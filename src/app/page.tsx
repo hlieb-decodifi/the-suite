@@ -1,5 +1,3 @@
-import { HomeTemplate } from '@/components/templates/HomeTemplate';
-
 export default function HomePage() {
-  return <HomeTemplate />;
+  return <div>Hello World</div>;
 }

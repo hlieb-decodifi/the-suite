@@ -27,13 +27,6 @@ src/
 │       ├── constants.ts    # Page-specific constants
 │       ├── types.ts        # Page-specific types
 │       └── helpers.ts      # Page-specific helpers
-├── api/                    # API-related code (React Query)
-│   ├── common/
-│   │   └── types.ts        # Generic API types (e.g., PaginatedResponse<T>)
-│   └── [domain-name]/      # Domain-specific API code (e.g., news)
-│       ├── types.ts        # Domain-specific types
-│       ├── fetchers.ts     # Pure JS fetchers for this domain
-│       └── queries.ts      # React Query hooks for this domain
 ├── hooks/                  # Custom React hooks
 └── utils/                  # Reusable utility functions
 
