@@ -44,7 +44,6 @@ export type Database = {
           }
         ];
       };
-      // Add other tables as needed
     };
     Views: {
       [_ in never]: never;

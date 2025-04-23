@@ -1,22 +1,8 @@
 # Supabase
-.env
+.branches
+.temp
+
+# dotenvx
+.env.keys
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Local Supabase
-.supabase/
-volumes/
-supabase/.temp/
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local secrets
-*.secret
-*.key
-credentials/ 
+.env.*.local
