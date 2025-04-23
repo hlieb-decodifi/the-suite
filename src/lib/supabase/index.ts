@@ -1,8 +1,8 @@
 // Export server-side client
-export { serverSupabase } from './client';
+export { createClient as createServerClient } from './server';
 
 // Export browser client
-export { browserSupabase } from './browser';
+export { createClient as createBrowserClient } from './client';
 
 // Export types
-export * from './database.types'; 
+export * from './database.types';
