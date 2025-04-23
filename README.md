@@ -25,9 +25,14 @@ src/
 │   └── ui/             # ShadCN components
 ├── hooks/              # Custom React hooks
 ├── lib/                # Utility libraries
-├── services/           # Supabase API interactions
+│   └── supabase/       # Supabase client configuration
+├── api/                # API interactions
+│   └── common/         # Shared API utilities and types
 ├── types/              # TypeScript type definitions
 └── utils/              # Reusable utility functions
+
+utils/
+└── supabase/          # Supabase migrations, schemas, seeds
 
 public/                 # Static assets
 ├── fonts/             # Font files
@@ -45,8 +50,17 @@ public/                 # Static assets
    ```
 3. Set up environment variables:
 
-   - Copy `.env.local.example` to `.env.local`
-   - Add your Supabase project URL and anon key
+   Create a `.env.local` file with the following variables:
+
+   ```
+   # Supabase Configuration
+   NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+
+   # Next.js Configuration
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
+   ```
 
 4. Run the development server:
 
@@ -55,6 +69,29 @@ public/                 # Static assets
    ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Supabase Setup
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+
+2. Get your project URL and API keys from the Supabase dashboard:
+
+   - Go to Project Settings > API
+   - Copy the URL, anon key, and service_role key to your `.env.local` file
+
+3. Set up your database schema:
+
+   - You can use the schema file in `utils/supabase/schemas/schema.sql`
+   - Run this in the SQL editor in your Supabase dashboard
+
+4. (Optional) Seed your database with initial data:
+
+   - Use the seed file in `utils/supabase/seeds/seed.sql`
+   - Run this in the SQL editor after applying the schema
+
+5. Database Types:
+   - The project includes TypeScript types for the database schema
+   - When you modify your database schema, update the types in `src/lib/supabase/types.ts`
 
 ## Development Guidelines
 
@@ -80,6 +117,11 @@ To learn more about Next.js, take a look at the following resources:
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+For Supabase:
+
+- [Supabase Documentation](https://supabase.com/docs) - learn about Supabase features and API.
+- [Supabase Auth Helpers for Next.js](https://supabase.com/docs/guides/auth/auth-helpers/nextjs) - Authentication helpers for Next.js.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 

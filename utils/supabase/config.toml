@@ -1,0 +1,41 @@
+# Config for local Supabase development
+
+# Database Configuration
+[database]
+port = 5432
+schema = "public"
+max_connections = 100
+pool_timeout = 60
+pool_idle_timeout = 300
+
+# API Configuration
+[api]
+port = 3000
+max_request_body_size = "100MB"
+max_request_header_size = "10KB"
+timeout = 30
+
+# Authentication Configuration
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/*"]
+jwt_expiry = 3600
+enable_signup = true
+
+# Local Studio configuration
+[studio]
+port = 8000
+api_url = "http://localhost:3000"
+
+# Email Configuration (for password reset, etc)
+[email]
+enable_signup = true
+# Configure an SMTP server like this:
+# smtp_host = "smtp.example.com"
+# smtp_port = 587
+# smtp_user = "example"
+# smtp_pass = "password"
+
+# Storage Configuration
+[storage]
+file_size_limit = "50MB" 

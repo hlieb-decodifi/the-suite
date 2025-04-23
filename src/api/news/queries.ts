@@ -1,4 +1,3 @@
-import { createBrowserClient } from '../../lib/supabase/client';
 import { News } from '../../../utils/supabase/types';
 import { useQuery } from '@tanstack/react-query';
 
