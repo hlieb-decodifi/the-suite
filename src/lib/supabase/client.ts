@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // This client is used for server-side operations
-export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+export const serverSupabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: false,
   },

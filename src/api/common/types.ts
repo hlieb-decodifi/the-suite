@@ -1,5 +1,13 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { Database } from './database.types'
+import { Database } from '@/lib/supabase/types'
+import type { 
+  Profile, 
+  ProfileInsert, 
+  ProfileUpdate, 
+  TableRow, 
+  TableInsert, 
+  TableUpdate 
+} from '@/lib/supabase/database.types'
 
 export type TypedSupabaseClient = SupabaseClient<Database>
 
@@ -12,4 +20,14 @@ export type PaginatedResponse<T> = {
   page: number
   pageSize: number
   totalPages: number
+}
+
+// Re-export the useful types
+export type { 
+  Profile, 
+  ProfileInsert, 
+  ProfileUpdate, 
+  TableRow, 
+  TableInsert, 
+  TableUpdate 
 }

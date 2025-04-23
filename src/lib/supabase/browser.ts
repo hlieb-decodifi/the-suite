@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // This client is used for client-side operations with persistent sessions
-export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+export const browserSupabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
