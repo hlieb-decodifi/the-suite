@@ -1,0 +1,138 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+### Component Organization Pattern
+
+```
+src/
+├── app/                    # Next.js app router pages
+├── components/             # React components
+│   ├── common/             # Shared components
+│   │   ├── Header/         # Example of a common component
+│   │   │   └── Header.tsx
+│   │   └── Footer/
+│   │       └── Footer.tsx
+|   ├── forms/             # Form components
+│   └── templates/[PageNameTemplate]/        # Page-specific components
+│       ├── components/     # Components used in this page
+│       │   └── ComponentA/
+│       │       ├── components/    # Sub-components for ComponentA
+│       │       ├── ComponentA.tsx
+│       │       ├── constants.ts
+│       │       ├── types.ts
+│       │       └── helpers.ts
+│       ├── [PageNameTemplate].tsx
+│       ├── constants.ts    # Page-specific constants
+│       ├── types.ts        # Page-specific types
+│       └── helpers.ts      # Page-specific helpers
+├── api/                    # API-related code (React Query)
+│   ├── common/
+│   │   └── types.ts        # Generic API types (e.g., PaginatedResponse<T>)
+│   └── [domain-name]/      # Domain-specific API code (e.g., news)
+│       ├── types.ts        # Domain-specific types
+│       ├── fetchers.ts     # Pure JS fetchers for this domain
+│       └── queries.ts      # React Query hooks for this domain
+├── hooks/                  # Custom React hooks
+└── utils/                  # Reusable utility functions
+
+utils/
+├── supabase/               # Folder fo the supabase migrations, schemas, seeds etc.
+
+public/                     # Static assets
+├── fonts/
+├── images/
+├── icons/
+└── videos/
+```
+
+### Component Organization
+
+- Each component should be organized in its own folder
+- Structure component folders based on their purpose and location:
+  ```
+  src/components/common/ActionButton/
+  ├── ActionButton.tsx # Component implementation
+  ├── constants.ts     # Component-specific constants
+  ├── types.ts         # Component-specific types
+  └── helpers.ts       # Component-specific utilities
+  ```
+- Related components used within a main component should be extracted into their own files within a nested `components` folder:
+  ```
+  // Example: Page with multiple sub-components
+  src/components/templates/DashboardTemplate/
+  ├── components/           # Sub-components used in Dashboard
+  │   ├── Summary/
+  │   │   ├── Summary.tsx
+  │   │   └── types.ts
+  │   └── Chart/
+  │       ├── Chart.tsx
+  │       └── helpers.ts
+  ├── DashboardTemplate.tsx         # Main page component
+  ├── constants.ts
+  ├── types.ts
+  └── helpers.ts
+  ```
+- Store component-specific text content in constants files within the component folder
+
+### Page Structure
+
+- Pages should use components from the corresponding component folder:
+
+  ```typescript
+  // src/app/dashboard/page.tsx
+  import { DashboardTemplate } from "@/components/templates/DashboardTemplate";
+
+  export default function DashboardPage() {
+    return <DashboardTemplate />;
+  }
+  ```
+
+- Main page components should be located in `src/components/templates/[PageNameTemplate]/[PageNameTemplate].tsx`
+- Page components should use sub-components from their local `components` folder or from the `common` folder
+
+## Code Quality
+
+### Component Architecture
+
+- Don't overload page components - create separate components for sections
+- Do not define related components (like tabs, panels, sections) within the same file as the parent component
+  - Extract these into their own files within the component's `components` folder
+  - This applies to any component that has more than minimal complexity (more than ~15-20 lines)
+- Separate reusable components into the `common` folder
+- `components/ui` folder should contain only library code; keep customizations in separate files
+
+### Coding Conventions
+
+- Follow ESLint config rules for code validation
+- Use named exports over default exports
+- Use camelCase for all FE component naming
+- Use path aliases with `@` symbol for imports:
+
+### UI Standards
+
+- Don't hardcode colors in classnames - use Tailwind variables
+- Reuse UI components from `components/ui` folder rather than creating new ones
+- Use Typography `components/ui/typography` components for all text content
+- Use custom Image component instead of HTML `img` tags
+
+### Code Location Policy
+
+- Component-specific code should stay within the component folder
+- Only move code to shared folders (utils, hooks) if used by multiple components
+- Domain-specific API code should be organized in the corresponding domain folder in `src/api/[domain-name]`
+
+## General Development Guidelines
+
+### Project Management
+
+- Use Yarn as package manager
+- Terminate previous Yarn processes before starting new ones
+- Delete unused files when replacing or changing names
+- Remove unused dependencies from package.json
+
+### Security
+
+- Store API keys only in the .env file
+- Never hardcode sensitive information

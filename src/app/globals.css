@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+  :root {
+    /* Brand Colors - FOCUSED for business */
+    --focused-orange: 28 100% 62%; /* Main orange from logo */
+    --focused-orange-light: 28 100% 72%;
+    --focused-orange-dark: 28 100% 52%;
+    --focused-gray: 0 0% 50%; /* Gray from FOCUSED text */
+    --focused-gray-light: 0 0% 70%;
+    --focused-gray-dark: 0 0% 40%;
+
+    /* System Colors */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    --primary: 28 100% 62%; /* From focused-orange */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 50%; /* From focused-gray */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 28 30% 94%;
+    --muted-foreground: 28 10% 40%;
+
+    --accent: 28 70% 90%;
+    --accent-foreground: 28 100% 35%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 28 15% 90%;
+    --input: 28 15% 90%;
+    --ring: 28 70% 50%;
+
+    --radius: 0.5rem;
+
+    --chart-1: 28 100% 62%; /* Main orange */
+    --chart-2: 28 80% 75%; /* Lighter orange */
+    --chart-3: 28 90% 50%; /* Darker orange */
+    --chart-4: 0 0% 50%; /* Gray */
+    --chart-5: 0 0% 70%; /* Light gray */
+  }
+  .dark {
+    /* Brand Colors - FOCUSED for business (dark mode) */
+    --focused-orange: 28 90% 55%;
+    --focused-orange-light: 28 80% 65%;
+    --focused-orange-dark: 28 90% 45%;
+    --focused-gray: 0 0% 60%;
+    --focused-gray-light: 0 0% 80%;
+    --focused-gray-dark: 0 0% 50%;
+
+    /* System Colors - Dark Theme */
+    --background: 0 0% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 15%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 28 90% 55%; /* From focused-orange (dark mode) */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 60%; /* From focused-gray (dark mode) */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 28 20% 20%;
+    --muted-foreground: 28 10% 70%;
+
+    --accent: 28 50% 25%;
+    --accent-foreground: 28 90% 75%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 28 15% 25%;
+    --input: 28 15% 25%;
+    --ring: 28 70% 60%;
+
+    --chart-1: 28 90% 55%; /* Main orange (dark) */
+    --chart-2: 28 70% 65%; /* Lighter orange (dark) */
+    --chart-3: 28 80% 45%; /* Darker orange (dark) */
+    --chart-4: 0 0% 60%; /* Gray (dark) */
+    --chart-5: 0 0% 80%; /* Light gray (dark) */
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  @keyframes custom-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-custom-spin {
+    animation: custom-spin 1s linear infinite;
+  }
+
+  .animate-custom-spin-slow {
+    animation: custom-spin 2s linear infinite;
+  }
+
+  .animate-custom-spin-fast {
+    animation: custom-spin 0.5s linear infinite;
+  }
+}
