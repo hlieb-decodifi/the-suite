@@ -3,6 +3,7 @@ import { Titillium_Web } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/providers';
 import { Toaster } from '@/components/ui/toaster';
+import { RootLayoutTemplate } from '@/components/templates/RootLayoutTemplate';
 
 const titilliumWeb = Titillium_Web({
   subsets: ['latin'],
@@ -11,8 +12,8 @@ const titilliumWeb = Titillium_Web({
 });
 
 export const metadata: Metadata = {
-  title: 'Next.js App',
-  description: 'Created with Next.js, TypeScript, and Tailwind CSS',
+  title: 'The Suite',
+  description: 'Premium services at your fingertips',
 };
 
 export default function RootLayout({
@@ -24,7 +25,7 @@ export default function RootLayout({
     <Providers>
       <html lang="en" className={titilliumWeb.variable}>
         <body className={titilliumWeb.className}>
-          {children}
+          <RootLayoutTemplate>{children}</RootLayoutTemplate>
           <Toaster />
         </body>
       </html>
