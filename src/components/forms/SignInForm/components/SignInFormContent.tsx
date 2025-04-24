@@ -10,6 +10,7 @@ type SignInFormContentProps = {
   isPending: boolean;
   onSubmit: (data: SignInFormValues) => void;
   onSignUpClick: () => void;
+  onForgotPasswordClick?: () => void;
 };
 
 export function SignInFormContent({
@@ -17,6 +18,7 @@ export function SignInFormContent({
   isPending,
   onSubmit,
   onSignUpClick,
+  onForgotPasswordClick,
 }: SignInFormContentProps) {
   const {
     register,
@@ -36,14 +38,28 @@ export function SignInFormContent({
           error={errors.email?.message}
         />
 
-        <PasswordInput
-          id="password"
-          label="Password"
-          placeholder="Enter your password"
-          {...register('password')}
-          hasError={!!errors.password}
-          error={errors.password?.message}
-        />
+        <div className="space-y-1">
+          <PasswordInput
+            id="password"
+            label="Password"
+            placeholder="Enter your password"
+            {...register('password')}
+            hasError={!!errors.password}
+            error={errors.password?.message}
+          />
+
+          {onForgotPasswordClick && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onForgotPasswordClick}
+                className="text-primary text-sm font-medium hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="pt-4">
           <Button

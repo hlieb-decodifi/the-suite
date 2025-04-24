@@ -7,12 +7,14 @@ import { useSignInForm } from './useSignInForm';
 export type SignInFormProps = {
   onSubmit: (data: SignInFormValues) => void;
   onSignUpClick?: () => void;
+  onForgotPasswordClick?: () => void;
   className?: string;
 };
 
 export function SignInForm({
   onSubmit,
   onSignUpClick,
+  onForgotPasswordClick,
   className = '',
 }: SignInFormProps) {
   const {
@@ -30,6 +32,7 @@ export function SignInForm({
         isPending={isPending}
         onSubmit={handleSubmit}
         onSignUpClick={onSignUpClick || (() => {})}
+        onForgotPasswordClick={onForgotPasswordClick || (() => {})}
       />
     </div>
   );
