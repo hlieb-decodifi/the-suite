@@ -1,5 +1,3 @@
-'use client';
-
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
 

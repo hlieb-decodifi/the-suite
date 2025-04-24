@@ -22,7 +22,7 @@ export function Logo({ variant = 'large', className }: LogoProps) {
         alt={logoAlt}
         width={variant === 'large' ? 140 : 80}
         height={variant === 'large' ? 60 : 40}
-        className="h-auto"
+        className="h-auto w-auto"
         priority
       />
     </Link>

@@ -6,6 +6,25 @@ import { cn } from '@/utils/cn';
 import Image from 'next/image';
 import { PLACEHOLDER_IMAGES } from '../../constants';
 
+type HeroImageProps = {
+  src: string;
+  alt: string;
+  priority?: boolean;
+};
+
+function HeroImage({ src, alt, priority = false }: HeroImageProps) {
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      className="object-cover"
+      priority={priority}
+    />
+  );
+}
+
 type HeroSectionProps = {
   className?: string;
 };
@@ -50,38 +69,30 @@ export function HeroSection({ className }: HeroSectionProps) {
           <div className="grid grid-cols-2 gap-2">
             {/* Top row */}
             <div className="relative h-44 overflow-hidden rounded-lg">
-              <Image
+              <HeroImage
                 src={PLACEHOLDER_IMAGES.HERO_BACKGROUND_1}
                 alt="Beauty professional 1"
-                fill
-                className="object-cover"
                 priority
               />
             </div>
             <div className="relative h-44 overflow-hidden rounded-lg">
-              <Image
+              <HeroImage
                 src={PLACEHOLDER_IMAGES.HERO_BACKGROUND_2}
                 alt="Beauty professional 2"
-                fill
-                className="object-cover"
               />
             </div>
 
             {/* Bottom row */}
             <div className="relative h-44 overflow-hidden rounded-lg">
-              <Image
+              <HeroImage
                 src={PLACEHOLDER_IMAGES.HERO_BACKGROUND_3}
                 alt="Beauty professional 3"
-                fill
-                className="object-cover"
               />
             </div>
             <div className="relative h-72 overflow-hidden rounded-lg">
-              <Image
+              <HeroImage
                 src={PLACEHOLDER_IMAGES.HERO_BACKGROUND_4}
                 alt="Beauty professional 4"
-                fill
-                className="object-cover"
               />
             </div>
           </div>

@@ -1,10 +1,8 @@
-'use client';
-
 import { cn } from '@/utils/cn';
-import { HeroSection } from './components/HeroSection';
-import { ProfessionalCtaSection } from './components/ProfessionalCtaSection';
-import { CampusSection } from './components/CampusSection';
-import { SalonOwnerSection } from './components/SalonOwnerSection';
+import { HeroSection } from './components/HeroSection/HeroSection';
+import { ProfessionalCtaSection } from './components/ProfessionalCtaSection/ProfessionalCtaSection';
+import { CampusSection } from './components/CampusSection/CampusSection';
+import { SalonOwnerSection } from './components/SalonOwnerSection/SalonOwnerSection';
 
 export type HomeTemplateProps = {
   className?: string;

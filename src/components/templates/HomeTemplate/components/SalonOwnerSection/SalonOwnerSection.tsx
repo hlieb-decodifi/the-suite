@@ -1,5 +1,3 @@
-'use client';
-
 import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
@@ -63,6 +61,7 @@ export function SalonOwnerSection({ className }: SalonOwnerSectionProps) {
                   src={src}
                   alt={`Beauty professional ${index + 1}`}
                   fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   className="object-cover"
                   priority={index === 0}
                 />
