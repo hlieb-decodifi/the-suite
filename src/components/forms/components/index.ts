@@ -3,3 +3,9 @@ export type { FormFieldProps } from './FormField';
 
 export { FormInput } from './FormInput';
 export type { FormInputProps } from './FormInput';
+
+export { PasswordInput } from './PasswordInput';
+export type { PasswordInputProps } from './PasswordInput';
+
+export { RadioGroup } from './RadioGroup';
+export type { RadioGroupProps, RadioOption } from './RadioGroup';

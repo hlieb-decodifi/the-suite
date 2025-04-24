@@ -14,7 +14,12 @@ src/
 │   │   │   └── Header.tsx
 │   │   └── Footer/
 │   │       └── Footer.tsx
-|   ├── forms/             # Form components
+|   ├── forms/              # Form components handled by the react-hook-form library
+│   │   └── [NameForm]/
+│   │       ├── [NameForm].tsx    # Form component
+│   │       ├── schema.ts         # Zod schema for the form
+│   │       └── use[NameForm].ts  # Form hook for handling all the logic
+|   ├── modals/             # Modal components
 │   └── templates/[PageNameTemplate]/        # Page-specific components
 │       ├── components/     # Components used in this page
 │       │   └── ComponentA/

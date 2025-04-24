@@ -6,6 +6,8 @@ import { Logo } from '@/components/common/Logo/Logo';
 import { SearchBox } from './components/SearchBox/SearchBox';
 import { UserMenu } from './components/UserMenu/UserMenu';
 import { MobileMenu } from './components/MobileMenu/MobileMenu';
+import { useState } from 'react';
+import { SignUpModal } from '@/components/modals/SignUpModal/SignUpModal';
 
 export type HeaderProps = {
   className?: string;
@@ -22,13 +24,13 @@ export function Header({
   isAuthenticated = false,
   userInfo,
 }: HeaderProps) {
-  // Default user info if authenticated but no info provided
-  const defaultUserInfo = {
-    name: 'User',
-    email: 'user@example.com',
-  };
-
+  const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
+  const defaultUserInfo = { name: 'User', email: 'user@example.com' };
   const userProfile = isAuthenticated && userInfo ? userInfo : defaultUserInfo;
+
+  const handleSignUpClick = () => setIsSignUpModalOpen(true);
+
+  const handleModalClose = () => setIsSignUpModalOpen(false);
 
   return (
     <header
@@ -53,13 +55,16 @@ export function Header({
           ) : (
             <>
               <Button
+                className="font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]"
+                onClick={handleSignUpClick}
+              >
+                Sign up
+              </Button>
+              <Button
                 variant="outline"
-                className="font-futura font-medium border-primary text-[#313131] hover:bg-[#DEA85B] hover:text-white"
+                className="font-futura font-medium border-[#DEA85B] text-[#313131] hover:bg-[#DEA85B] hover:text-white"
               >
                 Login
-              </Button>
-              <Button className="font-futura font-medium bg-primary text-white hover:bg-[#C89245]">
-                Sign up
               </Button>
             </>
           )}
@@ -69,8 +74,17 @@ export function Header({
         <MobileMenu
           isAuthenticated={isAuthenticated}
           userInfo={isAuthenticated ? userProfile : undefined}
+          onSignUpClick={handleSignUpClick}
         />
       </div>
+
+      {/* Sign Up Modal */}
+      <SignUpModal
+        isOpen={isSignUpModalOpen}
+        onOpenChange={setIsSignUpModalOpen}
+        onSignInClick={handleModalClose}
+        onSuccess={handleModalClose}
+      />
     </header>
   );
 }

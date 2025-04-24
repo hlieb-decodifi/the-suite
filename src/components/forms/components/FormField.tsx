@@ -37,14 +37,12 @@ export function FormField({
   className,
 }: FormFieldProps) {
   return (
-    <div className={cn('space-y-1.5 w-full relative pb-5', className)}>
+    <div className={cn('space-y-1.5 w-full relative pb-6', className)}>
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {error && (
-        <div className="text-xs text-destructive absolute bottom-0 left-0">
-          {error}
-        </div>
-      )}
+      <div className="min-h-5 absolute bottom-0 left-0 w-full">
+        {error && <div className="text-xs text-destructive">{error}</div>}
+      </div>
     </div>
   );
 }

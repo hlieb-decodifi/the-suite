@@ -22,11 +22,13 @@ export type MobileMenuProps = {
         avatarUrl?: string;
       }
     | undefined;
+  onSignUpClick?: () => void;
 };
 
 export function MobileMenu({
   isAuthenticated = false,
   userInfo,
+  onSignUpClick,
 }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -59,7 +61,13 @@ export function MobileMenu({
                 <MobileUserProfile userInfo={userInfo} />
               ) : (
                 <>
-                  <Button className="w-full font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]">
+                  <Button
+                    className="w-full font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]"
+                    onClick={() => {
+                      setIsOpen(false);
+                      if (onSignUpClick) onSignUpClick();
+                    }}
+                  >
                     Sign up
                   </Button>
                   <Button
