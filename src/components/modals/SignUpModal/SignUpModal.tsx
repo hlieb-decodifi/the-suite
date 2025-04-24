@@ -41,6 +41,13 @@ export function SignUpModal({
     }
   };
 
+  const handleSignInClick = () => {
+    handleClose();
+    if (onSignInClick) {
+      onSignInClick();
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -69,7 +76,7 @@ export function SignUpModal({
       ) : (
         <SignUpForm
           onSubmit={handleSubmit}
-          onLoginClick={onSignInClick ?? (() => {})}
+          onLoginClick={handleSignInClick}
           className="w-full"
         />
       )}

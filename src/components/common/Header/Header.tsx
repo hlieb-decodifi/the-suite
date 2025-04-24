@@ -1,13 +1,13 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 import { Logo } from '@/components/common/Logo/Logo';
 import { SearchBox } from './components/SearchBox/SearchBox';
 import { UserMenu } from './components/UserMenu/UserMenu';
 import { MobileMenu } from './components/MobileMenu/MobileMenu';
 import { useState } from 'react';
-import { SignUpModal } from '@/components/modals/SignUpModal/SignUpModal';
+import { AuthButtons } from './components/AuthButtons';
+import { Modals } from './components/Modals';
 
 export type HeaderProps = {
   className?: string;
@@ -25,12 +25,15 @@ export function Header({
   userInfo,
 }: HeaderProps) {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const defaultUserInfo = { name: 'User', email: 'user@example.com' };
   const userProfile = isAuthenticated && userInfo ? userInfo : defaultUserInfo;
 
   const handleSignUpClick = () => setIsSignUpModalOpen(true);
+  const handleSignInClick = () => setIsSignInModalOpen(true);
 
   const handleModalClose = () => setIsSignUpModalOpen(false);
+  const handleSignInModalClose = () => setIsSignInModalOpen(false);
 
   return (
     <header
@@ -53,20 +56,10 @@ export function Header({
           {isAuthenticated ? (
             <UserMenu userInfo={userProfile} />
           ) : (
-            <>
-              <Button
-                className="font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]"
-                onClick={handleSignUpClick}
-              >
-                Sign up
-              </Button>
-              <Button
-                variant="outline"
-                className="font-futura font-medium border-[#DEA85B] text-[#313131] hover:bg-[#DEA85B] hover:text-white"
-              >
-                Login
-              </Button>
-            </>
+            <AuthButtons
+              onSignUpClick={handleSignUpClick}
+              onSignInClick={handleSignInClick}
+            />
           )}
         </div>
 
@@ -75,15 +68,19 @@ export function Header({
           isAuthenticated={isAuthenticated}
           userInfo={isAuthenticated ? userProfile : undefined}
           onSignUpClick={handleSignUpClick}
+          onSignInClick={handleSignInClick}
         />
       </div>
 
-      {/* Sign Up Modal */}
-      <SignUpModal
-        isOpen={isSignUpModalOpen}
-        onOpenChange={setIsSignUpModalOpen}
-        onSignInClick={handleModalClose}
-        onSuccess={handleModalClose}
+      <Modals
+        isSignUpModalOpen={isSignUpModalOpen}
+        setIsSignUpModalOpen={setIsSignUpModalOpen}
+        isSignInModalOpen={isSignInModalOpen}
+        setIsSignInModalOpen={setIsSignInModalOpen}
+        handleSignUpClick={handleSignUpClick}
+        handleSignInClick={handleSignInClick}
+        handleSignUpModalClose={handleModalClose}
+        handleSignInModalClose={handleSignInModalClose}
       />
     </header>
   );

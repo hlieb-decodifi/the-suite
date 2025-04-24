@@ -23,12 +23,14 @@ export type MobileMenuProps = {
       }
     | undefined;
   onSignUpClick?: () => void;
+  onSignInClick?: () => void;
 };
 
 export function MobileMenu({
   isAuthenticated = false,
   userInfo,
   onSignUpClick,
+  onSignInClick,
 }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -73,6 +75,10 @@ export function MobileMenu({
                   <Button
                     variant="outline"
                     className="w-full font-futura font-medium border-[#DEA85B] text-[#313131] hover:bg-[#DEA85B] hover:text-white"
+                    onClick={() => {
+                      setIsOpen(false);
+                      if (onSignInClick) onSignInClick();
+                    }}
                   >
                     Login
                   </Button>
