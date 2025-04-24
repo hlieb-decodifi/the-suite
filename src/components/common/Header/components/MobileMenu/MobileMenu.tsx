@@ -1,7 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Menu, Search } from 'lucide-react';
 import { useState } from 'react';
 import { SearchBox } from '../SearchBox/SearchBox';
@@ -40,6 +45,7 @@ export function MobileMenu({
           side="right"
           className="w-[300px] sm:w-[350px] font-futura"
         >
+          <SheetTitle className="sr-only">Mobile Navigation Menu</SheetTitle>
           <div className="flex flex-col h-full pt-6">
             {/* Mobile Search */}
             <SearchBox className="mb-6" />
