@@ -3,96 +3,100 @@
 @tailwind utilities;
 
 @layer base {
-
   :root {
-    /* Brand Colors - FOCUSED for business */
-    --focused-orange: 28 100% 62%; /* Main orange from logo */
-    --focused-orange-light: 28 100% 72%;
-    --focused-orange-dark: 28 100% 52%;
-    --focused-gray: 0 0% 50%; /* Gray from FOCUSED text */
-    --focused-gray-light: 0 0% 70%;
-    --focused-gray-dark: 0 0% 40%;
+    /* Brand Colors - The Suite */
+    --suite-gold: 39 47% 61%; /* Main gold from logo #DEA85B */
+    --suite-gold-light: 39 47% 71%;
+    --suite-gold-dark: 39 47% 51%;
+    --suite-text-dark: 0 0% 19%; /* Main text color #313131 */
+    --suite-text-muted: 191 7% 40%; /* Secondary text color #5D6C6F */
+    --suite-bg-light: 0 0% 96%; /* Light background #F5F5F5 */
+    --suite-border: 0 0% 93%; /* Border color #ECECEC */
 
     /* System Colors */
     --background: 0 0% 100%;
-    --foreground: 0 0% 10%;
+    --foreground: 0 0% 19%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
+    --card-foreground: 0 0% 19%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
+    --popover-foreground: 0 0% 19%;
 
-    --primary: 28 100% 62%; /* From focused-orange */
+    --primary: 39 47% 61%; /* From suite-gold */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 50%; /* From focused-gray */
+    --secondary: 191 7% 40%; /* From suite-text-muted */
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 28 30% 94%;
-    --muted-foreground: 28 10% 40%;
+    --muted: 39 30% 94%;
+    --muted-foreground: 191 7% 40%;
 
-    --accent: 28 70% 90%;
-    --accent-foreground: 28 100% 35%;
+    --accent: 39 70% 90%;
+    --accent-foreground: 39 47% 41%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 28 15% 90%;
-    --input: 28 15% 90%;
-    --ring: 28 70% 50%;
+    --border: 0 0% 93%;
+    --input: 0 0% 93%;
+    --ring: 39 47% 61%;
 
     --radius: 0.5rem;
 
-    --chart-1: 28 100% 62%; /* Main orange */
-    --chart-2: 28 80% 75%; /* Lighter orange */
-    --chart-3: 28 90% 50%; /* Darker orange */
-    --chart-4: 0 0% 50%; /* Gray */
-    --chart-5: 0 0% 70%; /* Light gray */
+    /* Chart Colors */
+    --chart-1: 39 47% 61%; /* Main gold */
+    --chart-2: 39 47% 71%; /* Lighter gold */
+    --chart-3: 39 47% 51%; /* Darker gold */
+    --chart-4: 191 7% 40%; /* Gray */
+    --chart-5: 191 7% 60%; /* Light gray */
   }
+
   .dark {
-    /* Brand Colors - FOCUSED for business (dark mode) */
-    --focused-orange: 28 90% 55%;
-    --focused-orange-light: 28 80% 65%;
-    --focused-orange-dark: 28 90% 45%;
-    --focused-gray: 0 0% 60%;
-    --focused-gray-light: 0 0% 80%;
-    --focused-gray-dark: 0 0% 50%;
+    /* Brand Colors - The Suite (dark mode) */
+    --suite-gold: 39 47% 55%;
+    --suite-gold-light: 39 47% 65%;
+    --suite-gold-dark: 39 47% 45%;
+    --suite-text-dark: 0 0% 90%;
+    --suite-text-muted: 191 7% 70%;
+    --suite-bg-light: 0 0% 15%;
+    --suite-border: 0 0% 25%;
 
     /* System Colors - Dark Theme */
     --background: 0 0% 10%;
-    --foreground: 0 0% 98%;
+    --foreground: 0 0% 90%;
 
     --card: 0 0% 15%;
-    --card-foreground: 0 0% 98%;
+    --card-foreground: 0 0% 90%;
 
     --popover: 0 0% 15%;
-    --popover-foreground: 0 0% 98%;
+    --popover-foreground: 0 0% 90%;
 
-    --primary: 28 90% 55%; /* From focused-orange (dark mode) */
+    --primary: 39 47% 55%; /* From suite-gold (dark mode) */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 60%; /* From focused-gray (dark mode) */
+    --secondary: 191 7% 70%; /* From suite-text-muted (dark mode) */
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 28 20% 20%;
-    --muted-foreground: 28 10% 70%;
+    --muted: 39 20% 20%;
+    --muted-foreground: 191 7% 70%;
 
-    --accent: 28 50% 25%;
-    --accent-foreground: 28 90% 75%;
+    --accent: 39 50% 25%;
+    --accent-foreground: 39 47% 75%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 28 15% 25%;
-    --input: 28 15% 25%;
-    --ring: 28 70% 60%;
+    --border: 0 0% 25%;
+    --input: 0 0% 25%;
+    --ring: 39 47% 55%;
 
-    --chart-1: 28 90% 55%; /* Main orange (dark) */
-    --chart-2: 28 70% 65%; /* Lighter orange (dark) */
-    --chart-3: 28 80% 45%; /* Darker orange (dark) */
-    --chart-4: 0 0% 60%; /* Gray (dark) */
-    --chart-5: 0 0% 80%; /* Light gray (dark) */
+    /* Chart Colors (dark mode) */
+    --chart-1: 39 47% 55%; /* Main gold (dark) */
+    --chart-2: 39 47% 65%; /* Lighter gold (dark) */
+    --chart-3: 39 47% 45%; /* Darker gold (dark) */
+    --chart-4: 191 7% 60%; /* Gray (dark) */
+    --chart-5: 191 7% 80%; /* Light gray (dark) */
   }
 }
 

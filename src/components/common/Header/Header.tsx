@@ -1,36 +1,72 @@
 'use client';
 
-import Link from 'next/link';
-import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
+import { Logo } from '@/components/common/Logo/Logo';
+import { SearchBox } from './components/SearchBox/SearchBox';
+import { UserMenu } from './components/UserMenu/UserMenu';
+import { MobileMenu } from './components/MobileMenu/MobileMenu';
 
 export type HeaderProps = {
   className?: string;
+  isAuthenticated: boolean;
+  userInfo?: {
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  };
 };
 
-export function Header({ className }: HeaderProps) {
-  return (
-    <header className={cn('border-b py-4', className)}>
-      <div className="container flex items-center justify-between">
-        <Link href="/" className="flex items-center space-x-2">
-          <Typography variant="large" className="font-bold tracking-tight">
-            FOCUSED
-          </Typography>
-          <Typography variant="small" className="text-muted-foreground">
-            for business
-          </Typography>
-        </Link>
+export function Header({
+  className,
+  isAuthenticated = false,
+  userInfo,
+}: HeaderProps) {
+  // Default user info if authenticated but no info provided
+  const defaultUserInfo = {
+    name: 'User',
+    email: 'user@example.com',
+  };
 
-        <nav className="flex items-center gap-4">
-          <Link href="/" className="text-sm font-medium">
-            Home
-          </Link>
-          <Link href="/#components" className="text-sm font-medium">
-            Components
-          </Link>
-          <Button size="sm">Login</Button>
-        </nav>
+  const userProfile = isAuthenticated && userInfo ? userInfo : defaultUserInfo;
+
+  return (
+    <header
+      className={cn('py-4 border-b border-[#ECECEC] bg-white', className)}
+    >
+      <div className="container flex items-center justify-between">
+        {/* Logo */}
+        <Logo variant="large" className="mr-4" />
+
+        {/* Search Services (Desktop) */}
+        <div className="hidden md:block w-full max-w-md mx-4">
+          <SearchBox />
+        </div>
+
+        {/* Authentication / User Profile (Desktop) */}
+        <div className="hidden md:flex items-center gap-4">
+          {isAuthenticated ? (
+            <UserMenu userInfo={userProfile} />
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                className="font-futura font-medium border-[#DEA85B] text-[#313131] hover:bg-[#DEA85B] hover:text-white"
+              >
+                Login
+              </Button>
+              <Button className="font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]">
+                Sign up
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Mobile Menu */}
+        <MobileMenu
+          isAuthenticated={isAuthenticated}
+          userInfo={isAuthenticated ? userProfile : undefined}
+        />
       </div>
     </header>
   );

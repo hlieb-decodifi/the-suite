@@ -1,7 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
+import { SocialLinks } from './components/SocialLinks/SocialLinks';
+import { FooterNavigation } from './components/FooterNavigation/FooterNavigation';
 
 export type FooterProps = {
   className?: string;
@@ -9,16 +12,33 @@ export type FooterProps = {
 
 export function Footer({ className }: FooterProps) {
   return (
-    <footer className={cn('border-t py-6 md:py-8', className)}>
-      <div className="container flex flex-col items-center justify-between gap-4 md:flex-row">
-        <Typography variant="small" className="text-center md:text-left">
-          &copy; {new Date().getFullYear()} FOCUSED for business. All rights
-          reserved.
-        </Typography>
-        <div className="flex items-center gap-4">
-          <Typography variant="small" className="text-muted-foreground">
-            Powered by Next.js
+    <footer className={cn('border-t border-border py-8', className)}>
+      <div className="container">
+        <div className="flex flex-col gap-8 md:flex-row md:justify-between md:gap-0">
+          {/* Logo and Nav Links */}
+          <FooterNavigation />
+
+          {/* Social Links */}
+          <SocialLinks />
+        </div>
+
+        {/* Footer Bottom */}
+        <div className="mt-8 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
+          <Typography variant="p" className="text-foreground">
+            © {new Date().getFullYear()} The Suite. All rights reserved.
           </Typography>
+
+          <div className="flex gap-6">
+            <Link href="/terms" className="text-foreground hover:text-primary">
+              Terms & Conditions
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-foreground hover:text-primary"
+            >
+              Privacy Policy
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
