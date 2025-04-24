@@ -10,27 +10,27 @@ The Suite uses a design system based on Tailwind CSS and shadcn/ui components, w
 
 Primary color scheme:
 
-- Primary Gold: (`#DEA85B`)
-- Primary Gold Light: (Lighter shade of gold)
-- Primary Gold Dark: (Darker shade of gold)
-- Dark Text: (`#313131`)
-- Muted Text: (`#5D6C6F`)
+- **Primary Gold (#DEA85B)**: Our main brand color used for primary actions, buttons, and accents
+- Primary Gold Light: Lighter shade of primary gold for hover states and backgrounds
+- Primary Gold Dark: Darker shade of primary gold for active states
+- Dark Text (`#313131`): Main text color for headings and body content
+- Muted Text (`#5D6C6F`): Secondary text color for less emphasis
 
 Neutral colors:
 
-- Background: (`#FFFFFF`)
-- Surface: (`#F5F5F5`)
-- Border: (`#ECECEC`)
-- Text Primary: (`#313131`)
-- Text Secondary: (`#5D6C6F`)
-- Text Muted: (`#94A3B8`)
+- Background (`#FFFFFF`): Main page backgrounds
+- Surface (`#F5F5F5`): Secondary backgrounds, cards, inputs
+- Border (`#ECECEC`): Dividers, borders, and separators
+- Text Primary (`#313131`): Main content text
+- Text Secondary (`#5D6C6F`): Supportive text content
+- Text Muted (`#94A3B8`): Less prominent text elements
 
 Semantic colors:
 
-- Success: (`#10b981`)
-- Warning: (`#f59e0b`)
-- Error: (`#ef4444`)
-- Info: (`#0ea5e9`)
+- Success (`#10b981`): Positive actions and confirmations
+- Warning (`#f59e0b`): Alerts and cautions
+- Error (`#ef4444`): Error states and destructive actions
+- Info (`#0ea5e9`): Informational elements
 
 ### Typography
 
@@ -85,7 +85,7 @@ Use the Button component with consistent styling:
 
 - Primary: Gold background (#DEA85B) with white text
 - Secondary: White background with dark border and dark text
-- Outline: Transparent with gold border and gold text
+- Outline: Transparent with gold border (#DEA85B) and gold text
 - Ghost: Transparent with dark text
 - Destructive: Used for potentially destructive actions
 
@@ -97,7 +97,9 @@ Use the Button component with consistent styling:
 <Button variant="secondary">View Details</Button>
 
 // Outline button example
-<Button variant="outline">Cancel</Button>
+<Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
+  Cancel
+</Button>
 ```
 
 Button styling should be consistent with:
@@ -116,7 +118,7 @@ Button styling should be consistent with:
 - Use appropriate input types (text, email, password, etc.)
 - Include helper text for complex inputs
 - Form elements should have light gray backgrounds (#F5F5F5)
-- Form borders should be #ECECEC with focus states using the primary gold
+- Form borders should be #ECECEC with focus states using the primary gold (#DEA85B)
 
 ```tsx
 // Form example with validation
@@ -164,7 +166,7 @@ Use cards to group related content with consistent padding and styling:
 
 - Maintain consistent navigation patterns
 - Use Futura font for navigation items (16px, medium weight)
-- Highlight active navigation items with gold underline or accent
+- Highlight active navigation items with gold underline or accent (#DEA85B)
 - Use breadcrumbs for deep navigation structures
 - Ensure mobile-responsive navigation with proper hamburger menu
 

@@ -12,6 +12,7 @@ const config: Config = {
     fontFamily: {
       sans: ["var(--font-titillium-web)", "sans-serif"],
       serif: ["Georgia", "serif"],
+      caslon: ["Adobe Caslon Pro", "serif"],
     },
   	container: {
   		center: true,

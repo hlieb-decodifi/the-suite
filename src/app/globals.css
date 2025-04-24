@@ -5,9 +5,9 @@
 @layer base {
   :root {
     /* Brand Colors - The Suite */
-    --suite-gold: 39 47% 61%; /* Main gold from logo #DEA85B */
-    --suite-gold-light: 39 47% 71%;
-    --suite-gold-dark: 39 47% 51%;
+    --suite-gold: 39 69% 61%; /* Main gold from logo #DEA85B */
+    --suite-gold-light: 39 69% 71%;
+    --suite-gold-dark: 39 69% 51%;
     --suite-text-dark: 0 0% 19%; /* Main text color #313131 */
     --suite-text-muted: 191 7% 40%; /* Secondary text color #5D6C6F */
     --suite-bg-light: 0 0% 96%; /* Light background #F5F5F5 */
@@ -23,7 +23,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 19%;
 
-    --primary: 39 47% 61%; /* From suite-gold */
+    --primary: 39 69% 60%; /* From suite-gold #DEA85B */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 191 7% 40%; /* From suite-text-muted */
@@ -33,30 +33,30 @@
     --muted-foreground: 191 7% 40%;
 
     --accent: 39 70% 90%;
-    --accent-foreground: 39 47% 41%;
+    --accent-foreground: 39 69% 41%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
     --border: 0 0% 93%;
     --input: 0 0% 93%;
-    --ring: 39 47% 61%;
+    --ring: 39 69% 61%;
 
     --radius: 0.5rem;
 
     /* Chart Colors */
-    --chart-1: 39 47% 61%; /* Main gold */
-    --chart-2: 39 47% 71%; /* Lighter gold */
-    --chart-3: 39 47% 51%; /* Darker gold */
+    --chart-1: 39 69% 61%; /* Main gold #DEA85B */
+    --chart-2: 39 69% 71%; /* Lighter gold */
+    --chart-3: 39 69% 51%; /* Darker gold */
     --chart-4: 191 7% 40%; /* Gray */
     --chart-5: 191 7% 60%; /* Light gray */
   }
 
   .dark {
     /* Brand Colors - The Suite (dark mode) */
-    --suite-gold: 39 47% 55%;
-    --suite-gold-light: 39 47% 65%;
-    --suite-gold-dark: 39 47% 45%;
+    --suite-gold: 39 69% 55%; /* #DEA85B with dark mode adjustment */
+    --suite-gold-light: 39 69% 65%;
+    --suite-gold-dark: 39 69% 45%;
     --suite-text-dark: 0 0% 90%;
     --suite-text-muted: 191 7% 70%;
     --suite-bg-light: 0 0% 15%;
@@ -72,7 +72,7 @@
     --popover: 0 0% 15%;
     --popover-foreground: 0 0% 90%;
 
-    --primary: 39 47% 55%; /* From suite-gold (dark mode) */
+    --primary: 39 69% 55%; /* From suite-gold (dark mode) #DEA85B */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 191 7% 70%; /* From suite-text-muted (dark mode) */
@@ -82,19 +82,19 @@
     --muted-foreground: 191 7% 70%;
 
     --accent: 39 50% 25%;
-    --accent-foreground: 39 47% 75%;
+    --accent-foreground: 39 69% 75%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
     --border: 0 0% 25%;
     --input: 0 0% 25%;
-    --ring: 39 47% 55%;
+    --ring: 39 69% 55%;
 
     /* Chart Colors (dark mode) */
-    --chart-1: 39 47% 55%; /* Main gold (dark) */
-    --chart-2: 39 47% 65%; /* Lighter gold (dark) */
-    --chart-3: 39 47% 45%; /* Darker gold (dark) */
+    --chart-1: 39 69% 55%; /* Main gold (dark) #DEA85B */
+    --chart-2: 39 69% 65%; /* Lighter gold (dark) */
+    --chart-3: 39 69% 45%; /* Darker gold (dark) */
     --chart-4: 191 7% 60%; /* Gray (dark) */
     --chart-5: 191 7% 80%; /* Light gray (dark) */
   }

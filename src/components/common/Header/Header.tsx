@@ -32,7 +32,10 @@ export function Header({
 
   return (
     <header
-      className={cn('py-4 border-b border-[#ECECEC] bg-white', className)}
+      className={cn(
+        'sticky top-0 z-50 py-4 border-b border-[#ECECEC] bg-white shadow-sm',
+        className,
+      )}
     >
       <div className="container flex items-center justify-between">
         {/* Logo */}
@@ -51,11 +54,11 @@ export function Header({
             <>
               <Button
                 variant="outline"
-                className="font-futura font-medium border-[#DEA85B] text-[#313131] hover:bg-[#DEA85B] hover:text-white"
+                className="font-futura font-medium border-primary text-[#313131] hover:bg-[#DEA85B] hover:text-white"
               >
                 Login
               </Button>
-              <Button className="font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]">
+              <Button className="font-futura font-medium bg-primary text-white hover:bg-[#C89245]">
                 Sign up
               </Button>
             </>

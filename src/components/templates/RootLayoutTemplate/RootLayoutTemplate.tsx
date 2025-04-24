@@ -13,9 +13,9 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
   const isAuthenticated = false;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col relative">
       <Header isAuthenticated={isAuthenticated} />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 pt-2">{children}</main>
       <Footer />
     </div>
   );
