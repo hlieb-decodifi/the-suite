@@ -10,7 +10,7 @@ The schema in utils/supabase/schemas/schema.sql MUST ALWAYS stay up to date as a
 3a. If there are issues creating the diff, you can modify the schema and repeat step 3.
 4. The push the changes to the remote database with `npx supabase db push`.
 4a. If there are issues with this command, simply delete the migration file that was generated, modify the schema to fix the issue, and then regenerate the migration starting from step 3
-5. Finally, once the push is complete, regenerate the types using this command: `npx supabase gen types typescript --project-id vpcidoeumpmcxmymfdng --schema public > utils/supabase/types.ts`
+5. Finally, once the push is complete, regenerate the types using this command: `npx supabase gen types typescript --project-id vpcidoeumpmcxmymfdng --schema public > /supabase/types.ts`
 
 Question: Why should we NEVER change the migration files?
 Answer:

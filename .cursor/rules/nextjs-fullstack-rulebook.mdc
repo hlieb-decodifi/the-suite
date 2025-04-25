@@ -35,8 +35,7 @@ src/
 ├── hooks/                  # Custom React hooks
 └── utils/                  # Reusable utility functions
 
-utils/
-├── supabase/               # Folder fo the supabase migrations, schemas, seeds etc.
+supabase/                   # Folder fo the supabase migrations, schemas, seeds etc.
 
 public/                     # Static assets
 ├── fonts/
