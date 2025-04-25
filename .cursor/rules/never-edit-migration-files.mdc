@@ -3,15 +3,14 @@ description:
 globs: *.sql
 alwaysApply: false
 ---
-The schema in utils/supabase/schemas/schema.sql MUST ALWAYS stay up to date as an accurate representation of the current database. To make changes to the database, follow these steps:
+The schema in supabase/schemas/schema.sql MUST ALWAYS stay up to date as an accurate representation of the current database. To make changes to the database, follow these steps:
 1. Edit the schema.sql file
 2. Make sure the local database isn't running before running this command with `npx supabase stop`, but this is only required once.
 3. Generate the diff using `npx supabase db diff -f name_of_change`.
 3a. If there are issues creating the diff, you can modify the schema and repeat step 3.
-4. The push the changes to the remote database with `npx supabase db push`.
+4. Start the local database with `npx supabase start`, and push the changes with `npx supabase db push --local`.
 4a. If there are issues with this command, simply delete the migration file that was generated, modify the schema to fix the issue, and then regenerate the migration starting from step 3
-5. Finally, once the push is complete, regenerate the types using this command: `npx supabase gen types typescript --project-id vpcidoeumpmcxmymfdng --schema public > /supabase/types.ts`
-
+5. Finally, once the push is complete, regenerate the types using this command: `npx supabase gen types typescript --local --schema public > supabase/types.ts`
 Question: Why should we NEVER change the migration files?
 Answer:
 If we edit the migration files, then the database will no longer be in sync with the schema.sql file. We keep this file in sync by always using automatically generated migrations.

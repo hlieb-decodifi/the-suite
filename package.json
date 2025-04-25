@@ -14,7 +14,6 @@
     "db:start": "npx supabase start",
     "db:stop": "npx supabase stop",
     "db:status": "npx supabase status",
-    "db:studio": "npx supabase studio",
     "dev:local": "npx supabase start && next dev",
     "db:diff": "npx supabase db diff -f",
     "db:push": "npx supabase db push",

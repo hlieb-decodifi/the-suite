@@ -7,6 +7,11 @@ alwaysApply: true
 
 ```
 src/
+├── api/                    # Functions for utilising api calls to supabase and other APIs
+│   └── [CollectionName]/   # Api calls divided by tables or collections
+│       ├── fetchers.ts     # Functions with requests
+│       ├── queries.ts      # If request is sent from the client, use the queries handled by React Query lib
+│       └── types.ts        # Types
 ├── app/                    # Next.js app router pages
 ├── components/             # React components
 │   ├── common/             # Shared components
