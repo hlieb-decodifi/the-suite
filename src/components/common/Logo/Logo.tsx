@@ -17,14 +17,21 @@ export function Logo({ variant = 'large', className }: LogoProps) {
 
   return (
     <Link href="/" className={cn('inline-block', className)}>
-      <Image
-        src={logoSrc}
-        alt={logoAlt}
-        width={variant === 'large' ? 140 : 80}
-        height={variant === 'large' ? 60 : 40}
-        className="h-auto w-auto"
-        priority
-      />
+      <div
+        className="relative"
+        style={{
+          width: variant === 'large' ? '140px' : '80px',
+          height: variant === 'large' ? '60px' : '40px',
+        }}
+      >
+        <Image
+          src={logoSrc}
+          alt={logoAlt}
+          fill
+          className="object-contain"
+          priority
+        />
+      </div>
     </Link>
   );
 }
