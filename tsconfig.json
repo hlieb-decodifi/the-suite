@@ -23,7 +23,7 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@utils/*": ["./utils/*"]
+      "@supabase/*": ["./supabase/*"]
     },
     "baseUrl": "."
   },
