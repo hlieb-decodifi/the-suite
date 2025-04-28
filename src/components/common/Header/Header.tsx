@@ -12,11 +12,13 @@ import { UserMenu } from './components/UserMenu/UserMenu';
 export type HeaderProps = {
   className?: string;
   isAuthenticated: boolean;
-  userInfo?: {
-    name: string;
-    email: string;
-    avatarUrl?: string;
-  };
+  userInfo?:
+    | {
+        name: string;
+        email: string;
+        avatarUrl?: string;
+      }
+    | undefined;
 };
 
 export function Header({
@@ -26,8 +28,6 @@ export function Header({
 }: HeaderProps) {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
-  const defaultUserInfo = { name: 'User', email: 'user@example.com' };
-  const userProfile = isAuthenticated && userInfo ? userInfo : defaultUserInfo;
 
   const handleSignUpClick = () => setIsSignUpModalOpen(true);
   const handleSignInClick = () => setIsSignInModalOpen(true);
@@ -53,8 +53,8 @@ export function Header({
 
         {/* Authentication / User Profile (Desktop) */}
         <div className="hidden md:flex items-center gap-4">
-          {isAuthenticated ? (
-            <UserMenu userInfo={userProfile} />
+          {isAuthenticated && userInfo ? (
+            <UserMenu userInfo={userInfo} />
           ) : (
             <AuthButtons
               onSignUpClick={handleSignUpClick}
@@ -66,7 +66,7 @@ export function Header({
         {/* Mobile Menu */}
         <MobileMenu
           isAuthenticated={isAuthenticated}
-          userInfo={isAuthenticated ? userProfile : undefined}
+          userInfo={isAuthenticated ? userInfo : undefined}
           onSignUpClick={handleSignUpClick}
           onSignInClick={handleSignInClick}
         />

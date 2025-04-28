@@ -61,7 +61,7 @@ export function useSignUpForm({
       if (redirectToDashboard) {
         router.push('/dashboard');
       } else {
-        router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
+      router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
       }
     } catch (error) {
       console.error('Error submitting form:', error);

@@ -22,12 +22,14 @@ export type UserMenuProps = {
 export function UserMenu({ userInfo }: UserMenuProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
-        <UserProfileSummary
-          userInfo={userInfo}
-          as="button"
-          className="cursor-pointer px-1 py-1 rounded-lg transition-colors"
-        />
+      <DropdownMenuTrigger asChild>
+        <div className="cursor-pointer px-1 py-1 rounded-lg transition-colors">
+          <UserProfileSummary
+            userInfo={userInfo}
+            as="div"
+            className="cursor-pointer"
+          />
+        </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem asChild>
