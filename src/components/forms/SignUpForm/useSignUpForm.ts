@@ -1,17 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SignUpFormValues, signUpSchema } from './schema';
+import { toast } from '@/components/ui/use-toast';
+import { signUpAction } from '@/api/auth/actions';
+import { useRouter } from 'next/navigation';
 
 export type UseSignUpFormProps = {
   onSubmit: (data: SignUpFormValues) => void;
   defaultValues?: Partial<SignUpFormValues>;
 };
 
-export function useSignUpForm({ onSubmit, defaultValues }: UseSignUpFormProps) {
+export function useSignUpForm({ 
+  onSubmit, 
+  defaultValues
+}: UseSignUpFormProps) {
   const [isPending, setIsPending] = useState(false);
+  const router = useRouter();
 
   const form = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpSchema),
@@ -24,22 +31,43 @@ export function useSignUpForm({ onSubmit, defaultValues }: UseSignUpFormProps) {
     },
   });
 
-  const handleSubmit = async (data: SignUpFormValues) => {
+  const handleSubmit = useCallback(async (data: SignUpFormValues) => {
     try {
       setIsPending(true);
       
-      // You would typically make an API call here
-      // For now, we'll just simulate a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the server action for signup
+      const result = await signUpAction(data);
       
+      if (!result.success) {
+        toast({
+          variant: "destructive",
+          title: "Sign up failed",
+          description: result.error
+        });
+        return;
+      }
+      
+      // Call the onSubmit callback passed from parent
       onSubmit(data);
+      
+      toast({
+        title: "Account created",
+        description: "Please check your email to confirm your account."
+      });
+      
+      // Redirect to email verification page
+      router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
     } catch (error) {
       console.error('Error submitting form:', error);
-      // You can handle form errors here
+      toast({
+        variant: "destructive",
+        title: "Sign up failed",
+        description: "Failed to create account. Please try again."
+      });
     } finally {
       setIsPending(false);
     }
-  };
+  }, [onSubmit, router]);
 
   return {
     form,

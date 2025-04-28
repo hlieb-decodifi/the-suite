@@ -13,7 +13,9 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
   return (
     <div className="flex min-h-screen flex-col relative">
       <Header isAuthenticated={isAuthenticated} />
-      <main className="flex-1 pt-2">{children}</main>
+      <main className="flex flex-1 justify-center items-center">
+        {children}
+      </main>
       <Footer />
     </div>
   );

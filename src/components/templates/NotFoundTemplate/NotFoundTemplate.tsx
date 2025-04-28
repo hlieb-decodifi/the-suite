@@ -11,7 +11,7 @@ export type NotFoundTemplateProps = {
 
 export function NotFoundTemplate({ className }: NotFoundTemplateProps) {
   return (
-    <div className={cn('container mx-auto px-4 py-16 text-center', className)}>
+    <div className={cn('container mx-auto px-4', className)}>
       <div className="max-w-md mx-auto flex flex-col items-center gap-6">
         {/* 404 Icon or Image */}
         <div className="text-primary text-7xl font-bold">404</div>

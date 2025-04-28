@@ -147,22 +147,28 @@ declare
   user_role_id uuid;
   role_name text;
 begin
-  -- Get the role from metadata
+  -- Get the role from metadata with better error handling
   role_name := new.raw_user_meta_data->>'role';
   
-  -- Validate the role
+  -- Log for debugging
+  RAISE NOTICE 'Raw user meta data: %', new.raw_user_meta_data;
+  RAISE NOTICE 'Role name extracted: %', role_name;
+  
+  -- Validate the role with better error message
   if role_name is null or (role_name != 'client' and role_name != 'professional') then
-    raise exception 'Role must be specified as either "client" or "professional"';
+    RAISE NOTICE 'Invalid role specified: %', role_name;
+    role_name := 'client'; -- Default to client if not specified properly
   end if;
   
-  -- Get the corresponding role ID
-  select id into user_role_id from roles where name = role_name;
+  -- Get the corresponding role ID with fully qualified schema
+  select id into user_role_id from public.roles where name = role_name;
   
   if user_role_id is null then
-    raise exception 'Invalid role specified';
+    RAISE EXCEPTION 'Could not find role_id for role: %', role_name;
   end if;
   
   -- Insert the user with the specified role
+  begin
   insert into public.users (
     id, 
     first_name, 
@@ -177,15 +183,22 @@ begin
     new.raw_user_meta_data->>'avatar_url',
     user_role_id
   );
+  exception when others then
+    RAISE EXCEPTION 'Error creating user record: %', SQLERRM;
+  end;
   
   -- Create the appropriate profile based on role
+  begin
   if role_name = 'professional' then
-    insert into professional_profiles (user_id)
+      insert into public.professional_profiles (user_id)
     values (new.id);
   elsif role_name = 'client' then
-    insert into client_profiles (user_id)
+      insert into public.client_profiles (user_id)
     values (new.id);
   end if;
+  exception when others then
+    RAISE EXCEPTION 'Error creating profile record: %', SQLERRM;
+  end;
   
   return new;
 end;

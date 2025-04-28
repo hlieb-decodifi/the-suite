@@ -2,15 +2,17 @@
 
 import { useState } from 'react';
 import { Modal } from '../Modal';
-import { SignUpForm, SignUpFormValues } from '@/components/forms/SignUpForm';
+import { SignUpForm } from '@/components/forms/SignUpForm';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 type SignUpModalProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSignInClick?: () => void;
   onSuccess?: () => void;
+  redirectToDashboard?: boolean;
 };
 
 export function SignUpModal({
@@ -18,8 +20,10 @@ export function SignUpModal({
   onOpenChange,
   onSignInClick,
   onSuccess,
+  redirectToDashboard = true,
 }: SignUpModalProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const router = useRouter();
 
   const handleClose = () => {
     onOpenChange(false);
@@ -30,10 +34,14 @@ export function SignUpModal({
         setIsSubmitted(false);
       }
     }, 300);
+
+    // If we've submitted the form successfully and want to redirect, go to dashboard
+    if (isSubmitted && redirectToDashboard) {
+      router.push('/dashboard');
+    }
   };
 
-  const handleSubmit = (data: SignUpFormValues) => {
-    console.log('Sign up form submitted:', data);
+  const handleSubmit = () => {
     setIsSubmitted(true);
 
     if (onSuccess) {
@@ -70,7 +78,7 @@ export function SignUpModal({
             onClick={handleClose}
             className="px-8 py-3 font-futura text-xl font-bold"
           >
-            Close
+            {redirectToDashboard ? 'Go to Dashboard' : 'Close'}
           </Button>
         </div>
       ) : (
@@ -78,6 +86,7 @@ export function SignUpModal({
           onSubmit={handleSubmit}
           onLoginClick={handleSignInClick}
           className="w-full"
+          redirectToDashboard={redirectToDashboard}
         />
       )}
     </Modal>

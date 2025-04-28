@@ -8,12 +8,14 @@ export type SignUpFormProps = {
   onSubmit: (data: SignUpFormValues) => void;
   onLoginClick?: () => void;
   className?: string;
+  redirectToDashboard?: boolean;
 };
 
 export function SignUpForm({
   onSubmit,
   onLoginClick,
   className = '',
+  redirectToDashboard = false,
 }: SignUpFormProps) {
   const {
     form,
@@ -21,6 +23,7 @@ export function SignUpForm({
     onSubmit: handleSubmit,
   } = useSignUpForm({
     onSubmit,
+    redirectToDashboard,
   });
 
   return (
