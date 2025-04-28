@@ -21,7 +21,7 @@ export function SignInModal({
   onSignUpClick,
   onForgotPasswordClick,
   onSuccess,
-  redirectTo = '/dashboard',
+  redirectTo = '/profile',
 }: SignInModalProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);

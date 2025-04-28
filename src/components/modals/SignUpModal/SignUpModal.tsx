@@ -37,7 +37,7 @@ export function SignUpModal({
 
     // If we've submitted the form successfully and want to redirect, go to dashboard
     if (isSubmitted && redirectToDashboard) {
-      router.push('/dashboard');
+      router.push('/profile');
     }
   };
 

@@ -59,7 +59,7 @@ export function useSignUpForm({
       
       // Redirect based on the redirectToDashboard flag
       if (redirectToDashboard) {
-        router.push('/dashboard');
+        router.push('/profile');
       } else {
       router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
       }

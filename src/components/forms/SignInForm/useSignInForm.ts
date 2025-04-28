@@ -18,7 +18,7 @@ export type UseSignInFormProps = {
 export function useSignInForm({ 
   onSubmit, 
   defaultValues,
-  redirectTo = '/dashboard'
+  redirectTo = '/profile'
 }: UseSignInFormProps) {
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();

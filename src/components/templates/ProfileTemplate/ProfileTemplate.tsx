@@ -1,8 +1,9 @@
 'use client';
 
 import { User } from '@supabase/supabase-js';
-import { ProfileSummaryCard } from './components/ProfileSummaryCard';
-import { AccountDetailsCard } from './components/AccountDetailsCard';
+import { ClientProfileView } from './components/ClientProfileView/ClientProfileView';
+import { ProfessionalProfileView } from './components/ProfessionalProfileView/ProfessionalProfileView';
+import { notFound } from 'next/navigation';
 
 export type ProfileTemplateProps = {
   user: User | null;
@@ -13,29 +14,24 @@ export function ProfileTemplate({ user }: ProfileTemplateProps) {
     return null;
   }
 
-  // Extract user data
-  const firstName = user.user_metadata?.first_name || '';
-  const lastName = user.user_metadata?.last_name || '';
-  const fullName =
-    `${firstName} ${lastName}`.trim() || user.email?.split('@')[0] || 'User';
-  const email = user.email || '';
-  const avatarUrl = user.user_metadata?.avatar_url;
+  // Determine user role from metadata
+  const userRole = user.user_metadata?.role;
 
-  return (
-    <div className="container mx-auto py-10">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <ProfileSummaryCard
-          fullName={fullName}
-          email={email}
-          avatarUrl={avatarUrl}
-        />
-        <AccountDetailsCard
-          firstName={firstName}
-          lastName={lastName}
-          email={email}
-          userId={user.id}
-        />
-      </div>
-    </div>
-  );
+  if (!userRole) {
+    return notFound();
+  }
+
+  // Render the appropriate view based on user role
+  const renderProfileView = () => {
+    switch (userRole) {
+      case 'professional':
+        return <ProfessionalProfileView user={user} />;
+      case 'client':
+        return <ClientProfileView user={user} />;
+      default:
+        return notFound();
+    }
+  };
+
+  return <div className="container mx-auto py-10">{renderProfileView()}</div>;
 }

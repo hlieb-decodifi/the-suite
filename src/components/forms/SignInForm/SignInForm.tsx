@@ -17,7 +17,7 @@ export function SignInForm({
   onSignUpClick,
   onForgotPasswordClick,
   className = '',
-  redirectTo = '/dashboard',
+  redirectTo = '/profile',
 }: SignInFormProps) {
   const {
     form,
