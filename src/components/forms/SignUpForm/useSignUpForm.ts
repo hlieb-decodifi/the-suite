@@ -11,11 +11,13 @@ import { useRouter } from 'next/navigation';
 export type UseSignUpFormProps = {
   onSubmit: (data: SignUpFormValues) => void;
   defaultValues?: Partial<SignUpFormValues>;
+  redirectToDashboard?: boolean;
 };
 
 export function useSignUpForm({ 
   onSubmit, 
-  defaultValues
+  defaultValues,
+  redirectToDashboard = false
 }: UseSignUpFormProps) {
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
@@ -55,8 +57,12 @@ export function useSignUpForm({
         description: "Please check your email to confirm your account."
       });
       
-      // Redirect to email verification page
-      router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
+      // Redirect based on the redirectToDashboard flag
+      if (redirectToDashboard) {
+        router.push('/dashboard');
+      } else {
+        router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
+      }
     } catch (error) {
       console.error('Error submitting form:', error);
       toast({
@@ -67,7 +73,7 @@ export function useSignUpForm({
     } finally {
       setIsPending(false);
     }
-  }, [onSubmit, router]);
+  }, [onSubmit, router, redirectToDashboard]);
 
   return {
     form,
