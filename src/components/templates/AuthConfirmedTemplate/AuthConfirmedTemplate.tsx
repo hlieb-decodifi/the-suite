@@ -1,5 +1,6 @@
 'use client';
 
+import { SignInModal } from '@/components/modals/SignInModal';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -9,22 +10,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons';
+import { CheckCircledIcon } from '@radix-ui/react-icons';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import { SignInModal } from '@/components/modals/SignInModal';
 
-type AuthConfirmedTemplateProps = {
-  isVerified?: boolean;
-};
-
-export function AuthConfirmedTemplate({
-  isVerified: propIsVerified,
-}: AuthConfirmedTemplateProps) {
-  const searchParams = useSearchParams();
-  // Use the prop if provided, otherwise check the query params
-  const isVerified = propIsVerified ?? searchParams.get('verified') === 'true';
+export function AuthConfirmedTemplate() {
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
 
   const handleLoginClick = () => {
@@ -38,29 +28,20 @@ export function AuthConfirmedTemplate({
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
               <div
-                className={`h-12 w-12 ${isVerified ? 'bg-primary/10' : 'bg-destructive/10'} rounded-full flex items-center justify-center`}
+                className={`h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center`}
               >
-                {isVerified ? (
-                  <CheckCircledIcon className="h-6 w-6 text-primary" />
-                ) : (
-                  <CrossCircledIcon className="h-6 w-6 text-destructive" />
-                )}
+                <CheckCircledIcon className="h-6 w-6 text-primary" />
               </div>
             </div>
-            <CardTitle className="text-2xl">
-              {isVerified ? 'Email Verified!' : 'Verification Failed'}
-            </CardTitle>
+            <CardTitle className="text-2xl">Email Verified!</CardTitle>
             <CardDescription className="mt-2">
-              {isVerified
-                ? 'Your email has been successfully verified.'
-                : 'We could not verify your email address.'}
+              Your email has been successfully verified.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <p className="text-muted-foreground">
-              {isVerified
-                ? 'Your email has been successfully verified. Please log in with your credentials to access all features of the application.'
-                : 'There was a problem verifying your email. Please try again or contact support if the issue persists.'}
+              Your email has been successfully verified. Please log in with your
+              credentials to access all features of the application.
             </p>
           </CardContent>
           <CardFooter className="flex flex-col gap-2">

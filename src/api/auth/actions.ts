@@ -1,6 +1,7 @@
 'use server';
 
 import { SignUpFormValues } from '@/components/forms/SignUpForm/schema';
+import { SignInFormValues } from '@/components/forms/SignInForm/schema';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -52,6 +53,43 @@ export async function signUpAction(data: SignUpFormValues) {
     return {
       success: false,
       error: "Database error saving new user",
+    };
+  }
+}
+
+/**
+ * Server action for user sign in
+ */
+export async function signInAction(data: SignInFormValues) {
+  const supabase = await createClient();
+  
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    });
+
+    // Handle error
+    if (authError) {
+      console.error('Auth error:', authError);
+      return {
+        success: false,
+        error: authError.message,
+      };
+    }
+
+    // Return success
+    revalidatePath('/');
+    return {
+      success: true,
+      user: authData.user,
+      session: authData.session,
+    };
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return {
+      success: false,
+      error: "Failed to sign in. Please try again.",
     };
   }
 }

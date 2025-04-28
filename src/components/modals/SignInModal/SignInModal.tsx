@@ -10,14 +10,18 @@ type SignInModalProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSignUpClick?: () => void;
+  onForgotPasswordClick?: () => void;
   onSuccess?: () => void;
+  redirectTo?: string;
 };
 
 export function SignInModal({
   isOpen,
   onOpenChange,
   onSignUpClick,
+  onForgotPasswordClick,
   onSuccess,
+  redirectTo = '/dashboard',
 }: SignInModalProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
@@ -43,8 +47,14 @@ export function SignInModal({
   };
 
   const handleForgotPasswordClick = () => {
-    onOpenChange(false);
-    setIsForgotPasswordOpen(true);
+    // If external handler is provided, use it
+    if (onForgotPasswordClick) {
+      onForgotPasswordClick();
+    } else {
+      // Otherwise use the internal implementation
+      onOpenChange(false);
+      setIsForgotPasswordOpen(true);
+    }
   };
 
   const handleReturnToLogin = () => {
@@ -72,6 +82,7 @@ export function SignInModal({
             }}
             onForgotPasswordClick={handleForgotPasswordClick}
             className="w-full"
+            redirectTo={redirectTo}
           />
         )}
       </Modal>

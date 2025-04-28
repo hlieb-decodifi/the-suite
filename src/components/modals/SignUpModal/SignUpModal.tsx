@@ -20,7 +20,7 @@ export function SignUpModal({
   onOpenChange,
   onSignInClick,
   onSuccess,
-  redirectToDashboard = true,
+  redirectToDashboard = false,
 }: SignUpModalProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const router = useRouter();

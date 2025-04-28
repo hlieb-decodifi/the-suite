@@ -9,6 +9,7 @@ export type SignInFormProps = {
   onSignUpClick?: () => void;
   onForgotPasswordClick?: () => void;
   className?: string;
+  redirectTo?: string;
 };
 
 export function SignInForm({
@@ -16,6 +17,7 @@ export function SignInForm({
   onSignUpClick,
   onForgotPasswordClick,
   className = '',
+  redirectTo = '/dashboard',
 }: SignInFormProps) {
   const {
     form,
@@ -23,6 +25,7 @@ export function SignInForm({
     onSubmit: handleSubmit,
   } = useSignInForm({
     onSubmit,
+    redirectTo,
   });
 
   return (
