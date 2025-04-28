@@ -78,7 +78,7 @@ export async function signInAction(data: SignInFormValues) {
       };
     }
 
-    // Return success
+    // Return success with user and session data that will be used to update the auth store
     revalidatePath('/');
     return {
       success: true,
@@ -116,4 +116,5 @@ export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath('/');
+  // Note: The auth store will be cleared client-side after this action completes
 }

@@ -1,13 +1,13 @@
 'use client';
 
-import { cn } from '@/utils/cn';
 import { Logo } from '@/components/common/Logo/Logo';
-import { SearchBox } from './components/SearchBox/SearchBox';
-import { UserMenu } from './components/UserMenu/UserMenu';
-import { MobileMenu } from './components/MobileMenu/MobileMenu';
+import { cn } from '@/utils/cn';
 import { useState } from 'react';
 import { AuthButtons } from './components/AuthButtons';
+import { MobileMenu } from './components/MobileMenu/MobileMenu';
 import { Modals } from './components/Modals';
+import { SearchBox } from './components/SearchBox/SearchBox';
+import { UserMenu } from './components/UserMenu/UserMenu';
 
 export type HeaderProps = {
   className?: string;

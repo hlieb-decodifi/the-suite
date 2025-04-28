@@ -11,7 +11,8 @@ import { Menu, Search } from 'lucide-react';
 import { useState } from 'react';
 import { SearchBox } from '../SearchBox/SearchBox';
 import { MobileNavLinks } from './components/MobileNavLinks';
-import { MobileUserProfile } from './components/MobileUserProfile';
+import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
+import { UserProfileSummary } from '@/components/common/Header/components/UserProfileSummary/UserProfileSummary';
 
 export type MobileMenuProps = {
   isAuthenticated?: boolean;
@@ -60,11 +61,19 @@ export function MobileMenu({
             {/* Authentication Controls */}
             <div className="mt-auto flex flex-col gap-3 pb-6">
               {isAuthenticated && userInfo ? (
-                <MobileUserProfile userInfo={userInfo} />
+                <>
+                  <UserProfileSummary
+                    userInfo={userInfo}
+                    className="bg-muted rounded-md p-3"
+                  />
+                  <div className="mt-4 border-t pt-4">
+                    <SignOutButton className="w-full" />
+                  </div>
+                </>
               ) : (
                 <>
                   <Button
-                    className="w-full font-futura font-medium bg-[#DEA85B] text-white hover:bg-[#C89245]"
+                    className="w-full font-futura font-medium bg-primary text-primary-foreground hover:bg-primary/90"
                     onClick={() => {
                       setIsOpen(false);
                       if (onSignUpClick) onSignUpClick();
@@ -74,7 +83,7 @@ export function MobileMenu({
                   </Button>
                   <Button
                     variant="outline"
-                    className="w-full font-futura font-medium border-[#DEA85B] text-[#313131] hover:bg-[#DEA85B] hover:text-white"
+                    className="w-full font-futura font-medium border-primary text-foreground hover:bg-primary hover:text-primary-foreground"
                     onClick={() => {
                       setIsOpen(false);
                       if (onSignInClick) onSignInClick();

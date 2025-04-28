@@ -7,6 +7,7 @@ import { SignInFormValues, signInSchema } from './schema';
 import { signInAction } from '@/api/auth/actions';
 import { toast } from '@/components/ui/use-toast';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/stores/authStore';
 
 export type UseSignInFormProps = {
   onSubmit: (data: SignInFormValues) => void;
@@ -21,6 +22,7 @@ export function useSignInForm({
 }: UseSignInFormProps) {
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
+  const { setUser, setSession } = useAuthStore();
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -47,6 +49,10 @@ export function useSignInForm({
         return;
       }
       
+      // Update the auth store with user and session data
+      if (result.user) setUser(result.user);
+      if (result.session) setSession(result.session);
+      
       // Call the onSubmit callback passed from parent
       onSubmit(data);
       
@@ -69,7 +75,7 @@ export function useSignInForm({
     } finally {
       setIsPending(false);
     }
-  }, [onSubmit, router, redirectTo]);
+  }, [onSubmit, router, redirectTo, setUser, setSession]);
 
   return {
     form,

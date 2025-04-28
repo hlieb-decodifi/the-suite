@@ -1,14 +1,21 @@
+'use client';
+
 import { Header } from '@/components/common/Header';
 import { Footer } from '@/components/common/Footer';
+import { useAuthStore } from '@/stores/authStore';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 
 export type RootLayoutTemplateProps = {
   children: React.ReactNode;
 };
 
 export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
-  // This is just a placeholder since we don't have actual auth state management
-  // In a real app, this would come from your auth context
-  const isAuthenticated = false;
+  const { isAuthenticated, isLoading } = useAuthStore();
+
+  // Show loading overlay while authentication state is being determined
+  if (isLoading) {
+    return <LoadingOverlay />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col relative">
