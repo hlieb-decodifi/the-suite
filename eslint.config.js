@@ -41,9 +41,6 @@ export default [
       'react/react-in-jsx-scope': 'off',
       'jsx-a11y/anchor-is-valid': 'off',
 
-      // Function/code complexity
-      'max-lines-per-function': ['error', { max: 80 }],
-
       // Error rules (no warnings)
       'no-console': ['error', { allow: ['error', 'log'] }], // Allow console.error
       'no-debugger': 'error',

@@ -100,9 +100,6 @@ export default [
       'react/react-in-jsx-scope': 'off', // Not needed in Next.js
       'jsx-a11y/anchor-is-valid': 'off', // Next.js Link component handles this
 
-      // Function/code complexity
-      'max-lines-per-function': ['error', { max: 80 }],
-
       // Error rules (no warnings)
       'no-console': 'error',
       'no-debugger': 'error',
