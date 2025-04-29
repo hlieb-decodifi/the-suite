@@ -7,11 +7,13 @@ type AuthState = {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  avatarUrl: string | null;
   
   // Actions
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
   setIsLoading: (isLoading: boolean) => void;
+  setAvatarUrl: (url: string | null) => void;
   signOut: () => void;
   
   // Derived state
@@ -26,26 +28,31 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       isLoading: true,
       isAuthenticated: false,
+      avatarUrl: null,
       
       // Actions
       setUser: (user) => set({ 
         user, 
         isAuthenticated: !!user,
+        avatarUrl: null,
       }),
       
       setSession: (session) => set({ 
         session,
-        // Update user from session if available
         user: session?.user || get().user,
         isAuthenticated: !!session,
+        avatarUrl: null,
       }),
       
       setIsLoading: (isLoading) => set({ isLoading }),
+      
+      setAvatarUrl: (url) => set({ avatarUrl: url }),
       
       signOut: () => set({ 
         user: null,
         session: null,
         isAuthenticated: false,
+        avatarUrl: null,
       }),
       
       // Derived state
@@ -69,6 +76,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         session: state.session,
         isAuthenticated: state.isAuthenticated,
+        avatarUrl: state.avatarUrl,
       }),
     }
   )

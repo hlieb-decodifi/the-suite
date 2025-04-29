@@ -20,7 +20,7 @@ export type MobileMenuProps = {
     | {
         name: string;
         email: string;
-        avatarUrl?: string;
+        avatarUrl?: string | null;
       }
     | undefined;
   onSignUpClick?: () => void;

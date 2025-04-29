@@ -16,7 +16,7 @@ export type HeaderProps = {
     | {
         name: string;
         email: string;
-        avatarUrl?: string;
+        avatarUrl?: string | null;
       }
     | undefined;
 };

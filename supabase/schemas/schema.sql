@@ -30,7 +30,6 @@ create table users (
   id uuid references auth.users not null primary key,
   first_name text not null,
   last_name text not null,
-  avatar_url text,
   role_id uuid references roles not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -364,14 +363,12 @@ begin
     id, 
     first_name, 
     last_name, 
-    avatar_url, 
     role_id
   )
   values (
     new.id, 
     coalesce(new.raw_user_meta_data->>'first_name', ''),
     coalesce(new.raw_user_meta_data->>'last_name', ''),
-    new.raw_user_meta_data->>'avatar_url',
     user_role_id
   );
   exception when others then
@@ -398,45 +395,107 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- Drop the existing photos table and enum
+drop table if exists photos;
+drop type if exists photo_type;
+
 /**
-* PHOTOS
-* All photos for the app (avatars, portfolio, etc.)
+* PROFILE_PHOTOS
+* One profile photo per user (both clients and professionals)
 */
-create type photo_type as enum ('avatar', 'portfolio', 'profile');
-create table photos (
+create table profile_photos (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references users not null unique, -- Unique constraint ensures only one photo per user
+  url text not null,
+  filename text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table profile_photos enable row level security;
+
+-- RLS policies for profile photos
+create policy "Users can view their own profile photo"
+  on profile_photos for select
+  using (auth.uid() = user_id);
+  
+create policy "Users can insert their own profile photo"
+  on profile_photos for insert
+  with check (auth.uid() = user_id);
+  
+create policy "Users can update their own profile photo"
+  on profile_photos for update
+  using (auth.uid() = user_id);
+  
+create policy "Users can delete their own profile photo"
+  on profile_photos for delete
+  using (auth.uid() = user_id);
+  
+create policy "Anyone can view profile photos of published professionals"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id = profile_photos.user_id
+      and professional_profiles.is_published = true
+    )
+  );
+
+/**
+* PORTFOLIO_PHOTOS
+* Up to 10 portfolio photos per professional
+*/
+create table portfolio_photos (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references users not null,
   url text not null,
-  type photo_type not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  filename text not null,
+  description text,
+  order_index integer not null default 0, -- For ordering the portfolio photos
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  constraint user_is_professional check (is_professional(user_id)) -- Ensure only professionals can have portfolio photos
 );
-alter table photos enable row level security;
+alter table portfolio_photos enable row level security;
 
--- RLS policies for photos
-create policy "Users can view their own photos"
-  on photos for select
+-- Add constraint to limit portfolio photos to 10 per user
+create or replace function check_portfolio_photo_limit()
+returns trigger as $$
+begin
+  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 10 then
+    raise exception 'Maximum of 10 portfolio photos allowed per professional';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger enforce_portfolio_photo_limit
+  before insert on portfolio_photos
+  for each row
+  execute function check_portfolio_photo_limit();
+
+-- RLS policies for portfolio photos
+create policy "Professionals can view their own portfolio photos"
+  on portfolio_photos for select
   using (auth.uid() = user_id);
   
-create policy "Users can insert their own photos"
-  on photos for insert
+create policy "Professionals can insert their own portfolio photos"
+  on portfolio_photos for insert
   with check (auth.uid() = user_id);
   
-create policy "Users can update their own photos"
-  on photos for update
+create policy "Professionals can update their own portfolio photos"
+  on portfolio_photos for update
   using (auth.uid() = user_id);
   
-create policy "Users can delete their own photos"
-  on photos for delete
+create policy "Professionals can delete their own portfolio photos"
+  on portfolio_photos for delete
   using (auth.uid() = user_id);
   
 create policy "Anyone can view portfolio photos of published professionals"
-  on photos for select
+  on portfolio_photos for select
   using (
-    -- If the photo belongs to a professional with a published profile
-    type = 'portfolio' AND
     exists (
       select 1 from professional_profiles
-      where professional_profiles.user_id = photos.user_id
+      where professional_profiles.user_id = portfolio_photos.user_id
       and professional_profiles.is_published = true
     )
   );

@@ -1,16 +1,16 @@
 'use client';
 
-import Image from 'next/image';
+import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { Typography } from '@/components/ui/typography';
-import { User } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { User } from 'lucide-react';
 import * as React from 'react';
+import { useAuthStore } from '@/stores/authStore';
 
 export type UserProfileSummaryProps = {
   userInfo: {
     name: string;
     email: string;
-    avatarUrl?: string;
   };
   className?: string;
   as?: 'div' | 'button';
@@ -25,16 +25,18 @@ export function UserProfileSummary({
   onClick,
   tabIndex,
 }: UserProfileSummaryProps) {
+  const avatarUrl = useAuthStore((state) => state.avatarUrl);
+
   const shared = (
     <>
-      {userInfo.avatarUrl ? (
-        <Image
-          src={userInfo.avatarUrl}
-          alt="User avatar"
-          width={40}
-          height={40}
-          className="rounded-full"
-        />
+      {avatarUrl ? (
+        <Avatar>
+          <AvatarImage
+            src={avatarUrl}
+            alt="User avatar"
+            className="object-cover size-10 rounded-full"
+          />
+        </Avatar>
       ) : (
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
           <User size={20} className="text-primary-foreground" />

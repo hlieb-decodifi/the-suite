@@ -15,7 +15,7 @@ export type UserMenuProps = {
   userInfo: {
     name: string;
     email: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
   };
 };
 

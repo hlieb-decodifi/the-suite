@@ -84,31 +84,40 @@ export type Database = {
           },
         ]
       }
-      photos: {
+      portfolio_photos: {
         Row: {
           created_at: string
+          description: string | null
+          filename: string
           id: string
-          type: Database["public"]["Enums"]["photo_type"]
+          order_index: number
+          updated_at: string
           url: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          description?: string | null
+          filename: string
           id?: string
-          type: Database["public"]["Enums"]["photo_type"]
+          order_index?: number
+          updated_at?: string
           url: string
           user_id: string
         }
         Update: {
           created_at?: string
+          description?: string | null
+          filename?: string
           id?: string
-          type?: Database["public"]["Enums"]["photo_type"]
+          order_index?: number
+          updated_at?: string
           url?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "photos_user_id_fkey"
+            foreignKeyName: "portfolio_photos_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -218,6 +227,41 @@ export type Database = {
           },
         ]
       }
+      profile_photos: {
+        Row: {
+          created_at: string
+          filename: string
+          id: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filename: string
+          id?: string
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filename?: string
+          id?: string
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_photos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           created_at: string
@@ -271,7 +315,6 @@ export type Database = {
       }
       users: {
         Row: {
-          avatar_url: string | null
           created_at: string
           first_name: string
           id: string
@@ -280,7 +323,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          avatar_url?: string | null
           created_at?: string
           first_name: string
           id: string
@@ -289,7 +331,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          avatar_url?: string | null
           created_at?: string
           first_name?: string
           id?: string
@@ -322,7 +363,7 @@ export type Database = {
       }
     }
     Enums: {
-      photo_type: "avatar" | "portfolio" | "profile"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -437,9 +478,7 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      photo_type: ["avatar", "portfolio", "profile"],
-    },
+    Enums: {},
   },
 } as const
 
