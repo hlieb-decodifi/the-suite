@@ -15,6 +15,8 @@ export function UploadButton({
   onSuccess,
   className,
 }: UploadButtonProps) {
+  // TODO: Remove this once we have a real implementation
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +49,9 @@ export function UploadButton({
         size="icon"
         variant="secondary"
         className="h-8 w-8 rounded-full"
-        disabled={isUploading}
+        // TODO: Remove this once we have a real implementation
+        disabled
+        // disabled={isUploading}
         asChild
       >
         <label>
@@ -57,7 +61,9 @@ export function UploadButton({
             accept="image/*"
             className="sr-only"
             onChange={handleFileChange}
-            disabled={isUploading}
+            // TODO: Remove this once we have a real implementation
+            disabled
+            // disabled={isUploading}
           />
         </label>
       </Button>

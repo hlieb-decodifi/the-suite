@@ -17,6 +17,7 @@ export type AccountSectionProps = {
   user: User;
 };
 
+// eslint-disable-next-line max-lines-per-function
 export function AccountSection({ user }: AccountSectionProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(
     user.user_metadata?.avatar_url,
@@ -67,6 +68,8 @@ export function AccountSection({ user }: AccountSectionProps) {
               size="sm"
               className="w-full font-medium justify-start text-[#313131] border-[#ECECEC] hover:bg-[#F5F5F5] hover:text-[#DEA85B] hover:border-[#DEA85B]"
               onClick={() => setIsPasswordModalOpen(true)}
+              // TODO: Remove this once we have a real implementation
+              disabled
             >
               <Key size={16} className="mr-2 text-[#DEA85B]" />
               Change Password
@@ -76,6 +79,8 @@ export function AccountSection({ user }: AccountSectionProps) {
               size="sm"
               className="w-full font-medium justify-start text-[#313131] border-[#ECECEC] hover:bg-[#F5F5F5] hover:text-[#DEA85B] hover:border-[#DEA85B]"
               onClick={() => setIsEmailModalOpen(true)}
+              // TODO: Remove this once we have a real implementation
+              disabled
             >
               <Mail size={16} className="mr-2 text-[#DEA85B]" />
               Update Email
