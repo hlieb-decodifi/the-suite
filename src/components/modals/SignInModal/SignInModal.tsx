@@ -1,6 +1,6 @@
 'use client';
 
-import { SignInForm, SignInFormValues } from '@/components/forms/SignInForm';
+import { SignInForm } from '@/components/forms/SignInForm';
 import { useState } from 'react';
 import { ForgotPasswordModal } from '../ForgotPasswordModal';
 import { Modal } from '../Modal';
@@ -22,24 +22,13 @@ export function SignInModal({
   onSuccess,
   redirectTo = '/profile',
 }: SignInModalProps) {
-  const [isSubmitted, setIsSubmitted] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
   const handleClose = () => {
     onOpenChange(false);
-
-    // Reset form state when modal is closed
-    setTimeout(() => {
-      if (!isOpen) {
-        setIsSubmitted(false);
-      }
-    }, 300);
   };
 
-  const handleSubmit = async (data: SignInFormValues) => {
-    console.log('Sign in form submitted:', data);
-    setIsSubmitted(true);
-
+  const handleSubmit = async () => {
     if (onSuccess) {
       onSuccess();
     }
