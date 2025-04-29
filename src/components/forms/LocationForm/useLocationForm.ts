@@ -44,11 +44,6 @@ export function useLocationForm({
       // Call the parent's onSubmit function
       await onSubmit(data);
       
-      toast({
-        title: "Address updated",
-        description: "Your location information has been updated successfully.",
-      });
-      
       setSaveSuccess(true);
     } catch (error) {
       console.error('Error updating location:', error);

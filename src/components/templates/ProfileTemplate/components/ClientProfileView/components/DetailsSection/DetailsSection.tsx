@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,30 +10,51 @@ import {
   DetailsFormValues,
   DetailsDisplay,
 } from '@/components/forms/DetailsForm';
+import { ClientProfile, useUpdateUserDetails } from '@/api/profiles';
 
 export type DetailsSectionProps = {
   user: User;
+  profile: ClientProfile | null;
 };
 
-export function DetailsSection({ user }: DetailsSectionProps) {
+export function DetailsSection({ user, profile }: DetailsSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const updateDetails = useUpdateUserDetails();
+
   const [formData, setFormData] = useState<DetailsFormValues>({
     firstName: user.user_metadata?.first_name || '',
     lastName: user.user_metadata?.last_name || '',
-    phone: user.user_metadata?.phone || '',
+    phone: profile?.phone_number || user.user_metadata?.phone || '',
   });
+
+  // Update form data when profile changes
+  useEffect(() => {
+    setFormData({
+      firstName: user.user_metadata?.first_name || '',
+      lastName: user.user_metadata?.last_name || '',
+      phone: profile?.phone_number || user.user_metadata?.phone || '',
+    });
+  }, [profile, user.user_metadata]);
 
   const handleSubmit = async (data: DetailsFormValues) => {
     try {
-      // Here you would update the user's metadata in Supabase
-      console.log('Updating user details:', data);
+      // Use the API to update user details
+      const success = await updateDetails.mutateAsync({
+        user,
+        details: {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone || '',
+        },
+      });
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Update local state with new values
-      setFormData(data);
-      setIsEditing(false);
+      if (success) {
+        // Update local state with new values
+        setFormData(data);
+        setIsEditing(false);
+      } else {
+        throw new Error('Failed to update user details');
+      }
     } catch (error) {
       console.error('Error saving user details:', error);
       throw error;

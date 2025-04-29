@@ -25,7 +25,7 @@ function DetailsFields({
 }) {
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <FormInput
           id="firstName"
           label="First Name"
@@ -61,16 +61,16 @@ type DetailsFormContentProps = {
   form: UseFormReturn<DetailsFormValues>;
   isPending: boolean;
   saveSuccess: boolean;
-  onSubmit: (data: DetailsFormValues) => void;
   onCancel: () => void;
+  onSubmit: (data: DetailsFormValues) => Promise<void>;
 };
 
 export function DetailsFormContent({
   form,
   isPending,
   saveSuccess,
-  onSubmit,
   onCancel,
+  onSubmit,
 }: DetailsFormContentProps) {
   const {
     register,
@@ -83,7 +83,7 @@ export function DetailsFormContent({
   const phone = watch('phone');
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <DetailsFields
         register={register}
         errors={errors}
@@ -91,7 +91,7 @@ export function DetailsFormContent({
         onPhoneChange={(value) => setValue('phone', value)}
       />
 
-      <Separator className="my-4" />
+      <Separator className="my-3" />
 
       <FormButtons
         isPending={isPending}

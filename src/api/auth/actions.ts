@@ -118,3 +118,101 @@ export async function signOutAction() {
   revalidatePath('/');
   // Note: The auth store will be cleared client-side after this action completes
 }
+
+/**
+ * Server action to change user password
+ */
+export async function changePasswordAction(currentPassword: string, newPassword: string) {
+  const supabase = await createClient();
+  
+  try {
+    // First verify the current password is correct by attempting to sign in
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: '', // This will be filled from the session
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      return {
+        success: false,
+        error: 'Current password is incorrect',
+      };
+    }
+
+    // Update the password
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Password change error:', error);
+    return {
+      success: false,
+      error: "Failed to change password. Please try again.",
+    };
+  }
+}
+
+/**
+ * Server action to update user email
+ */
+export async function updateEmailAction(newEmail: string, password: string) {
+  const supabase = await createClient();
+  
+  try {
+    // First verify the password is correct
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user?.email) {
+      return {
+        success: false,
+        error: "No user email found",
+      };
+    }
+    
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: password,
+    });
+
+    if (verifyError) {
+      return {
+        success: false,
+        error: 'Password is incorrect',
+      };
+    }
+
+    // Update the email
+    const { error } = await supabase.auth.updateUser({
+      email: newEmail,
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    revalidatePath('/profile');
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Email update error:', error);
+    return {
+      success: false,
+      error: "Failed to update email. Please try again.",
+    };
+  }
+}

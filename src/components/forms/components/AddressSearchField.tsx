@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { MapPin, Loader2 } from 'lucide-react';
 import {
-  searchAddresses,
+  // searchAddresses,
   OSMSearchResult,
   parseAddressComponents,
 } from '@/lib/osm';
@@ -74,7 +74,8 @@ function useAddressSearch(
 
       setIsSearching(true);
       try {
-        const results = await searchAddresses(debouncedAddress);
+        // const results = await searchAddresses(debouncedAddress);
+        const results: OSMSearchResult[] = [];
         setSearchResults(results);
         // Only open the popover when we have results or are searching
         if (!open && (results.length > 0 || isSearching)) {
@@ -185,10 +186,16 @@ export function AddressSearchField({
         if (!newOpen) setOpen(newOpen);
       }}
     >
-      <PopoverTrigger asChild>
+      <PopoverTrigger
+        // TODO: Enable this when we have a way to create addresses
+        disabled
+        asChild
+      >
         <div className="relative">
           <MapPin className="absolute left-2 top-2.5 h-4 w-4 text-[#DEA85B]" />
           <Input
+            // TODO: Enable this when we have a way to create addresses
+            disabled
             ref={inputRef}
             placeholder="Search for your address"
             className="pl-8 border-[#ECECEC] focus:border-[#DEA85B] focus:ring-[#DEA85B]"

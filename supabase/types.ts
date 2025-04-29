@@ -7,35 +7,41 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string
-          query?: string
-          variables?: Json
-          extensions?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      addresses: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          id: string
+          state: string | null
+          street_address: string | null
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          state?: string | null
+          street_address?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          state?: string | null
+          street_address?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_profiles: {
         Row: {
+          address_id: string | null
           created_at: string
           id: string
           location: string | null
@@ -44,6 +50,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          address_id?: string | null
           created_at?: string
           id?: string
           location?: string | null
@@ -52,6 +59,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          address_id?: string | null
           created_at?: string
           id?: string
           location?: string | null
@@ -60,6 +68,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "client_profiles_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_profiles_user_id_fkey"
             columns: ["user_id"]
@@ -103,6 +118,7 @@ export type Database = {
       }
       professional_profiles: {
         Row: {
+          address_id: string | null
           appointment_requirements: string | null
           created_at: string
           description: string | null
@@ -117,6 +133,7 @@ export type Database = {
           working_hours: Json | null
         }
         Insert: {
+          address_id?: string | null
           appointment_requirements?: string | null
           created_at?: string
           description?: string | null
@@ -131,6 +148,7 @@ export type Database = {
           working_hours?: Json | null
         }
         Update: {
+          address_id?: string | null
           appointment_requirements?: string | null
           created_at?: string
           description?: string | null
@@ -145,6 +163,13 @@ export type Database = {
           working_hours?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "professional_profiles_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "professional_profiles_user_id_fkey"
             columns: ["user_id"]
@@ -287,10 +312,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      is_admin: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
       is_client: {
         Args: { user_uuid: string }
         Returns: boolean
@@ -415,9 +436,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       photo_type: ["avatar", "portfolio", "profile"],

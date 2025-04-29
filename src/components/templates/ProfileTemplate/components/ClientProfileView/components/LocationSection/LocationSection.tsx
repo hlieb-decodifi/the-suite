@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,39 +10,39 @@ import {
   LocationFormValues,
   LocationDisplay,
 } from '@/components/forms/LocationForm';
+import { Address, ClientProfile } from '@/api/profiles';
+import { useAddressFormatter } from './useAddressFormatter';
+import { useLocationSection } from './useLocationSection';
 
 export type LocationSectionProps = {
   user: User;
+  profile: ClientProfile | null;
+  address: Address | null;
 };
 
-export function LocationSection({ user }: LocationSectionProps) {
+export function LocationSection({
+  user,
+  profile,
+  address,
+}: LocationSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<LocationFormValues>({
-    address: user.user_metadata?.address?.fullAddress || '',
-    country: user.user_metadata?.address?.country || '',
-    state: user.user_metadata?.address?.state || '',
-    city: user.user_metadata?.address?.city || '',
-    streetAddress: `${user.user_metadata?.address?.houseNumber || ''} ${
-      user.user_metadata?.address?.street || ''
-    }`.trim(),
+  const { formatAddress } = useAddressFormatter();
+
+  const [formData, setFormData] = useState<LocationFormValues>(
+    formatAddress(address, user.user_metadata),
+  );
+
+  // Update form data when the address changes
+  useEffect(() => {
+    setFormData(formatAddress(address, user.user_metadata));
+  }, [address, user.user_metadata, formatAddress]);
+
+  const { handleSubmit } = useLocationSection({
+    user,
+    profile,
+    setFormData,
+    setIsEditing,
   });
-
-  const handleSubmit = async (data: LocationFormValues) => {
-    try {
-      // In a real implementation, you would update the user's address in Supabase
-      console.log('Saving address:', data);
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Update local state with new values
-      setFormData(data);
-      setIsEditing(false);
-    } catch (error) {
-      console.error('Error saving address:', error);
-      throw error;
-    }
-  };
 
   return (
     <Card className="border-[#ECECEC]">

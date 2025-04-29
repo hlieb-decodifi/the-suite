@@ -7,6 +7,7 @@ export type ProfessionalProfileViewProps = {
 };
 
 export function ProfessionalProfileView({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   user,
 }: ProfessionalProfileViewProps) {
   return (

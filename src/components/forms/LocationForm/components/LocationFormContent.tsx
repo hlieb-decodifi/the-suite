@@ -34,7 +34,7 @@ function LocationFields({
     <>
       <FormField
         id="address-search"
-        label="Address Search"
+        label="Address Search (will be enabled later)"
         error={errors.address?.message}
       >
         <AddressSearchField
@@ -44,7 +44,7 @@ function LocationFields({
         />
       </FormField>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormInput
           id="country"
           label="Country"

@@ -1,11 +1,13 @@
 'use client';
 
+import { useClientProfile } from '@/api/profiles';
+import { Separator } from '@/components/ui/separator';
+import { Typography } from '@/components/ui/typography';
 import { User } from '@supabase/supabase-js';
 import { AccountSection } from './components/AccountSection/AccountSection';
 import { DetailsSection } from './components/DetailsSection/DetailsSection';
 import { LocationSection } from './components/LocationSection/LocationSection';
-import { Typography } from '@/components/ui/typography';
-import { Separator } from '@/components/ui/separator';
+import { ProfileSkeleton } from './components/ProfileSkeleton';
 import { ServicesSection } from './components/ServicesSection/ServicesSection';
 
 export type ClientProfileViewProps = {
@@ -13,10 +15,27 @@ export type ClientProfileViewProps = {
 };
 
 export function ClientProfileView({ user }: ClientProfileViewProps) {
+  const { data, isLoading, error } = useClientProfile(user.id);
+  const { profile, address } = data || { profile: null, address: null };
+
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 rounded-lg border border-red-200 text-red-700">
+        <h3 className="text-lg font-semibold mb-2">Error loading profile</h3>
+        <p>There was a problem loading your profile. Please try again later.</p>
+        <p className="text-sm mt-2">
+          {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
+      </div>
+    );
+  }
+
   const hasAddress = Boolean(
-    user.user_metadata?.address?.city ||
-      user.user_metadata?.address?.state ||
-      user.user_metadata?.address?.country,
+    address?.city || address?.state || address?.country,
   );
 
   return (
@@ -30,7 +49,6 @@ export function ClientProfileView({ user }: ClientProfileViewProps) {
         </Typography>
         <Separator className="my-4" />
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-1 space-y-6">
           <AccountSection user={user} />
@@ -60,11 +78,9 @@ export function ClientProfileView({ user }: ClientProfileViewProps) {
             </ul>
           </div>
         </div>
-
         <div className="md:col-span-2 space-y-8">
-          <DetailsSection user={user} />
-          <LocationSection user={user} />
-
+          <DetailsSection user={user} profile={profile} />
+          <LocationSection user={user} profile={profile} address={address} />
           {hasAddress && (
             <>
               <Separator className="my-8" />
