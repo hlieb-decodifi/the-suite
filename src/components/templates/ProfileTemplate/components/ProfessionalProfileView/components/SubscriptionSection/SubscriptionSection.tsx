@@ -94,7 +94,7 @@ export function SubscriptionSection({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Monthly Plan */}
           <Card
-            className={`border ${selectedPlan === 'monthly' ? 'border-primary' : 'border-border'}`}
+            className={`flex flex-col justify-between border ${selectedPlan === 'monthly' ? 'border-primary' : 'border-border'}`}
           >
             <CardHeader className="pb-3">
               <div
