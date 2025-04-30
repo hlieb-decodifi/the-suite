@@ -1,37 +1,45 @@
-import { useId } from 'react';
-import { Form } from '@/components/ui/form';
-import { Button } from '@/components/ui/button';
-import { Typography } from '@/components/ui/typography'; // For potential error message
+/* eslint-disable max-lines-per-function */
+import { PaymentMethod } from '@/api/payment_methods'; // Import PaymentMethod type
 import {
-  FormFieldWrapper, // Use wrapper for structure, though label might be empty
   FormCheckbox,
+  FormFieldWrapper, // Use wrapper for structure, though label might be empty
 } from '@/components/forms/common';
+import { Button } from '@/components/ui/button';
+import { Form } from '@/components/ui/form';
+import { Typography } from '@/components/ui/typography'; // For potential error message
+import { useId } from 'react';
+import { PaymentMethodsFormValues } from './schema';
 import { usePaymentMethodsForm } from './usePaymentMethodsForm';
-import { PaymentMethodsFormValues, PAYMENT_METHODS } from './schema';
 
 export type PaymentMethodsFormProps = {
   onSubmitSuccess: (data: PaymentMethodsFormValues) => void;
   onCancel: () => void;
+  availableMethods: PaymentMethod[]; // Add prop for available methods
   defaultValues?: Partial<PaymentMethodsFormValues>;
+  isSubmitting?: boolean; // Add isSubmitting prop
 };
 
 export function PaymentMethodsForm({
   onSubmitSuccess,
   onCancel,
+  availableMethods,
   defaultValues,
+  isSubmitting, // Receive isSubmitting prop
 }: PaymentMethodsFormProps) {
   const formId = useId();
   const {
     form,
-    isPending,
+    // isPending is handled by the parent now via isSubmitting prop
     onSubmit: handleFormSubmit,
   } = usePaymentMethodsForm({
-    onSubmit: onSubmitSuccess, // Pass the success handler directly
-    defaultValues,
+    onSubmit: onSubmitSuccess,
+    // Provide {} fallback for potentially undefined defaultValues
+    defaultValues: defaultValues ?? {},
   });
 
   // Check for the specific field error where the refinement message is attached
-  const groupError = form.formState.errors.creditCard?.message;
+  // The error from refine without a path is often attached to the root or ""
+  const groupError = form.formState.errors['']?.message;
 
   return (
     <Form {...form}>
@@ -41,10 +49,12 @@ export function PaymentMethodsForm({
         noValidate
       >
         <div className="space-y-2">
-          {PAYMENT_METHODS.map((method) => (
+          {/* Render checkboxes dynamically */}
+          {availableMethods.map((method) => (
             <FormFieldWrapper
               key={method.id}
               control={form.control}
+              // Use method.id as the field name
               name={method.id as keyof PaymentMethodsFormValues}
               label="" // Label rendered by FormCheckbox
               showErrorMessage={false} // Keep hiding individual field messages
@@ -53,7 +63,7 @@ export function PaymentMethodsForm({
               {(field) => (
                 <FormCheckbox
                   field={field}
-                  label={method.label}
+                  label={method.name} // Use method name as label
                   id={`${formId}-${method.id}`}
                   labelClassName="text-md"
                 />
@@ -79,12 +89,12 @@ export function PaymentMethodsForm({
             size="sm"
             variant="outline"
             onClick={onCancel}
-            disabled={isPending}
+            disabled={isSubmitting} // Use isSubmitting prop
           >
             Cancel
           </Button>
-          <Button size="sm" type="submit" disabled={isPending}>
-            {isPending ? 'Saving...' : 'Save Changes'}
+          <Button size="sm" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </form>

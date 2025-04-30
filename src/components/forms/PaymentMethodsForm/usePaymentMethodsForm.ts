@@ -1,52 +1,54 @@
-import { useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  paymentMethodsSchema,
-  PaymentMethodsFormValues,
-} from './schema';
+import { paymentMethodsSchema, PaymentMethodsFormValues } from './schema';
+import { useCallback } from 'react';
+import type { Resolver } from 'react-hook-form';
 
 export type UsePaymentMethodsFormProps = {
-  onSubmit: (data: PaymentMethodsFormValues) => Promise<void> | void;
-  defaultValues?: Partial<PaymentMethodsFormValues> | undefined;
+  onSubmit: (data: PaymentMethodsFormValues) => void; // Keep void for simplicity now
+  // defaultValues might be partial, keys are UUIDs
+  defaultValues?: Partial<PaymentMethodsFormValues>;
 };
 
 export function usePaymentMethodsForm({
   onSubmit,
   defaultValues,
 }: UsePaymentMethodsFormProps) {
-  const [isPending, setIsPending] = useState(false);
+  // isPending state is removed as it's handled by the parent via isSubmitting prop
 
   const form = useForm<PaymentMethodsFormValues>({
-    resolver: zodResolver(paymentMethodsSchema),
-    // Provide defaults for the optional schema fields
-    defaultValues: {
-      creditCard: defaultValues?.creditCard ?? false,
-      cash: defaultValues?.cash ?? false,
-    },
+    resolver: zodResolver(paymentMethodsSchema) as Resolver<PaymentMethodsFormValues>,
+    // Initialize with provided defaults. Missing keys will be implicitly undefined/false.
+    defaultValues: defaultValues ?? {},
+    mode: 'onChange', // Or 'onBlur' or 'onSubmit' as needed
   });
 
+  // Reset logic might need adjustment if defaults change significantly after mount
+  // useEffect(() => {
+  //   form.reset(defaultValues ?? {});
+  // }, [defaultValues, form]);
+
+  // The submit handler remains largely the same
   const handleSubmit = useCallback(
     async (data: PaymentMethodsFormValues) => {
-      setIsPending(true);
       try {
-        // Pass data, ensuring defaults are handled if needed upstream
-        await onSubmit({
-          creditCard: data.creditCard ?? false,
-          cash: data.cash ?? false,
-        });
+        await onSubmit(data);
+        // No need to manage isPending here
       } catch (err) {
-        console.error('Submission failed:', err);
-      } finally {
-        setIsPending(false);
+        console.error('PaymentMethodsForm submission failed:', err);
+        // Optionally set a form error if the onSubmit promise rejects
+        form.setError('root.serverError', {
+          type: 'manual',
+          message: 'Failed to save payment methods. Please try again.',
+        });
       }
     },
-    [onSubmit],
+    [onSubmit, form],
   );
 
   return {
     form,
-    isPending,
     onSubmit: handleSubmit,
+    // Removed isPending from return
   };
 } 

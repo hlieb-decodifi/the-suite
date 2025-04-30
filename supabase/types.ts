@@ -84,6 +84,24 @@ export type Database = {
           },
         ]
       }
+      payment_methods: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       portfolio_photos: {
         Row: {
           created_at: string
@@ -121,6 +139,42 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      professional_payment_methods: {
+        Row: {
+          created_at: string
+          id: string
+          payment_method_id: string
+          professional_profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payment_method_id: string
+          professional_profile_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payment_method_id?: string
+          professional_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_payment_methods_payment_method_id_fkey"
+            columns: ["payment_method_id"]
+            isOneToOne: false
+            referencedRelation: "payment_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_payment_methods_professional_profile_id_fkey"
+            columns: ["professional_profile_id"]
+            isOneToOne: false
+            referencedRelation: "professional_profiles"
             referencedColumns: ["id"]
           },
         ]

@@ -492,6 +492,56 @@ create policy "Anyone can view portfolio photos of published professionals"
   );
 
 /**
+* PAYMENT_METHODS
+* Master list of available payment methods
+*/
+create table payment_methods (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table payment_methods enable row level security;
+
+-- RLS policies for payment_methods
+create policy "Anyone can view available payment methods" 
+  on payment_methods for select
+  using (true);
+
+/**
+* PROFESSIONAL_PAYMENT_METHODS
+* Junction table linking professionals to the payment methods they accept
+*/
+create table professional_payment_methods (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null,
+  payment_method_id uuid references payment_methods not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  constraint unique_professional_payment_method unique (professional_profile_id, payment_method_id)
+);
+alter table professional_payment_methods enable row level security;
+
+-- RLS policies for professional_payment_methods
+create policy "Professionals can view their own accepted payment methods" 
+  on professional_payment_methods for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = professional_payment_methods.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+create policy "Professionals can manage their own accepted payment methods" 
+  on professional_payment_methods for all -- insert, update, delete
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = professional_payment_methods.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+/**
 * REALTIME SUBSCRIPTIONS
 * Only allow realtime listening on public tables.
 */
