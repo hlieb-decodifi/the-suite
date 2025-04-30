@@ -15,9 +15,15 @@ import { SubscriptionSection } from './components/SubscriptionSection/Subscripti
 import { ServicesSection } from './components/ServicesSection/ServicesSection';
 import { PortfolioSection } from './components/PortfolioSection/PortfolioSection';
 import { ReviewsSection } from './components/ReviewsSection/ReviewsSection';
+import { HeaderFormValues } from '@/components/forms/HeaderForm';
 
 export type ProfessionalProfileViewProps = {
   user: User;
+  isSubscribed: boolean;
+  onPublishToggle: () => void;
+  onEditPortfolio: () => void;
+  professionalData: HeaderFormValues;
+  onSaveChanges: (data: HeaderFormValues) => Promise<void>;
 };
 
 // Helper component for the header section
@@ -85,12 +91,16 @@ function ProfileTabContent({
   isSubscribed,
   onPublishToggle,
   onEditPortfolio,
+  professionalData,
+  onSaveChanges,
 }: {
   user: User;
   isPublished: boolean;
   isSubscribed: boolean;
   onPublishToggle: () => void;
   onEditPortfolio: () => void;
+  professionalData: HeaderFormValues;
+  onSaveChanges: (data: HeaderFormValues) => Promise<void>;
 }) {
   return (
     <div className="space-y-8">
@@ -99,8 +109,10 @@ function ProfileTabContent({
           <HeaderSection
             user={user}
             isPublished={isPublished}
-            onPublishToggle={onPublishToggle}
             isSubscribed={isSubscribed}
+            onPublishToggle={onPublishToggle}
+            professionalData={professionalData}
+            onSaveChanges={onSaveChanges}
           />
           <ProfileOverviewSection
             user={user}
@@ -109,7 +121,7 @@ function ProfileTabContent({
         </div>
 
         <div className="md:col-span-1 space-y-8">
-          <ContactSection user={user} />
+          <ContactSection />
           <LocationSection user={user} />
           <PaymentMethodsSection user={user} />
         </div>
@@ -126,10 +138,25 @@ export function ProfessionalProfileView({
   const [isPublished, setIsPublished] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
+  const [professionalData, setProfessionalData] = useState<HeaderFormValues>({
+    firstName: 'Jane',
+    lastName: 'Doe',
+    profession: 'Professional',
+    description: '',
+    phoneNumber: '',
+    twitterUrl: '',
+    facebookUrl: '',
+    tiktokUrl: '',
+  });
+
+  const handleSaveChanges = async (data: HeaderFormValues) => {
+    console.log('Saving profile data:', data);
+    setProfessionalData(data);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  };
 
   const handlePublishToggle = () => {
     if (!isSubscribed) {
-      // Can't publish without subscription
       setActiveTab('subscription');
       return;
     }
@@ -186,9 +213,10 @@ export function ProfessionalProfileView({
             onPublishToggle={handlePublishToggle}
             onEditPortfolio={() => {
               setActiveTab('portfolio');
-              // Scroll to top smoothly after initiating tab change
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
+            professionalData={professionalData}
+            onSaveChanges={handleSaveChanges}
           />
         </TabsContent>
 

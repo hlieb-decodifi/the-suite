@@ -19,6 +19,7 @@ export type FormFieldWrapperProps<TFieldValues extends FieldValues> = {
   control: Control<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
+  labelSrOnly?: boolean; // Add prop for screen-reader-only label
   children: (
     field: ControllerRenderProps<TFieldValues, Path<TFieldValues>>,
   ) => React.ReactNode;
@@ -32,6 +33,7 @@ export function FormFieldWrapper<TFieldValues extends FieldValues>({
   control,
   name,
   label,
+  labelSrOnly = false, // Default to false
   children,
   className,
   labelClassName,
@@ -47,7 +49,8 @@ export function FormFieldWrapper<TFieldValues extends FieldValues>({
         <FormItem className={cn('relative space-y-1', className)}>
           <FormLabel
             className={cn(
-              error && 'text-foreground', // Keep label color normal on error
+              error && 'text-foreground',
+              labelSrOnly && 'sr-only', // Apply sr-only class if prop is true
               labelClassName,
             )}
           >

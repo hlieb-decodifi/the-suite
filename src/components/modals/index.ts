@@ -4,3 +4,6 @@ export * from './SignInModal';
 export * from './ForgotPasswordModal';
 export * from './ChangePasswordModal/ChangePasswordModal';
 export * from './UpdateEmailModal/UpdateEmailModal';
+export * from './ConfirmDeleteModal';
+export * from './ServiceModal';
+export * from './HeaderModal';

@@ -8,13 +8,8 @@ import { ContactHoursModal } from '@/components/modals/ContactHoursModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
-import { User } from '@supabase/supabase-js';
 import { Pencil } from 'lucide-react';
 import { useState } from 'react';
-
-export type ContactSectionProps = {
-  user: User;
-};
 
 // Helper to format form values back to display string
 const formatHoursForDisplay = (

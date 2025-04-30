@@ -5,164 +5,147 @@ import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { AvatarUpload } from '@/components/common/AvatarUpload';
+import { HeaderModal } from '@/components/modals';
 import {
   Pencil,
-  Camera,
-  Instagram,
   Facebook,
   Twitter,
   Link as LinkIcon,
+  Phone,
 } from 'lucide-react';
+import { HeaderFormValues } from '@/components/forms/HeaderForm';
 
 export type HeaderSectionProps = {
   user: User;
   isPublished: boolean;
   isSubscribed: boolean;
   onPublishToggle: () => void;
+  professionalData: HeaderFormValues & { photoUrl?: string };
+  onSaveChanges: (data: HeaderFormValues) => Promise<void>;
 };
 
 export function HeaderSection({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   user,
   isPublished,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isSubscribed,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onPublishToggle,
+  professionalData,
+  onSaveChanges,
 }: HeaderSectionProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Mock data - would come from API in a real app
-  const professional = {
-    firstName: 'John',
-    lastName: 'Smith',
-    profession: 'Hair Stylist',
-    photoUrl: '/placeholder-profile.jpg', // This would be a real photo URL in production
-    description:
-      'Professional hair stylist with over 10 years of experience specializing in cutting, coloring, and styling for all hair types.',
-    socialMedia: [
-      {
-        id: 'instagram',
-        name: 'Instagram',
-        url: 'https://instagram.com/professional',
-        icon: Instagram,
-      },
-      {
-        id: 'facebook',
-        name: 'Facebook',
-        url: 'https://facebook.com/professional',
-        icon: Facebook,
-      },
-      {
-        id: 'twitter',
-        name: 'Twitter',
-        url: 'https://twitter.com/professional',
-        icon: Twitter,
-      },
-    ],
+  const handleSaveChanges = async (data: HeaderFormValues) => {
+    console.log('Saving changes:', data);
+    try {
+      await onSaveChanges(data);
+    } catch (error) {
+      console.error('Failed to save header section:', error);
+      throw error;
+    }
   };
 
+  const fallbackName = `${professionalData.firstName} ${professionalData.lastName}`;
+
   return (
-    <Card className="border border-border">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <Typography variant="h3" className="font-bold text-foreground">
-          Professional Information
-        </Typography>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsEditing(!isEditing)}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <div className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative">
-              <Avatar className="h-24 w-24 border border-border">
-                <AvatarImage
-                  src={professional.photoUrl}
-                  alt={`${professional.firstName} ${professional.lastName}`}
-                />
-                <AvatarFallback className="bg-muted text-xl">
-                  {professional.firstName[0]}
-                  {professional.lastName[0]}
-                </AvatarFallback>
-              </Avatar>
-              {isEditing && (
-                <Button
-                  size="icon"
-                  className="absolute -bottom-2 -right-2 rounded-full h-8 w-8 bg-primary text-primary-foreground shadow-md"
-                >
-                  <Camera className="h-4 w-4" />
-                </Button>
-              )}
+    <>
+      <Card className="border border-border overflow-hidden">
+        <CardHeader className="flex flex-row items-start justify-between pb-4">
+          <div>
+            <Typography variant="h3" className="font-bold text-foreground">
+              Professional Information
+            </Typography>
+            <div
+              className={`mt-1 px-3 py-0.5 inline-block rounded-full text-xs font-medium ${isPublished ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
+            >
+              {isPublished ? 'Published' : 'Not Published'}
             </div>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsModalOpen(true)}
+            className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Edit professional information"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="flex flex-col md:flex-row gap-6">
+            <AvatarUpload
+              userId={user.id}
+              fallbackName={fallbackName}
+              size="lg"
+              avatarContainerClassName="border-muted"
+            />
 
-            <div className="flex-1">
-              <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-6">
-                <div>
-                  <Typography
-                    variant="h3"
-                    className="font-bold text-foreground"
-                  >
-                    {professional.firstName} {professional.lastName}
-                  </Typography>
-                  <Typography variant="muted" className="text-muted-foreground">
-                    {professional.profession}
-                  </Typography>
-                </div>
-                <div
-                  className={`px-3 py-1 rounded-full text-sm ${isPublished ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
-                >
-                  {isPublished ? 'Published' : 'Not Published'}
-                </div>
+            <div className="flex-1 space-y-2">
+              <div>
+                <Typography variant="h3" className="font-bold text-foreground">
+                  {fallbackName}
+                </Typography>
+                <Typography variant="muted" className="text-muted-foreground">
+                  {professionalData.profession}
+                </Typography>
               </div>
-              <Typography className="text-foreground mt-2">
-                {professional.description}
-              </Typography>
 
-              {/* Social Media Links */}
-              <div className="flex items-center space-x-3 mt-3">
-                {professional.socialMedia.map((platform) => (
+              {professionalData.description && (
+                <Typography className="text-foreground text-sm">
+                  {professionalData.description}
+                </Typography>
+              )}
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
+                {professionalData.phoneNumber && (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5 mr-1.5" />
+                    {professionalData.phoneNumber}
+                  </div>
+                )}
+                {professionalData.twitterUrl && (
                   <a
-                    key={platform.id}
-                    href={platform.url}
+                    href={professionalData.twitterUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={platform.name}
-                    className="text-muted-foreground hover:text-primary transition-colors"
+                    aria-label="Twitter"
+                    className="flex items-center text-muted-foreground hover:text-primary transition-colors"
                   >
-                    <platform.icon className="h-5 w-5" />
+                    <Twitter className="h-4 w-4 mr-1" />
                   </a>
-                ))}
-                {isEditing && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 rounded-full flex items-center gap-1 text-xs"
+                )}
+                {professionalData.facebookUrl && (
+                  <a
+                    href={professionalData.facebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Facebook"
+                    className="flex items-center text-muted-foreground hover:text-primary transition-colors"
                   >
-                    <LinkIcon className="h-3.5 w-3.5" />
-                    Add Link
-                  </Button>
+                    <Facebook className="h-4 w-4 mr-1" />
+                  </a>
+                )}
+                {professionalData.tiktokUrl && (
+                  <a
+                    href={professionalData.tiktokUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="TikTok"
+                    className="flex items-center text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <LinkIcon className="h-4 w-4 mr-1" />
+                  </a>
                 )}
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {isEditing && (
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setIsEditing(false)}>Save Changes</Button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      <HeaderModal
+        isOpen={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onSubmitSuccess={handleSaveChanges}
+        defaultValues={professionalData}
+      />
+    </>
   );
 }
