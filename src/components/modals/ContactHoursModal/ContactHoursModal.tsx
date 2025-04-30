@@ -49,7 +49,7 @@ export function ContactHoursModal({
         <ContactHoursForm
           onSubmitSuccess={onSubmitSuccess}
           onCancel={() => handleOpenChange(false)} // Use the guarded handler
-          defaultValues={defaultValues}
+          defaultValues={defaultValues ?? null}
           // Note: isSubmitting prop is passed to the form hook internally, not needed here
         />
       </DialogContent>

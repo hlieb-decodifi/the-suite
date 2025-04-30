@@ -35,7 +35,11 @@ export const TIME_OPTIONS = generateTimeOptions(30); // Generate options every 3
 export const timeToMinutes = (time: string | null | undefined): number | null => {
   if (!time) return null;
   const parts = time.split(':');
-  if (parts.length !== 2) return null;
+  // Ensure parts has 2 elements AND that they are defined strings
+  if (parts.length !== 2 || parts[0] === undefined || parts[1] === undefined) {
+      return null;
+  }
+  // Now parts[0] and parts[1] are guaranteed to be strings
   const hours = parseInt(parts[0], 10);
   const minutes = parseInt(parts[1], 10);
   if (isNaN(hours) || isNaN(minutes)) return null;

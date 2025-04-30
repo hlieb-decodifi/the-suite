@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 'use client';
 
 import { ChangeEvent, useState, useEffect } from 'react';
