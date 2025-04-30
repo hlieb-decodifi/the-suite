@@ -6,7 +6,11 @@ import {
   DialogDescription,
   // DialogFooter, // Removed unused import
 } from '@/components/ui/dialog';
-import { ServiceForm, ServiceFormValues } from '@/components/forms/ServiceForm';
+import {
+  ServiceForm,
+  ServiceFormValues,
+  ServiceFormProps,
+} from '@/components/forms/ServiceForm';
 import { UseServiceFormProps } from '@/components/forms/ServiceForm/useServiceForm'; // Import hook props type
 
 // Type for the raw service data coming in (might have string duration)
@@ -25,6 +29,7 @@ export type ServiceModalProps = {
   onSubmitSuccess: (data: ServiceFormValues & { id?: string }) => void;
   // Accept the full Service object or null for adding
   service?: InputServiceData | null;
+  isSubmitting?: boolean; // Add loading state prop
 };
 
 export function ServiceModal({
@@ -32,9 +37,11 @@ export function ServiceModal({
   onOpenChange,
   onSubmitSuccess,
   service,
+  isSubmitting = false, // Default to false
 }: ServiceModalProps) {
   const isEditMode = !!service?.id;
 
+  // Handle form submission internally and pass up
   const handleFormSubmitSuccess = (data: ServiceFormValues) => {
     // Conditionally add id only if it exists
     const submitData: ServiceFormValues & { id?: string } = {
@@ -42,7 +49,6 @@ export function ServiceModal({
       ...(service?.id && { id: service.id }),
     };
     onSubmitSuccess(submitData);
-    onOpenChange(false); // Close the modal on success
   };
 
   // Prepare default values for the ServiceForm, matching UseServiceFormProps expectation
@@ -55,9 +61,28 @@ export function ServiceModal({
       }
     : undefined; // Pass undefined if not editing
 
+  // Cast ServiceFormProps to include isSubmitting for type safety
+  const serviceFormProps: ServiceFormProps & { isSubmitting?: boolean } = {
+    onSubmitSuccess: handleFormSubmitSuccess,
+    onCancel: () => {
+      if (!isSubmitting) onOpenChange(false);
+    },
+    defaultValues: formDefaultValues,
+    isSubmitting: isSubmitting,
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+    // Prevent closing via overlay click or escape key when submitting
+    <Dialog open={isOpen} onOpenChange={isSubmitting ? () => {} : onOpenChange}>
+      <DialogContent
+        className="sm:max-w-[480px]"
+        onInteractOutside={(e) => {
+          if (isSubmitting) e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          if (isSubmitting) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {isEditMode ? 'Edit Service' : 'Add New Service'}
@@ -69,25 +94,7 @@ export function ServiceModal({
           </DialogDescription>
         </DialogHeader>
 
-        {/* 
-          Render the form. It needs onSubmitSuccess and onCancel.
-          Pass defaultValues if in edit mode.
-        */}
-        <ServiceForm
-          onSubmitSuccess={handleFormSubmitSuccess}
-          onCancel={() => onOpenChange(false)} // Basic cancel closes modal
-          // Pass the correctly typed defaults
-          defaultValues={formDefaultValues}
-        />
-
-        {/* 
-          Alternatively, form buttons could be here using DialogFooter 
-          if they weren't part of the ServiceForm itself. 
-        */}
-        {/* <DialogFooter>
-            <Button variant="outline">Cancel</Button>
-            <Button>Save changes</Button>
-          </DialogFooter> */}
+        <ServiceForm {...serviceFormProps} />
       </DialogContent>
     </Dialog>
   );

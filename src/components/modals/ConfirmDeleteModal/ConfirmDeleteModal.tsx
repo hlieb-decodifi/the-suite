@@ -9,6 +9,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
+import React from 'react';
 
 export type ConfirmDeleteModalProps = {
   isOpen: boolean;
@@ -17,44 +19,61 @@ export type ConfirmDeleteModalProps = {
   itemName?: string; // Optional name of the item being deleted for clarity
   title?: string;
   description?: string;
+  isDeleting?: boolean;
 };
 
 export function ConfirmDeleteModal({
   isOpen,
   onOpenChange,
   onConfirm,
-  // itemName can be kept for other potential uses or removed if only description is used
   // itemName = "item",
   title = 'Are you absolutely sure?',
-  // Default description assumes no specific item name is interpolated here
   description = 'This action cannot be undone. This will permanently delete the selected item.',
+  isDeleting = false,
 }: ConfirmDeleteModalProps) {
-  // Prevent modal closing on confirm click if onConfirm throws error
+  // Prevent modal closing on confirm click if onConfirm throws error or while deleting
   const handleConfirm = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (isDeleting) return;
     try {
       onConfirm();
-      // onOpenChange(false); // Let onConfirm handle closing if needed, or close here
     } catch (error) {
       console.error('Confirmation action failed:', error);
-      // Prevent modal from closing if confirm action fails
-      event.preventDefault();
+      event.preventDefault(); // Prevent closing if action fails
+    }
+  };
+
+  // Handle open change logic
+  const handleOpenChange = (open: boolean) => {
+    if (!isDeleting) {
+      onOpenChange(open);
     }
   };
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      {/* Optional: <AlertDialogTrigger asChild><Button>Open</Button></AlertDialogTrigger> */}
-      <AlertDialogContent>
+    // Prevent closing via escape key when deleting
+    <AlertDialog open={isOpen} onOpenChange={handleOpenChange}>
+      <AlertDialogContent
+        onEscapeKeyDown={(e: KeyboardEvent) => {
+          if (isDeleting) e.preventDefault();
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel asChild>
+          <AlertDialogCancel asChild disabled={isDeleting}>
             <Button variant="outline">Cancel</Button>
           </AlertDialogCancel>
-          <AlertDialogAction asChild onClick={handleConfirm}>
-            <Button variant="destructive">Confirm Delete</Button>
+          <AlertDialogAction
+            asChild
+            onClick={handleConfirm}
+            disabled={isDeleting}
+          >
+            <Button variant="destructive">
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+            </Button>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

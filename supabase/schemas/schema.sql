@@ -140,6 +140,7 @@ alter table client_profiles enable row level security;
 */
 create table services (
   id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null,
   name text not null,
   description text,
   price decimal(10, 2) not null,
@@ -149,19 +150,45 @@ create table services (
 );
 alter table services enable row level security;
 
+-- Constraint to limit services to 10 per professional
+create or replace function check_service_limit()
+returns trigger as $$
+begin
+  if (select count(*) from services where professional_profile_id = new.professional_profile_id) >= 10 then
+    raise exception 'Maximum of 10 services allowed per professional';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger enforce_service_limit
+  before insert on services
+  for each row
+  execute function check_service_limit();
+
 /**
 * PROFESSIONAL_SERVICES
 * Junction table to link professionals with their offered services
+* Note: This table is no longer needed since we've added professional_profile_id to services
 */
-create table professional_services (
-  professional_profile_id uuid references professional_profiles not null,
-  service_id uuid references services not null,
-  price decimal(10, 2), -- Optional override of service price
-  duration integer, -- Optional override of service duration
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  primary key (professional_profile_id, service_id)
-);
-alter table professional_services enable row level security;
+-- drop table if exists professional_services;
+-- Keep the table for now to avoid breaking existing code, but mark it as deprecated
+
+-- RLS policies for services
+-- Drop existing policies first
+drop policy if exists "Anyone can view services" on services;
+drop policy if exists "Professionals can delete their own services" on services;
+
+-- New policies
+create policy "Professionals can manage their own services"
+  on services for all
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
 
 -- RLS policies for addresses
 create policy "Users can create addresses"
@@ -238,44 +265,6 @@ create policy "Clients can view and update their own profile"
 create policy "Clients can update their own profile"
   on client_profiles for update
   using (auth.uid() = user_id);
-
--- RLS policies for services
-create policy "Anyone can view services"
-  on services for select
-  using (true);
-
-create policy "Professionals can delete their own services"
-  on services for delete
-  using (
-    exists (
-      select 1 from professional_profiles
-      join professional_services on professional_profiles.id = professional_services.professional_profile_id
-      where professional_profiles.user_id = auth.uid()
-      and professional_services.service_id = services.id
-    )
-  );
-
--- RLS policies for professional services
-create policy "Anyone can view professional services"
-  on professional_services for select
-  using (
-    -- If the professional profile is published
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.id = professional_services.professional_profile_id
-      and professional_profiles.is_published = true
-    )
-  );
-  
-create policy "Professionals can manage their own services"
-  on professional_services for all
-  using (
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.id = professional_services.professional_profile_id
-      and professional_profiles.user_id = auth.uid()
-    )
-  );
 
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
