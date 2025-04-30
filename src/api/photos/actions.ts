@@ -72,33 +72,42 @@ export async function updateProfilePhotoAction(
       return { success: false, error: uploadError.message };
     }
 
-    // --- 3. Remove Public URL Fetching (No longer needed here) ---
+    // --- 3. Get Public URL --- 
+    const { data: urlData } = supabase.storage
+       .from(PROFILE_PHOTOS_BUCKET)
+       .getPublicUrl(newFilePath);
+       
+    if (!urlData || !urlData.publicUrl) {
+        // Cleanup uploaded file if we can't get URL
+        await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([newFilePath]).catch(e => console.error("Cleanup failed after URL fetch error", e));
+        return { success: false, error: 'Could not get public URL for the uploaded photo.' };
+    }
+    const publicUrl = urlData.publicUrl;
 
-    // --- 4. Update or Insert Database Record with FILENAME ---
+    // --- 4. Update or Insert Database Record with FILENAME and URL ---
     let dbError: { message: string } | null = null;
     const photoData = {
         user_id: userId,
-        // Removed url field
+        url: publicUrl,
         filename: newFileName,
         updated_at: new Date().toISOString(),
     };
-    const insertData = { ...photoData, created_at: new Date().toISOString() }; // Add created_at for insert
+    const insertData = { ...photoData, created_at: new Date().toISOString() };
 
     if (recordExists) {
       // UPDATE existing record
       const { error } = await supabase
         .from('profile_photos')
-        .update(photoData) // Only includes fields to update
+        .update(photoData)
         .eq('user_id', userId);
       dbError = error;
     } else {
       // INSERT new record
       const { error } = await supabase
         .from('profile_photos')
-        .insert(insertData as Database['public']['Tables']['profile_photos']['Insert']); // Use full insert data
+        .insert(insertData as Database['public']['Tables']['profile_photos']['Insert']);
       dbError = error;
     }
-
 
     if (dbError) {
         console.error('Error saving profile_photos record:', dbError);

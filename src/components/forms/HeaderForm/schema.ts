@@ -32,7 +32,7 @@ export const headerSchema = z.object({
     .optional()
     .or(z.literal('')), // Allow empty string which we'll treat as undefined
   // Replace socialMedia array with specific optional fields
-  twitterUrl: optionalUrlSchema,
+  instagramUrl: optionalUrlSchema,
   facebookUrl: optionalUrlSchema,
   tiktokUrl: optionalUrlSchema,
 });

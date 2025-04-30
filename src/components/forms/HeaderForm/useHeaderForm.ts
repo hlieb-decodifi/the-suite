@@ -23,7 +23,7 @@ export function useHeaderForm({
       profession: '',
       description: '',
       phoneNumber: '',
-      twitterUrl: undefined,
+      instagramUrl: undefined,
       facebookUrl: undefined,
       tiktokUrl: undefined,
       ...defaultValues

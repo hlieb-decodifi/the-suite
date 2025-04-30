@@ -137,3 +137,7 @@
     animation: custom-spin 0.5s linear infinite;
   }
 }
+
+body {
+  overflow-y: scroll;
+}

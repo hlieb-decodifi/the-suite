@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { useAuthStore } from '@/stores/authStore';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -23,17 +25,22 @@ import {
   deleteServiceAction,
   ServiceUI,
 } from '@/api/services/actions';
+import {
+  getProfessionalProfileViewDataAction,
+  updateProfessionalProfileHeaderAction,
+  ProfessionalProfileViewData,
+} from '@/api/profiles/actions';
 import { ServiceModal } from '@/components/modals/ServiceModal';
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal';
 import { ServiceFormValues } from '@/components/forms/ServiceForm';
 import { toast } from '@/components/ui/use-toast';
 import React from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const VALID_TABS = ['profile', 'services', 'portfolio', 'subscription'];
 
 export type ProfessionalProfileViewProps = {
   user: User;
-  // Removed mock props, data will be fetched/managed here
 };
 
 // Type for PageHeader props
@@ -51,7 +58,7 @@ type ProfileTabContentProps = {
   isSubscribed: boolean;
   onPublishToggle: () => void;
   onEditPortfolio: () => void;
-  professionalData: HeaderFormValues;
+  professionalData: ProfessionalProfileViewData | null;
   onSaveChanges: (data: HeaderFormValues) => Promise<void>;
 };
 
@@ -117,18 +124,39 @@ function ProfileTabContent({
   professionalData,
   onSaveChanges,
 }: ProfileTabContentProps) {
+  // Map profileViewData to the shape needed by HeaderSection (HeaderFormValues & { photoUrl?: string })
+  const headerDataForSection = professionalData
+    ? {
+        firstName: professionalData.first_name,
+        lastName: professionalData.last_name,
+        profession: professionalData.profession ?? '',
+        description: professionalData.description ?? '',
+        phoneNumber: professionalData.phone_number ?? undefined,
+        facebookUrl: professionalData.facebook_url ?? undefined,
+        instagramUrl: professionalData.instagram_url ?? undefined,
+        tiktokUrl: professionalData.tiktok_url ?? undefined,
+        photoUrl: professionalData.photoUrl ?? undefined,
+      }
+    : null;
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-8">
-          <HeaderSection
-            user={user}
-            isPublished={isPublished}
-            isSubscribed={isSubscribed}
-            onPublishToggle={onPublishToggle}
-            professionalData={professionalData}
-            onSaveChanges={onSaveChanges}
-          />
+          {headerDataForSection ? (
+            <HeaderSection
+              user={user}
+              isPublished={isPublished}
+              isSubscribed={isSubscribed}
+              onPublishToggle={onPublishToggle}
+              professionalData={
+                headerDataForSection as HeaderFormValues & { photoUrl?: string }
+              }
+              onSaveChanges={onSaveChanges}
+            />
+          ) : (
+            <Skeleton className="h-[200px] w-full" />
+          )}
           <ProfileOverviewSection
             user={user}
             onEditPortfolio={onEditPortfolio}
@@ -151,6 +179,8 @@ export function ProfessionalProfileView({
 }: ProfessionalProfileViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const setSession = useAuthStore((state) => state.setSession);
+  const supabase = createClient();
 
   // Tab state
   const initialTab = searchParams.get('tab') || 'profile';
@@ -169,19 +199,10 @@ export function ProfessionalProfileView({
   );
   const [isDeletingService, setIsDeletingService] = useState(false);
 
-  // Other profile state (replace with actual data fetching)
-  const [isPublished, setIsPublished] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
-  const [professionalData, setProfessionalData] = useState<HeaderFormValues>({
-    firstName: 'Jane',
-    lastName: 'Doe',
-    profession: 'Professional',
-    description: '',
-    phoneNumber: '',
-    twitterUrl: '',
-    facebookUrl: '',
-    tiktokUrl: '',
-  });
+  // Profile Data State
+  const [profileViewData, setProfileViewData] =
+    useState<ProfessionalProfileViewData | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   // --- Effects ---
   // Sync URL with active tab state
@@ -191,6 +212,26 @@ export function ProfessionalProfileView({
       setActiveTab(urlTab);
     }
   }, [searchParams, activeTab]);
+
+  // Fetch combined profile data on mount
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      setIsLoadingProfile(true);
+      const result = await getProfessionalProfileViewDataAction(user.id);
+      if (result.success && result.data) {
+        setProfileViewData(result.data);
+      } else {
+        toast({
+          title: 'Error loading profile data',
+          description: result.error || 'Could not load profile.',
+          variant: 'destructive',
+        });
+        setProfileViewData(null);
+      }
+      setIsLoadingProfile(false);
+    };
+    fetchProfileData();
+  }, [user.id]);
 
   // Fetch services only once on mount
   useEffect(() => {
@@ -221,26 +262,85 @@ export function ProfessionalProfileView({
     }
   };
 
-  // Profile data save handler (replace with actual logic)
-  const handleSaveChanges = async (data: HeaderFormValues) => {
-    console.log('Saving profile data:', data);
-    setProfessionalData(data);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  // Profile Header save handler
+  const handleHeaderSaveChanges = async (data: HeaderFormValues) => {
+    const previousProfileData = profileViewData;
+    // Optimistic update matching ProfessionalProfileViewData structure
+    setProfileViewData((prev) =>
+      prev
+        ? {
+            ...prev,
+            first_name: data.firstName,
+            last_name: data.lastName,
+            profession: data.profession,
+            description: data.description,
+            phone_number: data.phoneNumber || null,
+            facebook_url: data.facebookUrl || null,
+            instagram_url: data.instagramUrl || null,
+            tiktok_url: data.tiktokUrl || null,
+          }
+        : null,
+    );
+
+    const result = await updateProfessionalProfileHeaderAction(user.id, data);
+    if (!result.success) {
+      toast({
+        title: 'Error saving profile',
+        description: result.error,
+        variant: 'destructive',
+      });
+      // Revert optimistic update on error
+      setProfileViewData(previousProfileData);
+    } else {
+      toast({ description: 'Profile information updated successfully.' });
+      // Refresh session and update auth store
+      try {
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.refreshSession();
+        if (sessionError) {
+          console.error('Error refreshing session:', sessionError);
+          // Optionally show a toast for session refresh failure
+        } else if (sessionData.session) {
+          setSession(sessionData.session);
+        }
+      } catch (refreshError) {
+        console.error('Failed to refresh session:', refreshError);
+      }
+      // Optionally refetch profile view data if needed, though session refresh might suffice
+      // const refreshedResult = await getProfessionalProfileViewDataAction(user.id);
+      // if (refreshedResult.success && refreshedResult.data) setProfileViewData(refreshedResult.data);
+    }
   };
 
-  // Publish toggle handler (replace with actual logic)
+  // Publish toggle handler
   const handlePublishToggle = () => {
-    if (!isSubscribed) {
+    if (!profileViewData?.isSubscribed) {
       handleTabChange('subscription');
       return;
     }
-    setIsPublished(!isPublished);
+    // TODO: Add server action for publish toggle
+    const newPublishState = !(profileViewData?.is_published ?? false);
+    // Optimistic update
+    setProfileViewData((prev) =>
+      prev ? { ...prev, is_published: newPublishState } : null,
+    );
+    console.log(
+      'TODO: Call server action to set is_published to:',
+      newPublishState,
+    );
+    // Handle potential error rollback if needed
   };
 
-  // Subscribe handler (replace with actual logic)
+  // Subscribe handler
   const handleSubscribe = () => {
-    setIsSubscribed(true);
+    // TODO: Add server action for subscription
+    // Optimistic update
+    setProfileViewData((prev) =>
+      prev ? { ...prev, isSubscribed: true } : null,
+    );
     handleTabChange('subscription');
+    console.log('TODO: Call server action for subscription');
+    // Handle potential error rollback if needed
   };
 
   // Portfolio edit handler
@@ -319,11 +419,30 @@ export function ProfessionalProfileView({
     }
   };
 
+  // --- Render Logic ---
+  // Show main loading skeleton if profile data isn't loaded yet
+  if (isLoadingProfile) {
+    return (
+      <div className="space-y-8">
+        <Skeleton className="h-10 w-1/3" />
+        <Skeleton className="h-8 w-full max-w-md" />
+        <Skeleton className="h-60 w-full" />
+      </div>
+    );
+  }
+
+  // Handle case where profile data failed to load
+  if (!profileViewData) {
+    return (
+      <Typography>Error loading profile. Please try again later.</Typography>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
-        isPublished={isPublished}
-        isSubscribed={isSubscribed}
+        isPublished={profileViewData.is_published ?? false}
+        isSubscribed={profileViewData.isSubscribed ?? false}
         onPublishToggle={handlePublishToggle}
         onSubscribe={handleSubscribe}
       />
@@ -348,12 +467,12 @@ export function ProfessionalProfileView({
         <TabsContent value="profile">
           <ProfileTabContent
             user={user}
-            isPublished={isPublished}
-            isSubscribed={isSubscribed}
+            isPublished={profileViewData.is_published ?? false}
+            isSubscribed={profileViewData.isSubscribed ?? false}
             onPublishToggle={handlePublishToggle}
             onEditPortfolio={handleEditPortfolio}
-            professionalData={professionalData}
-            onSaveChanges={handleSaveChanges}
+            professionalData={profileViewData}
+            onSaveChanges={handleHeaderSaveChanges}
           />
         </TabsContent>
 
@@ -374,16 +493,15 @@ export function ProfessionalProfileView({
         <TabsContent value="subscription">
           <SubscriptionSection
             user={user}
-            isSubscribed={isSubscribed}
+            isSubscribed={profileViewData.isSubscribed ?? false}
             onSubscribe={handleSubscribe}
           />
         </TabsContent>
       </Tabs>
 
-      {/* Render Modals Here (conditionally based on state) */}
       <ServiceModal
         isOpen={isServiceModalOpen}
-        onOpenChange={setIsServiceModalOpen}
+        onOpenChange={isSubmittingService ? () => {} : setIsServiceModalOpen}
         onSubmitSuccess={handleServiceModalSubmitSuccess}
         service={editingService}
         isSubmitting={isSubmittingService}
@@ -391,7 +509,7 @@ export function ProfessionalProfileView({
 
       <ConfirmDeleteModal
         isOpen={isConfirmDeleteOpen}
-        onOpenChange={setIsConfirmDeleteOpen}
+        onOpenChange={isDeletingService ? () => {} : setIsConfirmDeleteOpen}
         onConfirm={handleConfirmDeleteService}
         itemName={serviceToDelete?.name ?? 'this service'}
         title="Delete Service?"

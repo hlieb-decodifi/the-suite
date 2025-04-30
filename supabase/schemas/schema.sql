@@ -106,6 +106,7 @@ create table professional_profiles (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references users not null unique,
   description text,
+  profession text,
   appointment_requirements text,
   phone_number text,
   working_hours jsonb, -- Store as JSON with days and hours
@@ -113,6 +114,7 @@ create table professional_profiles (
   address_id uuid references addresses,
   facebook_url text,
   instagram_url text,
+  tiktok_url text,
   is_published boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null

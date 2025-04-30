@@ -10,7 +10,7 @@ import { HeaderModal } from '@/components/modals';
 import {
   Pencil,
   Facebook,
-  Twitter,
+  Instagram,
   Link as LinkIcon,
   Phone,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ export type HeaderSectionProps = {
   isPublished: boolean;
   isSubscribed: boolean;
   onPublishToggle: () => void;
-  professionalData: HeaderFormValues & { photoUrl?: string };
+  professionalData: HeaderFormValues & { photoUrl?: string | null | undefined };
   onSaveChanges: (data: HeaderFormValues) => Promise<void>;
 };
 
@@ -37,9 +37,9 @@ export function HeaderSection({
     console.log('Saving changes:', data);
     try {
       await onSaveChanges(data);
+      setIsModalOpen(false);
     } catch (error) {
       console.error('Failed to save header section:', error);
-      throw error;
     }
   };
 
@@ -101,15 +101,15 @@ export function HeaderSection({
                     {professionalData.phoneNumber}
                   </div>
                 )}
-                {professionalData.twitterUrl && (
+                {professionalData.instagramUrl && (
                   <a
-                    href={professionalData.twitterUrl}
+                    href={professionalData.instagramUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Twitter"
+                    aria-label="Instagram"
                     className="flex items-center text-muted-foreground hover:text-primary transition-colors"
                   >
-                    <Twitter className="h-4 w-4 mr-1" />
+                    <Instagram className="h-4 w-4 mr-1" />
                   </a>
                 )}
                 {professionalData.facebookUrl && (

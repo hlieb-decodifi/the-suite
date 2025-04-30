@@ -137,6 +137,8 @@ export type Database = {
           is_published: boolean | null
           location: string | null
           phone_number: string | null
+          profession: string | null
+          tiktok_url: string | null
           updated_at: string
           user_id: string
           working_hours: Json | null
@@ -152,6 +154,8 @@ export type Database = {
           is_published?: boolean | null
           location?: string | null
           phone_number?: string | null
+          profession?: string | null
+          tiktok_url?: string | null
           updated_at?: string
           user_id: string
           working_hours?: Json | null
@@ -167,6 +171,8 @@ export type Database = {
           is_published?: boolean | null
           location?: string | null
           phone_number?: string | null
+          profession?: string | null
+          tiktok_url?: string | null
           updated_at?: string
           user_id?: string
           working_hours?: Json | null

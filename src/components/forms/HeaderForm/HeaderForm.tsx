@@ -117,12 +117,12 @@ export function HeaderForm({
           </Typography>
           <FormFieldWrapper
             control={form.control}
-            name="twitterUrl"
-            label="Twitter / X URL"
+            name="instagramUrl"
+            label="Instagram URL"
           >
             {(field) => (
               <FormInput
-                placeholder="https://twitter.com/username"
+                placeholder="https://instagram.com/username"
                 {...field}
                 value={(field.value as string) ?? ''}
               />
