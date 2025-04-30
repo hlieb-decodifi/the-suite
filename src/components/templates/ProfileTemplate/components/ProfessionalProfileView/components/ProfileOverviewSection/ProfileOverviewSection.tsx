@@ -9,13 +9,14 @@ import { useState } from 'react';
 
 export type ProfileOverviewSectionProps = {
   user: User;
+  onEditPortfolio: () => void;
 };
 
 export function ProfileOverviewSection({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   user,
+  onEditPortfolio,
 }: ProfileOverviewSectionProps) {
-  const [isEditing, setIsEditing] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Mock data - would come from API in a real app
@@ -47,7 +48,7 @@ export function ProfileOverviewSection({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setIsEditing(!isEditing)}
+          onClick={onEditPortfolio}
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
         >
           <Pencil className="h-4 w-4" />
@@ -90,15 +91,6 @@ export function ProfileOverviewSection({
               ))}
             </div>
           </div>
-
-          {isEditing && (
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setIsEditing(false)}>Save Changes</Button>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

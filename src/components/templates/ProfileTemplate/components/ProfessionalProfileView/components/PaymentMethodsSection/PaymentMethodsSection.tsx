@@ -40,7 +40,7 @@ export function PaymentMethodsSection({
       </CardHeader>
       <CardContent className="pt-2">
         <div className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-2 pr-2">
             {paymentMethods.map((method) => (
               <div
                 key={method.id}

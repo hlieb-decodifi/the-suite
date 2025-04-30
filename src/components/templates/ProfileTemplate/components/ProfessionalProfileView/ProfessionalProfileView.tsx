@@ -84,11 +84,13 @@ function ProfileTabContent({
   isPublished,
   isSubscribed,
   onPublishToggle,
+  onEditPortfolio,
 }: {
   user: User;
   isPublished: boolean;
   isSubscribed: boolean;
   onPublishToggle: () => void;
+  onEditPortfolio: () => void;
 }) {
   return (
     <div className="space-y-8">
@@ -100,7 +102,10 @@ function ProfileTabContent({
             onPublishToggle={onPublishToggle}
             isSubscribed={isSubscribed}
           />
-          <ProfileOverviewSection user={user} />
+          <ProfileOverviewSection
+            user={user}
+            onEditPortfolio={onEditPortfolio}
+          />
         </div>
 
         <div className="md:col-span-1 space-y-8">
@@ -179,6 +184,11 @@ export function ProfessionalProfileView({
             isPublished={isPublished}
             isSubscribed={isSubscribed}
             onPublishToggle={handlePublishToggle}
+            onEditPortfolio={() => {
+              setActiveTab('portfolio');
+              // Scroll to top smoothly after initiating tab change
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         </TabsContent>
 
