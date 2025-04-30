@@ -8,16 +8,18 @@ import {
 import {
   ContactHoursForm,
   ContactHoursFormValues,
-  ContactHoursDefaultInput, // Type for initial data
+  // ContactHoursDefaultInput, // No longer needed for props
 } from '@/components/forms/ContactHoursForm';
+import { WorkingHoursEntry } from '@/api/working_hours/actions'; // Import type
 
 export type ContactHoursModalProps = {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   // Callback receives the validated & structured form data
-  onSubmitSuccess: (data: ContactHoursFormValues) => void;
-  // Default values should be in the format expected by the form's hook
-  defaultValues?: ContactHoursDefaultInput;
+  onSubmitSuccess: (data: ContactHoursFormValues) => Promise<void> | void;
+  // Update defaultValues type
+  defaultValues?: WorkingHoursEntry[] | null;
+  isSubmitting?: boolean;
 };
 
 export function ContactHoursModal({
@@ -25,17 +27,17 @@ export function ContactHoursModal({
   onOpenChange,
   onSubmitSuccess,
   defaultValues,
+  isSubmitting, // Added isSubmitting prop
 }: ContactHoursModalProps) {
-  // This handler is called by the form upon successful validation and submission
-  const handleFormSubmitSuccess = (data: ContactHoursFormValues) => {
-    onSubmitSuccess(data); // Pass the validated data up
-    onOpenChange(false); // Close the modal
+  // Handle modal closure prevention during submission
+  const handleOpenChange = (open: boolean) => {
+    if (!isSubmitting) {
+      onOpenChange(open);
+    }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      {/* Consider DialogContent className for width/height if needed */}
-      {/* e.g., sm:max-w-[600px] */}
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Working Hours</DialogTitle>
@@ -45,11 +47,10 @@ export function ContactHoursModal({
         </DialogHeader>
 
         <ContactHoursForm
-          // Pass the handler that includes closing the modal
-          onSubmitSuccess={handleFormSubmitSuccess}
-          // onCancel should just close the modal
-          onCancel={() => onOpenChange(false)}
+          onSubmitSuccess={onSubmitSuccess}
+          onCancel={() => handleOpenChange(false)} // Use the guarded handler
           defaultValues={defaultValues}
+          // Note: isSubmitting prop is passed to the form hook internally, not needed here
         />
       </DialogContent>
     </Dialog>

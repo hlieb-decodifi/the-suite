@@ -31,62 +31,60 @@ const generateTimeOptions = (intervalMinutes: number = 30) => {
 
 export const TIME_OPTIONS = generateTimeOptions(30); // Generate options every 30 mins
 
-// Helper to convert HH:MM string to minutes from midnight
-export const timeToMinutes = (time: string | undefined | null): number | null => {
+// Time conversion helper
+export const timeToMinutes = (time: string | null | undefined): number | null => {
   if (!time) return null;
-  // Handle the special Midnight case
-  if (time === '24:00') return 24 * 60; 
-
   const parts = time.split(':');
   if (parts.length !== 2) return null;
-  const hoursStr = parts[0];
-  const minutesStr = parts[1];
-  if (hoursStr === undefined || minutesStr === undefined) return null;
-  const hours = parseInt(hoursStr, 10);
-  const minutes = parseInt(minutesStr, 10);
-  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours >= 24 || minutes < 0 || minutes >= 60) {
-     // Add stricter validation for standard times
-     return null;
-  }
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return null;
   return hours * 60 + minutes;
 };
 
-// Helper to parse display string like "9:00 AM - 5:00 PM" or "Closed"
-export const parseDisplayHours = (
-  displayHours: string | undefined | null,
-): { startTime?: string | undefined; endTime?: string | undefined } => {
-  if (!displayHours || displayHours.toLowerCase() === 'closed') {
-    return {}; // Return empty object for exactOptionalPropertyTypes
+// Helper to parse display hours string like "9:00 AM - 5:00 PM"
+export const parseDisplayHours = (hoursString: string | undefined | null): { startTime?: string; endTime?: string } => {
+  if (!hoursString || hoursString.toLowerCase() === 'closed') {
+    return {}; // Return empty for exactOptionalPropertyTypes compatibility
+  }
+  const parts = hoursString.split(' - ');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return {}; // Invalid format
   }
 
-  const parts = displayHours.split(' - ');
-  if (parts.length !== 2) return {};
+  // Function to convert 12-hour AM/PM time to HH:MM format
+  const formatBackToHHMM = (timeStr: string): string | undefined => {
+    const timeParts = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!timeParts) return undefined;
 
-  const convertTo24Hour = (timeStr: string | undefined): string | undefined => {
-    if (!timeStr) return undefined;
-    const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-    if (!match) return undefined;
+    // Explicitly check match array elements before using them
+    const hoursStr = timeParts[1];
+    const minuteStr = timeParts[2];
+    const ampm = timeParts[3]?.toUpperCase(); // Safe navigation for ampm
 
-    // Ensure matched parts are defined (though regex guarantees this if match succeeds)
-    const hoursStr = match[1];
-    const minutesStr = match[2];
-    let ampm = match[3];
-    if (!hoursStr || !minutesStr || !ampm) return undefined;
+    if (!hoursStr || !minuteStr || !ampm) return undefined; // Guard against missing parts
 
-    let hours = parseInt(hoursStr, 10);
-    ampm = ampm.toUpperCase();
+    let hour = parseInt(hoursStr, 10);
+    if (isNaN(hour)) return undefined; // Guard against parsing failure
 
-    if (ampm === 'AM' && hours === 12) hours = 0; // Midnight case
-    if (ampm === 'PM' && hours < 12) hours += 12; // PM case
+    if (ampm === 'PM' && hour !== 12) {
+      hour += 12;
+    } else if (ampm === 'AM' && hour === 12) {
+      hour = 0; // Midnight
+    }
 
-    return `${hours.toString().padStart(2, '0')}:${minutesStr}`;
+    // Ensure hour is within valid range (0-23) although logic should guarantee this
+    if (hour < 0 || hour > 23) return undefined;
+
+    return `${hour.toString().padStart(2, '0')}:${minuteStr}`;
   };
 
-  const startTime = convertTo24Hour(parts[0]);
-  const endTime = convertTo24Hour(parts[1]);
+  // Ensure parts[0] and parts[1] are defined before calling
+  const startTime = parts[0] ? formatBackToHHMM(parts[0]) : undefined;
+  const endTime = parts[1] ? formatBackToHHMM(parts[1]) : undefined;
 
-  // Construct result carefully for exactOptionalPropertyTypes
-  const result: { startTime?: string | undefined; endTime?: string | undefined } = {};
+  // Build result object ensuring only defined values are added
+  const result: { startTime?: string; endTime?: string } = {};
   if (startTime !== undefined) result.startTime = startTime;
   if (endTime !== undefined) result.endTime = endTime;
 

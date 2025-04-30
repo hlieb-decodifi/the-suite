@@ -76,13 +76,14 @@ export function PaymentMethodsForm({
         <div className="flex justify-end gap-2 pt-5">
           <Button
             type="button"
+            size="sm"
             variant="outline"
             onClick={onCancel}
             disabled={isPending}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending}>
+          <Button size="sm" type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>

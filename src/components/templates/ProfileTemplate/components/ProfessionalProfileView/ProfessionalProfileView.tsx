@@ -36,6 +36,10 @@ import { ServiceFormValues } from '@/components/forms/ServiceForm';
 import { toast } from '@/components/ui/use-toast';
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  WorkingHoursEntry,
+  getWorkingHoursAction,
+} from '@/api/working_hours/actions';
 
 const VALID_TABS = ['profile', 'services', 'portfolio', 'subscription'];
 
@@ -60,6 +64,8 @@ type ProfileTabContentProps = {
   onEditPortfolio: () => void;
   professionalData: ProfessionalProfileViewData | null;
   onSaveChanges: (data: HeaderFormValues) => Promise<void>;
+  workingHours: WorkingHoursEntry[] | null;
+  isLoadingWorkingHours: boolean;
 };
 
 // PageHeader and ProfileTabContent remain largely the same, but might need props updated if needed later
@@ -123,6 +129,8 @@ function ProfileTabContent({
   onEditPortfolio,
   professionalData,
   onSaveChanges,
+  workingHours,
+  isLoadingWorkingHours,
 }: ProfileTabContentProps) {
   // Map profileViewData to the shape needed by HeaderSection (HeaderFormValues & { photoUrl?: string })
   const headerDataForSection = professionalData
@@ -163,7 +171,11 @@ function ProfileTabContent({
           />
         </div>
         <div className="md:col-span-1 space-y-8">
-          <ContactSection />
+          <ContactSection
+            user={user}
+            workingHours={workingHours}
+            isLoading={isLoadingWorkingHours}
+          />
           <LocationSection user={user} />
           <PaymentMethodsSection user={user} />
         </div>
@@ -204,6 +216,12 @@ export function ProfessionalProfileView({
     useState<ProfessionalProfileViewData | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
+  // Working Hours State (Lifted)
+  const [workingHours, setWorkingHours] = useState<WorkingHoursEntry[] | null>(
+    null,
+  );
+  const [isLoadingWorkingHours, setIsLoadingWorkingHours] = useState(true);
+
   // --- Effects ---
   // Sync URL with active tab state
   useEffect(() => {
@@ -213,25 +231,89 @@ export function ProfessionalProfileView({
     }
   }, [searchParams, activeTab]);
 
-  // Fetch combined profile data on mount
+  // Fetch combined profile and working hours data
   useEffect(() => {
-    const fetchProfileData = async () => {
-      setIsLoadingProfile(true);
-      const result = await getProfessionalProfileViewDataAction(user.id);
-      if (result.success && result.data) {
-        setProfileViewData(result.data);
-      } else {
-        toast({
-          title: 'Error loading profile data',
-          description: result.error || 'Could not load profile.',
-          variant: 'destructive',
-        });
-        setProfileViewData(null);
+    let isMounted = true; // Flag to prevent state updates on unmounted component
+
+    const fetchAllData = async () => {
+      // Only set initial loading states if data isn't present
+      if (!profileViewData) setIsLoadingProfile(true);
+      if (!workingHours) setIsLoadingWorkingHours(true);
+
+      try {
+        // Fetch in parallel
+        const [profileResult, hoursResult] = await Promise.all([
+          getProfessionalProfileViewDataAction(user.id),
+          getWorkingHoursAction(user.id),
+        ]);
+
+        if (!isMounted) return; // Don't update state if unmounted
+
+        // Process Profile Data
+        if (profileResult.success && profileResult.data) {
+          setProfileViewData(profileResult.data);
+        } else {
+          if (!profileViewData) {
+            toast({
+              title: 'Error loading profile data',
+              description: profileResult.error || 'Could not load profile.',
+              variant: 'destructive',
+            });
+            setProfileViewData(null);
+          }
+        }
+
+        // Process Working Hours Data
+        if (hoursResult.success && hoursResult.hours) {
+          setWorkingHours(hoursResult.hours);
+          if (hoursResult.error) {
+            toast({
+              title: 'Error loading working hours',
+              description: hoursResult.error || 'An unexpected error occurred.',
+              variant: 'destructive',
+            });
+          }
+        } else {
+          if (!workingHours) {
+            toast({
+              title: 'Error loading working hours',
+              description: 'An unexpected error occurred.',
+              variant: 'destructive',
+            });
+            setWorkingHours(null);
+          }
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('Failed to fetch profile/hours data:', error);
+        // Show general error only if initial load failed for both
+        if (!profileViewData && !workingHours) {
+          toast({
+            title: 'Error',
+            description: 'Failed to load profile data.',
+            variant: 'destructive',
+          });
+          setProfileViewData(null);
+          setWorkingHours(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+          setIsLoadingWorkingHours(false);
+        }
       }
-      setIsLoadingProfile(false);
     };
-    fetchProfileData();
-  }, [user.id]);
+
+    if (user?.id) {
+      fetchAllData();
+    }
+
+    // Cleanup function to set isMounted to false
+    return () => {
+      isMounted = false;
+    };
+    // Dependency only on user.id
+  }, [user.id]); // Removed profileViewData and workingHours from deps
 
   // Fetch services only once on mount
   useEffect(() => {
@@ -473,6 +555,8 @@ export function ProfessionalProfileView({
             onEditPortfolio={handleEditPortfolio}
             professionalData={profileViewData}
             onSaveChanges={handleHeaderSaveChanges}
+            workingHours={workingHours}
+            isLoadingWorkingHours={isLoadingWorkingHours}
           />
         </TabsContent>
 

@@ -35,6 +35,7 @@ export function LocationSection({
         <Button
           variant="ghost"
           size="icon"
+          disabled
           onClick={() => setIsEditing(!isEditing)}
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
         >

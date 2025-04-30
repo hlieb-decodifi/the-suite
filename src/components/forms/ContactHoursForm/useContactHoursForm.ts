@@ -1,58 +1,25 @@
-import { useState, useCallback } from 'react';
-import {
-  useForm,
-  useFieldArray,
-} from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  contactHoursSchema,
-  ContactHoursFormValues,
-} from './schema';
-import { DAYS_OF_WEEK, parseDisplayHours } from './constants';
-
-// Update input type
-export type ContactHoursDefaultInput = {
-  hours: { day: string; hours: string }[]; // Array from original component
-};
+import { contactHoursSchema, ContactHoursFormValues } from './schema';
+import { useCallback, useState, useEffect } from 'react';
+import type { Resolver } from 'react-hook-form';
+import { WorkingHoursEntry } from '@/api/working_hours/actions';
+import { DAYS_OF_WEEK, DayOfWeek } from './constants';
 
 export type UseContactHoursFormProps = {
   onSubmit: (data: ContactHoursFormValues) => Promise<void> | void;
-  // Allow defaultValues itself to be undefined
-  defaultValues?: ContactHoursDefaultInput | undefined;
+  defaultValues?: WorkingHoursEntry[] | null; 
 };
 
-// Update mapping helper
-const mapInputToFormValues = (
-  input: ContactHoursDefaultInput | undefined,
-): Partial<ContactHoursFormValues> => {
-  if (!input) {
-    return {
-      hours: DAYS_OF_WEEK.map((day) => ({
-        day,
-        // Default enabled to false here, as schema is optional
-        enabled: false,
-        startTime: undefined,
-        endTime: undefined,
-      })),
-    };
-  }
-
-  const mappedHours = DAYS_OF_WEEK.map((dayName) => {
-    const dayData = input.hours.find((d) => d.day === dayName);
-    const parsedTimes = parseDisplayHours(dayData?.hours);
-    const isEnabled = !!dayData && dayData.hours.toLowerCase() !== 'closed';
-
-    return {
-      day: dayName,
-      enabled: isEnabled,
-      startTime: isEnabled ? parsedTimes.startTime : undefined,
-      endTime: isEnabled ? parsedTimes.endTime : undefined,
-    };
+// Function to create default form values from DB structure or baseline
+const createInitialFormValues = (dbValues: WorkingHoursEntry[] | null): ContactHoursFormValues => {
+  const initialHours = DAYS_OF_WEEK.map(day => {
+    const existing = dbValues?.find(d => d.day === day);
+    // Ensure the day property matches the expected DayOfWeek type
+    return existing ? { ...existing, day: day as DayOfWeek } : { day, enabled: false, startTime: null, endTime: null };
   });
-
-  return {
-    hours: mappedHours,
-  };
+  // Explicitly type the return value to ensure consistency with the schema
+  return { hours: initialHours as ContactHoursFormValues['hours'] };
 };
 
 export function useContactHoursForm({
@@ -61,39 +28,51 @@ export function useContactHoursForm({
 }: UseContactHoursFormProps) {
   const [isPending, setIsPending] = useState(false);
 
+  // Initialize form with structured data, handling potential undefined defaultValues
+  const initialFormValues = createInitialFormValues(defaultValues ?? null);
+
   const form = useForm<ContactHoursFormValues>({
-    resolver: zodResolver(contactHoursSchema),
-    defaultValues: mapInputToFormValues(defaultValues),
+    resolver: zodResolver(contactHoursSchema) as Resolver<ContactHoursFormValues>,
+    defaultValues: initialFormValues, 
+    mode: 'onBlur',
   });
 
-  const hoursFieldArray = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'hours',
   });
+
+  // Reset form when defaultValues change (e.g., data loaded)
+  useEffect(() => {
+    // Pass null if defaultValues is undefined/null
+    form.reset(createInitialFormValues(defaultValues ?? null));
+  }, [defaultValues, form]);
+
 
   const handleSubmit = useCallback(
     async (data: ContactHoursFormValues) => {
       setIsPending(true);
       try {
-        const submitData = {
-          hours: data.hours.map(h => ({
-            ...h,
-            enabled: h.enabled ?? false,
-          }))
-        };
-        await onSubmit(submitData as ContactHoursFormValues);
+        await onSubmit(data);
       } catch (err) {
         console.error('Submission failed:', err);
+        form.setError('root.serverError', {
+          type: 'manual',
+          message: 'Failed to save working hours. Please try again.',
+        });
       } finally {
         setIsPending(false);
       }
     },
-    [onSubmit]
+    [onSubmit, form],
   );
 
   return {
     form,
-    hoursFieldArray,
+    fields,
+    hoursFieldArray: fields, // For backward compatibility
+    append,
+    remove,
     isPending,
     onSubmit: handleSubmit,
   };

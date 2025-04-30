@@ -1,19 +1,30 @@
 'use client';
 
-import {
-  ContactHoursDefaultInput,
-  ContactHoursFormValues,
-} from '@/components/forms/ContactHoursForm';
+import { useState, useEffect } from 'react';
+import { User } from '@supabase/supabase-js';
+import { ContactHoursFormValues } from '@/components/forms/ContactHoursForm';
 import { ContactHoursModal } from '@/components/modals/ContactHoursModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 import { Pencil } from 'lucide-react';
-import { useState } from 'react';
+import {
+  updateWorkingHoursAction,
+  WorkingHoursEntry,
+} from '@/api/working_hours/actions';
+import { toast } from '@/components/ui/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Update component props type
+export type ContactSectionProps = {
+  user: User;
+  workingHours: WorkingHoursEntry[] | null;
+  isLoading: boolean;
+};
 
 // Helper to format form values back to display string
 const formatHoursForDisplay = (
-  hours: ContactHoursFormValues['hours'][number],
+  hours: WorkingHoursEntry, // Use WorkingHoursEntry type
 ): string => {
   // Check for enabled and valid times upfront
   if (!hours.enabled || !hours.startTime || !hours.endTime) {
@@ -50,80 +61,107 @@ const formatHoursForDisplay = (
   return `${formattedStartTime} - ${formattedEndTime}`;
 };
 
-export function ContactSection() {
+export function ContactSection({
+  user,
+  workingHours, // Use prop
+  isLoading, // Use prop
+}: ContactSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localWorkingHours, setLocalWorkingHours] = useState<
+    WorkingHoursEntry[] | null
+  >(workingHours);
 
-  const [contactData, setContactData] = useState<ContactHoursDefaultInput>({
-    hours: [
-      { day: 'Monday', hours: 'Closed' },
-      { day: 'Tuesday', hours: '9:00 AM - 5:00 PM' },
-      { day: 'Wednesday', hours: '9:00 AM - 5:00 PM' },
-      { day: 'Thursday', hours: '9:00 AM - 5:00 PM' },
-      { day: 'Friday', hours: '9:00 AM - 5:00 PM' },
-      { day: 'Saturday', hours: '10:00 AM - 3:00 PM' },
-      { day: 'Sunday', hours: 'Closed' },
-    ],
-  });
+  // Effect to sync prop changes to local state
+  useEffect(() => {
+    setLocalWorkingHours(workingHours);
+  }, [workingHours]);
 
   const handleEditClick = () => {
     setIsModalOpen(true);
   };
 
   const handleSave = async (formData: ContactHoursFormValues) => {
-    console.log('Saving hours:', formData);
-
-    const formattedHours = formData.hours.map((dayHours) => ({
-      day: dayHours.day,
-      hours: formatHoursForDisplay(dayHours),
+    setIsSubmitting(true);
+    const hoursToSave: WorkingHoursEntry[] = formData.hours.map((h) => ({
+      day: h.day,
+      enabled: h.enabled ?? false,
+      startTime: h.startTime ?? null,
+      endTime: h.endTime ?? null,
     }));
 
-    const dataToSave: ContactHoursDefaultInput = {
-      hours: formattedHours,
-    };
+    const result = await updateWorkingHoursAction(user.id, hoursToSave);
+    setIsSubmitting(false);
 
-    console.log('Data formatted for API:', dataToSave);
-    await new Promise((res) => setTimeout(res, 500));
-
-    setContactData(dataToSave);
-    setIsModalOpen(false);
+    if (result.success) {
+      setLocalWorkingHours(hoursToSave); // Update local state optimistically or after fetch?
+      // Consider if parent needs to refetch or be notified
+      setIsModalOpen(false);
+      toast({ description: 'Working hours updated successfully.' });
+    } else {
+      toast({
+        title: 'Error saving working hours',
+        description: result.error || 'Could not save working hours.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
-    <Card className="border border-border">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <Typography variant="h3" className="font-bold text-foreground">
-          Working Hours
-        </Typography>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleEditClick}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <div className="space-y-2">
-          {contactData.hours.map((day) => (
-            <div key={day.day} className="flex justify-between text-sm">
-              <Typography variant="small" className="text-muted-foreground">
-                {day.day}
-              </Typography>
-              <Typography variant="small" className="text-foreground">
-                {day.hours}
-              </Typography>
+    <>
+      <Card className="border border-border">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <Typography variant="h3" className="font-bold text-foreground">
+            Working Hours
+          </Typography>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleEditClick}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            disabled={isLoading || !localWorkingHours}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="pt-2">
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <Skeleton key={i} className="h-5 w-full" />
+              ))}
             </div>
-          ))}
-        </div>
-      </CardContent>
+          ) : localWorkingHours ? (
+            <div className="space-y-2">
+              {localWorkingHours.map((dayHours) => (
+                <div
+                  key={dayHours.day}
+                  className="flex justify-between text-sm"
+                >
+                  <Typography variant="small" className="text-muted-foreground">
+                    {dayHours.day}
+                  </Typography>
+                  <Typography variant="small" className="text-foreground">
+                    {formatHoursForDisplay(dayHours)}
+                  </Typography>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Typography variant="small" className="text-muted-foreground">
+              Could not load working hours.
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
 
       <ContactHoursModal
         isOpen={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSubmitSuccess={handleSave}
-        defaultValues={contactData}
+        defaultValues={localWorkingHours}
+        isSubmitting={isSubmitting}
       />
-    </Card>
+    </>
   );
 }

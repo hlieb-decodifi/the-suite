@@ -5,18 +5,16 @@ import { Typography } from '@/components/ui/typography';
 import { Controller } from 'react-hook-form';
 import { FormSelect } from '@/components/forms/common';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  useContactHoursForm,
-  ContactHoursDefaultInput,
-} from './useContactHoursForm';
+import { useContactHoursForm } from './useContactHoursForm';
 import { TIME_OPTIONS } from './constants';
 import { ContactHoursFormValues } from './schema';
 import { FormMessage } from '@/components/ui/form';
+import { WorkingHoursEntry } from '@/api/working_hours/actions';
 
 export type ContactHoursFormProps = {
   onSubmitSuccess: (data: ContactHoursFormValues) => void;
   onCancel: () => void;
-  defaultValues?: ContactHoursDefaultInput | undefined;
+  defaultValues?: WorkingHoursEntry[] | null;
 };
 
 export function ContactHoursForm({
@@ -27,14 +25,13 @@ export function ContactHoursForm({
   const formId = useId();
   const {
     form,
-    hoursFieldArray,
+    fields,
     isPending,
     onSubmit: handleFormSubmit,
   } = useContactHoursForm({
     onSubmit: onSubmitSuccess,
-    defaultValues,
+    defaultValues: defaultValues ?? null,
   });
-  const { fields } = hoursFieldArray;
   const hoursErrors = form.formState.errors.hours;
 
   return (
