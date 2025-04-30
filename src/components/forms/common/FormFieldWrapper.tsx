@@ -25,6 +25,7 @@ export type FormFieldWrapperProps<TFieldValues extends FieldValues> = {
   className?: string; // Optional className for FormItem
   labelClassName?: string; // Optional className for FormLabel
   messageClassName?: string; // Optional className for FormMessage
+  showErrorMessage?: boolean; // New prop to control message visibility
 };
 
 export function FormFieldWrapper<TFieldValues extends FieldValues>({
@@ -35,6 +36,7 @@ export function FormFieldWrapper<TFieldValues extends FieldValues>({
   className,
   labelClassName,
   messageClassName,
+  showErrorMessage = true, // Default to true
 }: FormFieldWrapperProps<TFieldValues>) {
   return (
     <FormField
@@ -52,13 +54,15 @@ export function FormFieldWrapper<TFieldValues extends FieldValues>({
             {label}
           </FormLabel>
           <FormControl>{children(field)}</FormControl>
-          {/* Position message absolutely */}
-          <FormMessage
-            className={cn(
-              'absolute text-destructive text-xs',
-              messageClassName,
-            )}
-          />
+          {/* Conditionally render FormMessage */}
+          {showErrorMessage && (
+            <FormMessage
+              className={cn(
+                'absolute text-destructive text-xs',
+                messageClassName,
+              )}
+            />
+          )}
         </FormItem>
       )}
     />
