@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { Database } from '@/../supabase/types';
-import { HeaderFormValues } from '@/components/forms/HeaderForm';
 
 // Type aliases using correct snake_case keys from Database types
 type UserRow = Database['public']['Tables']['users']['Row'];
@@ -92,7 +91,16 @@ export async function getProfessionalProfileViewDataAction(userId: string) {
  */
 export async function updateProfessionalProfileHeaderAction(
   userId: string, 
-  data: HeaderFormValues // Data comes from the form (camelCase)
+  data: {
+    firstName: string;
+    lastName: string;
+    profession?: string | undefined;
+    description?: string | undefined;
+    phoneNumber?: string | null | undefined;
+    facebookUrl?: string | null | undefined;
+    instagramUrl?: string | null | undefined;
+    tiktokUrl?: string | null | undefined;
+  }
 ) {
   const supabase = await createClient();
   try {

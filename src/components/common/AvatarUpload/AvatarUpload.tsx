@@ -1,7 +1,7 @@
 /* eslint-disable max-lines-per-function */
 'use client';
 
-import { ChangeEvent, useState, useEffect } from 'react';
+import { ChangeEvent } from 'react';
 import {
   Avatar,
   AvatarFallback,
@@ -11,12 +11,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Camera } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
-import { updateProfilePhotoAction } from '@/api/photos/actions';
-import { cn } from '@/utils/cn';
 import imageCompression from 'browser-image-compression';
-import { useAvatarUrl } from '@/hooks/useAvatarUrl';
-import { useAuthStore } from '@/stores/authStore';
+import { cn } from '@/utils/cn';
+import { useAvatarUrlQuery, useUpdateProfilePhoto } from '@/api/photos/hooks';
 
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -46,25 +43,16 @@ export function AvatarUpload({
   size = 'lg', // Default size to large ('h-24 w-24')
   className, // Root div className
   avatarContainerClassName, // Extra Avatar container styles
-  buttonClassName = 'absolute bottom-0 right-0',
+  buttonClassName, // We'll ignore this prop now and use our own consistent positioning
   onUploadSuccess,
   ...avatarProps // Pass remaining AvatarProps (like size) down
 }: AvatarUploadProps) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadTrigger, setUploadTrigger] = useState(0);
-  const { toast } = useToast();
+  // Use React Query hooks for data fetching and mutation
+  const { data: avatarUrl, isLoading: isLoadingAvatar } =
+    useAvatarUrlQuery(userId);
 
-  const { avatarUrl: hookAvatarUrl, isLoading } = useAvatarUrl(
-    userId,
-    uploadTrigger,
-  );
-  const setStoreAvatarUrl = useAuthStore((state) => state.setAvatarUrl);
-
-  useEffect(() => {
-    if (!isLoading && hookAvatarUrl) {
-      setStoreAvatarUrl(hookAvatarUrl);
-    }
-  }, [hookAvatarUrl, isLoading, setStoreAvatarUrl]);
+  const updatePhotoMutation = useUpdateProfilePhoto();
+  const isUploading = updatePhotoMutation.isPending;
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     let file = e.target.files?.[0];
@@ -72,16 +60,10 @@ export function AvatarUpload({
 
     // --- Client-side validation ---
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      toast({
-        variant: 'destructive',
-        title: 'File Too Large',
-        description: `Please select a file smaller than ${MAX_FILE_SIZE_MB}MB.`,
-      });
+      updatePhotoMutation.reset();
       e.target.value = '';
       return;
     }
-
-    setIsUploading(true);
 
     try {
       // --- Compress Image ---
@@ -95,43 +77,18 @@ export function AvatarUpload({
       // --- Upload Logic ---
       const formData = new FormData();
       formData.append('file', file);
-      const result = await updateProfilePhotoAction(userId, formData);
 
-      if (result.success) {
-        toast({
-          title: 'Success',
-          description: 'Profile photo updated successfully!',
-        });
-        setUploadTrigger((prev) => prev + 1); // Trigger refetch via hook dependency
-        onUploadSuccess?.(); // Call optional callback
-      } else {
-        console.error('Upload failed:', result.error);
-        toast({
-          variant: 'destructive',
-          title: 'Upload Error',
-          description: result.error || 'Failed to update profile photo.',
-        });
-      }
+      await updatePhotoMutation.mutateAsync(
+        { userId, formData },
+        {
+          onSuccess: () => {
+            onUploadSuccess?.(); // Call optional callback
+          },
+        },
+      );
     } catch (error: unknown) {
-      let errorMessage = 'An unexpected error occurred.';
-      if (error instanceof Error) {
-        // Specific handling for browser-image-compression errors if needed
-        if (error.message.includes('Cannot read properties of undefined')) {
-          errorMessage =
-            'Image processing failed. Please try a different image.';
-          console.error('Compression/Read Error:', error);
-        } else {
-          errorMessage = error.message;
-        }
-      }
       console.error('Error during upload/compression:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: errorMessage,
-      });
     } finally {
-      setIsUploading(false);
       e.target.value = '';
     }
   };
@@ -152,9 +109,18 @@ export function AvatarUpload({
   const skeletonClass =
     skeletonSizeClasses[size || 'default'] || skeletonSizeClasses.default;
 
+  // Define button position based on avatar size
+  const buttonPositions: Record<string, string> = {
+    sm: 'bottom-[-4px] right-[-4px]',
+    default: 'bottom-[-4px] right-[-4px]',
+    lg: 'bottom-0 right-0',
+    xl: 'bottom-0 right-0',
+  };
+  const buttonPosition = buttonPositions[size || 'default'];
+
   return (
     <div className={cn('relative', className)}>
-      {isLoading ? (
+      {isLoadingAvatar ? (
         <Skeleton className={cn('rounded-full', skeletonClass)} />
       ) : (
         <Avatar
@@ -165,10 +131,10 @@ export function AvatarUpload({
           )}
           {...avatarProps}
         >
-          {hookAvatarUrl ? (
+          {avatarUrl ? (
             <AvatarImage
               className="object-cover"
-              src={hookAvatarUrl}
+              src={avatarUrl}
               alt={fallbackName}
             />
           ) : (
@@ -187,12 +153,12 @@ export function AvatarUpload({
         </Avatar>
       )}
 
-      <div className={buttonClassName}>
+      <div className={cn('absolute', buttonPosition, buttonClassName)}>
         <Button
           size="icon"
           variant="secondary"
           className="cursor-pointer h-8 w-8 rounded-full"
-          disabled={isUploading || isLoading}
+          disabled={isUploading || isLoadingAvatar}
           asChild
         >
           <label>
@@ -202,7 +168,7 @@ export function AvatarUpload({
               accept="image/png, image/jpeg, image/webp"
               className="sr-only"
               onChange={handleFileChange}
-              disabled={isUploading || isLoading}
+              disabled={isUploading || isLoadingAvatar}
             />
           </label>
         </Button>

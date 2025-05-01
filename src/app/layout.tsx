@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Titillium_Web } from 'next/font/google';
 import './globals.css';
-import { Providers } from '@/providers';
+import { Providers } from './providers';
 import { Toaster } from '@/components/ui/toaster';
 import { RootLayoutTemplate } from '@/components/templates/RootLayoutTemplate';
 
@@ -22,13 +22,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <Providers>
-      <html lang="en" className={titilliumWeb.variable}>
-        <body className={titilliumWeb.className}>
+    <html lang="en" className={titilliumWeb.variable}>
+      <body className={titilliumWeb.className}>
+        <Providers>
           <RootLayoutTemplate>{children}</RootLayoutTemplate>
           <Toaster />
-        </body>
-      </html>
-    </Providers>
+        </Providers>
+      </body>
+    </html>
   );
 }

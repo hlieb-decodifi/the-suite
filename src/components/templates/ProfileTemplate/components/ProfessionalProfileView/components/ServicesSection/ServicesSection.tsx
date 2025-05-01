@@ -1,28 +1,102 @@
+/* eslint-disable max-lines-per-function */
 'use client';
 
+import { useState } from 'react';
+import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus } from 'lucide-react';
 import { ServiceCard } from './components/ServiceCard';
 import { ServiceCardSkeleton } from './components/ServiceCardSkeleton';
-import { ServiceUI } from '@/api/services/actions';
+import { ServiceModal } from '@/components/modals/ServiceModal';
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal';
+import { ServiceFormValues } from '@/components/forms/ServiceForm';
+import { ServiceUI } from '@/api/services/types';
+import {
+  useServices,
+  useUpsertService,
+  useDeleteService,
+} from '@/api/services/hooks';
 
 export type ServicesSectionProps = {
-  services: ServiceUI[];
-  isLoading: boolean;
-  onAddService: () => void;
-  onEditService: (service: ServiceUI) => void;
-  onDeleteService: (service: ServiceUI) => void;
+  user: User;
 };
 
-export function ServicesSection({
-  services,
-  isLoading,
-  onAddService,
-  onEditService,
-  onDeleteService,
-}: ServicesSectionProps) {
+export function ServicesSection({ user }: ServicesSectionProps) {
+  // State for modals
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<ServiceUI | null>(null);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<ServiceUI | null>(
+    null,
+  );
+
+  // React Query hooks
+  const {
+    data: services = [],
+    isLoading: isLoadingServices,
+    error: servicesError,
+  } = useServices(user.id);
+
+  const { mutate: upsertService, isPending: isSubmittingService } =
+    useUpsertService();
+
+  const { mutate: deleteService, isPending: isDeletingService } =
+    useDeleteService();
+
+  // Service handlers
+  const handleAddServiceClick = () => {
+    setEditingService(null);
+    setIsServiceModalOpen(true);
+  };
+
+  const handleEditService = (service: ServiceUI) => {
+    setEditingService(service);
+    setIsServiceModalOpen(true);
+  };
+
+  const handleDeleteServiceClick = (service: ServiceUI) => {
+    setServiceToDelete(service);
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDeleteService = async () => {
+    if (!serviceToDelete) return;
+
+    deleteService({
+      userId: user.id,
+      serviceId: serviceToDelete.id,
+      serviceName: serviceToDelete.name,
+    });
+
+    setIsConfirmDeleteOpen(false);
+    setServiceToDelete(null);
+  };
+
+  const handleServiceModalSubmitSuccess = (
+    data: ServiceFormValues & { id?: string },
+  ) => {
+    upsertService({
+      userId: user.id,
+      data,
+    });
+
+    setIsServiceModalOpen(false);
+  };
+
+  // Error handling
+  if (servicesError) {
+    return (
+      <Typography className="text-destructive">
+        Error loading services. Please try again later.
+        {servicesError instanceof Error && (
+          <div className="text-sm">{servicesError.message}</div>
+        )}
+      </Typography>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -35,16 +109,16 @@ export function ServicesSection({
           </Typography>
         </div>
         <Button
-          onClick={onAddService}
+          onClick={handleAddServiceClick}
           className="flex items-center gap-1"
-          disabled={isLoading || services.length >= 10}
+          disabled={isLoadingServices || services.length >= 10}
         >
           <Plus className="h-4 w-4" />
           Add Service
         </Button>
       </div>
 
-      {!isLoading && services.length >= 10 && (
+      {!isLoadingServices && services.length >= 10 && (
         <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800">
           <Typography className="text-sm">
             You have reached the maximum limit of 10 services. To add a new
@@ -53,7 +127,7 @@ export function ServicesSection({
         </div>
       )}
 
-      {isLoading ? (
+      {isLoadingServices ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ServiceCardSkeleton />
           <ServiceCardSkeleton />
@@ -64,8 +138,8 @@ export function ServicesSection({
             <ServiceCard
               key={service.id}
               service={service}
-              onEdit={onEditService}
-              onDelete={() => onDeleteService(service)}
+              onEdit={handleEditService}
+              onDelete={() => handleDeleteServiceClick(service)}
             />
           ))}
         </div>
@@ -81,6 +155,26 @@ export function ServicesSection({
           </CardContent>
         </Card>
       )}
+
+      {/* Service Modal */}
+      <ServiceModal
+        isOpen={isServiceModalOpen}
+        onOpenChange={isSubmittingService ? () => {} : setIsServiceModalOpen}
+        onSubmitSuccess={handleServiceModalSubmitSuccess}
+        service={editingService}
+        isSubmitting={isSubmittingService}
+      />
+
+      {/* Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        isOpen={isConfirmDeleteOpen}
+        onOpenChange={isDeletingService ? () => {} : setIsConfirmDeleteOpen}
+        onConfirm={handleConfirmDeleteService}
+        itemName={serviceToDelete?.name ?? 'this service'}
+        title="Delete Service?"
+        description={`Are you sure you want to delete the service "${serviceToDelete?.name ?? 'this service'}"? This action cannot be undone.`}
+        isDeleting={isDeletingService}
+      />
     </div>
   );
 }
