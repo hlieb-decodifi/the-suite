@@ -247,18 +247,17 @@ export async function updatePortfolioPhoto(
   updates: { description?: string; orderIndex?: number }
 ): Promise<PortfolioPhotoResponse> {
   try {
-    // Convert orderIndex to order_index for database
-    const dbUpdates: { description?: string | undefined; order_index?: number | undefined } = {
-      description: updates.description,
-      order_index: updates.orderIndex
-    };
+    // Create update object with correct types
+    const dbUpdates: { description?: string | null; order_index?: number } = {};
     
-    // Remove undefined properties
-    Object.keys(dbUpdates).forEach(key => {
-      if (dbUpdates[key as keyof typeof dbUpdates] === undefined) {
-        delete dbUpdates[key as keyof typeof dbUpdates];
-      }
-    });
+    // Only add properties that exist
+    if (updates.description !== undefined) {
+      dbUpdates.description = updates.description ?? null;
+    }
+    
+    if (updates.orderIndex !== undefined) {
+      dbUpdates.order_index = updates.orderIndex;
+    }
     
     // Update in database
     const updatedPhoto = await updatePhotoInDb(id, userId, dbUpdates);
