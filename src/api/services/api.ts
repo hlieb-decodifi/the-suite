@@ -1,41 +1,85 @@
-import type { ServiceUI } from './types';
-import type { ServiceFormValues } from '@/components/forms/ServiceForm';
+import { 
+  getServices as getServicesAction, 
+  upsertService as upsertServiceAction, 
+  deleteService as deleteServiceAction 
+} from '@/server/domains/services/actions';
+import type { 
+  ServiceUI, 
+  ServiceParams, 
+  UpsertServiceParams, 
+  DeleteServiceParams,
+  PaginatedResponse
+} from '@/types/services';
 
-export async function getServices(userId: string): Promise<ServiceUI[]> {
-  const response = await fetch(`/api/services/${userId}`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to fetch services');
+/**
+ * Get services for a user with pagination and search support
+ */
+export async function getServices({
+  userId,
+  page = 1,
+  pageSize = 20,
+  search = '',
+}: ServiceParams): Promise<ServiceUI[]> {
+  const result = await getServicesAction({ userId, page, pageSize, search });
+  
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to fetch services');
   }
-  const data = await response.json();
-  return data;
+  
+  return result.services ?? [];
 }
 
-export async function upsertService(
-  userId: string, 
-  data: ServiceFormValues & { id?: string }
-): Promise<ServiceUI> {
-  const response = await fetch(`/api/services/${userId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+/**
+ * Get services with pagination information
+ */
+export async function getServicesWithPagination({
+  userId,
+  page = 1,
+  pageSize = 20,
+  search = '',
+}: ServiceParams): Promise<PaginatedResponse<ServiceUI>> {
+  const result = await getServicesAction({ userId, page, pageSize, search });
   
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to save service');
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to fetch services');
   }
   
-  return response.json();
+  if (!result.services || !result.pagination) {
+    throw new Error('Server returned invalid data format');
+  }
+  
+  return {
+    data: result.services,
+    pagination: result.pagination,
+  };
 }
 
-export async function deleteService(userId: string, serviceId: string): Promise<void> {
-  const response = await fetch(`/api/services/${userId}/${serviceId}`, {
-    method: 'DELETE',
-  });
+/**
+ * Create or update a service
+ */
+export async function upsertService({
+  userId, 
+  data,
+}: UpsertServiceParams): Promise<ServiceUI> {
+  const result = await upsertServiceAction({ userId, data });
   
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to delete service');
+  if (!result.success || !result.service) {
+    throw new Error(result.error || 'Failed to save service');
+  }
+  
+  return result.service;
+}
+
+/**
+ * Delete a service
+ */
+export async function deleteService({
+  userId,
+  serviceId,
+}: Omit<DeleteServiceParams, 'serviceName'>): Promise<void> {
+  const result = await deleteServiceAction({ userId, serviceId });
+  
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to delete service');
   }
 } 

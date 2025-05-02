@@ -53,7 +53,7 @@ export function ServiceForm({
           {(field) => <FormInput placeholder="e.g., Haircut" {...field} />}
         </FormFieldWrapper>
 
-        <FormFieldWrapper control={form.control} name="price" label="Price ($">
+        <FormFieldWrapper control={form.control} name="price" label="Price ($)">
           {(field) => (
             <FormInput
               type="text"

@@ -12,7 +12,7 @@ import { ServiceCardSkeleton } from './components/ServiceCardSkeleton';
 import { ServiceModal } from '@/components/modals/ServiceModal';
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal';
 import { ServiceFormValues } from '@/components/forms/ServiceForm';
-import { ServiceUI } from '@/api/services/types';
+import { ServiceUI } from '@/types/services';
 import {
   useServices,
   useUpsertService,
@@ -32,12 +32,20 @@ export function ServicesSection({ user }: ServicesSectionProps) {
     null,
   );
 
+  // Pagination state - we could add UI controls for these later
+  const [page] = useState(1);
+  const pageSize = 20; // Large enough to show all services for now
+
   // React Query hooks
   const {
     data: services = [],
-    isLoading: isLoadingServices,
+    isFetching: isLoadingServices,
     error: servicesError,
-  } = useServices(user.id);
+  } = useServices({
+    userId: user.id,
+    page,
+    pageSize,
+  });
 
   const { mutate: upsertService, isPending: isSubmittingService } =
     useUpsertService();
@@ -111,7 +119,9 @@ export function ServicesSection({ user }: ServicesSectionProps) {
         <Button
           onClick={handleAddServiceClick}
           className="flex items-center gap-1"
-          disabled={isLoadingServices || services.length >= 10}
+          disabled={
+            isLoadingServices || services.length >= 10 || isSubmittingService
+          }
         >
           <Plus className="h-4 w-4" />
           Add Service
