@@ -1,25 +1,24 @@
 /* eslint-disable max-lines-per-function */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
-import { Typography } from '@/components/ui/typography';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import React from 'react';
-import {
-  ServicesSection,
-  PortfolioSection,
-  SubscriptionSection,
-  PageHeader,
-  ProfileTabContent,
-} from './components';
 import {
   useProfile,
   useToggleProfilePublishStatus,
   useUpdateSubscription,
 } from '@/api/profiles/hooks';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Typography } from '@/components/ui/typography';
+import { User } from '@supabase/supabase-js';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import {
+  PageHeader,
+  PortfolioSection,
+  ProfileTabContent,
+  ServicesSection,
+  SubscriptionSection,
+} from './components';
 
 const VALID_TABS = ['profile', 'services', 'portfolio', 'subscription'];
 
@@ -50,15 +49,6 @@ export function ProfessionalProfileView({
 
   // Subscription mutation
   const { mutate: updateSubscription } = useUpdateSubscription();
-
-  // --- Effects ---
-  // Sync URL with active tab state
-  useEffect(() => {
-    const urlTab = searchParams.get('tab') || 'profile';
-    if (VALID_TABS.includes(urlTab) && urlTab !== activeTab) {
-      setActiveTab(urlTab);
-    }
-  }, [searchParams, activeTab]);
 
   // --- Handlers ---
   // Tab change handler
@@ -145,7 +135,18 @@ export function ProfessionalProfileView({
           ))}
         </TabsList>
 
-        <TabsContent value="profile">
+        <TabsContent
+          value="profile"
+          forceMount
+          className={activeTab !== 'profile' ? 'hidden' : ''}
+        >
+          {/* <div className="relative h-96 w-full">
+            <Image
+              fill
+              src="http://127.0.0.1:54321/storage/v1/object/sign/portfolio-photos/a694eb9c-bc41-4ce5-9379-fe542eeb3cee/1746174973509.blob?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJwb3J0Zm9saW8tcGhvdG9zL2E2OTRlYjljLWJjNDEtNGNlNS05Mzc5LWZlNTQyZWViM2NlZS8xNzQ2MTc0OTczNTA5LmJsb2IiLCJpYXQiOjE3NDYxNzc4NjgsImV4cCI6MTc3NzcxMzg2OH0.dE3Vab2uoLjq1awKUdJtX55JlTgY-JgtLAtP8H5d_L8"
+              alt="Profile"
+            />
+          </div> */}
           <ProfileTabContent
             user={user}
             onPublishToggle={handlePublishToggle}
@@ -153,15 +154,27 @@ export function ProfessionalProfileView({
           />
         </TabsContent>
 
-        <TabsContent value="services">
+        <TabsContent
+          value="services"
+          forceMount
+          className={activeTab !== 'services' ? 'hidden' : ''}
+        >
           <ServicesSection user={user} />
         </TabsContent>
 
-        <TabsContent value="portfolio">
+        <TabsContent
+          value="portfolio"
+          forceMount
+          className={activeTab !== 'portfolio' ? 'hidden' : ''}
+        >
           <PortfolioSection user={user} />
         </TabsContent>
 
-        <TabsContent value="subscription">
+        <TabsContent
+          value="subscription"
+          forceMount
+          className={activeTab !== 'subscription' ? 'hidden' : ''}
+        >
           <SubscriptionSection
             user={user}
             isSubscribed={profileData.isSubscribed ?? false}
