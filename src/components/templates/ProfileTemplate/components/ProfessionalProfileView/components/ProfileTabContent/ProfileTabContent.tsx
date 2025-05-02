@@ -27,12 +27,12 @@ export function ProfileTabContent({
   // Fetch profile data using React Query
   const {
     data: profileViewData,
-    isLoading: isLoadingProfile,
+    isFetching: isLoadingProfile,
     error: profileError,
   } = useProfile(user.id);
 
   // Fetch working hours using React Query
-  const { data: workingHours, isLoading: isLoadingWorkingHours } =
+  const { data: workingHours, isFetching: isLoadingWorkingHours } =
     useWorkingHours(user.id);
 
   // Handle loading state

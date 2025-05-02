@@ -31,7 +31,11 @@ export function HeaderSection({ user }: HeaderSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch profile data using React Query
-  const { data: profileData, isLoading, error } = useProfile(user.id);
+  const {
+    data: profileData,
+    isFetching: isLoading,
+    error,
+  } = useProfile(user.id);
 
   // Setup mutation for updating profile header
   const updateProfileHeader = useUpdateProfileHeader();
