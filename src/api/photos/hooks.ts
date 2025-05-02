@@ -9,33 +9,18 @@ export const QUERY_KEYS = {
   avatarUrl: (userId: string) => ['avatarUrl', userId],
 };
 
-// Create a function to prefetch and initialize avatar URL
-export async function prefetchAvatarUrl(queryClient: ReturnType<typeof useQueryClient>, userId: string) {
-  // Check if we already have the data in cache
-  const existingData = queryClient.getQueryData(QUERY_KEYS.avatarUrl(userId));
-  
-  if (!existingData) {
-    // Only fetch if not in cache
-    return queryClient.prefetchQuery({
-      queryKey: QUERY_KEYS.avatarUrl(userId),
-      queryFn: () => fetchProfilePhotoUrl(userId),
-      staleTime: 1000 * 60 * 60, // 1 hour
-      gcTime: 1000 * 60 * 60 * 24, // 24 hours
-    });
-  }
-  
-  return Promise.resolve();
-}
-
-export function useAvatarUrlQuery(userId: string) {
+export function useAvatarUrlQuery(userId?: string) {
   const setStoreAvatarUrl = useAuthStore((state) => state.setAvatarUrl);
   
   // Get current avatar URL from store for initial data
   const currentAvatarUrl = useAuthStore((state) => state.avatarUrl);
 
   return useQuery({
-    queryKey: QUERY_KEYS.avatarUrl(userId),
+    queryKey: QUERY_KEYS.avatarUrl(userId || ''),
     queryFn: async () => {
+      if (!userId) {
+        return;
+      }
       const url = await fetchProfilePhotoUrl(userId);
       
       // Update the store when we get a new URL

@@ -5,12 +5,12 @@ import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
 import { User } from 'lucide-react';
 import * as React from 'react';
-import { useAuthStore } from '@/stores/authStore';
 
 export type UserProfileSummaryProps = {
   userInfo: {
     name: string;
     email: string;
+    avatarUrl?: string | null;
   };
   className?: string;
   as?: 'div' | 'button';
@@ -25,14 +25,12 @@ export function UserProfileSummary({
   onClick,
   tabIndex,
 }: UserProfileSummaryProps) {
-  const avatarUrl = useAuthStore((state) => state.avatarUrl);
-
   const shared = (
     <>
-      {avatarUrl ? (
+      {userInfo.avatarUrl ? (
         <Avatar>
           <AvatarImage
-            src={avatarUrl}
+            src={userInfo.avatarUrl}
             alt="User avatar"
             className="object-cover size-10 rounded-full"
           />

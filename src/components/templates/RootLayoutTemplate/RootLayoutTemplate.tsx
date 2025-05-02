@@ -6,6 +6,7 @@ import { Header } from '@/components/common/Header';
 import { Footer } from '@/components/common/Footer';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { Toaster } from '@/components/ui/toaster';
+import { useAvatarUrlQuery } from '@/api/photos/hooks';
 
 export type RootLayoutTemplateProps = {
   children: ReactNode;
@@ -13,8 +14,11 @@ export type RootLayoutTemplateProps = {
 
 export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
+  const { data: avatarUrl, isLoading: isAvatarLoading } = useAvatarUrlQuery(
+    user?.id,
+  );
 
-  const isLoading = isAuthLoading;
+  const isLoading = isAuthLoading || isAvatarLoading;
 
   if (isLoading) {
     return <LoadingOverlay />;
@@ -27,6 +31,7 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
             `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() ||
             'User',
           email: String(user.email || ''),
+          avatarUrl: avatarUrl || null,
         }
       : undefined;
 

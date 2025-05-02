@@ -1,28 +1,26 @@
 /* eslint-disable max-lines-per-function */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { User } from '@supabase/supabase-js';
-import { Typography } from '@/components/ui/typography';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { useProfile, useUpdateProfileHeader } from '@/api/profiles/hooks';
 import { AvatarUpload } from '@/components/common/AvatarUpload';
 import { ExpandableText } from '@/components/common/ExpandableText';
+import { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
 import { HeaderModal } from '@/components/modals';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Typography } from '@/components/ui/typography';
+import { User } from '@supabase/supabase-js';
 import {
-  Pencil,
+  AlertCircle,
   Facebook,
   Instagram,
   Link as LinkIcon,
+  Pencil,
   Phone,
-  AlertCircle,
 } from 'lucide-react';
-import { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
-import { useProfile, useUpdateProfileHeader } from '@/api/profiles/hooks';
-import { useQueryClient } from '@tanstack/react-query';
-import { prefetchAvatarUrl } from '@/api/photos/hooks';
 import Link from 'next/link';
+import { useState } from 'react';
 
 export type HeaderSectionProps = {
   user: User;
@@ -31,14 +29,6 @@ export type HeaderSectionProps = {
 
 export function HeaderSection({ user }: HeaderSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const queryClient = useQueryClient();
-
-  // Prefetch avatar URL when component mounts
-  useEffect(() => {
-    if (user?.id) {
-      prefetchAvatarUrl(queryClient, user.id);
-    }
-  }, [queryClient, user?.id]);
 
   // Fetch profile data using React Query
   const { data: profileData, isLoading, error } = useProfile(user.id);
