@@ -20,8 +20,6 @@ export type SubscriptionSectionProps = {
 };
 
 export function SubscriptionSection({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  user,
   isSubscribed,
   onSubscribe,
 }: SubscriptionSectionProps) {

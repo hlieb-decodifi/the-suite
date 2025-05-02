@@ -11,20 +11,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Camera } from 'lucide-react';
-import imageCompression from 'browser-image-compression';
 import { cn } from '@/utils/cn';
 import { useAvatarUrlQuery, useUpdateProfilePhoto } from '@/api/photos/hooks';
-
-const MAX_FILE_SIZE_MB = 2;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-// Compression options (adjust as needed)
-const compressionOptions = {
-  maxSizeMB: 1, // Compress images over 1MB
-  maxWidthOrHeight: 1024, // Resize images larger than 1024px
-  useWebWorker: true,
-  initialQuality: 0.8, // Start with 80% quality
-};
+import { compressImage, MAX_FILE_SIZE_BYTES } from '@/utils/imageCompression';
 
 // Extend props to include Avatar size, omit className which we handle internally
 export type AvatarUploadProps = Omit<AvatarProps, 'className' | 'children'> & {
@@ -67,12 +56,7 @@ export function AvatarUpload({
 
     try {
       // --- Compress Image ---
-      console.log(`Original file size: ${file.size / 1024 / 1024} MB`);
-      const compressedFile = await imageCompression(file, compressionOptions);
-      console.log(
-        `Compressed file size: ${compressedFile.size / 1024 / 1024} MB`,
-      );
-      file = compressedFile; // Use the compressed file for upload
+      file = await compressImage(file);
 
       // --- Upload Logic ---
       const formData = new FormData();

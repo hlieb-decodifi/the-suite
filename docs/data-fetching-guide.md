@@ -27,16 +27,26 @@ Our data fetching architecture follows a hybrid approach that balances clear cli
 ```
 src/
 ├── api/                 # Client-side API layer
-│   └── services/        # Resource-specific client code
-│       ├── api.ts       # API functions that call server actions
-│       └── hooks.ts     # React Query hooks
+│   ├── profiles/        # Resource-specific client code
+│   │   ├── api.ts       # API functions that call server actions
+│   │   └── hooks.ts     # React Query hooks
+│   ├── portfolio-photos/ # Portfolio photos client code
+│   │   ├── api.ts
+│   │   └── hooks.ts
+│   └── photos/          # Profile photos client code
+│       ├── api.ts
+│       └── hooks.ts
 ├── server/              # Server-side code
 │   └── domains/         # Domain-organized server code
-│       └── services/    # All services-related server code
-│           ├── actions.ts # Server actions (with 'use server')
-│           └── db.ts      # Database operations
+│       ├── profiles/    # All profiles-related server code
+│       │   ├── actions.ts # Server actions (with 'use server')
+│       │   └── db.ts      # Database operations
+│       └── portfolio-photos/ # Portfolio photos server code
+│           ├── actions.ts
+│           └── db.ts
 └── types/               # Shared type definitions
-    └── services.ts      # Types shared between client and server
+    ├── profiles.ts      # Types shared between client and server
+    └── portfolio-photos.ts # Portfolio photo types
 ```
 
 ## Implementation Guide
@@ -188,6 +198,20 @@ export function useServices(params: ServiceParams) {
      return { success: false, error: error.message };
    }
    ```
+
+## Implemented Resources
+
+The following resources have been implemented using this architecture:
+
+1. **Profiles**
+   - User profile information
+   - Path: `src/api/profiles/` and `src/server/domains/profiles/`
+2. **Portfolio Photos**
+   - Professional's portfolio photos management
+   - Path: `src/api/portfolio-photos/` and `src/server/domains/portfolio-photos/`
+3. **Profile Photos**
+   - User avatar/profile photo
+   - Path: `src/api/photos/` and `src/server/domains/photos/`
 
 ## Migration Guide
 

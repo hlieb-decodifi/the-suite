@@ -1,6 +1,10 @@
 # Page Creation Guide
 
+## Introduction
+
 This guide outlines the standard approach for creating pages within our Next.js application. We follow a consistent pattern to ensure separation of concerns, reusability, and maintainability.
+
+> **Note:** This guide focuses on page-level architecture and works in conjunction with the [Component Creation Guide](./component-creation-guide.md), which provides detailed standards for individual component implementation. Please refer to both guides when developing new features.
 
 ## Page Structure Overview
 
@@ -277,6 +281,23 @@ Our UI component library includes:
 - `Input`, `Select`, etc. - For form elements
 - `Card`, `Dialog`, etc. - For common UI patterns
 
+## Component Implementation Details
+
+While this guide focuses on the overall structure of pages and their components, the detailed implementation of components follows additional guidelines:
+
+- **Component Structure**: Each component should follow the standardized file structure
+- **Type Safety**: All components must have proper TypeScript typing
+- **State Management**: Use appropriate state management based on component needs
+- **Performance Considerations**: Implement memoization and code splitting techniques where appropriate
+
+For comprehensive guidance on these aspects, please refer to the [Component Creation Guide](./component-creation-guide.md), which provides detailed standards for individual component implementation including:
+
+1. Detailed file organization within component folders
+2. Component size and complexity guidelines
+3. Type safety implementations
+4. State management best practices
+5. Performance optimization techniques
+
 ## Component Organization Summary
 
 1. **Page Component**: Minimal routing component in `src/app/[route]/page.tsx`
@@ -285,6 +306,16 @@ Our UI component library includes:
 4. **Section Components**: Focused content sections in `view/components/[Template][Name]Section/`
 
 This hierarchical structure ensures code organization, separation of concerns, and maintainability.
+
+## Component Size and Complexity
+
+To maintain code quality and readability, follow these guidelines for component size:
+
+- **Maximum Lines**: Components should not exceed 80 lines (excluding imports)
+- **Single Responsibility**: Each component should have one clear purpose
+- **Extraction Threshold**: When a component exceeds 50 lines, consider breaking it down
+
+For more detailed guidelines on component size, structure, and best practices, refer to the [Component Creation Guide](./component-creation-guide.md).
 
 ## Example: Complete Page Structure
 
