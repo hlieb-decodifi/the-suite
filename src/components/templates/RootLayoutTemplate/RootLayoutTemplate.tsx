@@ -20,6 +20,8 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
 
   const isLoading = isAuthLoading || isAvatarLoading;
 
+  console.log('isLoading', isLoading);
+
   if (isLoading) {
     return <LoadingOverlay />;
   }
@@ -39,7 +41,9 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
     <div className="flex flex-col min-h-screen">
       {/* Pass userInfo without avatarUrl */}
       <Header isAuthenticated={isAuthenticated} userInfo={userInfo} />
-      <main className="flex-grow container mx-auto px-4 py-8">{children}</main>
+      <main className="flex flex-grow container mx-auto px-4 py-8">
+        {children}
+      </main>
       <Footer />
       <Toaster />
     </div>
