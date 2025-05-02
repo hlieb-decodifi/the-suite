@@ -7,6 +7,7 @@ import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { AvatarUpload } from '@/components/common/AvatarUpload';
+import { ExpandableText } from '@/components/common/ExpandableText';
 import { HeaderModal } from '@/components/modals';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -18,12 +19,10 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
-import {
-  useProfessionalProfile,
-  useUpdateProfileHeader,
-} from '@/api/profiles/hooks';
+import { useProfile, useUpdateProfileHeader } from '@/api/profiles/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchAvatarUrl } from '@/api/photos/hooks';
+import Link from 'next/link';
 
 export type HeaderSectionProps = {
   user: User;
@@ -42,11 +41,7 @@ export function HeaderSection({ user }: HeaderSectionProps) {
   }, [queryClient, user?.id]);
 
   // Fetch profile data using React Query
-  const {
-    data: profileData,
-    isLoading,
-    error,
-  } = useProfessionalProfile(user.id);
+  const { data: profileData, isLoading, error } = useProfile(user.id);
 
   // Setup mutation for updating profile header
   const updateProfileHeader = useUpdateProfileHeader();
@@ -102,19 +97,19 @@ export function HeaderSection({ user }: HeaderSectionProps) {
     );
   }
 
-  const isPublished = profileData.is_published ?? false;
-  const fallbackName = `${profileData.first_name} ${profileData.last_name}`;
+  const isPublished = profileData.isPublished ?? false;
+  const fallbackName = `${profileData.firstName} ${profileData.lastName}`;
 
   // Map profileData to the shape needed by HeaderModal
   const headerFormData: HeaderFormValues = {
-    firstName: profileData.first_name,
-    lastName: profileData.last_name,
+    firstName: profileData.firstName,
+    lastName: profileData.lastName,
     profession: profileData.profession ?? '',
     description: profileData.description ?? '',
-    phoneNumber: profileData.phone_number ?? undefined,
-    facebookUrl: profileData.facebook_url ?? undefined,
-    instagramUrl: profileData.instagram_url ?? undefined,
-    tiktokUrl: profileData.tiktok_url ?? undefined,
+    phoneNumber: profileData.phoneNumber ?? undefined,
+    facebookUrl: profileData.facebookUrl ?? undefined,
+    instagramUrl: profileData.instagramUrl ?? undefined,
+    tiktokUrl: profileData.tiktokUrl ?? undefined,
   };
 
   return (
@@ -164,16 +159,22 @@ export function HeaderSection({ user }: HeaderSectionProps) {
               </div>
 
               {headerFormData.description && (
-                <Typography className="text-foreground text-sm">
-                  {headerFormData.description}
-                </Typography>
+                <ExpandableText
+                  text={headerFormData.description}
+                  maxLines={3}
+                  variant="p"
+                  textClassName="text-foreground text-sm"
+                  lineHeight="leading-tight"
+                />
               )}
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
                 {headerFormData.phoneNumber && (
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Phone className="h-3.5 w-3.5 mr-1.5" />
-                    {headerFormData.phoneNumber}
+                    <Link href={`tel:${headerFormData.phoneNumber}`}>
+                      {headerFormData.phoneNumber}
+                    </Link>
                   </div>
                 )}
                 {headerFormData.instagramUrl && (

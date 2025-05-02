@@ -8,6 +8,11 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+	safelist: [
+		{
+			pattern: /^line-clamp-(\d+)$/,
+		},
+	],
   theme: {
     fontFamily: {
       sans: ["var(--font-titillium-web)", "sans-serif"],

@@ -1,48 +1,39 @@
-import type { ProfileData, HeaderFormValues } from './types';
+import { HeaderFormValues, ProfileData } from '@/types/profiles';
+import { 
+  getProfileAction, 
+  updateProfileHeaderAction, 
+  toggleProfilePublishStatusAction,
+  updateSubscriptionStatusAction 
+} from '@/server/domains/profiles/actions';
 
-export async function getProfile(userId: string): Promise<ProfileData> {
-  const response = await fetch(`/api/profiles/${userId}`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to fetch profile');
+export async function getProfile(userId: string) {
+  const result = await getProfileAction(userId);
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to fetch profile');
   }
-  return response.json();
+  return result.data as ProfileData;
 }
 
-export async function updateProfileHeader(userId: string, data: HeaderFormValues): Promise<void> {
-  const response = await fetch(`/api/profiles/${userId}/header`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to update profile');
+export async function updateProfileHeader(userId: string, data: HeaderFormValues) {
+  const result = await updateProfileHeaderAction(userId, data);
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to update profile');
   }
+  return result;
 }
 
-export async function toggleProfilePublishStatus(userId: string, isPublished: boolean): Promise<void> {
-  const response = await fetch(`/api/profiles/${userId}/publish`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ isPublished }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to toggle publish status');
+export async function toggleProfilePublishStatus(userId: string, isPublished: boolean) {
+  const result = await toggleProfilePublishStatusAction(userId, { isPublished });
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to toggle publish status');
   }
+  return result;
 }
 
-export async function updateSubscriptionStatus(userId: string): Promise<void> {
-  const response = await fetch(`/api/profiles/${userId}/subscribe`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to update subscription');
+export async function updateSubscriptionStatus(userId: string) {
+  const result = await updateSubscriptionStatusAction(userId);
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to update subscription');
   }
+  return result;
 } 

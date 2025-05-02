@@ -2,35 +2,18 @@ import { toast } from '@/components/ui/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getProfessionalProfileViewDataAction, updateProfessionalProfileHeaderAction } from './actions';
-import { getProfile, toggleProfilePublishStatus, updateSubscriptionStatus } from './api';
-import type { HeaderFormValues, ProfileData } from './types';
+import { getProfile, toggleProfilePublishStatus, updateProfileHeader, updateSubscriptionStatus } from './api';
+import type { HeaderFormValues, ProfileData } from '@/types/profiles';
 
 // Define query keys as constants for consistency
 export const QUERY_KEYS = {
   profile: (userId: string) => ['profile', userId],
-  professionalProfile: (userId: string) => ['professionalProfile', userId],
 };
 
 export function useProfile(userId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.profile(userId),
     queryFn: () => getProfile(userId),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    enabled: !!userId,
-  });
-}
-
-export function useProfessionalProfile(userId: string) {
-  return useQuery({
-    queryKey: QUERY_KEYS.professionalProfile(userId),
-    queryFn: async () => {
-      const result = await getProfessionalProfileViewDataAction(userId);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch professional profile');
-      }
-      return result.data;
-    },
     staleTime: 1000 * 60 * 5, // 5 minutes
     enabled: !!userId,
   });
@@ -49,15 +32,11 @@ export function useUpdateProfileHeader() {
       userId: string; 
       data: HeaderFormValues;
     }) => {
-      const result = await updateProfessionalProfileHeaderAction(userId, data);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update profile');
-      }
-      return result;
+      return updateProfileHeader(userId, data);
     },
     onSuccess: async (_, { userId }) => {
       // Invalidate relevant queries on success
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.professionalProfile(userId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile(userId) });
       toast({ description: 'Profile information updated successfully.' });
       
       // Refresh session and update auth store

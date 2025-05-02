@@ -63,7 +63,7 @@ export function DetailsSection({ user, profile }: DetailsSectionProps) {
 
   return (
     <Card className="border-[#ECECEC]">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
+      <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
         <div className="flex items-center">
           <UserRound size={18} className="text-[#DEA85B] mr-2" />
           <CardTitle className="text-[#313131]">Personal Details</CardTitle>

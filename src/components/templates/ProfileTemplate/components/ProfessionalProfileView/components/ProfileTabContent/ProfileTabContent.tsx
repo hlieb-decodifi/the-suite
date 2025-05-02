@@ -1,6 +1,6 @@
 'use client';
 
-import { useProfessionalProfile } from '@/api/profiles/hooks';
+import { useProfile } from '@/api/profiles/hooks';
 import { useWorkingHours } from '@/api/working_hours/hooks';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,7 +29,7 @@ export function ProfileTabContent({
     data: profileViewData,
     isLoading: isLoadingProfile,
     error: profileError,
-  } = useProfessionalProfile(user.id);
+  } = useProfile(user.id);
 
   // Fetch working hours using React Query
   const { data: workingHours, isLoading: isLoadingWorkingHours } =

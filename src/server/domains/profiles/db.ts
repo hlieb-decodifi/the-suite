@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { Database } from '@/../supabase/types';
-import { ProfileData, HeaderFormValues } from '@/api/profiles/types';
+import { ProfileData, HeaderFormValues } from '@/types/profiles';
 
 export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   const supabase = await createClient();

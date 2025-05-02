@@ -6,8 +6,8 @@ import {
   toggleProfilePublishStatusInDb,
   updateProfileHeaderInDb,
   updateSubscriptionStatusInDb
-} from '../db/profiles';
-import { headerFormSchema, publishToggleSchema } from '../validation/profiles';
+} from './db';
+import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
 
 export async function getProfileAction(userId: string) {
   try {
