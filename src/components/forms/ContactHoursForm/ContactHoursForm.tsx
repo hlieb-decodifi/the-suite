@@ -10,7 +10,7 @@ import { useContactHoursForm } from './useContactHoursForm';
 import { TIME_OPTIONS } from './constants';
 import { ContactHoursFormValues } from './schema';
 import { FormMessage } from '@/components/ui/form';
-import { WorkingHoursEntry } from '@/api/working_hours/actions';
+import { WorkingHoursEntry } from '@/types/working_hours';
 
 export type ContactHoursFormProps = {
   onSubmitSuccess: (data: ContactHoursFormValues) => void;

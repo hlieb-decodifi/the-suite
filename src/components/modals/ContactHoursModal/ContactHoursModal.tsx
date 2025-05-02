@@ -10,7 +10,7 @@ import {
   ContactHoursFormValues,
   // ContactHoursDefaultInput, // No longer needed for props
 } from '@/components/forms/ContactHoursForm';
-import { WorkingHoursEntry } from '@/api/working_hours/actions'; // Import type
+import { WorkingHoursEntry } from '@/types/working_hours';
 
 export type ContactHoursModalProps = {
   isOpen: boolean;

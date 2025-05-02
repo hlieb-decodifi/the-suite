@@ -1,5 +1,4 @@
 /* eslint-disable max-lines-per-function */
-import { PaymentMethod } from '@/api/payment_methods'; // Import PaymentMethod type
 import {
   FormCheckbox,
   FormFieldWrapper, // Use wrapper for structure, though label might be empty
@@ -10,6 +9,7 @@ import { Typography } from '@/components/ui/typography'; // For potential error 
 import { useId } from 'react';
 import { PaymentMethodsFormValues } from './schema';
 import { usePaymentMethodsForm } from './usePaymentMethodsForm';
+import { PaymentMethod } from '@/types/payment_methods';
 
 export type PaymentMethodsFormProps = {
   onSubmitSuccess: (data: PaymentMethodsFormValues) => void;

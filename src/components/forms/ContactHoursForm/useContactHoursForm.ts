@@ -3,8 +3,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { contactHoursSchema, ContactHoursFormValues } from './schema';
 import { useCallback, useState, useEffect } from 'react';
 import type { Resolver } from 'react-hook-form';
-import { WorkingHoursEntry } from '@/api/working_hours/actions';
 import { DAYS_OF_WEEK, DayOfWeek } from './constants';
+import { WorkingHoursEntry } from '@/types/working_hours';
 
 export type UseContactHoursFormProps = {
   onSubmit: (data: ContactHoursFormValues) => Promise<void> | void;

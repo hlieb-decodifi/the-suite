@@ -9,12 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 import { Pencil } from 'lucide-react';
-import {
-  updateWorkingHoursAction,
-  WorkingHoursEntry,
-} from '@/api/working_hours/actions';
+
 import { toast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WorkingHoursEntry } from '@/types/working_hours';
+import { updateWorkingHoursAction } from '@/server/domains/working_hours/actions';
 
 // Update component props type
 export type ContactSectionProps = {
