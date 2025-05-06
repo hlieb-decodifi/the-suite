@@ -140,13 +140,6 @@ export function ProfessionalProfileView({
           forceMount
           className={activeTab !== 'profile' ? 'hidden' : ''}
         >
-          {/* <div className="relative h-96 w-full">
-            <Image
-              fill
-              src="http://127.0.0.1:54321/storage/v1/object/sign/portfolio-photos/a694eb9c-bc41-4ce5-9379-fe542eeb3cee/1746174973509.blob?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJwb3J0Zm9saW8tcGhvdG9zL2E2OTRlYjljLWJjNDEtNGNlNS05Mzc5LWZlNTQyZWViM2NlZS8xNzQ2MTc0OTczNTA5LmJsb2IiLCJpYXQiOjE3NDYxNzc4NjgsImV4cCI6MTc3NzcxMzg2OH0.dE3Vab2uoLjq1awKUdJtX55JlTgY-JgtLAtP8H5d_L8"
-              alt="Profile"
-            />
-          </div> */}
           <ProfileTabContent
             user={user}
             onPublishToggle={handlePublishToggle}

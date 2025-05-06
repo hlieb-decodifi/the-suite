@@ -74,7 +74,7 @@ export async function getProfessionalProfileViewDataAction(userId: string) {
       profession: profile?.profession ?? null,
       is_published: profile?.is_published ?? false,
       photoUrl: photo?.url ?? null,
-      isSubscribed: true, // Mock
+      isSubscribed: false, // Mock
     };
 
     return { success: true, data: profileViewData };
