@@ -20,8 +20,6 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
 
   const isLoading = isAuthLoading || isAvatarLoading;
 
-  console.log('isLoading', isLoading);
-
   if (isLoading) {
     return <LoadingOverlay />;
   }

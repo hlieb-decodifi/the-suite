@@ -8,5 +8,5 @@ export * from './ServicesSection/ServicesSection';
 export * from './PortfolioSection/PortfolioSection';
 export * from './ReviewsSection/ReviewsSection';
 export * from './PageHeader/PageHeader';
-export * from './ProfileTabContent/ProfileTabContent';
+export * from './ProfileTabContent/ProfileTabContent'; 
 export * from './SubscriptionTooltip'; 

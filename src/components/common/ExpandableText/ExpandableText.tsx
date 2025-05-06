@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useLayoutEffect, useId } from 'react';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/button';
@@ -15,20 +15,58 @@ export type ExpandableTextProps = {
   lineHeight?: string;
 };
 
-// Helper function to calculate max height
-const calculateMaxHeight = (
-  element: HTMLDivElement,
-  maxLines: number,
-): number => {
-  const computedStyle = getComputedStyle(element);
-  const lineHeightValue = parseFloat(computedStyle.lineHeight);
+// Toggle button component to reduce main component line count
+const ToggleButton = ({
+  isExpanded,
+  onClick,
+}: {
+  isExpanded: boolean;
+  onClick: () => void;
+}) => (
+  <Button
+    variant="ghost"
+    size="sm"
+    className="h-6 px-1 text-xs text-muted-foreground hover:text-foreground"
+    onClick={onClick}
+  >
+    {isExpanded ? (
+      <>
+        <ChevronUp className="h-3 w-3 mr-1" />
+        Show less
+      </>
+    ) : (
+      <>
+        <ChevronDown className="h-3 w-3 mr-1" />
+        Show more
+      </>
+    )}
+  </Button>
+);
 
-  // Use actual line height from computed style or estimate based on font size
-  const calculatedLineHeight = isNaN(lineHeightValue)
-    ? parseFloat(computedStyle.fontSize) * 1.2
-    : lineHeightValue;
+// Check if content is overflowing by comparing clamped height to full height
+const checkContentOverflow = (
+  textElement: HTMLDivElement | null,
+  contentElement: HTMLDivElement | null,
+): boolean => {
+  if (!textElement || !contentElement) return false;
 
-  return calculatedLineHeight * maxLines;
+  // Create a temporary clone to measure full height without clamp
+  const tempDiv = document.createElement('div');
+  tempDiv.style.position = 'absolute';
+  tempDiv.style.visibility = 'hidden';
+  tempDiv.style.width = `${textElement.clientWidth}px`;
+  tempDiv.innerHTML = contentElement.innerHTML;
+  document.body.appendChild(tempDiv);
+
+  // Get heights and compare
+  const clampedHeight = textElement.clientHeight;
+  const fullHeight = tempDiv.clientHeight;
+
+  // Clean up
+  document.body.removeChild(tempDiv);
+
+  // Compare heights to determine if content is clamped
+  return fullHeight > clampedHeight;
 };
 
 export function ExpandableText({
@@ -40,29 +78,48 @@ export function ExpandableText({
 }: ExpandableTextProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const [hasBeenExpanded, setHasBeenExpanded] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const instanceId = useId();
 
-  useEffect(() => {
+  // Check overflow after DOM updates but before browser paint
+  useLayoutEffect(() => {
     const checkOverflow = () => {
-      const element = textRef.current;
-      if (!element) return;
-
-      const maxHeight = calculateMaxHeight(element, maxLines);
-      setIsOverflowing(element.scrollHeight > maxHeight);
+      const isOverflow = checkContentOverflow(
+        textRef.current,
+        contentRef.current,
+      );
+      setIsOverflowing(isOverflow);
     };
 
-    // Run on mount and when text changes
-    const timer = setTimeout(checkOverflow, 10); // Small delay to ensure rendering
-    window.addEventListener('resize', checkOverflow);
+    // Check after component mounts or updates
+    checkOverflow();
 
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', checkOverflow);
-    };
-  }, [text, maxLines]);
+    // Check again after a delay to handle fonts or images loading
+    const timer = setTimeout(checkOverflow, 100);
+
+    return () => clearTimeout(timer);
+  }, [text, maxLines, isExpanded]);
+
+  // Toggle handler that also re-checks overflow state
+  const handleToggle = () => {
+    const newExpandedState = !isExpanded;
+    setIsExpanded(newExpandedState);
+
+    // If we're expanding, mark that this content has been expanded at least once
+    if (newExpandedState) {
+      setHasBeenExpanded(true);
+    }
+  };
+
+  // Determine if we should show the toggle button
+  const shouldShowToggle =
+    isOverflowing || // Show when content overflows
+    (hasBeenExpanded && isExpanded); // Always show "Show less" if expanded
 
   return (
-    <div className={cn('space-y-1', className)}>
+    <div className={cn('space-y-1', className)} data-instance-id={instanceId}>
       <div
         ref={textRef}
         className={cn(
@@ -71,36 +128,18 @@ export function ExpandableText({
           textClassName,
         )}
       >
-        <Typography
-          variant={variant}
-          className={cn(
-            // Override Typography's default line height when using variant 'p'
-            variant === 'p' && 'leading-6',
-          )}
-        >
-          {text}
-        </Typography>
+        <div ref={contentRef}>
+          <Typography
+            variant={variant}
+            className={cn(variant === 'p' && 'leading-6')}
+          >
+            {text}
+          </Typography>
+        </div>
       </div>
 
-      {isOverflowing && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-1 text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp className="h-3 w-3 mr-1" />
-              Show less
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-3 w-3 mr-1" />
-              Show more
-            </>
-          )}
-        </Button>
+      {shouldShowToggle && (
+        <ToggleButton isExpanded={isExpanded} onClick={handleToggle} />
       )}
     </div>
   );

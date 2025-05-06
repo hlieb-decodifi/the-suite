@@ -1,14 +1,17 @@
 /* eslint-disable max-lines-per-function */
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus } from 'lucide-react';
-import { ServiceCard } from './components/ServiceCard';
-import { ServiceCardSkeleton } from './components/ServiceCardSkeleton';
+import {
+  ServiceCard,
+  ServiceCardSkeleton,
+  InlineServiceForm,
+} from './components';
 import { ServiceModal } from '@/components/modals/ServiceModal';
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal';
 import { ServiceFormValues } from '@/components/forms/ServiceForm';
@@ -18,19 +21,23 @@ import {
   useUpsertService,
   useDeleteService,
 } from '@/api/services/hooks';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export type ServicesSectionProps = {
   user: User;
 };
 
 export function ServicesSection({ user }: ServicesSectionProps) {
-  // State for modals
-  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  // State
   const [editingService, setEditingService] = useState<ServiceUI | null>(null);
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<ServiceUI | null>(
     null,
   );
+
+  // Check if we're on mobile/tablet
+  const isMobile = useMediaQuery('(max-width: 1023px)');
 
   // Pagination state - we could add UI controls for these later
   const [page] = useState(1);
@@ -53,15 +60,37 @@ export function ServicesSection({ user }: ServicesSectionProps) {
   const { mutate: deleteService, isPending: isDeletingService } =
     useDeleteService();
 
+  // Calculate remaining slots
+  const MAX_SERVICES = 10;
+  const remainingSlots = MAX_SERVICES - services.length;
+
+  // On mobile, open modal when editingService changes
+  useEffect(() => {
+    if (isMobile && editingService) {
+      setIsServiceModalOpen(true);
+    }
+  }, [editingService, isMobile]);
+
   // Service handlers
   const handleAddServiceClick = () => {
     setEditingService(null);
-    setIsServiceModalOpen(true);
+
+    if (isMobile) {
+      setIsServiceModalOpen(true);
+    }
   };
 
   const handleEditService = (service: ServiceUI) => {
     setEditingService(service);
-    setIsServiceModalOpen(true);
+
+    if (isMobile) {
+      setIsServiceModalOpen(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingService(null);
+    setIsServiceModalOpen(false);
   };
 
   const handleDeleteServiceClick = (service: ServiceUI) => {
@@ -78,19 +107,31 @@ export function ServicesSection({ user }: ServicesSectionProps) {
       serviceName: serviceToDelete.name,
     });
 
+    // If we're deleting the service we're editing, reset it
+    if (editingService?.id === serviceToDelete.id) {
+      setEditingService(null);
+    }
+
     setIsConfirmDeleteOpen(false);
     setServiceToDelete(null);
   };
 
-  const handleServiceModalSubmitSuccess = (
+  const handleServiceFormSubmitSuccess = (
     data: ServiceFormValues & { id?: string },
   ) => {
-    upsertService({
-      userId: user.id,
-      data,
-    });
-
-    setIsServiceModalOpen(false);
+    upsertService(
+      {
+        userId: user.id,
+        data,
+      },
+      {
+        onSuccess: () => {
+          // Reset edit state on successful save
+          setEditingService(null);
+          setIsServiceModalOpen(false);
+        },
+      },
+    );
   };
 
   // Error handling
@@ -113,64 +154,133 @@ export function ServicesSection({ user }: ServicesSectionProps) {
             Services
           </Typography>
           <Typography className="text-muted-foreground">
-            Manage the services you offer (up to 10)
+            Manage the services you offer (up to {MAX_SERVICES})
           </Typography>
         </div>
-        <Button
-          onClick={handleAddServiceClick}
-          className="flex items-center gap-1"
-          disabled={
-            isLoadingServices || services.length >= 10 || isSubmittingService
-          }
-        >
-          <Plus className="h-4 w-4" />
-          Add Service
-        </Button>
+
+        {/* Mobile Add Button */}
+        {isMobile && (
+          <Button
+            onClick={handleAddServiceClick}
+            className="flex items-center gap-1"
+            disabled={
+              isLoadingServices || remainingSlots <= 0 || isSubmittingService
+            }
+          >
+            <Plus className="h-4 w-4" />
+            Add Service
+          </Button>
+        )}
       </div>
 
-      {!isLoadingServices && services.length >= 10 && (
+      {!isLoadingServices && remainingSlots <= 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800">
           <Typography className="text-sm">
-            You have reached the maximum limit of 10 services. To add a new
-            service, please delete an existing one first.
+            You have reached the maximum limit of {MAX_SERVICES} services. To
+            add a new service, please delete an existing one first.
           </Typography>
         </div>
       )}
 
-      {isLoadingServices ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ServiceCardSkeleton />
-          <ServiceCardSkeleton />
-        </div>
-      ) : services.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {services.map((service) => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              onEdit={handleEditService}
-              onDelete={() => handleDeleteServiceClick(service)}
-            />
-          ))}
-        </div>
+      {/* Mobile View - Just the services list */}
+      {isMobile ? (
+        isLoadingServices ? (
+          <div className="grid grid-cols-1 gap-4">
+            <ServiceCardSkeleton />
+            <ServiceCardSkeleton />
+          </div>
+        ) : services.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4">
+            {services.map((service) => (
+              <ServiceCard
+                key={service.id}
+                service={service}
+                onEdit={handleEditService}
+                onDelete={() => handleDeleteServiceClick(service)}
+                isUpdating={
+                  isSubmittingService && editingService?.id === service.id
+                }
+                isBeingEdited={editingService?.id === service.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <Card className="border border-dashed border-border bg-background/50">
+            <CardContent className="p-6 text-center">
+              <Typography variant="h4" className="text-muted-foreground mb-2">
+                No Services Yet
+              </Typography>
+              <Typography className="text-muted-foreground mb-4">
+                Click "Add Service" to offer your first service to clients.
+              </Typography>
+            </CardContent>
+          </Card>
+        )
       ) : (
-        <Card className="border border-dashed border-border bg-background/50">
-          <CardContent className="p-6 text-center">
-            <Typography variant="h4" className="text-muted-foreground mb-2">
-              No Services Yet
-            </Typography>
-            <Typography className="text-muted-foreground mb-4">
-              Click "Add Service" to offer your first service to clients.
-            </Typography>
-          </CardContent>
-        </Card>
+        // Desktop View - Split Layout
+        <div className="grid lg:grid-cols-[1fr_500px] gap-6">
+          {/* Services List (Left Side) */}
+          <div className="space-y-4 max-h-[550px] overflow-y-auto pr-2">
+            {isLoadingServices ? (
+              <>
+                <ServiceCardSkeleton />
+                <ServiceCardSkeleton />
+              </>
+            ) : services.length > 0 ? (
+              <>
+                {services.map((service) => (
+                  <ServiceCard
+                    key={service.id}
+                    service={service}
+                    onEdit={handleEditService}
+                    onDelete={() => handleDeleteServiceClick(service)}
+                    isUpdating={
+                      isSubmittingService && editingService?.id === service.id
+                    }
+                    isBeingEdited={editingService?.id === service.id}
+                  />
+                ))}
+              </>
+            ) : (
+              <Card className="border border-dashed border-border bg-background/50">
+                <CardContent className="p-6 text-center">
+                  <Typography
+                    variant="h4"
+                    className="text-muted-foreground mb-2"
+                  >
+                    No Services Yet
+                  </Typography>
+                  <Typography className="text-muted-foreground mb-4">
+                    Use the form to add your first service.
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Service Form (Right Side) */}
+          <div className="lg:border-l lg:pl-6">
+            <InlineServiceForm
+              onSubmitSuccess={handleServiceFormSubmitSuccess}
+              editingService={editingService}
+              onCancel={handleCancelEdit}
+            />
+          </div>
+        </div>
       )}
 
-      {/* Service Modal */}
+      {/* Service Modal for Mobile/Tablet */}
       <ServiceModal
         isOpen={isServiceModalOpen}
-        onOpenChange={isSubmittingService ? () => {} : setIsServiceModalOpen}
-        onSubmitSuccess={handleServiceModalSubmitSuccess}
+        onOpenChange={(open) => {
+          if (!isSubmittingService) {
+            setIsServiceModalOpen(open);
+            if (!open) {
+              setEditingService(null);
+            }
+          }
+        }}
+        onSubmitSuccess={handleServiceFormSubmitSuccess}
         service={editingService}
         isSubmitting={isSubmittingService}
       />
