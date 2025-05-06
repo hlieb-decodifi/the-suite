@@ -7,6 +7,7 @@ import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
 export type ReviewsSectionProps = {
   user: User;
@@ -109,70 +110,77 @@ export function ReviewsSection({
     setVisibleReviews(3);
   };
 
+  if (reviews.length <= 5) {
+    return null;
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <Typography variant="h2" className="font-bold text-foreground">
-            Reviews
-          </Typography>
-          <Typography className="text-muted-foreground">
-            See what your clients are saying about your services
-          </Typography>
-        </div>
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Star
-                key={star}
-                className={`w-5 h-5 ${star <= Math.round(averageRating) ? 'text-primary fill-primary' : 'text-muted-foreground'}`}
-              />
-            ))}
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <Typography variant="h4" className="font-bold text-foreground">
-              {averageRating.toFixed(1)}
+    <>
+      <Separator className="my-4" />
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <Typography variant="h2" className="font-bold text-foreground">
+              Reviews
             </Typography>
-            <Typography variant="small" className="text-muted-foreground">
-              ({reviews.length} reviews)
+            <Typography className="text-muted-foreground">
+              See what your clients are saying about your services
             </Typography>
           </div>
-        </div>
-      </div>
-
-      {reviews.length === 0 ? (
-        <div className="bg-muted rounded-md p-8 text-center">
-          <Typography className="text-muted-foreground">
-            No reviews yet. Reviews will appear here when clients leave
-            feedback.
-          </Typography>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-4">
-            {displayedReviews.map((review) => (
-              <ReviewItem key={review.id} review={review} />
-            ))}
-          </div>
-
-          {reviews.length > 3 && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                onClick={
-                  visibleReviews < reviews.length
-                    ? handleShowMore
-                    : handleShowLess
-                }
-              >
-                {visibleReviews < reviews.length
-                  ? 'Show More Reviews'
-                  : 'Show Less'}
-              </Button>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className={`w-5 h-5 ${star <= Math.round(averageRating) ? 'text-primary fill-primary' : 'text-muted-foreground'}`}
+                />
+              ))}
             </div>
-          )}
-        </>
-      )}
-    </div>
+            <div className="flex items-baseline space-x-2">
+              <Typography variant="h4" className="font-bold text-foreground">
+                {averageRating.toFixed(1)}
+              </Typography>
+              <Typography variant="small" className="text-muted-foreground">
+                ({reviews.length} reviews)
+              </Typography>
+            </div>
+          </div>
+        </div>
+
+        {reviews.length === 0 ? (
+          <div className="bg-muted rounded-md p-8 text-center">
+            <Typography className="text-muted-foreground">
+              No reviews yet. Reviews will appear here when clients leave
+              feedback.
+            </Typography>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4">
+              {displayedReviews.map((review) => (
+                <ReviewItem key={review.id} review={review} />
+              ))}
+            </div>
+
+            {reviews.length > 3 && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={
+                    visibleReviews < reviews.length
+                      ? handleShowMore
+                      : handleShowLess
+                  }
+                >
+                  {visibleReviews < reviews.length
+                    ? 'Show More Reviews'
+                    : 'Show Less'}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }

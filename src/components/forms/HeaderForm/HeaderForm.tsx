@@ -69,7 +69,7 @@ export function HeaderForm({
         <FormFieldWrapper
           control={form.control}
           name="profession"
-          label="Profession"
+          label="Title"
         >
           {(field) => (
             <FormInput

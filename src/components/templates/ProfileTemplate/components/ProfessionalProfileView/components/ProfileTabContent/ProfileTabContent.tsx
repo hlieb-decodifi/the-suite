@@ -2,7 +2,6 @@
 
 import { useProfile } from '@/api/profiles/hooks';
 import { useWorkingHours } from '@/api/working_hours/hooks';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { User } from '@supabase/supabase-js';
 import { ContactSection } from '../ContactSection/ContactSection';
@@ -75,7 +74,6 @@ export function ProfileTabContent({
           <PaymentMethodsSection user={user} />
         </div>
       </div>
-      <Separator className="my-4" />
       <ReviewsSection user={user} />
     </div>
   );
