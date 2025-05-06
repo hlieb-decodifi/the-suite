@@ -9,6 +9,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Typography } from '@/components/ui/typography';
+import { cn } from '@/utils/cn';
 import { User } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -18,6 +19,7 @@ import {
   ProfileTabContent,
   ServicesSection,
   SubscriptionSection,
+  SubscriptionTooltip,
 } from './components';
 
 const VALID_TABS = ['profile', 'services', 'portfolio', 'subscription'];
@@ -61,11 +63,6 @@ export function ProfessionalProfileView({
 
   // Publish toggle handler
   const handlePublishToggle = () => {
-    if (!profileData?.isSubscribed) {
-      handleTabChange('subscription');
-      return;
-    }
-
     const newPublishState = !(profileData?.isPublished ?? false);
     togglePublishStatus({
       userId: user.id,
@@ -109,13 +106,13 @@ export function ProfessionalProfileView({
     );
   }
 
+  const isSubscribed = profileData.isSubscribed ?? false;
+
   return (
     <div className="space-y-8">
       <PageHeader
         isPublished={profileData.isPublished ?? false}
-        isSubscribed={profileData.isSubscribed ?? false}
         onPublishToggle={handlePublishToggle}
-        onSubscribe={handleSubscribe}
       />
 
       <Tabs
@@ -123,14 +120,29 @@ export function ProfessionalProfileView({
         onValueChange={handleTabChange}
         className="w-full"
       >
-        <TabsList className="w-full max-w-md mb-8 bg-muted/50 p-1 rounded-full">
+        <TabsList className="gap-1 w-full max-w-md mb-8 bg-muted/50 p-1 rounded-full">
           {VALID_TABS.map((tab) => (
             <TabsTrigger
               key={tab}
               value={tab}
-              className="flex-1 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground capitalize"
+              className={cn(
+                'border-primary flex items-center justify-center gap-1.5 flex-1 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground capitalize',
+                tab === 'subscription' &&
+                  !isSubscribed &&
+                  'border border-primary/50',
+              )}
             >
-              {tab}
+              {tab === 'subscription' && !isSubscribed ? (
+                <div className="flex items-center">
+                  {tab}
+                  <SubscriptionTooltip
+                    isSubscribed={isSubscribed}
+                    activeTab={activeTab}
+                  />
+                </div>
+              ) : (
+                tab
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -170,7 +182,7 @@ export function ProfessionalProfileView({
         >
           <SubscriptionSection
             user={user}
-            isSubscribed={profileData.isSubscribed ?? false}
+            isSubscribed={isSubscribed}
             onSubscribe={handleSubscribe}
           />
         </TabsContent>
