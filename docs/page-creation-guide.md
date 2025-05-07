@@ -341,4 +341,149 @@ src/
                     └── ...
 ```
 
+## Case Study: Services Page Implementation
+
+The services page in our application demonstrates a comprehensive implementation of our architecture patterns, with a particular focus on server components, data fetching, and client interactivity.
+
+### Page Component
+
+```tsx
+// src/app/services/page.tsx
+import { ServicesTemplate } from '@/components/templates/ServicesTemplate';
+
+type SearchParams = {
+  search?: string;
+  page?: string;
+};
+
+// Enable dynamic rendering for this page to access searchParams
+export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Disable cache for this route
+
+export default async function ServicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  // Await the searchParams before passing to the template
+  const resolvedSearchParams = await searchParams;
+
+  return <ServicesTemplate searchParams={resolvedSearchParams} />;
+}
+```
+
+This page component:
+
+1. Is minimal and focused only on routing concerns
+2. Handles URL search parameters for filtering and pagination
+3. Uses `dynamic = 'force-dynamic'` to ensure fresh data on each request
+4. Disables caching with `revalidate = 0` for real-time data
+
+### Template Structure
+
+The ServicesTemplate follows a specialized structure optimized for server components and client interactivity:
+
+```
+src/components/templates/ServicesTemplate/
+├── ServicesTemplate.tsx        # Server component entry point
+├── ServicesTemplateClient.tsx  # Client component with interactivity
+├── index.ts                    # Export file
+├── actions.ts                  # Server actions for data fetching
+├── utils.ts                    # Client utility functions
+├── types.ts                    # Type definitions
+└── components/                 # Template-specific components
+    ├── ServiceCard/            # Individual service display
+    ├── ServicesList/           # Container for service cards
+    ├── ServicesPagination/     # Pagination controls
+    └── ServicesSearch/         # Search functionality
+```
+
+This structure differs from our standard template organization in a few key ways:
+
+1. **Server/Client Split**: Instead of view components, we split the template into server and client components
+2. **Co-located Server Actions**: Server actions are placed in the template directory instead of a separate domain folder
+3. **Utility Functions**: Client-side utilities are organized in a separate file for better code organization
+
+### Data Fetching Integration
+
+The services page integrates data fetching directly into the template through server actions:
+
+```tsx
+// Inside ServicesTemplate.tsx (server component)
+export async function ServicesTemplate({
+  searchParams,
+}: ServicesTemplateProps) {
+  // Extract query parameters
+  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
+  const search = searchParams.search || '';
+
+  // Fetch initial data on the server
+  const initialData = await getServices(page, 12, search);
+
+  // Pass data to client component
+  return (
+    <div className="container py-8">
+      <h1 className="text-3xl font-bold mb-8">Services</h1>
+
+      <Suspense fallback={<div>Loading...</div>}>
+        <ServicesTemplateClient
+          initialData={initialData}
+          initialPage={page}
+          initialSearch={search}
+        />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+The client component then handles interactivity:
+
+```tsx
+// Inside ServicesTemplateClient.tsx (client component)
+export function ServicesTemplateClient({
+  initialData,
+  initialPage,
+  initialSearch,
+}: ServicesTemplateClientProps) {
+  // Client-side state
+  const [data, setData] = useState(initialData);
+  const [page, setPage] = useState(initialPage);
+  const [search, setSearch] = useState(initialSearch);
+
+  // Event handlers for pagination and search
+  const handlePageChange = async (newPage: number) => {
+    // Update URL and fetch new data
+    // ...
+  };
+
+  const handleSearch = async (searchTerm: string) => {
+    // Update URL and fetch filtered data
+    // ...
+  };
+
+  // Render components with data and handlers
+  return (
+    <div className="space-y-8">
+      <ServicesSearch initialValue={search} onSearch={handleSearch} />
+      <ServicesList services={data.services} />
+      <ServicesPagination
+        currentPage={page}
+        totalPages={data.pagination.totalPages}
+        onPageChange={handlePageChange}
+      />
+    </div>
+  );
+}
+```
+
+### When to Use This Pattern
+
+This server/client component split with co-located server actions is ideal for:
+
+1. Pages with search and filtering that benefit from URL parameters
+2. Listings that require pagination with server-side data fetching
+3. Features where the data model is specific to a single page or view
+4. Cases where SEO benefits from server-rendered initial content
+
 By following these patterns, we maintain consistency across the application, simplify development, and ensure a better user experience.

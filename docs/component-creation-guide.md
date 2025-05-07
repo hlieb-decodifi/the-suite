@@ -323,4 +323,189 @@ export function usePortfolioUploads(userId: string) {
 }
 ```
 
+### Template with Server Actions Example
+
+Below is an example of a complete template implementation that showcases our approach to creating a services listing page:
+
+```tsx
+// src/components/templates/ServicesTemplate/
+├── ServicesTemplate.tsx         # Main template component
+├── ServicesTemplateClient.tsx   # Client component with state management
+├── index.ts                     # Export file
+├── actions.ts                   # Server actions for data fetching
+├── utils.ts                     # Client-side utility functions
+├── types.ts                     # Type definitions
+└── components/                  # Template-specific components
+    ├── ServiceCard/             # Card component for individual services
+    ├── ServicesList/            # Container for service cards
+    ├── ServicesPagination/      # Pagination controls
+    ├── ServicesSearch/          # Search input component
+    └── ...
+```
+
+```tsx
+// src/components/templates/ServicesTemplate/ServicesTemplate.tsx
+// Server component that serves as the main entry point
+import { Suspense } from 'react';
+import { getServices } from './actions';
+import { ServicesTemplateClient } from './ServicesTemplateClient';
+import { SearchParams } from '@/app/services/page';
+
+export type ServicesTemplateProps = {
+  searchParams: SearchParams;
+};
+
+export async function ServicesTemplate({
+  searchParams,
+}: ServicesTemplateProps) {
+  // Extract and validate parameters from URL
+  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
+  const search = searchParams.search || '';
+
+  // Fetch initial data on the server
+  const initialData = await getServices(page, 12, search);
+
+  return (
+    <div className="container py-8">
+      <h1 className="text-3xl font-bold mb-8">Services</h1>
+
+      <Suspense fallback={<div>Loading...</div>}>
+        <ServicesTemplateClient
+          initialData={initialData}
+          initialPage={page}
+          initialSearch={search}
+        />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+```tsx
+// src/components/templates/ServicesTemplate/ServicesTemplateClient.tsx
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { fetchServicesAction } from './actions';
+import { ServicesList } from './components/ServicesList';
+import { ServicesPagination } from './components/ServicesPagination';
+import { ServicesSearch } from './components/ServicesSearch';
+import { scrollToElement } from './utils';
+import type { ServicesWithPagination } from './actions';
+
+type ServicesTemplateClientProps = {
+  initialData: ServicesWithPagination;
+  initialPage: number;
+  initialSearch: string;
+};
+
+export function ServicesTemplateClient({
+  initialData,
+  initialPage,
+  initialSearch,
+}: ServicesTemplateClientProps) {
+  // State management
+  const [data, setData] = useState(initialData);
+  const [page, setPage] = useState(initialPage);
+  const [search, setSearch] = useState(initialSearch);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Handle pagination changes
+  const handlePageChange = async (newPage: number) => {
+    setIsLoading(true);
+
+    try {
+      // Update URL with new page parameter
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      params.set('page', newPage.toString());
+      router.push(`${pathname}?${params.toString()}`);
+
+      // Fetch data for the new page
+      const newData = await fetchServicesAction(newPage, 12, search);
+      setData(newData);
+      setPage(newPage);
+
+      // Scroll to the top of the list
+      if (listRef.current) {
+        scrollToElement(listRef.current, 100);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle search input
+  const handleSearch = async (searchTerm: string) => {
+    setIsLoading(true);
+    setSearch(searchTerm);
+
+    try {
+      // Update URL with search parameter and reset to page 1
+      const params = new URLSearchParams();
+      if (searchTerm) params.set('search', searchTerm);
+      router.push(`${pathname}?${params.toString()}`);
+
+      // Fetch data with the search filter
+      const newData = await fetchServicesAction(1, 12, searchTerm);
+      setData(newData);
+      setPage(1);
+    } catch (error) {
+      console.error('Error searching services:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <ServicesSearch initialValue={search} onSearch={handleSearch} />
+
+      <div ref={listRef}>
+        <ServicesList services={data.services} isLoading={isLoading} />
+      </div>
+
+      {data.pagination.totalPages > 1 && (
+        <ServicesPagination
+          currentPage={page}
+          totalPages={data.pagination.totalPages}
+          onPageChange={handlePageChange}
+          disabled={isLoading}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+The above example demonstrates several important principles:
+
+1. **Separation of Concerns**:
+
+   - Server component for initial data fetching
+   - Client component for interactive functionality
+   - Specialized sub-components for specific UI elements
+
+2. **Component Hierarchy**:
+
+   - Template as the top-level container
+   - Client component handling state management
+   - UI components for specific functionality
+
+3. **Tight Integration with Data Layer**:
+
+   - Server actions in `actions.ts` for data fetching
+   - Client-side utilities in `utils.ts` for UI operations
+
+4. **Type Safety**:
+   - Strict typing through shared type definitions
+   - Proper TypeScript interfaces for component props
+
 Remember that well-structured components lead to a more maintainable codebase. Always prioritize readability, reusability, and adherence to the single responsibility principle when creating components.
