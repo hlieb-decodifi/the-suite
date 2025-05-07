@@ -7,12 +7,14 @@ export type ServicesTemplatePaginationProps = {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  disabled?: boolean;
 };
 
 export function ServicesTemplatePagination({
   currentPage,
   totalPages,
   onPageChange,
+  disabled = false,
 }: ServicesTemplatePaginationProps) {
   const handlePreviousPage = () => {
     if (currentPage > 1) {
@@ -32,7 +34,7 @@ export function ServicesTemplatePagination({
         variant="outline"
         size="sm"
         onClick={handlePreviousPage}
-        disabled={currentPage === 1}
+        disabled={currentPage === 1 || disabled}
         className="flex items-center"
       >
         <ChevronLeft className="h-4 w-4 mr-1" />
@@ -46,6 +48,7 @@ export function ServicesTemplatePagination({
             variant={page === currentPage ? 'default' : 'outline'}
             size="sm"
             onClick={() => onPageChange(page)}
+            disabled={disabled}
             className="w-9 h-9"
           >
             {page}
@@ -57,7 +60,7 @@ export function ServicesTemplatePagination({
         variant="outline"
         size="sm"
         onClick={handleNextPage}
-        disabled={currentPage === totalPages}
+        disabled={currentPage === totalPages || disabled}
         className="flex items-center"
       >
         Next

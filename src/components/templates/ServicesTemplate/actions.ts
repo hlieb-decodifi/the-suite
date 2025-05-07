@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { ServiceListItem, Professional } from './types';
+import { ServiceListItem, Professional, PaginationInfo } from './types';
 
 // Supabase project URL from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -84,20 +84,85 @@ function mapServiceData(service: unknown): ServiceListItem {
   };
 }
 
+// Define a return type that includes pagination metadata
+export type ServicesWithPagination = {
+  services: ServiceListItem[];
+  pagination: PaginationInfo;
+};
+
 /**
- * Fetches all services with professional information from Supabase
+ * Get published professional profile IDs
  */
-export async function getServices(): Promise<ServiceListItem[]> {
+async function getPublishedProfileIds() {
   const supabase = await createClient();
   
-  // First get published profile IDs
   const { data: publishedProfiles } = await supabase
     .from('professional_profiles')
     .select('id')
     .eq('is_published', true);
   
-  // Extract just the IDs into an array
-  const publishedProfileIds = publishedProfiles?.map(profile => profile.id) || [];
+  return publishedProfiles?.map(profile => profile.id) || [];
+}
+
+/**
+ * Count total services for pagination
+ */
+async function countServices(publishedProfileIds: string[]) {
+  const supabase = await createClient();
+  
+  const { count, error: countError } = await supabase
+    .from('services')
+    .select('id', { count: 'exact' })
+    .in('professional_profile_id', publishedProfileIds);
+    
+  if (countError) {
+    console.error('Error counting services:', countError);
+    return 0;
+  }
+  
+  return count || 0;
+}
+
+/**
+ * Create empty pagination result
+ */
+function createEmptyPaginationResult(page: number, pageSize: number): ServicesWithPagination {
+  return { 
+    services: [], 
+    pagination: { 
+      currentPage: page, 
+      totalPages: 0, 
+      totalItems: 0, 
+      pageSize 
+    } 
+  };
+}
+
+/**
+ * Fetches services with professional information from Supabase with pagination
+ */
+/* eslint-disable-next-line max-lines-per-function */
+export async function getServices(
+  page = 1,
+  pageSize = 12
+): Promise<ServicesWithPagination> {
+  const supabase = await createClient();
+  
+  // Get published profile IDs
+  const publishedProfileIds = await getPublishedProfileIds();
+  if (publishedProfileIds.length === 0) {
+    return createEmptyPaginationResult(page, pageSize);
+  }
+  
+  // Count total services for pagination
+  const totalCount = await countServices(publishedProfileIds);
+  if (totalCount === 0) {
+    return createEmptyPaginationResult(page, pageSize);
+  }
+  
+  // Calculate start and end for pagination
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize - 1;
   
   // Use the array with in() for better performance than filter()
   const { data: servicesData, error } = await supabase
@@ -123,19 +188,38 @@ export async function getServices(): Promise<ServiceListItem[]> {
       )
     `)
     .in('professional_profile_id', publishedProfileIds)
-    .order('name');
+    .order('name')
+    .range(start, end);
 
   if (error) {
     console.error('Error fetching services:', error);
-    return [];
+    return createEmptyPaginationResult(page, pageSize);
   }
   
   if (!servicesData || servicesData.length === 0) {
-    return [];
+    return { 
+      services: [], 
+      pagination: { 
+        currentPage: page, 
+        totalPages: Math.ceil(totalCount / pageSize), 
+        totalItems: totalCount, 
+        pageSize 
+      } 
+    };
   }
   
   // Transform the data to match our ServiceListItem type
-  return servicesData.map(mapServiceData);
+  const mappedServices = servicesData.map(mapServiceData);
+  
+  return {
+    services: mappedServices,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / pageSize),
+      totalItems: totalCount,
+      pageSize
+    }
+  };
 }
 
 /**
@@ -143,15 +227,17 @@ export async function getServices(): Promise<ServiceListItem[]> {
  */
 export async function getFilteredServices(
   searchTerm?: string,
-  location?: string
-): Promise<ServiceListItem[]> {
-  const services = await getServices();
+  location?: string,
+  page = 1,
+  pageSize = 12
+): Promise<ServicesWithPagination> {
+  const { services, pagination } = await getServices(page, pageSize);
   
   if (!searchTerm && !location) {
-    return services;
+    return { services, pagination };
   }
   
-  return services.filter((service) => {
+  const filteredServices = services.filter((service) => {
     const searchTermMatch = !searchTerm 
       || service.name.toLowerCase().includes(searchTerm.toLowerCase())
       || service.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -161,4 +247,14 @@ export async function getFilteredServices(
       
     return searchTermMatch && locationMatch;
   });
+  
+  // Adjust pagination for filtered results
+  return {
+    services: filteredServices,
+    pagination: {
+      ...pagination,
+      totalItems: filteredServices.length,
+      totalPages: Math.ceil(filteredServices.length / pageSize)
+    }
+  };
 } 

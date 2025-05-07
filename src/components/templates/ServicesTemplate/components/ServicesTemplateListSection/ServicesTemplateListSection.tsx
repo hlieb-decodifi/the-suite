@@ -5,12 +5,14 @@ import { ServicesTemplateListSectionProps } from './types';
 import { ServicesTemplateServicesList } from './components/ServicesTemplateServicesList/ServicesTemplateServicesList';
 import { ServicesTemplateEmptyState } from './components/ServicesTemplateEmptyState/ServicesTemplateEmptyState';
 import { ServicesTemplatePagination } from './components/ServicesTemplatePagination';
+import { Loader2 } from 'lucide-react';
 
 export function ServicesTemplateListSection({
   services,
   pagination,
   onPageChange,
   authStatus,
+  isLoading = false,
 }: ServicesTemplateListSectionProps) {
   const { currentPage, totalPages, totalItems, pageSize } = pagination;
 
@@ -23,18 +25,31 @@ export function ServicesTemplateListSection({
       {/* Results summary */}
       <div className="flex justify-between items-center">
         <Typography className="text-muted-foreground">
-          {totalItems > 0
-            ? `Showing ${start}-${end} of ${totalItems} services`
-            : 'No services found'}
+          {isLoading ? (
+            <span className="flex items-center">
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Loading services...
+            </span>
+          ) : totalItems > 0 ? (
+            `Showing ${start}-${end} of ${totalItems} services`
+          ) : (
+            'No services found'
+          )}
         </Typography>
       </div>
 
       {/* Services list or empty state */}
-      {services.length > 0 ? (
-        <ServicesTemplateServicesList
-          services={services}
-          authStatus={authStatus}
-        />
+      {isLoading && services.length === 0 ? (
+        <div className="py-16 flex justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : services.length > 0 ? (
+        <div className={isLoading ? 'opacity-60 pointer-events-none' : ''}>
+          <ServicesTemplateServicesList
+            services={services}
+            authStatus={authStatus}
+          />
+        </div>
       ) : (
         <ServicesTemplateEmptyState />
       )}
@@ -45,6 +60,7 @@ export function ServicesTemplateListSection({
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={onPageChange}
+          disabled={isLoading}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ServicesTemplateFiltersSection } from '../ServicesTemplateFiltersSection';
 import { ServicesTemplateListSection } from '../ServicesTemplateListSection';
 import {
@@ -15,9 +15,12 @@ import {
   calculateTotalPages,
 } from '../../utils';
 import { useAuthStore } from '@/stores/authStore';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { getServices } from '../../actions';
 
 type ClientServicesContainerProps = {
   initialServices: ServiceListItem[];
+  initialPagination: PaginationInfo;
 };
 
 // Custom hook for auth status
@@ -40,109 +43,178 @@ function useAuthStatus(): AuthStatus {
   return authStatus;
 }
 
-// Custom hook for pagination and filtering logic
-function useServicePagination(initialServices: ServiceListItem[]) {
+// Helper function for determining if filtered results should use server or client pagination
+function getServicesForCurrentView(
+  initialServices: ServiceListItem[],
+  filteredServices: ServiceListItem[],
+  filters: ServicesFilters,
+  pagination: PaginationInfo,
+): ServiceListItem[] {
+  // If no filters are applied, use the services as is (already paginated from server)
+  if (filters.searchTerm === '' && filters.location === '') {
+    return initialServices;
+  }
+
+  // Otherwise, apply pagination on client-side filtered results
+  return getPaginatedServices(
+    filteredServices,
+    pagination.currentPage,
+    pagination.pageSize,
+  );
+}
+
+// Helper function to create pagination state when filters change
+function createFilteredPagination(
+  initialServices: ServiceListItem[],
+  newFilters: ServicesFilters,
+  pageSize: number,
+): PaginationInfo {
+  const newFilteredServices = filterServices(initialServices, newFilters);
+
+  return {
+    currentPage: 1,
+    totalPages: calculateTotalPages(newFilteredServices, pageSize),
+    totalItems: newFilteredServices.length,
+    pageSize,
+  };
+}
+
+/* eslint-disable max-lines-per-function */
+export function ClientServicesContainer({
+  initialServices,
+  initialPagination,
+}: ClientServicesContainerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // State for services and pagination
+  const [services, setServices] = useState<ServiceListItem[]>(initialServices);
+  const [pagination, setPagination] =
+    useState<PaginationInfo>(initialPagination);
+  const [isLoading, setIsLoading] = useState(false);
+
   // State for filters
   const [filters, setFilters] = useState<ServicesFilters>({
     searchTerm: '',
     location: '',
   });
 
-  // State for pagination
-  const [pagination, setPagination] = useState<PaginationInfo>({
-    currentPage: 1,
-    totalPages: Math.ceil(initialServices.length / 10),
-    totalItems: initialServices.length,
-    pageSize: 12,
-  });
+  // Get auth status using the custom hook
+  const authStatus = useAuthStatus();
 
-  // Filter services based on search and location
+  // Get filtered services
   const filteredServices = useMemo(
-    () => filterServices(initialServices, filters),
-    [initialServices, filters],
+    () => filterServices(services, filters),
+    [services, filters],
   );
 
-  // Get paginated services
-  const paginatedServices = useMemo(
+  // Get services to display
+  const displayedServices = useMemo(
     () =>
-      getPaginatedServices(
+      getServicesForCurrentView(
+        services,
         filteredServices,
-        pagination.currentPage,
-        pagination.pageSize,
+        filters,
+        pagination,
       ),
-    [filteredServices, pagination.currentPage, pagination.pageSize],
+    [filteredServices, services, filters, pagination],
   );
 
-  // Update filters and reset pagination
+  // Effect to load services when page changes in URL
+  useEffect(() => {
+    const page = searchParams.get('page')
+      ? parseInt(searchParams.get('page') as string, 10)
+      : 1;
+
+    // Only fetch if we're not filtering and the page differs from current page
+    if (
+      filters.searchTerm === '' &&
+      filters.location === '' &&
+      page !== pagination.currentPage
+    ) {
+      const fetchPagedServices = async () => {
+        setIsLoading(true);
+        try {
+          const { services: newServices, pagination: newPagination } =
+            await getServices(page);
+          setServices(newServices);
+          setPagination(newPagination);
+        } catch (error) {
+          console.error('Error fetching services:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchPagedServices();
+    }
+  }, [searchParams, filters, pagination.currentPage]);
+
+  // Handle filter changes
   const handleFiltersChange = useCallback(
     (newFilters: ServicesFilters) => {
       setFilters(newFilters);
 
-      // Calculate new filtered services
-      const newFilteredServices = filterServices(initialServices, newFilters);
-
-      // Reset to first page
-      setPagination((prev) => ({
-        currentPage: 1,
-        totalPages: calculateTotalPages(newFilteredServices, prev.pageSize),
-        totalItems: newFilteredServices.length,
-        pageSize: prev.pageSize,
-      }));
+      if (newFilters.searchTerm === '' && newFilters.location === '') {
+        // If filters are cleared, reset to the initial page's data
+        // and update URL to remove page param
+        if (searchParams.has('page')) {
+          router.push(pathname);
+        }
+      } else {
+        // Otherwise calculate new pagination for filtered results
+        const newPagination = createFilteredPagination(
+          services,
+          newFilters,
+          pagination.pageSize,
+        );
+        setPagination(newPagination);
+      }
     },
-    [initialServices],
+    [services, pagination.pageSize, router, pathname, searchParams],
   );
 
   // Handle page change
-  const handlePageChange = useCallback((page: number) => {
-    setPagination((prev) => ({
-      ...prev,
-      currentPage: page,
-    }));
+  const handlePageChange = useCallback(
+    (page: number) => {
+      // If client-side filtering is active, just update pagination state
+      if (filters.searchTerm !== '' || filters.location !== '') {
+        setPagination((prev) => ({
+          ...prev,
+          currentPage: page,
+        }));
+      } else {
+        // Otherwise, update URL with the new page (triggers the useEffect)
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('page', page.toString());
 
-    // Scroll to top of the page
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth',
-    });
-  }, []);
-
-  return {
-    filters,
-    pagination,
-    paginatedServices,
-    handleFiltersChange,
-    handlePageChange,
-  };
-}
-
-export function ClientServicesContainer({
-  initialServices,
-}: ClientServicesContainerProps) {
-  // Get auth status using the custom hook
-  const authStatus = useAuthStatus();
-
-  // Get pagination and filter related data and handlers
-  const {
-    filters,
-    pagination,
-    paginatedServices,
-    handleFiltersChange,
-    handlePageChange,
-  } = useServicePagination(initialServices);
+        // Use shallow routing to avoid full page refresh
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      }
+      containerRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    },
+    [filters, router, pathname, searchParams],
+  );
 
   return (
-    <>
+    <div className="flex flex-col gap-4" ref={containerRef}>
       <ServicesTemplateFiltersSection
         filters={filters}
         onFiltersChange={handleFiltersChange}
       />
 
       <ServicesTemplateListSection
-        services={paginatedServices}
+        services={displayedServices}
         pagination={pagination}
         onPageChange={handlePageChange}
         authStatus={authStatus}
+        isLoading={isLoading}
       />
-    </>
+    </div>
   );
 }

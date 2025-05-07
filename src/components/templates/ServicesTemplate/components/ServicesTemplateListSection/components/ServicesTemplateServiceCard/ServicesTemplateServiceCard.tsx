@@ -99,8 +99,8 @@ export function ServicesTemplateServiceCard({
               {/* Mobile professional info without border */}
               <div className="md:hidden mt-4 pt-4 border-t border-border">
                 <div className="flex items-start">
-                  <div className="relative">
-                    <Avatar className="h-12 w-12 ring-2 ring-primary/20 flex-shrink-0">
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="h-12 w-12 ring-2 ring-primary/20">
                       <AvatarImage
                         src={professional.avatar}
                         alt={professional.name}
@@ -117,17 +117,17 @@ export function ServicesTemplateServiceCard({
                     )}
                   </div>
 
-                  <div className="ml-4 flex-1">
-                    <Typography className="font-semibold text-foreground">
+                  <div className="ml-4 flex-1 min-w-0">
+                    <Typography className="font-semibold text-foreground truncate">
                       {professional.name}
                     </Typography>
 
                     <div className="flex flex-col gap-1 mt-0.5">
                       <div className="flex items-center gap-1 text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
+                        <MapPin className="h-3 w-3 flex-shrink-0" />
                         <Typography
                           variant="small"
-                          className="text-xs truncate max-w-[200px]"
+                          className="text-xs truncate max-w-[180px]"
                         >
                           {professional.address}
                         </Typography>
@@ -165,11 +165,11 @@ export function ServicesTemplateServiceCard({
             </div>
 
             {/* Professional info section - right side on desktop only */}
-            <div className="hidden md:flex md:flex-col p-6 md:min-w-[25%] md:border-l md:border-border md:bg-muted/10">
+            <div className="hidden md:flex md:flex-col p-6 md:w-[32%] md:border-l md:border-border md:bg-muted/10">
               {/* Professional profile info */}
               <div className="flex pb-2 items-start space-x-4">
-                <div className="relative">
-                  <Avatar className="h-12 w-12 ring-2 ring-primary/20 flex-shrink-0">
+                <div className="relative flex-shrink-0">
+                  <Avatar className="h-12 w-12 ring-2 ring-primary/20">
                     <AvatarImage
                       src={professional.avatar}
                       alt={professional.name}
@@ -186,8 +186,8 @@ export function ServicesTemplateServiceCard({
                   )}
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <Typography className="font-semibold text-foreground truncate">
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <Typography className="font-semibold text-foreground truncate w-full">
                     {professional.name}
                   </Typography>
 
