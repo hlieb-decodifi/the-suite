@@ -20,17 +20,23 @@ export async function ServicesTemplate({
   const { services, pagination } = await getServices(page, pageSize);
 
   return (
-    <div className="container py-8 space-y-8">
-      <ServicesTemplateHeader />
+    <div className="container max-w-7xl mx-auto">
+      <div className="py-8 space-y-8">
+        {/* Page Header */}
+        <ServicesTemplateHeader />
 
-      <Suspense
-        fallback={<div className="text-center py-10">Loading services...</div>}
-      >
-        <ClientServicesContainer
-          initialServices={services}
-          initialPagination={pagination}
-        />
-      </Suspense>
+        {/* Main Content Area */}
+        <Suspense
+          fallback={
+            <div className="text-center py-10">Loading services...</div>
+          }
+        >
+          <ClientServicesContainer
+            initialServices={services}
+            initialPagination={pagination}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }

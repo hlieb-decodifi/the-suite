@@ -23,6 +23,32 @@ type ClientServicesContainerProps = {
   initialPagination: PaginationInfo;
 };
 
+// Custom hook for scrolling to an element
+function useScrollToElement() {
+  const scrollToElement = useCallback(
+    (element: HTMLElement | null, offset = 0) => {
+      if (!element) return;
+
+      // Get the element's position relative to the viewport
+      const rect = element.getBoundingClientRect();
+
+      // Calculate the absolute position to scroll to
+      const scrollTop =
+        window.pageYOffset || document.documentElement.scrollTop;
+      const targetPosition = rect.top + scrollTop - offset;
+
+      // Perform the scroll
+      window.scrollTo({
+        top: targetPosition,
+        behavior: 'smooth',
+      });
+    },
+    [],
+  );
+
+  return scrollToElement;
+}
+
 // Custom hook for auth status
 function useAuthStatus(): AuthStatus {
   const { isAuthenticated, isLoading, user } = useAuthStore();
@@ -88,6 +114,7 @@ export function ClientServicesContainer({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollToElement = useScrollToElement();
 
   // State for services and pagination
   const [services, setServices] = useState<ServiceListItem[]>(initialServices);
@@ -141,6 +168,11 @@ export function ClientServicesContainer({
             await getServices(page);
           setServices(newServices);
           setPagination(newPagination);
+
+          // Scroll to top after new services are loaded
+          setTimeout(() => {
+            scrollToElement(containerRef.current, 80);
+          }, 100);
         } catch (error) {
           console.error('Error fetching services:', error);
         } finally {
@@ -150,7 +182,7 @@ export function ClientServicesContainer({
 
       fetchPagedServices();
     }
-  }, [searchParams, filters, pagination.currentPage]);
+  }, [searchParams, filters, pagination.currentPage, scrollToElement]);
 
   // Handle filter changes
   const handleFiltersChange = useCallback(
@@ -172,8 +204,20 @@ export function ClientServicesContainer({
         );
         setPagination(newPagination);
       }
+
+      // Scroll to top when filters change
+      setTimeout(() => {
+        scrollToElement(containerRef.current, 80);
+      }, 100);
     },
-    [services, pagination.pageSize, router, pathname, searchParams],
+    [
+      services,
+      pagination.pageSize,
+      router,
+      pathname,
+      searchParams,
+      scrollToElement,
+    ],
   );
 
   // Handle page change
@@ -185,6 +229,11 @@ export function ClientServicesContainer({
           ...prev,
           currentPage: page,
         }));
+
+        // Scroll to top after state update with a small delay to ensure state has updated
+        setTimeout(() => {
+          scrollToElement(containerRef.current, 80); // Add offset for header
+        }, 100);
       } else {
         // Otherwise, update URL with the new page (triggers the useEffect)
         const params = new URLSearchParams(searchParams.toString());
@@ -192,29 +241,53 @@ export function ClientServicesContainer({
 
         // Use shallow routing to avoid full page refresh
         router.push(`${pathname}?${params.toString()}`, { scroll: false });
+
+        // Scroll to top after navigation
+        setTimeout(() => {
+          scrollToElement(containerRef.current, 80); // Add offset for header
+        }, 100);
       }
-      containerRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
     },
-    [filters, router, pathname, searchParams],
+    [filters, router, pathname, searchParams, scrollToElement],
   );
 
   return (
-    <div className="flex flex-col gap-4" ref={containerRef}>
-      <ServicesTemplateFiltersSection
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-      />
+    <div
+      className="flex flex-col gap-4"
+      ref={containerRef}
+      id="services-container"
+    >
+      {/* Mobile view - filters above services */}
+      <div className="md:hidden mb-2">
+        <ServicesTemplateFiltersSection
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+        />
+      </div>
 
-      <ServicesTemplateListSection
-        services={displayedServices}
-        pagination={pagination}
-        onPageChange={handlePageChange}
-        authStatus={authStatus}
-        isLoading={isLoading}
-      />
+      {/* Desktop view - two-column layout */}
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Left sidebar - filters (desktop only) */}
+        <div className="hidden md:block md:w-72 flex-shrink-0">
+          <div className="sticky top-24">
+            <ServicesTemplateFiltersSection
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+            />
+          </div>
+        </div>
+
+        {/* Right content - services list */}
+        <div className="flex-1">
+          <ServicesTemplateListSection
+            services={displayedServices}
+            pagination={pagination}
+            onPageChange={handlePageChange}
+            authStatus={authStatus}
+            isLoading={isLoading}
+          />
+        </div>
+      </div>
     </div>
   );
 }
