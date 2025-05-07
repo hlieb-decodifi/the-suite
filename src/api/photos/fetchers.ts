@@ -1,11 +1,10 @@
 import { createClient } from '@/lib/supabase/client';
 
 const PROFILE_PHOTOS_BUCKET = 'profile-photos';
-const SIGNED_URL_EXPIRATION = 60 * 60; // 1 hour in seconds
 
 /**
- * Fetches a temporary signed URL for a user's profile photo.
- * Returns the signed URL string if found, otherwise null.
+ * Fetches a public URL for a user's profile photo.
+ * Returns the URL string if found, otherwise null.
  * Handles errors internally and logs them.
  * @param userId - The UUID of the user.
  */
@@ -35,17 +34,12 @@ export async function fetchProfilePhotoUrl(
     // 2. Construct the full file path
     const filePath = `${userId}/${photoData.filename}`;
 
-    // 3. Create a signed URL
-    const { data: signedUrlData, error: signError } = await supabase.storage
+    // 3. Get a public URL (not signed) since the bucket is public
+    const { data: publicUrlData } = supabase.storage
       .from(PROFILE_PHOTOS_BUCKET)
-      .createSignedUrl(filePath, SIGNED_URL_EXPIRATION);
+      .getPublicUrl(filePath);
 
-    if (signError) {
-      console.error('Error creating signed URL:', signError);
-      return null;
-    }
-
-    return signedUrlData?.signedUrl || null;
+    return publicUrlData?.publicUrl || null;
 
   } catch (error) {
     console.error('Unexpected error fetching profile photo URL:', error);
