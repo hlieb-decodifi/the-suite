@@ -105,25 +105,6 @@ async function getPublishedProfileIds() {
 }
 
 /**
- * Count total services for pagination
- */
-async function countServices(publishedProfileIds: string[]) {
-  const supabase = await createClient();
-  
-  const { count, error: countError } = await supabase
-    .from('services')
-    .select('id', { count: 'exact' })
-    .in('professional_profile_id', publishedProfileIds);
-    
-  if (countError) {
-    console.error('Error counting services:', countError);
-    return 0;
-  }
-  
-  return count || 0;
-}
-
-/**
  * Create empty pagination result
  */
 function createEmptyPaginationResult(page: number, pageSize: number): ServicesWithPagination {
@@ -144,7 +125,8 @@ function createEmptyPaginationResult(page: number, pageSize: number): ServicesWi
 /* eslint-disable-next-line max-lines-per-function */
 export async function getServices(
   page = 1,
-  pageSize = 12
+  pageSize = 12,
+  search?: string
 ): Promise<ServicesWithPagination> {
   const supabase = await createClient();
   
@@ -154,18 +136,8 @@ export async function getServices(
     return createEmptyPaginationResult(page, pageSize);
   }
   
-  // Count total services for pagination
-  const totalCount = await countServices(publishedProfileIds);
-  if (totalCount === 0) {
-    return createEmptyPaginationResult(page, pageSize);
-  }
-  
-  // Calculate start and end for pagination
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize - 1;
-  
-  // Use the array with in() for better performance than filter()
-  const { data: servicesData, error } = await supabase
+  // Create a query builder that we can modify based on search parameters
+  let query = supabase
     .from('services')
     .select(`
       id, 
@@ -187,7 +159,46 @@ export async function getServices(
         )
       )
     `)
-    .in('professional_profile_id', publishedProfileIds)
+    .in('professional_profile_id', publishedProfileIds);
+  
+  // Add search filter if provided
+  if (search && search.trim() !== '') {
+    const trimmedSearch = search.trim().toLowerCase();
+    // Use ilike for case-insensitive matching with wildcards
+    query = query.ilike('name', `%${trimmedSearch}%`);
+  }
+  
+  // First, get the count of total items matching the search criteria
+  let countQuery = supabase
+    .from('services')
+    .select('id', { count: 'exact' })
+    .in('professional_profile_id', publishedProfileIds);
+    
+  // Add search filter to count query if needed
+  if (search && search.trim() !== '') {
+    const trimmedSearch = search.trim().toLowerCase();
+    countQuery = countQuery.ilike('name', `%${trimmedSearch}%`);
+  }
+  
+  const { count, error: countError } = await countQuery;
+  
+  if (countError) {
+    console.error('Error counting services:', countError);
+    return createEmptyPaginationResult(page, pageSize);
+  }
+  
+  const totalCount = count || 0;
+  
+  if (totalCount === 0) {
+    return createEmptyPaginationResult(page, pageSize);
+  }
+  
+  // Calculate start and end for pagination
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize - 1;
+  
+  // Execute the query with pagination
+  const { data: servicesData, error } = await query
     .order('name')
     .range(start, end);
 
@@ -223,6 +234,18 @@ export async function getServices(
 }
 
 /**
+ * Server action that can be called from client components to fetch services
+ * without requiring a full page reload
+ */
+export async function fetchServicesAction(
+  page: number,
+  pageSize: number,
+  searchTerm: string
+): Promise<ServicesWithPagination> {
+  return getServices(page, pageSize, searchTerm);
+}
+
+/**
  * Fetches services filtered by search term and location
  */
 export async function getFilteredServices(
@@ -231,21 +254,21 @@ export async function getFilteredServices(
   page = 1,
   pageSize = 12
 ): Promise<ServicesWithPagination> {
-  const { services, pagination } = await getServices(page, pageSize);
+  // Use the updated getServices function with search parameter
+  const { services, pagination } = await getServices(page, pageSize, searchTerm);
   
-  if (!searchTerm && !location) {
+  // If no additional location filtering is needed, return the results directly
+  if (!location) {
     return { services, pagination };
   }
   
+  // Additional filtering for location if needed
   const filteredServices = services.filter((service) => {
-    const searchTermMatch = !searchTerm 
-      || service.name.toLowerCase().includes(searchTerm.toLowerCase())
-      || service.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const locationMatch = service.professional.address
+      .toLowerCase()
+      .includes(location.toLowerCase());
       
-    const locationMatch = !location
-      || service.professional.address.toLowerCase().includes(location.toLowerCase());
-      
-    return searchTermMatch && locationMatch;
+    return locationMatch;
   });
   
   // Adjust pagination for filtered results

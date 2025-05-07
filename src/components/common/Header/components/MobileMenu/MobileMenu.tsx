@@ -8,10 +8,28 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Menu, Search } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { SearchBox } from '../SearchBox/SearchBox';
 import { MobileNavLinks } from './components/MobileNavLinks';
 import { MobileAuthSection } from './components/MobileAuthSection';
+
+// Helper function to focus search input
+function useFocusSearch(
+  isOpen: boolean,
+  shouldFocus: boolean,
+  ref: React.RefObject<HTMLDivElement | null>,
+) {
+  useEffect(() => {
+    if (isOpen && shouldFocus && ref.current) {
+      const input = ref.current.querySelector('input');
+      if (input) {
+        setTimeout(() => {
+          input.focus();
+        }, 300);
+      }
+    }
+  }, [isOpen, shouldFocus, ref]);
+}
 
 export type MobileMenuProps = {
   isAuthenticated?: boolean;
@@ -24,6 +42,7 @@ export type MobileMenuProps = {
     | undefined;
   onSignUpClick?: () => void;
   onSignInClick?: () => void;
+  onSearch?: (term: string) => void;
 };
 
 export function MobileMenu({
@@ -31,10 +50,14 @@ export function MobileMenu({
   userInfo,
   onSignUpClick,
   onSignInClick,
+  onSearch,
 }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [shouldFocusSearch, setShouldFocusSearch] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
+
+  // Use the focus hook
+  useFocusSearch(isOpen, shouldFocusSearch, searchBoxRef);
 
   const handleSearchClick = () => {
     setIsOpen(true);
@@ -82,7 +105,7 @@ export function MobileMenu({
           <div className="flex flex-col h-full pt-6">
             {/* Mobile Search */}
             <div ref={searchBoxRef}>
-              <SearchBox className="mb-6" autoFocus={shouldFocusSearch} />
+              <SearchBox className="mb-6" onSearch={onSearch} />
             </div>
 
             {/* Navigation Links */}
