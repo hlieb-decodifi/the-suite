@@ -189,6 +189,7 @@ export type Database = {
           id: string
           instagram_url: string | null
           is_published: boolean | null
+          is_subscribed: boolean | null
           location: string | null
           phone_number: string | null
           profession: string | null
@@ -206,6 +207,7 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
+          is_subscribed?: boolean | null
           location?: string | null
           phone_number?: string | null
           profession?: string | null
@@ -223,6 +225,7 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
+          is_subscribed?: boolean | null
           location?: string | null
           phone_number?: string | null
           profession?: string | null

@@ -116,6 +116,7 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
+  is_subscribed boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -180,10 +181,33 @@ create trigger enforce_service_limit
 -- Drop existing policies first
 drop policy if exists "Anyone can view services" on services;
 drop policy if exists "Professionals can delete their own services" on services;
+drop policy if exists "Professionals can manage their own services" on services;
+drop policy if exists "Anyone can view services from published professionals" on services;
+drop policy if exists "Professionals can view their own unpublished services" on services;
 
--- New policies
+-- New policies for services
 create policy "Professionals can manage their own services"
   on services for all
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+create policy "Anyone can view services from published professionals"
+  on services for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.is_published = true
+    )
+  );
+
+create policy "Professionals can view their own services"
+  on services for select
   using (
     exists (
       select 1 from professional_profiles
@@ -247,6 +271,10 @@ create policy "Users can delete addresses linked to their profile"
   );
 
 -- RLS policies for professional profiles
+drop policy if exists "Professionals can view their own profile" on professional_profiles;
+drop policy if exists "Professionals can update their own profile" on professional_profiles;
+drop policy if exists "Anyone can view published professional profiles" on professional_profiles;
+
 create policy "Professionals can view their own profile"
   on professional_profiles for select
   using (auth.uid() = user_id);
@@ -547,3 +575,33 @@ create policy "Professionals can manage their own accepted payment methods"
 */
 drop publication if exists supabase_realtime;
 create publication supabase_realtime for table services;
+
+-- RLS policies for users
+drop policy if exists "Users can view their own data" on users;
+
+create policy "Users can view their own data"
+  on users for select
+  using (auth.uid() = id);
+
+create policy "Anyone can view user data for published professionals"
+  on users for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id = users.id
+      and professional_profiles.is_published = true
+    )
+  );
+
+-- RLS policies for profile photos
+drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
+
+create policy "Anyone can view profile photos of published professionals"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id = profile_photos.user_id
+      and professional_profiles.is_published = true
+    )
+  );

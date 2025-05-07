@@ -240,7 +240,7 @@ export function ServicesSection({
             className={
               isEditable
                 ? 'space-y-4 max-h-[550px] overflow-y-auto pr-2'
-                : 'gap-4 grid grid-cols-2'
+                : 'gap-4 grid grid-cols-1'
             }
           >
             {isLoadingServices ? (

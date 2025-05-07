@@ -18,8 +18,6 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
     user?.id,
   );
 
-  console.log('avatarUrl', avatarUrl);
-
   const isLoading = isAuthLoading || isAvatarLoading;
 
   if (isLoading) {
