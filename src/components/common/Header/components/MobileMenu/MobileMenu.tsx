@@ -8,11 +8,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Menu, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { SearchBox } from '../SearchBox/SearchBox';
 import { MobileNavLinks } from './components/MobileNavLinks';
-import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
-import { UserProfileSummary } from '@/components/common/Header/components/UserProfileSummary/UserProfileSummary';
+import { MobileAuthSection } from './components/MobileAuthSection';
 
 export type MobileMenuProps = {
   isAuthenticated?: boolean;
@@ -34,13 +33,42 @@ export function MobileMenu({
   onSignInClick,
 }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [shouldFocusSearch, setShouldFocusSearch] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+
+  const handleSearchClick = () => {
+    setIsOpen(true);
+    setShouldFocusSearch(true);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      setShouldFocusSearch(false);
+    }
+  };
+
+  const handleSignUpClick = () => {
+    setIsOpen(false);
+    if (onSignUpClick) onSignUpClick();
+  };
+
+  const handleSignInClick = () => {
+    setIsOpen(false);
+    if (onSignInClick) onSignInClick();
+  };
 
   return (
     <div className="md:hidden flex items-center gap-2">
-      <Button variant="ghost" size="icon" className="text-[#313131]">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="text-[#313131]"
+        onClick={handleSearchClick}
+      >
         <Search size={24} />
       </Button>
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <Sheet open={isOpen} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="text-[#313131]">
             <Menu size={24} />
@@ -53,47 +81,20 @@ export function MobileMenu({
           <SheetTitle className="sr-only">Mobile Navigation Menu</SheetTitle>
           <div className="flex flex-col h-full pt-6">
             {/* Mobile Search */}
-            <SearchBox className="mb-6" />
+            <div ref={searchBoxRef}>
+              <SearchBox className="mb-6" autoFocus={shouldFocusSearch} />
+            </div>
 
             {/* Navigation Links */}
             <MobileNavLinks onItemClick={() => setIsOpen(false)} />
 
             {/* Authentication Controls */}
-            <div className="mt-auto flex flex-col gap-3 pb-6">
-              {isAuthenticated && userInfo ? (
-                <>
-                  <UserProfileSummary
-                    userInfo={userInfo}
-                    className="bg-muted rounded-md p-3"
-                  />
-                  <div className="mt-4 border-t pt-4">
-                    <SignOutButton className="w-full" />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Button
-                    className="w-full font-futura font-medium bg-primary text-primary-foreground hover:bg-primary/90"
-                    onClick={() => {
-                      setIsOpen(false);
-                      if (onSignUpClick) onSignUpClick();
-                    }}
-                  >
-                    Sign up
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full font-futura font-medium border-primary text-foreground hover:bg-primary hover:text-primary-foreground"
-                    onClick={() => {
-                      setIsOpen(false);
-                      if (onSignInClick) onSignInClick();
-                    }}
-                  >
-                    Login
-                  </Button>
-                </>
-              )}
-            </div>
+            <MobileAuthSection
+              isAuthenticated={isAuthenticated}
+              userInfo={userInfo}
+              onSignUpClick={handleSignUpClick}
+              onSignInClick={handleSignInClick}
+            />
           </div>
         </SheetContent>
       </Sheet>

@@ -2,26 +2,39 @@
 
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
 export type SearchBoxProps = {
   className?: string;
   placeholder?: string;
   onSearch?: (term: string) => void;
+  autoFocus?: boolean;
 };
 
 export function SearchBox({
   className = '',
   placeholder = 'Search services',
   onSearch,
+  autoFocus = false,
 }: SearchBoxProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const pathname = usePathname();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Check if we're on the services page
   const isServicesPage =
     pathname === '/services' || pathname?.startsWith('/services?');
+
+  // Focus the input when autoFocus is true
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      // Short delay to ensure the sidebar is fully opened
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
+    }
+  }, [autoFocus]);
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && onSearch) {
@@ -40,6 +53,7 @@ export function SearchBox({
         />
       </div>
       <Input
+        ref={inputRef}
         type="text"
         placeholder={
           isServicesPage ? 'Search available services...' : placeholder
