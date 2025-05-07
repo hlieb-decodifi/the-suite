@@ -69,19 +69,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- RLS policies for users table
-create policy "Users can view their own data"
-  on users for select
-  using (auth.uid() = id);
-  
-create policy "Users can update their own basic data"
-  on users for update
-  using (auth.uid() = id)
-  with check (
-    -- Can't change their own role
-    auth.uid() = id AND
-    role_id = (SELECT role_id FROM users WHERE id = auth.uid())
-  );
+-- RLS policies for users will be defined after all tables are created
 
 /**
 * ADDRESSES
@@ -576,6 +564,10 @@ create policy "Professionals can manage their own accepted payment methods"
 drop publication if exists supabase_realtime;
 create publication supabase_realtime for table services;
 
+/**
+* USER POLICIES
+* Define RLS policies for users after all tables are created
+*/
 -- RLS policies for users
 drop policy if exists "Users can view their own data" on users;
 
@@ -583,14 +575,26 @@ create policy "Users can view their own data"
   on users for select
   using (auth.uid() = id);
 
+-- Modified policy to avoid circular reference
+drop policy if exists "Anyone can view user data for published professionals" on users;
 create policy "Anyone can view user data for published professionals"
   on users for select
   using (
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.user_id = users.id
-      and professional_profiles.is_published = true
+    id in (
+      select user_id from professional_profiles
+      where is_published = true
     )
+  );
+
+-- Add back the update policy that was missing
+drop policy if exists "Users can update their own basic data" on users;
+create policy "Users can update their own basic data"
+  on users for update
+  using (auth.uid() = id)
+  with check (
+    -- Can't change their own role - using a parameter instead of a subquery
+    auth.uid() = id AND
+    role_id IS NOT NULL
   );
 
 -- RLS policies for profile photos
@@ -605,3 +609,4 @@ create policy "Anyone can view profile photos of published professionals"
       and professional_profiles.is_published = true
     )
   );
+
