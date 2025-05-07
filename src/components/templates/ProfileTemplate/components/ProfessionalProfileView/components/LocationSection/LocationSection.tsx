@@ -9,11 +9,13 @@ import { MapPin, Pencil } from 'lucide-react';
 
 export type LocationSectionProps = {
   user: User;
+  isEditable?: boolean;
 };
 
 export function LocationSection({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   user,
+  isEditable = true,
 }: LocationSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -32,15 +34,17 @@ export function LocationSection({
         <Typography variant="h3" className="font-bold text-foreground">
           Location
         </Typography>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled
-          onClick={() => setIsEditing(!isEditing)}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+        {isEditable && (
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled
+            onClick={() => setIsEditing(!isEditing)}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-2">
         <div className="space-y-3">

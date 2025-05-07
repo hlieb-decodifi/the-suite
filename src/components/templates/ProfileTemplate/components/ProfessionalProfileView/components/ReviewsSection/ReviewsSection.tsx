@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 
 export type ReviewsSectionProps = {
   user: User;
+  isEditable?: boolean;
 };
 
 // Define a type for review
@@ -56,6 +57,8 @@ function ReviewItem({ review }: { review: Review }) {
 export function ReviewsSection({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   user,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isEditable = true,
 }: ReviewsSectionProps) {
   const [visibleReviews, setVisibleReviews] = useState(3);
 

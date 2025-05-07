@@ -12,7 +12,7 @@ import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
 import { User } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   PageHeader,
   PortfolioSection,
@@ -22,7 +22,9 @@ import {
   SubscriptionTooltip,
 } from './components';
 
-const VALID_TABS = ['profile', 'services', 'portfolio', 'subscription'];
+// Define tab options
+const EDIT_MODE_TABS = ['profile', 'services', 'portfolio', 'subscription'];
+const PREVIEW_MODE_TABS = ['profile', 'services', 'portfolio'];
 
 export type ProfessionalProfileViewProps = {
   user: User;
@@ -34,10 +36,25 @@ export function ProfessionalProfileView({
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Preview mode state
+  const [isEditable, setIsEditable] = useState(true);
+
+  // Get valid tabs based on current mode
+  const validTabs = isEditable ? EDIT_MODE_TABS : PREVIEW_MODE_TABS;
+
   // Tab state
   const initialTab = searchParams.get('tab') || 'profile';
-  const currentTab = VALID_TABS.includes(initialTab) ? initialTab : 'profile';
+  const currentTab = validTabs.includes(initialTab) ? initialTab : 'profile';
   const [activeTab, setActiveTab] = useState(currentTab);
+
+  // Update activeTab when isEditable changes
+  useEffect(() => {
+    // If we're switching to preview mode and current tab is subscription,
+    // change to profile tab
+    if (!isEditable && activeTab === 'subscription') {
+      setActiveTab('profile');
+    }
+  }, [isEditable, activeTab]);
 
   // Use React Query hook for profile data
   const {
@@ -55,7 +72,7 @@ export function ProfessionalProfileView({
   // --- Handlers ---
   // Tab change handler
   const handleTabChange = (newTab: string) => {
-    if (VALID_TABS.includes(newTab)) {
+    if (validTabs.includes(newTab)) {
       setActiveTab(newTab);
       router.replace(`?tab=${newTab}`, { scroll: false });
     }
@@ -70,6 +87,12 @@ export function ProfessionalProfileView({
     });
   };
 
+  // Preview handler - toggles edit mode
+  const handlePreview = () => {
+    // Toggle isEditable state for preview mode
+    setIsEditable(!isEditable);
+  };
+
   // Subscribe handler
   const handleSubscribe = () => {
     updateSubscription(user.id);
@@ -78,8 +101,10 @@ export function ProfessionalProfileView({
 
   // Portfolio edit handler
   const handleEditPortfolio = () => {
-    handleTabChange('portfolio');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (isEditable) {
+      handleTabChange('portfolio');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   // --- Render Logic ---
@@ -113,6 +138,8 @@ export function ProfessionalProfileView({
       <PageHeader
         isPublished={profileData.isPublished ?? false}
         onPublishToggle={handlePublishToggle}
+        onPreview={handlePreview}
+        isPreviewMode={!isEditable}
       />
 
       <Tabs
@@ -121,7 +148,7 @@ export function ProfessionalProfileView({
         className="w-full"
       >
         <TabsList className="gap-1 w-full max-w-md mb-8 bg-muted/50 p-1 rounded-full">
-          {VALID_TABS.map((tab) => (
+          {validTabs.map((tab) => (
             <TabsTrigger
               key={tab}
               value={tab}
@@ -156,6 +183,7 @@ export function ProfessionalProfileView({
             user={user}
             onPublishToggle={handlePublishToggle}
             onEditPortfolio={handleEditPortfolio}
+            isEditable={isEditable}
           />
         </TabsContent>
 
@@ -164,7 +192,7 @@ export function ProfessionalProfileView({
           forceMount
           className={activeTab !== 'services' ? 'hidden' : ''}
         >
-          <ServicesSection user={user} />
+          <ServicesSection user={user} isEditable={isEditable} />
         </TabsContent>
 
         <TabsContent
@@ -172,20 +200,22 @@ export function ProfessionalProfileView({
           forceMount
           className={activeTab !== 'portfolio' ? 'hidden' : ''}
         >
-          <PortfolioSection user={user} />
+          <PortfolioSection user={user} isEditable={isEditable} />
         </TabsContent>
 
-        <TabsContent
-          value="subscription"
-          forceMount
-          className={activeTab !== 'subscription' ? 'hidden' : ''}
-        >
-          <SubscriptionSection
-            user={user}
-            isSubscribed={isSubscribed}
-            onSubscribe={handleSubscribe}
-          />
-        </TabsContent>
+        {isEditable && (
+          <TabsContent
+            value="subscription"
+            forceMount
+            className={activeTab !== 'subscription' ? 'hidden' : ''}
+          >
+            <SubscriptionSection
+              user={user}
+              isSubscribed={isSubscribed}
+              onSubscribe={handleSubscribe}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

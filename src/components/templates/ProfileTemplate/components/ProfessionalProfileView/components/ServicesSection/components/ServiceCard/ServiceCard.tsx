@@ -13,6 +13,8 @@ export type ServiceCardProps = {
   onDelete: () => void;
   isUpdating?: boolean;
   isBeingEdited?: boolean;
+  isEditable?: boolean;
+  isDeletable?: boolean;
 };
 
 export function ServiceCard({
@@ -21,6 +23,8 @@ export function ServiceCard({
   onDelete,
   isUpdating = false,
   isBeingEdited = false,
+  isEditable = true,
+  isDeletable = true,
 }: ServiceCardProps) {
   return (
     <Card
@@ -62,27 +66,31 @@ export function ServiceCard({
             </div>
           </div>
           <div className="flex space-x-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'h-8 w-8',
-                isBeingEdited ? 'text-primary' : 'text-muted-foreground',
-              )}
-              onClick={() => onEdit(service)}
-              disabled={isUpdating}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={onDelete}
-              disabled={isUpdating}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {isEditable && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'h-8 w-8',
+                  isBeingEdited ? 'text-primary' : 'text-muted-foreground',
+                )}
+                onClick={() => onEdit(service)}
+                disabled={isUpdating}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+            {isDeletable && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={onDelete}
+                disabled={isUpdating}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
         {service.description && (

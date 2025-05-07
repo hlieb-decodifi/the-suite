@@ -25,9 +25,15 @@ import { useState } from 'react';
 export type HeaderSectionProps = {
   user: User;
   onPublishToggle: () => void;
+  isEditable?: boolean;
 };
 
-export function HeaderSection({ user }: HeaderSectionProps) {
+export function HeaderSection({
+  user,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onPublishToggle,
+  isEditable = true,
+}: HeaderSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch profile data using React Query
@@ -114,22 +120,26 @@ export function HeaderSection({ user }: HeaderSectionProps) {
             <Typography variant="h3" className="font-bold text-foreground">
               Professional Information
             </Typography>
-            <div
-              className={`mt-1 px-3 py-0.5 inline-block rounded-full text-xs font-medium ${isPublished ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
-            >
-              {isPublished ? 'Published' : 'Not Published'}
-            </div>
+            {isEditable && (
+              <div
+                className={`mt-1 px-3 py-0.5 inline-block rounded-full text-xs font-medium ${isPublished ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}
+              >
+                {isPublished ? 'Published' : 'Not Published'}
+              </div>
+            )}
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsModalOpen(true)}
-            className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label="Edit professional information"
-            disabled={updateProfileHeader.isPending}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {isEditable && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsModalOpen(true)}
+              className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label="Edit professional information"
+              disabled={updateProfileHeader.isPending}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex items-start flex-col md:flex-row gap-6">
@@ -210,12 +220,16 @@ export function HeaderSection({ user }: HeaderSectionProps) {
         </CardContent>
       </Card>
 
-      <HeaderModal
-        isOpen={isModalOpen}
-        onOpenChange={updateProfileHeader.isPending ? () => {} : setIsModalOpen}
-        onSubmitSuccess={handleSaveChanges}
-        defaultValues={headerFormData}
-      />
+      {isEditable && (
+        <HeaderModal
+          isOpen={isModalOpen}
+          onOpenChange={
+            updateProfileHeader.isPending ? () => {} : setIsModalOpen
+          }
+          onSubmitSuccess={handleSaveChanges}
+          defaultValues={headerFormData}
+        />
+      )}
     </>
   );
 }

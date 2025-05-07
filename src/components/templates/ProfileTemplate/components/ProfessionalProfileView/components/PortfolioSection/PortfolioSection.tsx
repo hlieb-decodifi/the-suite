@@ -10,9 +10,13 @@ import { PortfolioUploader } from './components/PortfolioUploader';
 
 export type PortfolioSectionProps = {
   user: User;
+  isEditable?: boolean;
 };
 
-export function PortfolioSection({ user }: PortfolioSectionProps) {
+export function PortfolioSection({
+  user,
+  isEditable = true,
+}: PortfolioSectionProps) {
   // Fetch portfolio images using React Query
   const {
     data: portfolioImages = [],
@@ -56,21 +60,29 @@ export function PortfolioSection({ user }: PortfolioSectionProps) {
             Portfolio
           </Typography>
           <Typography className="text-muted-foreground">
-            Showcase your work with photos
+            {isEditable
+              ? 'Showcase your work with photos'
+              : "This professional's portfolio of work"}
           </Typography>
         </div>
 
-        <PortfolioUploader
-          userId={user.id}
-          maxPhotos={10}
-          currentPhotosCount={portfolioImages.length}
-        />
+        {isEditable && (
+          <PortfolioUploader
+            userId={user.id}
+            maxPhotos={10}
+            currentPhotosCount={portfolioImages.length}
+          />
+        )}
       </div>
 
       {portfolioImages.length === 0 ? (
-        <PortfolioEmptyState />
+        <PortfolioEmptyState isEditable={isEditable} />
       ) : (
-        <PortfolioGrid photos={portfolioImages} userId={user.id} />
+        <PortfolioGrid
+          photos={portfolioImages}
+          userId={user.id}
+          isEditable={isEditable}
+        />
       )}
     </div>
   );

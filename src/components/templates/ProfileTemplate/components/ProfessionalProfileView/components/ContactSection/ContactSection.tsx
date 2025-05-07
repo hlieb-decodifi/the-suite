@@ -20,6 +20,7 @@ export type ContactSectionProps = {
   user: User;
   workingHours: WorkingHoursEntry[] | null;
   isLoading: boolean;
+  isEditable?: boolean;
 };
 
 // Helper to format form values back to display string
@@ -65,6 +66,7 @@ export function ContactSection({
   user,
   workingHours, // Use prop
   isLoading, // Use prop
+  isEditable = true,
 }: ContactSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,15 +116,17 @@ export function ContactSection({
           <Typography variant="h3" className="font-bold text-foreground">
             Working Hours
           </Typography>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleEditClick}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            disabled={isLoading || !localWorkingHours}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {isEditable && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleEditClick}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              disabled={isLoading || !localWorkingHours}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="pt-2">
           {isLoading ? (

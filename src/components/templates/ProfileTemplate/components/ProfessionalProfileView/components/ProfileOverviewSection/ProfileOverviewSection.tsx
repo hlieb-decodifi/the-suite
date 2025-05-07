@@ -19,11 +19,13 @@ import Image from 'next/image';
 export type ProfileOverviewSectionProps = {
   user: User;
   onEditPortfolio: () => void;
+  isEditable?: boolean;
 };
 
 export function ProfileOverviewSection({
   user,
   onEditPortfolio,
+  isEditable = true,
 }: ProfileOverviewSectionProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -64,14 +66,16 @@ export function ProfileOverviewSection({
         <Typography variant="h3" className="font-bold text-foreground">
           Portfolio
         </Typography>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onEditPortfolio}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+        {isEditable && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onEditPortfolio}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-2">
         <div className="space-y-6">
@@ -94,14 +98,16 @@ export function ProfileOverviewSection({
               <Typography className="text-muted-foreground text-center">
                 No portfolio images yet
               </Typography>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={onEditPortfolio}
-              >
-                Add Photos
-              </Button>
+              {isEditable && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={onEditPortfolio}
+                >
+                  Add Photos
+                </Button>
+              )}
             </div>
           )}
 

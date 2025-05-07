@@ -25,9 +25,13 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export type ServicesSectionProps = {
   user: User;
+  isEditable?: boolean;
 };
 
-export function ServicesSection({ user }: ServicesSectionProps) {
+export function ServicesSection({
+  user,
+  isEditable = true,
+}: ServicesSectionProps) {
   // State
   const [editingService, setEditingService] = useState<ServiceUI | null>(null);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -61,15 +65,15 @@ export function ServicesSection({ user }: ServicesSectionProps) {
     useDeleteService();
 
   // Calculate remaining slots
-  const MAX_SERVICES = 10;
+  const MAX_SERVICES = 50;
   const remainingSlots = MAX_SERVICES - services.length;
 
   // On mobile, open modal when editingService changes
   useEffect(() => {
-    if (isMobile && editingService) {
+    if (isMobile && editingService && isEditable) {
       setIsServiceModalOpen(true);
     }
-  }, [editingService, isMobile]);
+  }, [editingService, isMobile, isEditable]);
 
   // Service handlers
   const handleAddServiceClick = () => {
@@ -81,6 +85,8 @@ export function ServicesSection({ user }: ServicesSectionProps) {
   };
 
   const handleEditService = (service: ServiceUI) => {
+    if (!isEditable) return;
+
     setEditingService(service);
 
     if (isMobile) {
@@ -94,6 +100,8 @@ export function ServicesSection({ user }: ServicesSectionProps) {
   };
 
   const handleDeleteServiceClick = (service: ServiceUI) => {
+    if (!isEditable) return;
+
     setServiceToDelete(service);
     setIsConfirmDeleteOpen(true);
   };
@@ -154,12 +162,14 @@ export function ServicesSection({ user }: ServicesSectionProps) {
             Services
           </Typography>
           <Typography className="text-muted-foreground">
-            Manage the services you offer (up to {MAX_SERVICES})
+            {isEditable
+              ? 'Manage the services you offer'
+              : 'Services offered by this professional'}
           </Typography>
         </div>
 
-        {/* Mobile Add Button */}
-        {isMobile && (
+        {/* Mobile Add Button - Only in edit mode */}
+        {isMobile && isEditable && (
           <Button
             onClick={handleAddServiceClick}
             className="flex items-center gap-1"
@@ -173,7 +183,7 @@ export function ServicesSection({ user }: ServicesSectionProps) {
         )}
       </div>
 
-      {!isLoadingServices && remainingSlots <= 0 && (
+      {!isLoadingServices && remainingSlots <= 0 && isEditable && (
         <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800">
           <Typography className="text-sm">
             You have reached the maximum limit of {MAX_SERVICES} services. To
@@ -201,26 +211,38 @@ export function ServicesSection({ user }: ServicesSectionProps) {
                   isSubmittingService && editingService?.id === service.id
                 }
                 isBeingEdited={editingService?.id === service.id}
+                isEditable={isEditable}
+                isDeletable={isEditable}
               />
             ))}
           </div>
         ) : (
-          <Card className="border border-dashed border-border bg-background/50">
+          <Card className="border border-border bg-background/50">
             <CardContent className="p-6 text-center">
               <Typography variant="h4" className="text-muted-foreground mb-2">
                 No Services Yet
               </Typography>
               <Typography className="text-muted-foreground mb-4">
-                Click "Add Service" to offer your first service to clients.
+                {isEditable
+                  ? 'Click "Add Service" to offer your first service to clients.'
+                  : "This professional hasn't added any services yet."}
               </Typography>
             </CardContent>
           </Card>
         )
       ) : (
-        // Desktop View - Split Layout
-        <div className="grid lg:grid-cols-[1fr_500px] gap-6">
-          {/* Services List (Left Side) */}
-          <div className="space-y-4 max-h-[550px] overflow-y-auto pr-2">
+        // Desktop View - Split Layout or just list in view mode
+        <div
+          className={isEditable ? 'grid lg:grid-cols-[1fr_500px] gap-6' : ''}
+        >
+          {/* Services List */}
+          <div
+            className={
+              isEditable
+                ? 'space-y-4 max-h-[550px] overflow-y-auto pr-2'
+                : 'gap-4 grid grid-cols-2'
+            }
+          >
             {isLoadingServices ? (
               <>
                 <ServiceCardSkeleton />
@@ -238,11 +260,13 @@ export function ServicesSection({ user }: ServicesSectionProps) {
                       isSubmittingService && editingService?.id === service.id
                     }
                     isBeingEdited={editingService?.id === service.id}
+                    isEditable={isEditable}
+                    isDeletable={isEditable}
                   />
                 ))}
               </>
             ) : (
-              <Card className="border border-dashed border-border bg-background/50">
+              <Card className="border border-muted bg-background/50">
                 <CardContent className="p-6 text-center">
                   <Typography
                     variant="h4"
@@ -251,50 +275,58 @@ export function ServicesSection({ user }: ServicesSectionProps) {
                     No Services Yet
                   </Typography>
                   <Typography className="text-muted-foreground mb-4">
-                    Use the form to add your first service.
+                    {isEditable
+                      ? 'Use the form to add your first service.'
+                      : "This professional hasn't added any services yet."}
                   </Typography>
                 </CardContent>
               </Card>
             )}
           </div>
 
-          {/* Service Form (Right Side) */}
-          <div className="lg:border-l lg:pl-6">
-            <InlineServiceForm
-              onSubmitSuccess={handleServiceFormSubmitSuccess}
-              editingService={editingService}
-              onCancel={handleCancelEdit}
-            />
-          </div>
+          {/* Service Form (Right Side) - Only in edit mode */}
+          {isEditable && (
+            <div className="lg:border-l lg:pl-6">
+              <InlineServiceForm
+                onSubmitSuccess={handleServiceFormSubmitSuccess}
+                editingService={editingService}
+                onCancel={handleCancelEdit}
+              />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Service Modal for Mobile/Tablet */}
-      <ServiceModal
-        isOpen={isServiceModalOpen}
-        onOpenChange={(open) => {
-          if (!isSubmittingService) {
-            setIsServiceModalOpen(open);
-            if (!open) {
-              setEditingService(null);
+      {/* Service Modal for Mobile/Tablet - Only in edit mode */}
+      {isEditable && (
+        <ServiceModal
+          isOpen={isServiceModalOpen}
+          onOpenChange={(open) => {
+            if (!isSubmittingService) {
+              setIsServiceModalOpen(open);
+              if (!open) {
+                setEditingService(null);
+              }
             }
-          }
-        }}
-        onSubmitSuccess={handleServiceFormSubmitSuccess}
-        service={editingService}
-        isSubmitting={isSubmittingService}
-      />
+          }}
+          onSubmitSuccess={handleServiceFormSubmitSuccess}
+          service={editingService}
+          isSubmitting={isSubmittingService}
+        />
+      )}
 
-      {/* Confirm Delete Modal */}
-      <ConfirmDeleteModal
-        isOpen={isConfirmDeleteOpen}
-        onOpenChange={isDeletingService ? () => {} : setIsConfirmDeleteOpen}
-        onConfirm={handleConfirmDeleteService}
-        itemName={serviceToDelete?.name ?? 'this service'}
-        title="Delete Service?"
-        description={`Are you sure you want to delete the service "${serviceToDelete?.name ?? 'this service'}"? This action cannot be undone.`}
-        isDeleting={isDeletingService}
-      />
+      {/* Confirm Delete Modal - Only in edit mode */}
+      {isEditable && (
+        <ConfirmDeleteModal
+          isOpen={isConfirmDeleteOpen}
+          onOpenChange={isDeletingService ? () => {} : setIsConfirmDeleteOpen}
+          onConfirm={handleConfirmDeleteService}
+          itemName={serviceToDelete?.name ?? 'this service'}
+          title="Delete Service?"
+          description={`Are you sure you want to delete the service "${serviceToDelete?.name ?? 'this service'}"? This action cannot be undone.`}
+          isDeleting={isDeletingService}
+        />
+      )}
     </div>
   );
 }
