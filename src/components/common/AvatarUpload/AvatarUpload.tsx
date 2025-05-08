@@ -24,6 +24,7 @@ export type AvatarUploadProps = Omit<AvatarProps, 'className' | 'children'> & {
   avatarContainerClassName?: string; // For extra styling on the Avatar container
   buttonClassName?: string;
   onUploadSuccess?: () => void;
+  uploadEnabled?: boolean;
 };
 
 export function AvatarUpload({
@@ -34,6 +35,7 @@ export function AvatarUpload({
   avatarContainerClassName, // Extra Avatar container styles
   buttonClassName, // We'll ignore this prop now and use our own consistent positioning
   onUploadSuccess,
+  uploadEnabled = true,
   ...avatarProps // Pass remaining AvatarProps (like size) down
 }: AvatarUploadProps) {
   // Use React Query hooks for data fetching and mutation
@@ -137,31 +139,33 @@ export function AvatarUpload({
         </Avatar>
       )}
 
-      <div className={cn('absolute', buttonPosition, buttonClassName)}>
-        <Button
-          size="icon"
-          variant="secondary"
-          className="cursor-pointer h-8 w-8 rounded-full"
-          disabled={isUploading || isLoadingAvatar}
-          asChild
-        >
-          <label>
-            <Camera className="h-4 w-4" />
-            <input
-              type="file"
-              accept="image/png, image/jpeg, image/webp"
-              className="sr-only"
-              onChange={handleFileChange}
-              disabled={isUploading || isLoadingAvatar}
-            />
-          </label>
-        </Button>
-        {isUploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full">
-            <div className="size-7 animate-spin rounded-full border-2 border-solid border-white/80 border-t-transparent"></div>
-          </div>
-        )}
-      </div>
+      {uploadEnabled && (
+        <div className={cn('absolute', buttonPosition, buttonClassName)}>
+          <Button
+            size="icon"
+            variant="secondary"
+            className="cursor-pointer h-8 w-8 rounded-full"
+            disabled={isUploading || isLoadingAvatar}
+            asChild
+          >
+            <label>
+              <Camera className="h-4 w-4" />
+              <input
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                className="sr-only"
+                onChange={handleFileChange}
+                disabled={isUploading || isLoadingAvatar}
+              />
+            </label>
+          </Button>
+          {isUploading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full">
+              <div className="size-7 animate-spin rounded-full border-2 border-solid border-white/80 border-t-transparent"></div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

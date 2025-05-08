@@ -33,5 +33,5 @@ export function ProfileTemplate({ user }: ProfileTemplateProps) {
     }
   };
 
-  return <div className="container mx-auto py-10">{renderProfileView()}</div>;
+  return <div>{renderProfileView()}</div>;
 }

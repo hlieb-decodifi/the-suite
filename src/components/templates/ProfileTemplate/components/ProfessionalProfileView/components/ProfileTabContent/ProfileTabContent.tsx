@@ -2,6 +2,7 @@
 
 import { useProfile } from '@/api/profiles/hooks';
 import { useWorkingHours } from '@/api/working_hours/hooks';
+import { useProfessionalPaymentMethods } from '@/api/payment_methods/hooks';
 import { Skeleton } from '@/components/ui/skeleton';
 import { User } from '@supabase/supabase-js';
 import { ContactSection } from '../ContactSection/ContactSection';
@@ -35,6 +36,14 @@ export function ProfileTabContent({
   // Fetch working hours using React Query
   const { data: workingHours, isFetching: isLoadingWorkingHours } =
     useWorkingHours(user.id);
+
+  // Fetch payment methods
+  const { data: acceptedPaymentMethods = [] } = useProfessionalPaymentMethods(
+    user.id,
+  );
+
+  // Determine if payment methods section should be shown
+  const showPaymentMethods = isEditable || acceptedPaymentMethods.length > 0;
 
   // Handle loading state
   if (isLoadingProfile) {
@@ -79,7 +88,9 @@ export function ProfileTabContent({
             isEditable={isEditable}
           />
           <LocationSection user={user} isEditable={isEditable} />
-          <PaymentMethodsSection user={user} isEditable={isEditable} />
+          {showPaymentMethods && (
+            <PaymentMethodsSection user={user} isEditable={isEditable} />
+          )}
         </div>
       </div>
       <ReviewsSection user={user} isEditable={isEditable} />

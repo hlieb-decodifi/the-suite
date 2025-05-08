@@ -28,16 +28,18 @@ const PREVIEW_MODE_TABS = ['profile', 'services', 'portfolio'];
 
 export type ProfessionalProfileViewProps = {
   user: User;
+  isPublicView?: boolean;
 };
 
 export function ProfessionalProfileView({
   user,
+  isPublicView = false,
 }: ProfessionalProfileViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Preview mode state
-  const [isEditable, setIsEditable] = useState(true);
+  // Preview mode state - always false if isPublicView is true
+  const [isEditable, setIsEditable] = useState(!isPublicView);
 
   // Get valid tabs based on current mode
   const validTabs = isEditable ? EDIT_MODE_TABS : PREVIEW_MODE_TABS;
@@ -74,7 +76,9 @@ export function ProfessionalProfileView({
   const handleTabChange = (newTab: string) => {
     if (validTabs.includes(newTab)) {
       setActiveTab(newTab);
-      router.replace(`?tab=${newTab}`, { scroll: false });
+      if (!isPublicView) {
+        router.replace(`?tab=${newTab}`, { scroll: false });
+      }
     }
   };
 
@@ -89,8 +93,10 @@ export function ProfessionalProfileView({
 
   // Preview handler - toggles edit mode
   const handlePreview = () => {
-    // Toggle isEditable state for preview mode
-    setIsEditable(!isEditable);
+    // Toggle isEditable state for preview mode (only if not in public view)
+    if (!isPublicView) {
+      setIsEditable(!isEditable);
+    }
   };
 
   // Subscribe handler
@@ -140,6 +146,8 @@ export function ProfessionalProfileView({
         onPublishToggle={handlePublishToggle}
         onPreview={handlePreview}
         isPreviewMode={!isEditable}
+        isPublicView={isPublicView}
+        user={user}
       />
 
       <Tabs

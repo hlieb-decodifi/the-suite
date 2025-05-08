@@ -149,6 +149,7 @@ export function HeaderSection({
                 fallbackName={fallbackName}
                 size="lg"
                 avatarContainerClassName="border-muted"
+                uploadEnabled={isEditable}
               />
             )}
 
