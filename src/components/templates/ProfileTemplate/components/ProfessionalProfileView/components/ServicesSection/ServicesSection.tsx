@@ -239,7 +239,7 @@ export function ServicesSection({
           <div
             className={
               isEditable
-                ? 'space-y-4 max-h-[550px] overflow-y-auto pr-2'
+                ? 'space-y-4 lg:space-y-4 max-h-[650px] lg:max-h-none overflow-y-auto lg:overflow-visible pr-2 pb-4'
                 : 'gap-4 grid grid-cols-1'
             }
           >
@@ -286,7 +286,7 @@ export function ServicesSection({
 
           {/* Service Form (Right Side) - Only in edit mode */}
           {isEditable && (
-            <div className="lg:border-l lg:pl-6">
+            <div className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-150px)] lg:border-l lg:pl-6">
               <InlineServiceForm
                 onSubmitSuccess={handleServiceFormSubmitSuccess}
                 editingService={editingService}
