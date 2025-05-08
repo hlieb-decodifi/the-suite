@@ -33,5 +33,5 @@ export function ProfileTemplate({ user }: ProfileTemplateProps) {
     }
   };
 
-  return <div>{renderProfileView()}</div>;
+  return <div className="w-full">{renderProfileView()}</div>;
 }

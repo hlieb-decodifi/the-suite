@@ -24,9 +24,5 @@ export async function ProfessionalPublicTemplate({
     notFound();
   }
 
-  return (
-    <div className="container py-8">
-      <ProfessionalPublicView profileId={profileId} />
-    </div>
-  );
+  return <ProfessionalPublicView profileId={profileId} />;
 }

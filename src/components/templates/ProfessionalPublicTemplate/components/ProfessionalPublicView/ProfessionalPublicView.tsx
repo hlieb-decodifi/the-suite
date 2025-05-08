@@ -20,9 +20,5 @@ export function ProfessionalPublicView({
     created_at: '',
   });
 
-  return (
-    <>
-      <ProfessionalProfileView user={user} isPublicView={true} />
-    </>
-  );
+  return <ProfessionalProfileView user={user} isPublicView={true} />;
 }

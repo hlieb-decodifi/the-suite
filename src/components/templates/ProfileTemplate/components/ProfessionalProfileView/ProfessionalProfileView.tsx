@@ -140,7 +140,7 @@ export function ProfessionalProfileView({
   const isSubscribed = profileData.isSubscribed ?? false;
 
   return (
-    <div className="space-y-8">
+    <div className="w-full space-y-8">
       <PageHeader
         isPublished={profileData.isPublished ?? false}
         onPublishToggle={handlePublishToggle}

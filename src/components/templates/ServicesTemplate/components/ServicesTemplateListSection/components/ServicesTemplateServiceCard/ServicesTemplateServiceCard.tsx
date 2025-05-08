@@ -11,6 +11,7 @@ import { ExpandableText } from '@/components/common/ExpandableText/ExpandableTex
 import { formatDuration } from '@/utils/formatDuration';
 import { useState } from 'react';
 import { SignInModal } from '@/components/modals/SignInModal';
+import Link from 'next/link';
 
 export type ServicesTemplateServiceCardProps = {
   service: ServiceListItem;
@@ -25,6 +26,9 @@ export function ServicesTemplateServiceCard({
     service;
   const { isAuthenticated, isLoading, isClient } = authStatus;
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+
+  // Build the professional profile URL
+  const professionalProfileUrl = `/professional/${professional.id}`;
 
   // Determine if the Book Now button should be shown
   const shouldShowBookButton =
@@ -99,7 +103,11 @@ export function ServicesTemplateServiceCard({
               {/* Mobile professional info without border */}
               <div className="md:hidden mt-4 pt-4 border-t border-border">
                 <div className="flex items-start">
-                  <div className="relative flex-shrink-0">
+                  <Link
+                    href={professionalProfileUrl}
+                    className="relative flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
+                    aria-label={`View ${professional.name}'s profile`}
+                  >
                     <Avatar className="h-12 w-12 ring-2 ring-primary/20">
                       <AvatarImage
                         src={professional.avatar}
@@ -115,12 +123,14 @@ export function ServicesTemplateServiceCard({
                         {professional.rating}
                       </div>
                     )}
-                  </div>
+                  </Link>
 
                   <div className="ml-4 flex-1 min-w-0">
-                    <Typography className="font-semibold text-foreground truncate">
-                      {professional.name}
-                    </Typography>
+                    <Link href={professionalProfileUrl}>
+                      <Typography className="font-semibold text-foreground truncate hover:underline">
+                        {professional.name}
+                      </Typography>
+                    </Link>
 
                     <div className="flex flex-col gap-1 mt-0.5">
                       <div className="flex items-center gap-1 text-muted-foreground">
@@ -168,7 +178,11 @@ export function ServicesTemplateServiceCard({
             <div className="hidden md:flex md:flex-col p-6 md:w-[32%] md:border-l md:border-border md:bg-muted/10">
               {/* Professional profile info */}
               <div className="flex pb-2 items-start space-x-4">
-                <div className="relative flex-shrink-0">
+                <Link
+                  href={professionalProfileUrl}
+                  className="relative flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
+                  aria-label={`View ${professional.name}'s profile`}
+                >
                   <Avatar className="h-12 w-12 ring-2 ring-primary/20">
                     <AvatarImage
                       src={professional.avatar}
@@ -184,12 +198,14 @@ export function ServicesTemplateServiceCard({
                       {professional.rating}
                     </div>
                   )}
-                </div>
+                </Link>
 
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  <Typography className="font-semibold text-foreground truncate w-full">
-                    {professional.name}
-                  </Typography>
+                  <Link href={professionalProfileUrl}>
+                    <Typography className="font-semibold text-foreground truncate w-full hover:underline">
+                      {professional.name}
+                    </Typography>
+                  </Link>
 
                   <div className="flex flex-col gap-1 mt-0.5">
                     <div className="flex items-center gap-1 text-muted-foreground">

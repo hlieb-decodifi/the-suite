@@ -26,7 +26,7 @@ export async function ServicesTemplate({
   );
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl w-full mx-auto">
       <div className="py-8 space-y-8">
         {/* Page Header */}
         <ServicesTemplateHeader searchTerm={searchTerm} />

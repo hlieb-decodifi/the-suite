@@ -11,9 +11,7 @@ export function RootLayoutTemplate({ children }: RootLayoutTemplateProps) {
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
-      <main className="flex flex-grow container mx-auto px-4 py-8">
-        {children}
-      </main>
+      <main className="flex flex-grow container mx-auto py-8">{children}</main>
       <Footer />
       <Toaster />
     </div>
