@@ -11,6 +11,7 @@ import { ExpandableText } from '@/components/common/ExpandableText/ExpandableTex
 import { formatDuration } from '@/utils/formatDuration';
 import { useState } from 'react';
 import { SignInModal } from '@/components/modals/SignInModal';
+import { BookingModal } from '@/components/modals/BookingModal/BookingModal';
 import Link from 'next/link';
 
 export type ServicesTemplateServiceCardProps = {
@@ -26,6 +27,7 @@ export function ServicesTemplateServiceCard({
     service;
   const { isAuthenticated, isLoading, isClient } = authStatus;
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
   // Build the professional profile URL
   const professionalProfileUrl = `/professional/${professional.id}`;
@@ -41,10 +43,14 @@ export function ServicesTemplateServiceCard({
       // Open sign-in modal for unauthenticated users
       setIsSignInModalOpen(true);
     } else {
-      // Handle booking for authenticated clients
-      console.log('Booking service:', service.id);
-      // Additional booking logic would go here
+      // Open booking modal for authenticated clients
+      setIsBookingModalOpen(true);
     }
+  };
+
+  const handleBookingComplete = (bookingId: string) => {
+    console.log('Booking completed with ID:', bookingId);
+    // Additional logic after booking completion could go here
   };
 
   const getInitials = (name: string) => {
@@ -253,6 +259,16 @@ export function ServicesTemplateServiceCard({
         onOpenChange={setIsSignInModalOpen}
         redirectTo={`/services?booking=${service.id}`}
       />
+
+      {/* Booking modal */}
+      {isAuthenticated && (
+        <BookingModal
+          isOpen={isBookingModalOpen}
+          onOpenChange={setIsBookingModalOpen}
+          service={service}
+          onBookingComplete={handleBookingComplete}
+        />
+      )}
     </>
   );
 }

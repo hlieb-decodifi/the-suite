@@ -70,6 +70,7 @@ function mapServiceData(service: unknown): ServiceListItem {
     address: professionalProfile?.location || 'Location not specified',
     rating: 4.5, // Mock data, would come from reviews table
     reviewCount: 0, // Mock data, would come from reviews count
+    profile_id: professionalProfile?.id, // Include the professional profile ID
   };
 
   // Return mapped service data

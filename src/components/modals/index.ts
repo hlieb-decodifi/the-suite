@@ -7,3 +7,4 @@ export * from './UpdateEmailModal/UpdateEmailModal';
 export * from './ConfirmDeleteModal';
 export * from './ServiceModal';
 export * from './HeaderModal';
+export * from './BookingModal';

@@ -6,6 +6,7 @@ export type Professional = {
   address: string;
   rating: number;
   reviewCount: number;
+  profile_id: string; // Database profile ID for use with APIs
 };
 
 // Service type with related professional information

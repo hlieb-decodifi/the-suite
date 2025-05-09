@@ -6,10 +6,8 @@ export const revalidate = 0;
 export default async function ProfessionalPublicPage({
   params,
 }: {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  // Await params if they're a promise
-  const resolvedParams = await Promise.resolve(params);
-
-  return <ProfessionalPublicTemplate profileId={resolvedParams.id} />;
+  const { id } = await params;
+  return <ProfessionalPublicTemplate profileId={id} />;
 }
