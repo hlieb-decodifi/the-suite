@@ -36,7 +36,7 @@ export function LocationSection({
         </Typography>
         {isEditable && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             disabled
             onClick={() => setIsEditing(!isEditing)}

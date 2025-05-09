@@ -2,10 +2,11 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Typography } from '@/components/ui/typography';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, LayoutDashboard } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProfile } from '@/api/profiles/hooks';
 import { User } from '@supabase/supabase-js';
+import Link from 'next/link';
 
 // Type for PageHeader props
 export type PageHeaderProps = {
@@ -63,9 +64,12 @@ export function PageHeader({
         {!isPublicView && (
           <div className="flex items-center gap-3">
             {!isPreviewMode && (
-              <Button variant="outline" className="bg-background">
-                Go to Dashboard
-              </Button>
+              <Link href="/dashboard">
+                <Button variant="outline">
+                  <LayoutDashboard size={16} />
+                  Go to Dashboard
+                </Button>
+              </Link>
             )}
             {onPreview && (
               <Button

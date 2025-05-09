@@ -110,7 +110,7 @@ export function PaymentMethodsSection({
         </Typography>
         {isEditable && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={handleEditToggle}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"

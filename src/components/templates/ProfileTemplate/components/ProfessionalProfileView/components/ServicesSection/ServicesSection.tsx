@@ -239,7 +239,7 @@ export function ServicesSection({
           <div
             className={
               isEditable
-                ? 'space-y-4 lg:space-y-4 max-h-[650px] lg:max-h-none overflow-y-auto lg:overflow-visible pr-2 pb-4'
+                ? 'space-y-4 lg:space-y-4 max-h-[650px] lg:max-h-none overflow-y-auto lg:overflow-visible pb-4'
                 : 'gap-4 grid grid-cols-1'
             }
           >

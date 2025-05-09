@@ -21,7 +21,6 @@ export function ClientProfileView({ user }: ClientProfileViewProps) {
   if (isLoading) {
     return <ProfileSkeleton />;
   }
-
   if (error) {
     return (
       <div className="p-6 bg-red-50 rounded-lg border border-red-200 text-red-700">
@@ -41,8 +40,11 @@ export function ClientProfileView({ user }: ClientProfileViewProps) {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <Typography variant="h2" className="font-bold text-[#313131]">
-          Your Profile
+        <Typography
+          variant="h2"
+          className="border-none font-bold text-[#313131]"
+        >
+          Client Profile
         </Typography>
         <Typography className="text-[#5D6C6F]">
           Manage your personal information and preferences

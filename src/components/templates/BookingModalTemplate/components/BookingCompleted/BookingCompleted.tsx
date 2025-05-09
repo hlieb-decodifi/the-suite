@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -7,9 +8,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Typography } from '@/components/ui/typography';
-import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/utils/formatCurrency';
-import { CheckCircle, X } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { BookingCompletedProps } from '../../utils';
 
 // Components
@@ -94,15 +94,6 @@ export function BookingCompleted({
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>Booking Confirmed</DialogTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-7 w-7"
-            >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </Button>
           </div>
         </DialogHeader>
 

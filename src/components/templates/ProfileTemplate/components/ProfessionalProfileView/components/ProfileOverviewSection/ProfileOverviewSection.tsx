@@ -68,7 +68,7 @@ export function ProfileOverviewSection({
         </Typography>
         {isEditable && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={onEditPortfolio}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"

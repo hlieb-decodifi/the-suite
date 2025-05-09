@@ -134,15 +134,6 @@ export function BookingFormExtraServices({
     <div className="space-y-2">
       {/* Header with toggle control */}
       <div className="flex items-center justify-between">
-        <Typography variant="h4" className="text-sm font-medium">
-          Additional Services{' '}
-          {selectedExtraServicesCount > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 bg-primary/10 text-primary rounded-md text-xs">
-              {selectedExtraServicesCount}
-            </span>
-          )}
-        </Typography>
-
         {isExpanded && (
           <Button
             variant="ghost"
