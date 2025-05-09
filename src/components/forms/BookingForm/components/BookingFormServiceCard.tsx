@@ -101,7 +101,7 @@ export function BookingFormServiceCard({
                 )}
               </Button>
             ) : (
-              <div className="w-6 h-6" aria-hidden="true" />
+              !isPrimary && <div className="w-6 h-6" aria-hidden="true" />
             )}
           </div>
         </div>
