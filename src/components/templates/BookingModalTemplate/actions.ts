@@ -396,8 +396,6 @@ export async function getAvailableTimeSlots(
       .eq('date', date)
       .neq('status', 'cancelled');
 
-    console.log('bookedAppointments', bookedAppointments);
-    
     if (appointmentsError) {
       console.error('Error fetching booked appointments:', appointmentsError);
       return allTimeSlots.map(formatTimeForDisplay); // Return all slots if we can't check appointments

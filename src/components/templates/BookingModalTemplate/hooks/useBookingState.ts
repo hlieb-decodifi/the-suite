@@ -105,12 +105,15 @@ export function useBookingState(props: BookingModalProps) {
   };
   
   // Success handler
-  const handleSuccess = async (bookingId: string, formData: BookingFormValues, totalPrice: number) => {
+  const handleSuccess = async (
+    formData: BookingFormValues, 
+    totalPrice: number
+  ) => {
     try {
       setIsSubmitting(true);
       
       // Execute the server action to create the booking
-      await createBooking(
+      const { bookingId } = await createBooking(
         formData,
         professionalProfileId
       );
@@ -138,6 +141,7 @@ export function useBookingState(props: BookingModalProps) {
         description: `Your booking with ${professional?.name || 'the professional'} has been confirmed.`,
       });
       
+      // Use the real booking ID from the server
       if (onBookingComplete) onBookingComplete(bookingId);
     } catch (error) {
       console.error('Error creating booking:', error);
