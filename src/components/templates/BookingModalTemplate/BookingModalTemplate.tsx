@@ -15,6 +15,9 @@ export type BookingModalTemplateProps = {
   onOpenChange: (open: boolean) => void;
   service: ServiceListItem;
   onBookingComplete?: (bookingId: string) => void;
+  onSubmitStateChange?: (isSubmitting: boolean) => void;
+  onBookingStart?: () => void;
+  onBookingEnd?: () => void;
 };
 
 /**
@@ -48,6 +51,13 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     return <BookingCompleted {...completedProps} />;
   }
 
+  // Debug log for when submission state changes
+  const handleSubmitStateChange = (isSubmitting: boolean) => {
+    if (props.onSubmitStateChange) {
+      props.onSubmitStateChange(isSubmitting);
+    }
+  };
+
   return (
     <BookingForm
       service={service}
@@ -61,6 +71,7 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
       onSubmitSuccess={handleSuccess}
       selectedDate={selectedDate}
       onSelectDate={handleDateSelect}
+      onSubmitStateChange={handleSubmitStateChange}
     />
   );
 }
