@@ -72,7 +72,7 @@ export function BookingFormServiceCard({
                 {name}
               </label>
               <div className="flex items-center text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                <Clock className="h-3 w-3 mr-0.5" />
+                <Clock className="h-3 w-3 mr-0.5 mt-0.5" />
                 <span>{formatDuration(duration)}</span>
               </div>
             </div>
