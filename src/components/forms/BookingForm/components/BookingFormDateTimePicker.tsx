@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar } from '@/components/ui/calendar';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils';
-import { Clock, AlertTriangle } from 'lucide-react';
 import { formatDuration } from '@/utils/formatDuration';
-import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, Clock } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 
 type TimeSlot = {
   id: string;
@@ -34,6 +34,7 @@ export type BookingFormDateTimePickerProps = {
   onSelectTimeSlot: (timeSlot: string) => void;
   service: ServiceListItem;
   selectedExtraServices: ServiceListItem[];
+  isLoading?: boolean;
 };
 
 // Time slots rendering component
@@ -381,6 +382,24 @@ function DatePickerSection({
   onSelectDate: (date: Date | undefined) => void;
   availableDays: string[];
 }) {
+  // Use local state to track selected date
+  const [localSelectedDate, setLocalSelectedDate] = useState<Date | undefined>(
+    selectedDate,
+  );
+
+  // Sync with parent state when parent state changes
+  useEffect(() => {
+    if (selectedDate !== localSelectedDate) {
+      setLocalSelectedDate(selectedDate);
+    }
+  }, [selectedDate]);
+
+  // Handle local date selection
+  const handleDateSelect = (date: Date | undefined) => {
+    setLocalSelectedDate(date);
+    onSelectDate(date);
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
@@ -392,18 +411,18 @@ function DatePickerSection({
       <div className="flex justify-start">
         <Calendar
           mode="single"
-          selected={selectedDate}
-          onSelect={onSelectDate}
+          selected={localSelectedDate}
+          onSelect={handleDateSelect}
+          defaultMonth={localSelectedDate || new Date()}
           disabled={(date) => {
             // Can't book in the past
             if (date < new Date()) return true;
 
             // Check if day is in available days
             if (availableDays.length > 0) {
-              const dayName = new Intl.DateTimeFormat('en-US', {
-                weekday: 'long',
-              }).format(date);
-              return !availableDays.includes(dayName);
+              // Get the day of week as a number where Monday is 0 and Sunday is 6
+              const dayOfWeek = (date.getDay() + 6) % 7;
+              return !availableDays.includes(dayOfWeek.toString());
             }
 
             // Default behavior if no availableDays are provided
@@ -423,12 +442,14 @@ function TimeSlotsContainer({
   onSelectTimeSlot,
   totalDurationMinutes,
   validationStatus,
+  isLoading,
 }: {
   selectedDate: Date | undefined;
   timeSlots: TimeSlot[];
   onSelectTimeSlot: (slot: TimeSlot) => void;
   totalDurationMinutes: number;
   validationStatus: ValidationStatus;
+  isLoading?: boolean;
 }) {
   return (
     <div className="w-full h-full min-h-20 flex flex-col">
@@ -442,7 +463,7 @@ function TimeSlotsContainer({
         </div>
       </div>
 
-      {validationStatus.message && validationStatus.type && (
+      {validationStatus.message && validationStatus.type && !isLoading && (
         <div className="mb-2">
           <Alert
             variant={
@@ -460,7 +481,13 @@ function TimeSlotsContainer({
 
       <div className="flex-1 border rounded-md p-2 overflow-hidden">
         {selectedDate ? (
-          timeSlots.length > 0 ? (
+          isLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <Typography variant="small" className="text-muted-foreground">
+                Loading available time slots...
+              </Typography>
+            </div>
+          ) : timeSlots.length > 0 ? (
             <TimeSlotsPicker
               timeSlots={timeSlots}
               onSelectTimeSlot={onSelectTimeSlot}
@@ -484,6 +511,30 @@ function TimeSlotsContainer({
   );
 }
 
+// Custom hook to manage date state synchronization
+function useSynchronizedDateState(
+  selectedDate: Date | undefined,
+  onSelectDate: (date: Date | undefined) => void,
+) {
+  // Use local state to track date independently
+  const [localDate, setLocalDate] = useState<Date | undefined>(selectedDate);
+
+  // Sync with parent props when they change
+  useEffect(() => {
+    if (selectedDate !== localDate) {
+      setLocalDate(selectedDate);
+    }
+  }, [selectedDate, localDate]);
+
+  // When local date changes, update parent
+  const handleLocalDateChange = (date: Date | undefined) => {
+    setLocalDate(date);
+    onSelectDate(date);
+  };
+
+  return { localDate, handleLocalDateChange };
+}
+
 export function BookingFormDateTimePicker({
   selectedDate,
   onSelectDate,
@@ -493,7 +544,14 @@ export function BookingFormDateTimePicker({
   onSelectTimeSlot,
   service,
   selectedExtraServices,
+  isLoading = false,
 }: BookingFormDateTimePickerProps) {
+  // Use synchronized date state
+  const { localDate, handleLocalDateChange } = useSynchronizedDateState(
+    selectedDate,
+    onSelectDate,
+  );
+
   // Calculate total duration in minutes
   const totalDurationMinutes = useMemo(() => {
     const extraServicesDuration = selectedExtraServices.reduce(
@@ -528,19 +586,20 @@ export function BookingFormDateTimePicker({
         {/* Calendar section */}
         <div className="w-full flex justify-start md:block">
           <DatePickerSection
-            selectedDate={selectedDate}
-            onSelectDate={onSelectDate}
+            selectedDate={localDate}
+            onSelectDate={handleLocalDateChange}
             availableDays={availableDays}
           />
         </div>
 
         {/* Time slots section */}
         <TimeSlotsContainer
-          selectedDate={selectedDate}
+          selectedDate={localDate}
           timeSlots={timeSlots}
           onSelectTimeSlot={handleSlotSelect}
           totalDurationMinutes={totalDurationMinutes}
           validationStatus={validationStatus}
+          isLoading={isLoading}
         />
       </div>
     </div>

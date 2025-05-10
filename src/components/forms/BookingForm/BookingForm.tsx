@@ -9,7 +9,7 @@ import { Typography } from '@/components/ui/typography';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { Clock } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   BookingFormDateTimePicker,
   BookingFormExtraServices,
@@ -29,7 +29,10 @@ export type BookingFormProps = {
   availablePaymentMethods?: { id: string; name: string }[];
   isLoadingPaymentMethods?: boolean;
   availableTimeSlots?: string[];
+  isLoadingTimeSlots?: boolean;
   availableDays?: string[];
+  selectedDate: Date | undefined;
+  onSelectDate?: (date: Date | undefined) => void;
   onSubmitSuccess: (
     bookingId: string,
     formData: BookingFormValues,
@@ -44,10 +47,26 @@ export function BookingForm({
   availablePaymentMethods = [],
   isLoadingPaymentMethods = false,
   availableTimeSlots,
+  isLoadingTimeSlots = false,
   availableDays = [],
+  selectedDate,
+  onSelectDate,
   onSubmitSuccess,
 }: BookingFormProps) {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  // Use local state for date to ensure component has control
+  const [localSelectedDate, setLocalSelectedDate] = useState<Date | undefined>(
+    selectedDate,
+  );
+
+  // Sync with parent when parent date changes
+  useEffect(() => {
+    if (selectedDate !== localSelectedDate) {
+      setLocalSelectedDate(selectedDate);
+      if (selectedDate) {
+        form.setValue('date', selectedDate);
+      }
+    }
+  }, [selectedDate]);
 
   const { form, calculateTotalPrice, onSubmit } = useBookingForm({
     onSubmit: async (data: BookingFormValues) => {
@@ -93,6 +112,25 @@ export function BookingForm({
     return extraServices.filter((service) => selectedIds.includes(service.id));
   }, [extraServices, form.watch('extraServiceIds')]);
 
+  // Handle date selection
+  const handleDateSelect = (date: Date | undefined) => {
+    // Update local state first
+    setLocalSelectedDate(date);
+
+    // Update parent component state
+    if (onSelectDate) {
+      onSelectDate(date);
+    }
+
+    // Update form value
+    form.setValue('date', date as Date);
+
+    // Clear timeSlot when date changes
+    if (date) {
+      form.setValue('timeSlot', '');
+    }
+  };
+
   return (
     <Form {...form}>
       <form
@@ -124,14 +162,9 @@ export function BookingForm({
 
         {/* Date and Time Selection - Using the new component */}
         <BookingFormDateTimePicker
-          selectedDate={selectedDate}
-          onSelectDate={(date: Date | undefined) => {
-            setSelectedDate(date);
-            form.setValue('date', date as Date);
-            // Clear timeSlot when date changes
-            if (date) {
-              form.setValue('timeSlot', '');
-            }
+          selectedDate={localSelectedDate}
+          onSelectDate={(date) => {
+            handleDateSelect(date);
           }}
           availableDays={availableDays}
           availableTimeSlots={availableTimeSlots}
@@ -141,6 +174,7 @@ export function BookingForm({
           }}
           service={service}
           selectedExtraServices={selectedExtraServices}
+          isLoading={isLoadingTimeSlots}
         />
 
         {/* Show form errors for date and time */}

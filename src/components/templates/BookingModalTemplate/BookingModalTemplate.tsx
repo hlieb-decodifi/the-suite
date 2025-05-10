@@ -2,16 +2,10 @@
 
 import { BookingForm } from '@/components/forms/BookingForm/BookingForm';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { BookingCompleted } from './components/BookingCompleted';
 import { useBookingState } from './hooks/useBookingState';
-import { createCompletedViewProps } from './utils';
 import { PaymentMethod } from './hooks/usePaymentMethods';
+import { createCompletedViewProps } from './utils';
 
 /**
  * Template component for booking a service
@@ -20,7 +14,6 @@ export type BookingModalTemplateProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   service: ServiceListItem;
-  onBookingComplete?: (bookingId: string) => void;
 };
 
 /**
@@ -39,8 +32,11 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     availableDays,
     paymentMethods,
     isLoadingPaymentMethods,
+    isLoadingTimeSlots,
     handleOpenChange,
     handleSuccess,
+    selectedDate,
+    handleDateSelect,
   } = useBookingState(props);
 
   // Ensure we always have an array of payment methods
@@ -61,22 +57,18 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Book Service</DialogTitle>
-        </DialogHeader>
-        <BookingForm
-          service={service}
-          extraServices={additionalServices}
-          isLoadingExtraServices={isLoadingAdditionalServices}
-          availablePaymentMethods={availablePaymentMethods}
-          isLoadingPaymentMethods={isLoadingPaymentMethods}
-          availableTimeSlots={availableTimeSlots}
-          availableDays={availableDays}
-          onSubmitSuccess={handleSuccess}
-        />
-      </DialogContent>
-    </Dialog>
+    <BookingForm
+      service={service}
+      extraServices={additionalServices}
+      isLoadingExtraServices={isLoadingAdditionalServices}
+      availablePaymentMethods={availablePaymentMethods}
+      isLoadingPaymentMethods={isLoadingPaymentMethods}
+      availableTimeSlots={availableTimeSlots}
+      isLoadingTimeSlots={isLoadingTimeSlots}
+      availableDays={availableDays}
+      onSubmitSuccess={handleSuccess}
+      selectedDate={selectedDate}
+      onSelectDate={handleDateSelect}
+    />
   );
 }

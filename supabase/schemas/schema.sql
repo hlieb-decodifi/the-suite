@@ -514,6 +514,7 @@ create policy "Anyone can view portfolio photos of published professionals"
 create table payment_methods (
   id uuid primary key default uuid_generate_v4(),
   name text not null unique,
+  is_online boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table payment_methods enable row level security;
@@ -692,4 +693,217 @@ create policy "Anyone can view profile photos of published professionals"
       and professional_profiles.is_published = true
     )
   );
+
+/**
+* BOOKING SYSTEM
+* Tables and functions related to bookings and appointments
+*/
+
+/**
+* BOOKINGS
+* Core table to track bookings
+*/
+create table bookings (
+  id uuid primary key default uuid_generate_v4(),
+  client_id uuid references users not null,
+  professional_profile_id uuid references professional_profiles not null,
+  status text not null check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
+  notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table bookings enable row level security;
+
+/**
+* APPOINTMENTS
+* For tracking the actual appointment details
+*/
+create table appointments (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null unique,
+  date date not null,
+  start_time time not null,
+  end_time time not null,
+  status text not null check (status in ('upcoming', 'completed', 'cancelled')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table appointments enable row level security;
+
+/**
+* BOOKING_SERVICES
+* To link bookings with services (allowing multiple services per booking)
+*/
+create table booking_services (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null,
+  service_id uuid references services not null,
+  price decimal(10, 2) not null, -- Store price at time of booking
+  duration integer not null, -- in minutes, store duration at time of booking
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table booking_services enable row level security;
+
+/**
+* BOOKING_PAYMENTS
+* To track payment details
+*/
+create table booking_payments (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null unique,
+  payment_method_id uuid references payment_methods not null,
+  amount decimal(10, 2) not null,
+  tip_amount decimal(10, 2) default 0 not null,
+  service_fee decimal(10, 2) not null,
+  status text not null check (status in ('pending', 'completed', 'failed', 'refunded')),
+  stripe_payment_intent_id text, -- For Stripe integration
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table booking_payments enable row level security;
+
+/**
+* Function to check professional availability
+* Prevents double booking
+*/
+create or replace function check_professional_availability()
+returns trigger as $$
+begin
+  if exists (
+    select 1 from appointments a
+    join bookings b on a.booking_id = b.id
+    where b.professional_profile_id = (
+      select professional_profile_id from bookings where id = new.booking_id
+    )
+    and a.date = new.date
+    and a.status != 'cancelled'
+    and a.booking_id != new.booking_id
+    and (
+      (new.start_time < a.end_time and new.end_time > a.start_time) -- time slots overlap
+    )
+  ) then
+    raise exception 'Professional is already booked for this time slot';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+/**
+* Trigger to enforce no double booking
+*/
+create trigger enforce_no_double_booking
+  before insert or update on appointments
+  for each row
+  execute function check_professional_availability();
+
+/**
+* RLS policies for booking tables
+*/
+
+-- Booking policies
+create policy "Clients can view their own bookings"
+  on bookings for select
+  using (auth.uid() = client_id);
+
+create policy "Professionals can view bookings for their profile"
+  on bookings for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = bookings.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+create policy "Clients can create their own bookings"
+  on bookings for insert
+  with check (auth.uid() = client_id);
+
+create policy "Clients can update their own bookings"
+  on bookings for update
+  using (auth.uid() = client_id);
+
+-- Appointment policies
+create policy "Clients can view their appointments"
+  on appointments for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = appointments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+create policy "Professionals can view appointments for their profile"
+  on appointments for select
+  using (
+    exists (
+      select 1 from bookings
+      join professional_profiles on bookings.professional_profile_id = professional_profiles.id
+      where bookings.id = appointments.booking_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Booking services policies
+create policy "Users can view booking services for their bookings"
+  on booking_services for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_services.booking_id
+      and (
+        bookings.client_id = auth.uid()
+        or exists (
+          select 1 from professional_profiles
+          where professional_profiles.id = bookings.professional_profile_id
+          and professional_profiles.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+create policy "Clients can create booking services for their bookings"
+  on booking_services for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_services.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+-- Booking payments policies
+create policy "Users can view booking payments for their bookings"
+  on booking_payments for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_payments.booking_id
+      and (
+        bookings.client_id = auth.uid()
+        or exists (
+          select 1 from professional_profiles
+          where professional_profiles.id = bookings.professional_profile_id
+          and professional_profiles.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+create policy "Clients can create booking payments for their bookings"
+  on booking_payments for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_payments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+/**
+* Update realtime subscriptions to include booking tables
+*/
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table services, bookings, appointments;
 

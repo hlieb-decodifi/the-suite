@@ -1,7 +1,7 @@
 import { BookingFormValues } from '@/components/forms/BookingForm';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { useToast } from '@/components/ui/use-toast';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BookingDetailsState,
   createBookingDetails,
@@ -9,6 +9,10 @@ import {
 } from '../helpers';
 import { usePaymentMethods } from './usePaymentMethods';
 import { useAdditionalServices } from './useAdditionalServices';
+import { useAvailableDates } from './useAvailableDates';
+import { useAvailableTimeSlots } from './useAvailableTimeSlots';
+import { createBooking } from '../actions';
+import { format } from 'date-fns';
 
 export type BookingModalProps = {
   isOpen: boolean;
@@ -20,6 +24,7 @@ export type BookingModalProps = {
 /**
  * Custom hook to manage booking states and data fetching
  */
+/* eslint-disable-next-line max-lines-per-function */
 export function useBookingState(props: BookingModalProps) {
   const { 
     isOpen, 
@@ -33,11 +38,28 @@ export function useBookingState(props: BookingModalProps) {
   const [bookingCompleted, setBookingCompleted] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookingDetails, setBookingDetails] = useState<BookingDetailsState>({});
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Get professional info for API calls
   const professional = service.professional;
-  const professionalProfileId = professional.profile_id;
+  const professionalProfileId = professional.profile_id || '';
   
+  // Fetch available dates
+  const { data: availableDays = [] } = useAvailableDates(professionalProfileId, isOpen);
+
+  // Fetch available time slots when a date is selected
+  const formattedDate = useMemo(() => 
+    selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null
+  , [selectedDate]);
+
+  // Use the memoized formatted date for the API call
+  const { data: availableTimeSlots = [], isLoading: isLoadingTimeSlots } = useAvailableTimeSlots(
+    professionalProfileId,
+    formattedDate,
+    isOpen && Boolean(selectedDate)
+  );
+
   // Use React Query to fetch payment methods
   const { 
     data: paymentMethods,
@@ -61,22 +83,52 @@ export function useBookingState(props: BookingModalProps) {
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       resetBookingState(setBookingCompleted, setBookingId, setBookingDetails);
+      setSelectedDate(undefined);
+      setIsSubmitting(false);
     }
     onOpenChange(open);
   };
   
+  // Date selection handler
+  const handleDateSelect = (date: Date | undefined) => {
+    // Force the date to be either a Date object or undefined with no extra funny business
+    const newDate = date ? new Date(date.getTime()) : undefined;
+
+    setSelectedDate(newDate);
+  };
+  
   // Success handler
-  const handleSuccess = (id: string, formData: BookingFormValues, price: number) => {
-    setBookingId(id);
-    setBookingDetails(createBookingDetails(formData, price));
-    setBookingCompleted(true);
-    
-    toast({
-      title: 'Booking Confirmed!',
-      description: `Your booking with ${professional?.name || 'the professional'} has been confirmed.`,
-    });
-    
-    if (onBookingComplete) onBookingComplete(id);
+  const handleSuccess = async (bookingId: string, formData: BookingFormValues, totalPrice: number) => {
+    try {
+      setIsSubmitting(true);
+      
+      // Execute the server action to create the booking - not needed as we already have the bookingId
+      await createBooking(
+        formData,
+        professionalProfileId
+      );
+      
+      // Update UI state
+      setBookingId(bookingId);
+      setBookingDetails(createBookingDetails(formData, totalPrice));
+      setBookingCompleted(true);
+      
+      toast({
+        title: 'Booking Confirmed!',
+        description: `Your booking with ${professional?.name || 'the professional'} has been confirmed.`,
+      });
+      
+      if (onBookingComplete) onBookingComplete(bookingId);
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      toast({
+        title: 'Booking Failed',
+        description: 'There was an error processing your booking. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return {
@@ -87,11 +139,15 @@ export function useBookingState(props: BookingModalProps) {
     bookingDetails,
     additionalServices,
     isLoadingAdditionalServices,
-    availableTimeSlots: [],
-    availableDays: [],
+    availableTimeSlots,
+    availableDays,
     paymentMethods,
     isLoadingPaymentMethods,
+    isSubmitting,
     handleOpenChange,
-    handleSuccess
+    handleSuccess,
+    handleDateSelect,
+    selectedDate,
+    isLoadingTimeSlots
   };
 } 

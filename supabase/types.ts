@@ -39,6 +39,188 @@ export type Database = {
         }
         Relationships: []
       }
+      appointments: {
+        Row: {
+          booking_id: string
+          created_at: string
+          date: string
+          end_time: string
+          id: string
+          start_time: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          date: string
+          end_time: string
+          id?: string
+          start_time: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          date?: string
+          end_time?: string
+          id?: string
+          start_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_payments: {
+        Row: {
+          amount: number
+          booking_id: string
+          created_at: string
+          id: string
+          payment_method_id: string
+          service_fee: number
+          status: string
+          stripe_payment_intent_id: string | null
+          tip_amount: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          booking_id: string
+          created_at?: string
+          id?: string
+          payment_method_id: string
+          service_fee: number
+          status: string
+          stripe_payment_intent_id?: string | null
+          tip_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          booking_id?: string
+          created_at?: string
+          id?: string
+          payment_method_id?: string
+          service_fee?: number
+          status?: string
+          stripe_payment_intent_id?: string | null
+          tip_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_payments_payment_method_id_fkey"
+            columns: ["payment_method_id"]
+            isOneToOne: false
+            referencedRelation: "payment_methods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_services: {
+        Row: {
+          booking_id: string
+          created_at: string
+          duration: number
+          id: string
+          price: number
+          service_id: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          duration: number
+          id?: string
+          price: number
+          service_id: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          duration?: number
+          id?: string
+          price?: number
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_services_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_services_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bookings: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          professional_profile_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          professional_profile_id: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          professional_profile_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_professional_profile_id_fkey"
+            columns: ["professional_profile_id"]
+            isOneToOne: false
+            referencedRelation: "professional_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_profiles: {
         Row: {
           address_id: string | null
@@ -88,16 +270,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_online: boolean
           name: string
         }
         Insert: {
           created_at?: string
           id?: string
+          is_online?: boolean
           name: string
         }
         Update: {
           created_at?: string
           id?: string
+          is_online?: boolean
           name?: string
         }
         Relationships: []
