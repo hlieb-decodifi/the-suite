@@ -23,6 +23,7 @@ export function LocationDisplay({ data, onEditClick }: LocationDisplayProps) {
           No address information added yet
         </Typography>
         <Button
+          disabled
           onClick={onEditClick}
           variant="outline"
           className="mt-2 border-[#DEA85B] text-[#DEA85B] hover:bg-[#FAEBD7] hover:text-[#C89245]"

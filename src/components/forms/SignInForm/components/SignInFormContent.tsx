@@ -27,7 +27,7 @@ export function SignInFormContent({
 
   return (
     <div className="w-full">
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)}>
         <FormInput
           id="email"
           label="Email"

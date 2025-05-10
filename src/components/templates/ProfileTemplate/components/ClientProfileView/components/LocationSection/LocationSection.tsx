@@ -53,6 +53,7 @@ export function LocationSection({
         </div>
         {!isEditing && (
           <Button
+            disabled
             variant="ghost"
             size="sm"
             onClick={() => setIsEditing(true)}

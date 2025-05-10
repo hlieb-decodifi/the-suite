@@ -83,7 +83,7 @@ export function DetailsFormContent({
   const phone = watch('phone');
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)}>
       <DetailsFields
         register={register}
         errors={errors}
