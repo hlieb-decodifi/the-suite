@@ -5,19 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getServicesForUser, upsertService as dbUpsertService, deleteService as dbDeleteService } from './db';
 import type { Service } from './db';
 import type { ServiceUI } from '@/types/services';
-
-/**
- * Convert minutes to a formatted duration string (e.g., 90 => "1h 30m")
- */
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-
-  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h`;
-  if (mins > 0) return `${mins}m`;
-  return '0m'; // Default if 0 minutes
-}
+import { formatDuration } from '@/utils/formatDuration';
 
 /**
  * Convert duration in form hours and minutes to total minutes for DB

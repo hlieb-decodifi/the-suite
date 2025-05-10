@@ -212,6 +212,102 @@ The following resources have been implemented using this architecture:
 3. **Profile Photos**
    - User avatar/profile photo
    - Path: `src/api/photos/` and `src/server/domains/photos/`
+4. **Services**
+   - Professional services listing
+   - Path: `src/components/templates/ServicesTemplate/actions.ts`
+
+## Template-Specific Server Actions
+
+For some features that are tightly coupled with their UI templates, we use a simplified approach by placing server actions directly in the template folder:
+
+```
+src/components/templates/
+└── ServicesTemplate/
+    ├── ServicesTemplate.tsx    # Main template component
+    ├── actions.ts              # Server actions for this template
+    ├── utils.ts                # Client-side utility functions
+    └── types.ts                # Type definitions
+```
+
+### When to Use Template-Specific Server Actions
+
+Use template-specific server actions when:
+
+1. The data fetching logic is specific to a single page/template
+2. The data model requires complex joins or transformations
+3. The feature doesn't need to be reused across multiple pages
+
+### Example: Services Template Server Actions
+
+The Services page implementation demonstrates this approach:
+
+```typescript
+// src/components/templates/ServicesTemplate/actions.ts
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { ServiceListItem, Professional, PaginationInfo } from './types';
+
+// Helper functions for data transformation
+function getPublicImageUrl(path: string | undefined): string | undefined {
+  // Implementation...
+}
+
+function mapServiceData(service: unknown): ServiceListItem {
+  // Implementation...
+}
+
+// Define a return type that includes pagination metadata
+export type ServicesWithPagination = {
+  services: ServiceListItem[];
+  pagination: PaginationInfo;
+};
+
+// Server action for fetching services with pagination
+export async function getServices(
+  page = 1,
+  pageSize = 12,
+  search?: string,
+): Promise<ServicesWithPagination> {
+  // Implementation...
+}
+
+// Additional server actions for this template...
+export async function fetchServicesAction(
+  page: number,
+  pageSize: number,
+  searchTerm: string,
+): Promise<ServicesWithPagination> {
+  return getServices(page, pageSize, searchTerm);
+}
+```
+
+### Client-Side Utilities
+
+For client-side operations, place utility functions in a separate `utils.ts` file:
+
+```typescript
+// src/components/templates/ServicesTemplate/utils.ts
+import { ServiceListItem, ServicesFilters } from './types';
+
+// Client-side filtering functions
+export function filterServices(
+  services: ServiceListItem[],
+  filters: ServicesFilters,
+): ServiceListItem[] {
+  // Implementation...
+}
+
+export function getPaginatedServices(
+  filteredServices: ServiceListItem[],
+  currentPage: number,
+  pageSize: number,
+): ServiceListItem[] {
+  // Implementation...
+}
+
+// Additional utility functions...
+```
 
 ## Migration Guide
 

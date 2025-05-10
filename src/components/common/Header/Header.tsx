@@ -2,43 +2,44 @@
 
 import { Logo } from '@/components/common/Logo/Logo';
 import { cn } from '@/utils/cn';
-import { useState } from 'react';
 import { AuthButtons } from './components/AuthButtons';
 import { MobileMenu } from './components/MobileMenu/MobileMenu';
 import { Modals } from './components/Modals';
 import { SearchBox } from './components/SearchBox/SearchBox';
 import { UserMenu } from './components/UserMenu/UserMenu';
+import { useAuthData, useAuthModals } from './hooks';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
+import { useSearch } from '@/stores/searchStore';
 
 export type HeaderProps = {
   className?: string;
-  isAuthenticated: boolean;
-  userInfo?:
-    | {
-        name: string;
-        email: string;
-        avatarUrl?: string | null;
-      }
-    | undefined;
 };
 
-export function Header({
-  className,
-  isAuthenticated = false,
-  userInfo,
-}: HeaderProps) {
-  const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
-  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+export function Header({ className }: HeaderProps) {
+  const { isAuthenticated, userInfo, isLoading } = useAuthData();
+  const {
+    isSignUpModalOpen,
+    isSignInModalOpen,
+    setIsSignUpModalOpen,
+    setIsSignInModalOpen,
+    handlers: authHandlers,
+  } = useAuthModals();
+  const { handleSearch } = useSearch();
 
-  const handleSignUpClick = () => setIsSignUpModalOpen(true);
-  const handleSignInClick = () => setIsSignInModalOpen(true);
-
-  const handleModalClose = () => setIsSignUpModalOpen(false);
-  const handleSignInModalClose = () => setIsSignInModalOpen(false);
+  const content =
+    isAuthenticated && userInfo ? (
+      <UserMenu userInfo={userInfo} />
+    ) : (
+      <AuthButtons
+        onSignUpClick={authHandlers.handleSignUpClick}
+        onSignInClick={authHandlers.handleSignInClick}
+      />
+    );
 
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 py-2 border-b border-[#ECECEC] bg-white shadow-sm',
+        'md:min-h-[77px] sticky top-0 z-50 py-2 border-b border-[#ECECEC] bg-white shadow-sm',
         className,
       )}
     >
@@ -48,27 +49,21 @@ export function Header({
 
         {/* Search Services (Desktop) */}
         <div className="hidden md:block w-full max-w-md mx-4">
-          <SearchBox />
+          <SearchBox onSearch={handleSearch} />
         </div>
 
         {/* Authentication / User Profile (Desktop) */}
         <div className="hidden md:flex items-center gap-4">
-          {isAuthenticated && userInfo ? (
-            <UserMenu userInfo={userInfo} />
-          ) : (
-            <AuthButtons
-              onSignUpClick={handleSignUpClick}
-              onSignInClick={handleSignInClick}
-            />
-          )}
+          {isLoading ? <LoadingOverlay /> : content}
         </div>
 
         {/* Mobile Menu */}
         <MobileMenu
           isAuthenticated={isAuthenticated}
           userInfo={isAuthenticated ? userInfo : undefined}
-          onSignUpClick={handleSignUpClick}
-          onSignInClick={handleSignInClick}
+          onSignUpClick={authHandlers.handleSignUpClick}
+          onSignInClick={authHandlers.handleSignInClick}
+          onSearch={handleSearch}
         />
       </div>
 
@@ -77,10 +72,10 @@ export function Header({
         setIsSignUpModalOpen={setIsSignUpModalOpen}
         isSignInModalOpen={isSignInModalOpen}
         setIsSignInModalOpen={setIsSignInModalOpen}
-        handleSignUpClick={handleSignUpClick}
-        handleSignInClick={handleSignInClick}
-        handleSignUpModalClose={handleModalClose}
-        handleSignInModalClose={handleSignInModalClose}
+        handleSignUpClick={authHandlers.handleSignUpClick}
+        handleSignInClick={authHandlers.handleSignInClick}
+        handleSignUpModalClose={authHandlers.handleModalClose}
+        handleSignInModalClose={authHandlers.handleSignInModalClose}
       />
     </header>
   );

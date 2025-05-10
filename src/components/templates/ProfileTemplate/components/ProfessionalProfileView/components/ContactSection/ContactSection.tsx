@@ -14,12 +14,14 @@ import { toast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkingHoursEntry } from '@/types/working_hours';
 import { updateWorkingHoursAction } from '@/server/domains/working_hours/actions';
+import { formatTime } from '@/utils';
 
 // Update component props type
 export type ContactSectionProps = {
   user: User;
   workingHours: WorkingHoursEntry[] | null;
   isLoading: boolean;
+  isEditable?: boolean;
 };
 
 // Helper to format form values back to display string
@@ -32,20 +34,6 @@ const formatHoursForDisplay = (
   }
 
   // Basic AM/PM formatting (can be improved with date library if needed)
-  const formatTime = (time: string): string => {
-    const parts = time.split(':');
-    // Add basic check for parts length
-    if (parts.length !== 2 || parts[0] === undefined || parts[1] === undefined)
-      return 'Invalid Time';
-    const hour = parseInt(parts[0], 10);
-    const minuteStr = parts[1]; // Keep as string
-    if (isNaN(hour)) return 'Invalid Time';
-
-    const ampm = hour < 12 ? 'AM' : 'PM';
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${displayHour}:${minuteStr} ${ampm}`;
-  };
-
   // Now startTime and endTime are guaranteed to be strings here
   const formattedStartTime = formatTime(hours.startTime);
   const formattedEndTime = formatTime(hours.endTime);
@@ -65,6 +53,7 @@ export function ContactSection({
   user,
   workingHours, // Use prop
   isLoading, // Use prop
+  isEditable = true,
 }: ContactSectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,15 +103,17 @@ export function ContactSection({
           <Typography variant="h3" className="font-bold text-foreground">
             Working Hours
           </Typography>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleEditClick}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            disabled={isLoading || !localWorkingHours}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {isEditable && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleEditClick}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              disabled={isLoading || !localWorkingHours}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="pt-2">
           {isLoading ? (

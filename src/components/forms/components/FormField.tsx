@@ -1,6 +1,7 @@
 import { Label } from '@/components/ui/label';
 import { ReactNode } from 'react';
 import { cn } from '@/utils/cn';
+import { FormError } from './FormError';
 
 export type FormFieldProps = {
   /**
@@ -37,12 +38,10 @@ export function FormField({
   className,
 }: FormFieldProps) {
   return (
-    <div className={cn('space-y-1.5 w-full relative pb-6', className)}>
+    <div className={cn('space-y-1 w-full relative pb-6', className)}>
       <Label htmlFor={id}>{label}</Label>
       {children}
-      <div className="min-h-5 absolute bottom-0 left-0 w-full">
-        {error && <div className="text-xs text-destructive">{error}</div>}
-      </div>
+      <FormError error={error} />
     </div>
   );
 }

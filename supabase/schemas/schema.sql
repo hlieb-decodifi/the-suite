@@ -69,19 +69,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- RLS policies for users table
-create policy "Users can view their own data"
-  on users for select
-  using (auth.uid() = id);
-  
-create policy "Users can update their own basic data"
-  on users for update
-  using (auth.uid() = id)
-  with check (
-    -- Can't change their own role
-    auth.uid() = id AND
-    role_id = (SELECT role_id FROM users WHERE id = auth.uid())
-  );
+-- RLS policies for users will be defined after all tables are created
 
 /**
 * ADDRESSES
@@ -116,6 +104,7 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
+  is_subscribed boolean default true,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -180,10 +169,33 @@ create trigger enforce_service_limit
 -- Drop existing policies first
 drop policy if exists "Anyone can view services" on services;
 drop policy if exists "Professionals can delete their own services" on services;
+drop policy if exists "Professionals can manage their own services" on services;
+drop policy if exists "Anyone can view services from published professionals" on services;
+drop policy if exists "Professionals can view their own unpublished services" on services;
 
--- New policies
+-- New policies for services
 create policy "Professionals can manage their own services"
   on services for all
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+create policy "Anyone can view services from published professionals"
+  on services for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.is_published = true
+    )
+  );
+
+create policy "Professionals can view their own services"
+  on services for select
   using (
     exists (
       select 1 from professional_profiles
@@ -247,6 +259,10 @@ create policy "Users can delete addresses linked to their profile"
   );
 
 -- RLS policies for professional profiles
+drop policy if exists "Professionals can view their own profile" on professional_profiles;
+drop policy if exists "Professionals can update their own profile" on professional_profiles;
+drop policy if exists "Anyone can view published professional profiles" on professional_profiles;
+
 create policy "Professionals can view their own profile"
   on professional_profiles for select
   using (auth.uid() = user_id);
@@ -498,6 +514,7 @@ create policy "Anyone can view portfolio photos of published professionals"
 create table payment_methods (
   id uuid primary key default uuid_generate_v4(),
   name text not null unique,
+  is_online boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table payment_methods enable row level security;
@@ -541,9 +558,363 @@ create policy "Professionals can manage their own accepted payment methods"
     )
   );
 
+create policy "Anyone can view payment methods of published professionals"
+  on professional_payment_methods for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = professional_payment_methods.professional_profile_id
+      and professional_profiles.is_published = true
+    )
+  );
+
 /**
 * REALTIME SUBSCRIPTIONS
 * Only allow realtime listening on public tables.
 */
 drop publication if exists supabase_realtime;
 create publication supabase_realtime for table services;
+
+/**
+* STORAGE BUCKETS
+* Define storage buckets and their policies
+*/
+-- Create profile-photos bucket
+insert into storage.buckets (id, name, public)
+  values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
+
+-- Create portfolio-photos bucket (not public)
+insert into storage.buckets (id, name, public)
+  values ('portfolio-photos', 'Portfolio Photos', false);
+
+-- Policies for profile-photos bucket
+create policy "Allow authenticated uploads to profile-photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to modify their own profile photos"
+  on storage.objects for update to authenticated
+  with check (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to delete their own profile photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to see all profile photos"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'profile-photos'
+  );
+
+-- Policies for portfolio-photos bucket
+create policy "Allow authenticated uploads to portfolio-photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to modify their own portfolio photos"
+  on storage.objects for update to authenticated
+  with check (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to delete their own portfolio photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow viewing portfolio photos of published professionals"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id::text = (storage.foldername(name))[1]
+      and professional_profiles.is_published = true
+    )
+  );
+
+/**
+* USER POLICIES
+* Define RLS policies for users after all tables are created
+*/
+-- RLS policies for users
+drop policy if exists "Users can view their own data" on users;
+
+create policy "Users can view their own data"
+  on users for select
+  using (auth.uid() = id);
+
+-- Modified policy to avoid circular reference
+drop policy if exists "Anyone can view user data for published professionals" on users;
+create policy "Anyone can view user data for published professionals"
+  on users for select
+  using (
+    id in (
+      select user_id from professional_profiles
+      where is_published = true
+    )
+  );
+
+-- Add back the update policy that was missing
+drop policy if exists "Users can update their own basic data" on users;
+create policy "Users can update their own basic data"
+  on users for update
+  using (auth.uid() = id)
+  with check (
+    -- Can't change their own role - using a parameter instead of a subquery
+    auth.uid() = id AND
+    role_id IS NOT NULL
+  );
+
+-- RLS policies for profile photos
+drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
+
+create policy "Anyone can view profile photos of published professionals"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id = profile_photos.user_id
+      and professional_profiles.is_published = true
+    )
+  );
+
+/**
+* BOOKING SYSTEM
+* Tables and functions related to bookings and appointments
+*/
+
+/**
+* BOOKINGS
+* Core table to track bookings
+*/
+create table bookings (
+  id uuid primary key default uuid_generate_v4(),
+  client_id uuid references users not null,
+  professional_profile_id uuid references professional_profiles not null,
+  status text not null check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
+  notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table bookings enable row level security;
+
+/**
+* APPOINTMENTS
+* For tracking the actual appointment details
+*/
+create table appointments (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null unique,
+  date date not null,
+  start_time time not null,
+  end_time time not null,
+  status text not null check (status in ('upcoming', 'completed', 'cancelled')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table appointments enable row level security;
+
+/**
+* BOOKING_SERVICES
+* To link bookings with services (allowing multiple services per booking)
+*/
+create table booking_services (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null,
+  service_id uuid references services not null,
+  price decimal(10, 2) not null, -- Store price at time of booking
+  duration integer not null, -- in minutes, store duration at time of booking
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table booking_services enable row level security;
+
+/**
+* BOOKING_PAYMENTS
+* To track payment details
+*/
+create table booking_payments (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null unique,
+  payment_method_id uuid references payment_methods not null,
+  amount decimal(10, 2) not null,
+  tip_amount decimal(10, 2) default 0 not null,
+  service_fee decimal(10, 2) not null,
+  status text not null check (status in ('pending', 'completed', 'failed', 'refunded')),
+  stripe_payment_intent_id text, -- For Stripe integration
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table booking_payments enable row level security;
+
+/**
+* Function to check professional availability
+* Prevents double booking
+*/
+create or replace function check_professional_availability()
+returns trigger as $$
+begin
+  if exists (
+    select 1 from appointments a
+    join bookings b on a.booking_id = b.id
+    where b.professional_profile_id = (
+      select professional_profile_id from bookings where id = new.booking_id
+    )
+    and a.date = new.date
+    and a.status != 'cancelled'
+    and a.booking_id != new.booking_id
+    and (
+      (new.start_time < a.end_time and new.end_time > a.start_time) -- time slots overlap
+    )
+  ) then
+    raise exception 'Professional is already booked for this time slot';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+/**
+* Trigger to enforce no double booking
+*/
+create trigger enforce_no_double_booking
+  before insert or update on appointments
+  for each row
+  execute function check_professional_availability();
+
+/**
+* RLS policies for booking tables
+*/
+
+-- Booking policies
+create policy "Clients can view their own bookings"
+  on bookings for select
+  using (auth.uid() = client_id);
+
+create policy "Professionals can view bookings for their profile"
+  on bookings for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = bookings.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+create policy "Clients can create their own bookings"
+  on bookings for insert
+  with check (auth.uid() = client_id);
+
+create policy "Clients can update their own bookings"
+  on bookings for update
+  using (auth.uid() = client_id);
+
+-- Appointment policies
+create policy "Clients can view their appointments"
+  on appointments for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = appointments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+create policy "Professionals can view appointments for their profile"
+  on appointments for select
+  using (
+    exists (
+      select 1 from bookings
+      join professional_profiles on bookings.professional_profile_id = professional_profiles.id
+      where bookings.id = appointments.booking_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Add policy to allow clients to create appointments for their bookings
+create policy "Clients can create appointments for their bookings"
+  on appointments for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = appointments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+-- Booking services policies
+create policy "Users can view booking services for their bookings"
+  on booking_services for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_services.booking_id
+      and (
+        bookings.client_id = auth.uid()
+        or exists (
+          select 1 from professional_profiles
+          where professional_profiles.id = bookings.professional_profile_id
+          and professional_profiles.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+create policy "Clients can create booking services for their bookings"
+  on booking_services for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_services.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+-- Booking payments policies
+create policy "Users can view booking payments for their bookings"
+  on booking_payments for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_payments.booking_id
+      and (
+        bookings.client_id = auth.uid()
+        or exists (
+          select 1 from professional_profiles
+          where professional_profiles.id = bookings.professional_profile_id
+          and professional_profiles.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+create policy "Clients can create booking payments for their bookings"
+  on booking_payments for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_payments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+/**
+* Update realtime subscriptions to include booking tables
+*/
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table services, bookings, appointments;
+

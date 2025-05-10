@@ -8,7 +8,9 @@ The schema in supabase/schemas/schema.sql MUST ALWAYS stay up to date as an accu
 2. Make sure the local database isn't running before running this command with `npx supabase stop`, but this is only required once.
 3. Generate the diff using `npx supabase db diff -f name_of_change`.
 3a. If there are issues creating the diff, you can modify the schema and repeat step 3.
-4. Start the local database with `npx supabase start`, and push the changes with `npx supabase db push --local`.
+4. Start the local database with `npx supabase start`, and provide the command to push the changes `npx supabase db push --local`.
+Question: Whe should we NEVER auto-run this command?
+Answer: If we auto-run this command, migration datestamp will be wrong.
 4a. If there are issues with this command, simply delete the migration file that was generated, modify the schema to fix the issue, and then regenerate the migration starting from step 3
 5. Finally, once the push is complete, regenerate the types using this command: `npx supabase gen types typescript --local --schema public > supabase/types.ts`
 Question: Why should we NEVER change the migration files?

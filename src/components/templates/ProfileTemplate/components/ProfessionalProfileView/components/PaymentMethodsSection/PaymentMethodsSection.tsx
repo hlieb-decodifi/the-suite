@@ -20,9 +20,13 @@ import {
 
 export type PaymentMethodsSectionProps = {
   user: User;
+  isEditable?: boolean;
 };
 
-export function PaymentMethodsSection({ user }: PaymentMethodsSectionProps) {
+export function PaymentMethodsSection({
+  user,
+  isEditable = true,
+}: PaymentMethodsSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
 
   // Fetch data using React Query
@@ -104,15 +108,17 @@ export function PaymentMethodsSection({ user }: PaymentMethodsSectionProps) {
         <Typography variant="h3" className="font-bold text-foreground">
           Payment Methods
         </Typography>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleEditToggle}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          disabled={isLoading || updatePaymentMethods.isPending} // Disable edit while loading or submitting
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+        {isEditable && (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleEditToggle}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            disabled={isLoading || updatePaymentMethods.isPending} // Disable edit while loading or submitting
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (

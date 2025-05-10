@@ -24,7 +24,7 @@ const optionalUrlSchema = z.preprocess(
 export const headerSchema = z.object({
   firstName: z.string().min(1, 'First name is required.'),
   lastName: z.string().min(1, 'Last name is required.'),
-  profession: z.string().min(1, 'Profession is required.'),
+  profession: z.string(),
   description: z.string().max(500, 'Description cannot exceed 500 characters.'), // Example max length
   phoneNumber: z
     .string()

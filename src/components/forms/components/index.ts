@@ -14,3 +14,6 @@ export { FormButtons } from './FormButtons';
 export type { FormButtonsProps } from './FormButtons';
 
 export { AddressSearchField } from './AddressSearchField';
+
+export { FormError } from './FormError';
+export type { FormErrorProps } from './FormError';

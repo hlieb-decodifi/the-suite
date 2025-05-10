@@ -41,7 +41,7 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
     tiktokUrl: data.professional_profiles?.tiktok_url ?? null,
     photoUrl: data.profile_photos?.url ?? null,
     isPublished: data.professional_profiles?.is_published ?? null,
-    isSubscribed: true, // Mock value - would be determined by subscription status in a real app
+    isSubscribed: false, // Mock value - would be determined by subscription status in a real app
   };
 }
 

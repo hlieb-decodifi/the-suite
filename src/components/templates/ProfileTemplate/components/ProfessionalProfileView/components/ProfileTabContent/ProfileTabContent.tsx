@@ -2,7 +2,7 @@
 
 import { useProfile } from '@/api/profiles/hooks';
 import { useWorkingHours } from '@/api/working_hours/hooks';
-import { Separator } from '@/components/ui/separator';
+import { useProfessionalPaymentMethods } from '@/api/payment_methods/hooks';
 import { Skeleton } from '@/components/ui/skeleton';
 import { User } from '@supabase/supabase-js';
 import { ContactSection } from '../ContactSection/ContactSection';
@@ -17,12 +17,14 @@ export type ProfileTabContentProps = {
   user: User;
   onEditPortfolio: () => void;
   onPublishToggle: () => void;
+  isEditable?: boolean;
 };
 
 export function ProfileTabContent({
   user,
   onEditPortfolio,
   onPublishToggle,
+  isEditable = true,
 }: ProfileTabContentProps) {
   // Fetch profile data using React Query
   const {
@@ -34,6 +36,14 @@ export function ProfileTabContent({
   // Fetch working hours using React Query
   const { data: workingHours, isFetching: isLoadingWorkingHours } =
     useWorkingHours(user.id);
+
+  // Fetch payment methods
+  const { data: acceptedPaymentMethods = [] } = useProfessionalPaymentMethods(
+    user.id,
+  );
+
+  // Determine if payment methods section should be shown
+  const showPaymentMethods = isEditable || acceptedPaymentMethods.length > 0;
 
   // Handle loading state
   if (isLoadingProfile) {
@@ -59,10 +69,15 @@ export function ProfileTabContent({
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-8">
-          <HeaderSection user={user} onPublishToggle={onPublishToggle} />
+          <HeaderSection
+            user={user}
+            onPublishToggle={onPublishToggle}
+            isEditable={isEditable}
+          />
           <ProfileOverviewSection
             user={user}
             onEditPortfolio={onEditPortfolio}
+            isEditable={isEditable}
           />
         </div>
         <div className="md:col-span-1 space-y-8">
@@ -70,13 +85,15 @@ export function ProfileTabContent({
             user={user}
             workingHours={workingHours ?? null}
             isLoading={isLoadingWorkingHours}
+            isEditable={isEditable}
           />
-          <LocationSection user={user} />
-          <PaymentMethodsSection user={user} />
+          <LocationSection user={user} isEditable={isEditable} />
+          {showPaymentMethods && (
+            <PaymentMethodsSection user={user} isEditable={isEditable} />
+          )}
         </div>
       </div>
-      <Separator className="my-4" />
-      <ReviewsSection user={user} />
+      <ReviewsSection user={user} isEditable={isEditable} />
     </div>
   );
 }

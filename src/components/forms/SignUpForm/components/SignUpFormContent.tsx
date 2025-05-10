@@ -29,7 +29,7 @@ export function SignUpFormContent({
   } = form;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+    <form onSubmit={handleSubmit(onSubmit)}>
       <NameFields register={register} errors={errors} />
 
       {/* Email and Password in one row on desktop, column on mobile */}
@@ -51,7 +51,9 @@ export function SignUpFormContent({
         </div>
       </div>
 
-      <UserTypesFields errors={errors} control={control} />
+      <div className="mt-2">
+        <UserTypesFields errors={errors} control={control} />
+      </div>
 
       <div className="pt-4">
         <Button

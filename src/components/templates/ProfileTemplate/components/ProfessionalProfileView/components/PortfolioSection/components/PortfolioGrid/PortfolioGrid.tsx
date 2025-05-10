@@ -5,8 +5,13 @@ import { Button } from '@/components/ui/button';
 import { useDeletePortfolioPhoto } from '@/api/portfolio-photos/hooks';
 import { PortfolioItem } from '../PortfolioItem';
 import { PortfolioGridProps } from './types';
+import { PortfolioItemProps } from '../PortfolioItem/types';
 
-export function PortfolioGrid({ photos, userId }: PortfolioGridProps) {
+export function PortfolioGrid({
+  photos,
+  userId,
+  isEditable = true,
+}: PortfolioGridProps) {
   const [showAll, setShowAll] = useState(false);
   const deletePhoto = useDeletePortfolioPhoto();
 
@@ -17,16 +22,26 @@ export function PortfolioGrid({ photos, userId }: PortfolioGridProps) {
     deletePhoto.mutate({ id, userId });
   };
 
+  // Create a no-op function for when we're in view mode
+  const noop = () => {
+    /* do nothing */
+  };
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {displayImages.map((image) => (
-          <PortfolioItem
-            key={image.id}
-            photo={image}
-            onRemove={() => handleRemoveImage(image.id)}
-          />
-        ))}
+        {displayImages.map((image) => {
+          // Create props with type casting to satisfy TypeScript
+          const itemProps: PortfolioItemProps = {
+            photo: image,
+            userId,
+            isEditable,
+            // Use noop function instead of undefined to satisfy the type checker
+            onRemove: isEditable ? () => handleRemoveImage(image.id) : noop,
+          };
+
+          return <PortfolioItem key={image.id} {...itemProps} />;
+        })}
       </div>
 
       {photos.length > 4 && (

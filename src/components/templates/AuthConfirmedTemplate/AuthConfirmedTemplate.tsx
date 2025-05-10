@@ -23,7 +23,7 @@ export function AuthConfirmedTemplate() {
 
   return (
     <>
-      <div className="container px-4">
+      <div className="container flex flex-col items-center justify-center px-4">
         <Card className="w-full max-w-md mx-auto">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">

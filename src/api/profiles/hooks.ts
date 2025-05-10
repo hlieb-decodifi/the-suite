@@ -129,7 +129,7 @@ export function useUpdateSubscription() {
       if (previousProfile) {
         queryClient.setQueryData<ProfileData>(QUERY_KEYS.profile(userId), {
           ...previousProfile,
-          isSubscribed: true,
+          isSubscribed: false,
         });
       }
       
