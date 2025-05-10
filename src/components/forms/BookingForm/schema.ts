@@ -11,7 +11,7 @@ export const bookingSchema = z.object({
   }),
   timeSlot: z.string({
     required_error: "Please select an appointment time",
-  }),
+  }).nonempty("Please select an appointment time"),
   
   // Payment
   paymentMethodId: z.string({
