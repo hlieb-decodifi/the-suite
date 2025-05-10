@@ -104,7 +104,7 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
-  is_subscribed boolean default false,
+  is_subscribed boolean default true,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
