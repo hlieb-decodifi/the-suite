@@ -2,7 +2,7 @@
 
 import { forwardRef } from 'react';
 import { cn } from '@/utils/cn';
-import { Typography } from '@/components/ui/typography';
+import { FormError } from '@/components/forms/components/FormError';
 
 export type RadioOption = {
   value: string;
@@ -62,11 +62,7 @@ export const BookingFormRadioGroup = forwardRef<
           ))}
         </div>
 
-        {error && (
-          <Typography variant="small" className="text-destructive">
-            {error}
-          </Typography>
-        )}
+        <FormError className="bottom-[-24px]" error={error} />
       </div>
     );
   },

@@ -63,14 +63,6 @@ export function LocationSection({
                 Map View
               </Typography>
             </div>
-            <div className="absolute bottom-2 right-2 p-1 bg-background rounded shadow-sm">
-              <Typography
-                variant="small"
-                className="text-primary font-semibold text-xs"
-              >
-                Get Directions
-              </Typography>
-            </div>
           </div>
 
           {isEditing && (

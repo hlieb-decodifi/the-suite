@@ -521,10 +521,8 @@ export function BookingFormDateTimePicker({
   };
 
   return (
-    <div className="space-y-4">
-      <Typography variant="h4" className="text-sm font-medium">
-        Select Date & Time
-      </Typography>
+    <div className="space-y-1">
+      <Typography className="font-medium">Select Date & Time</Typography>
 
       <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-4 md:gap-6">
         {/* Calendar section */}

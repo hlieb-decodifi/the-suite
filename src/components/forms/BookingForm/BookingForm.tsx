@@ -3,7 +3,6 @@
 
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { Form } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Typography } from '@/components/ui/typography';
@@ -19,6 +18,9 @@ import {
 } from './components';
 import { BookingFormValues } from './schema';
 import { useBookingForm } from './useBookingForm';
+import { FormFieldWrapper } from '@/components/forms/common/FormFieldWrapper';
+import { FormInput } from '@/components/forms/common/FormInput';
+import { FormError } from '@/components/forms/components/FormError';
 
 export type BookingFormProps = {
   service: ServiceListItem;
@@ -142,16 +144,14 @@ export function BookingForm({
         />
 
         {/* Show form errors for date and time */}
-        <div className="space-y-1">
-          {form.formState.errors.date && (
-            <Typography variant="small" className="text-destructive">
-              {form.formState.errors.date.message?.toString()}
-            </Typography>
+        <div className="relative">
+          {!form.formState.errors.date && form.formState.errors.timeSlot && (
+            <FormError
+              error={form.formState.errors.timeSlot.message?.toString()}
+            />
           )}
-          {form.formState.errors.timeSlot && (
-            <Typography variant="small" className="text-destructive">
-              {form.formState.errors.timeSlot.message?.toString()}
-            </Typography>
+          {form.formState.errors.date && (
+            <FormError error={form.formState.errors.date.message?.toString()} />
           )}
         </div>
 
@@ -180,7 +180,7 @@ export function BookingForm({
           )}
         </div>
         {/* Notes */}
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
           <Typography variant="h4" className="text-sm font-medium">
             Additional Notes
           </Typography>
@@ -191,43 +191,38 @@ export function BookingForm({
             {...form.register('notes')}
           />
 
-          {form.formState.errors.notes && (
-            <Typography variant="small" className="text-destructive">
-              {form.formState.errors.notes.message?.toString()}
-            </Typography>
-          )}
+          <FormError error={form.formState.errors.notes?.message?.toString()} />
         </div>
-        {/* Tip - at the bottom as requested */}
-        <div className="space-y-2">
-          <Typography variant="h4" className="text-sm font-medium">
-            Add a Tip ($)
-          </Typography>
-
-          <Input
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            className="focus-visible:ring-primary"
-            {...form.register('tipAmount', {
-              setValueAs: (v) => (v === '' ? 0 : Number(v)),
-            })}
-          />
-
-          <Typography variant="small" className="text-muted-foreground">
-            Optional: Add a tip for your service provider
-          </Typography>
-
-          {form.formState.errors.tipAmount && (
-            <Typography variant="small" className="text-destructive">
-              {form.formState.errors.tipAmount.message?.toString()}
-            </Typography>
+        {/* Tip - using FormFieldWrapper and FormInput */}
+        <FormFieldWrapper
+          control={form.control}
+          name="tipAmount"
+          label="Add a Tip ($)"
+        >
+          {(field) => (
+            <FormInput
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              numericOnly
+              allowDecimal
+              {...field}
+              onChange={(e) => {
+                const value =
+                  e.target.value === '' ? 0 : Number(e.target.value);
+                field.onChange(value);
+              }}
+              value={field.value === 0 ? '' : (field.value?.toString() ?? '')}
+            />
           )}
-        </div>
+        </FormFieldWrapper>
+
+        <Typography variant="small" className="text-muted-foreground -mt-4">
+          Optional: Add a tip for your service provider
+        </Typography>
         {/* Price Summary */}
         <div className="space-y-2">
-          <Typography variant="h4" className="text-sm font-medium">
-            Booking Summary
-          </Typography>
+          <Typography>Booking Summary</Typography>
           <div className="bg-muted/10 p-4 rounded-md border">
             <div className="space-y-2">
               <div className="flex justify-between items-center">
@@ -287,13 +282,13 @@ export function BookingForm({
               </div>
 
               {/* Tip */}
-              {form.watch('tipAmount') > 0 && (
+              {(form.watch('tipAmount') ?? 0) > 0 && (
                 <div className="flex justify-between items-center">
                   <Typography variant="small" className="text-muted-foreground">
                     Tip
                   </Typography>
                   <Typography variant="small" className="font-medium">
-                    {formatCurrency(form.watch('tipAmount'))}
+                    {formatCurrency(form.watch('tipAmount') ?? 0)}
                   </Typography>
                 </div>
               )}

@@ -28,7 +28,7 @@ export function useBookingForm({
   const formDefaultValues: Partial<BookingFormValues> = {
     serviceId: service.id,
     extraServiceIds: [],
-    tipAmount: 0,
+    tipAmount: undefined,
     ...defaultValues,
   };
 

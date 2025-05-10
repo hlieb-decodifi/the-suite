@@ -22,7 +22,7 @@ export const bookingSchema = z.object({
   notes: z.string().optional(),
   
   // Tips
-  tipAmount: z.number().min(0),
+  tipAmount: z.number().min(0).optional(),
 });
 
 export type BookingFormValues = z.infer<typeof bookingSchema>; 
