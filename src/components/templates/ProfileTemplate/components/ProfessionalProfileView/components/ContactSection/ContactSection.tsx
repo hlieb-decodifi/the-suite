@@ -14,7 +14,16 @@ import { toast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkingHoursEntry } from '@/types/working_hours';
 import { updateWorkingHoursAction } from '@/server/domains/working_hours/actions';
-import { formatTime } from '@/utils';
+import { formatTime, convertToUTC, convertToLocal } from '@/utils';
+
+// Helper function to safely format time strings that might be null
+function safeFormatTime(timeString: string | null): string {
+  if (!timeString) return 'Invalid Time';
+
+  // First convert UTC time to local time, then format it
+  const localTime = convertToLocal(timeString);
+  return localTime ? formatTime(localTime) : 'Invalid Time';
+}
 
 // Update component props type
 export type ContactSectionProps = {
@@ -33,10 +42,9 @@ const formatHoursForDisplay = (
     return 'Closed';
   }
 
-  // Basic AM/PM formatting (can be improved with date library if needed)
-  // Now startTime and endTime are guaranteed to be strings here
-  const formattedStartTime = formatTime(hours.startTime);
-  const formattedEndTime = formatTime(hours.endTime);
+  // Basic AM/PM formatting using our utility with null safety
+  const formattedStartTime = safeFormatTime(hours.startTime);
+  const formattedEndTime = safeFormatTime(hours.endTime);
 
   // Handle potential invalid time results from formatTime
   if (
@@ -72,12 +80,40 @@ export function ContactSection({
 
   const handleSave = async (formData: ContactHoursFormValues) => {
     setIsSubmitting(true);
-    const hoursToSave: WorkingHoursEntry[] = formData.hours.map((h) => ({
-      day: h.day,
-      enabled: h.enabled ?? false,
-      startTime: h.startTime ?? null,
-      endTime: h.endTime ?? null,
-    }));
+
+    // Convert local times to UTC before saving
+    const hoursToSave: WorkingHoursEntry[] = formData.hours.map((h) => {
+      // Add logging to compare local time vs UTC time
+      if (h.enabled && h.startTime && h.endTime) {
+        console.log(`[Working Hours] Day: ${h.day}`);
+        console.log(
+          `[Working Hours] Local start time: ${h.startTime}, end time: ${h.endTime}`,
+        );
+
+        const utcStartTime = convertToUTC(h.startTime);
+        const utcEndTime = convertToUTC(h.endTime);
+
+        console.log(
+          `[Working Hours] UTC start time: ${utcStartTime}, end time: ${utcEndTime}`,
+        );
+        console.log('------');
+
+        return {
+          day: h.day,
+          enabled: h.enabled,
+          startTime: utcStartTime,
+          endTime: utcEndTime,
+        };
+      }
+
+      // If disabled or missing times, just pass through the values
+      return {
+        day: h.day,
+        enabled: h.enabled ?? false,
+        startTime: h.startTime ?? null,
+        endTime: h.endTime ?? null,
+      };
+    });
 
     const result = await updateWorkingHoursAction(user.id, hoursToSave);
     setIsSubmitting(false);

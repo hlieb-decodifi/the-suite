@@ -4,6 +4,7 @@ import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import { isValidWorkingHours } from '@/types/working_hours';
+import { convertToUTC, convertToLocal } from '@/utils/formatDate';
 
 /**
  * Converts a timeSlot string (e.g., "14:00") to a time object
@@ -16,7 +17,11 @@ function timeSlotToTimeObject(
 ): { start: string; end: string; durationMinutes: number } {
   // Safely handle timeSlot parsing
   const timeString = timeSlot || '00:00';
-  const parts = timeString.split(':');
+  
+  // Convert local time to UTC for storage in database
+  const utcTimeString = convertToUTC(timeString) || timeString;
+  
+  const parts = utcTimeString.split(':');
   const hoursStr = parts[0] || '0';
   const minutesStr = parts[1] || '0';
   
@@ -138,6 +143,7 @@ export async function createBooking(
   }
   
   // Parse the time slot with correct service durations
+  // This will convert local time to UTC for database storage
   const timeInfo = timeSlotToTimeObject(
     formData.timeSlot,
     mainService.duration,
@@ -408,9 +414,10 @@ export async function getAvailableTimeSlots(
       return [];
     }
 
+    // Convert UTC times from database to local time for display
     const daySchedule = {
-      start: dayEntry.startTime,
-      end: dayEntry.endTime
+      start: convertToLocal(dayEntry.startTime),
+      end: convertToLocal(dayEntry.endTime)
     };
 
     if (!daySchedule.start || !daySchedule.end) {
@@ -456,12 +463,15 @@ export async function getAvailableTimeSlots(
       const isSlotBooked = bookedAppointments.some(appointment => {
         if (!appointment.start_time || !appointment.end_time) return false;
         
-        // Convert appointment times to minutes
-        const apptStartTime = appointment.start_time.substring(0, 5); // Format: "14:00:00" -> "14:00"
-        const apptEndTime = appointment.end_time.substring(0, 5);
+        // Convert appointment times to minutes - first convert UTC to local
+        const apptStartTimeUTC = appointment.start_time.substring(0, 5); // Format: "14:00:00" -> "14:00"
+        const apptEndTimeUTC = appointment.end_time.substring(0, 5);
         
-        const apptStartMinutes = timeToMinutes(apptStartTime);
-        const apptEndMinutes = timeToMinutes(apptEndTime);
+        const apptStartTimeLocal = convertToLocal(apptStartTimeUTC) || apptStartTimeUTC;
+        const apptEndTimeLocal = convertToLocal(apptEndTimeUTC) || apptEndTimeUTC;
+        
+        const apptStartMinutes = timeToMinutes(apptStartTimeLocal);
+        const apptEndMinutes = timeToMinutes(apptEndTimeLocal);
         
         return isSlotOverlapping(
           slotStartMinutes, 
@@ -512,6 +522,8 @@ export async function getAvailableDates(
     const availableDaysOfWeek = Object.entries(workingHours)
       .filter(([, schedule]) => schedule?.startTime && schedule?.endTime)
       .map(([day]) => day); // Convert to day number
+      
+    console.log(availableDaysOfWeek)
 
     // Filter out any empty strings (in case of invalid day names)
     const validDays = availableDaysOfWeek.filter(day => day !== '');
