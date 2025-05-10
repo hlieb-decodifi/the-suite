@@ -46,7 +46,7 @@ function TimeSlotsPicker({
   onSelectTimeSlot: (slot: TimeSlot) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1.5 overflow-y-auto p-1 h-full">
+    <div className="grid grid-cols-3 gap-1.5 overflow-y-auto p-1">
       {timeSlots.map((slot) => (
         <button
           key={slot.id}

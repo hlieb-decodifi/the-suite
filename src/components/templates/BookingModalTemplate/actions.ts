@@ -7,8 +7,13 @@ import { isValidWorkingHours } from '@/types/working_hours';
 
 /**
  * Converts a timeSlot string (e.g., "14:00") to a time object
+ * and calculates the end time based on the total duration of the service(s)
  */
-function timeSlotToTimeObject(timeSlot: string): { start: string; end: string; durationMinutes: number } {
+function timeSlotToTimeObject(
+  timeSlot: string,
+  mainServiceDuration: number,
+  extraServiceDurations: number[] = []
+): { start: string; end: string; durationMinutes: number } {
   // Safely handle timeSlot parsing
   const timeString = timeSlot || '00:00';
   const parts = timeString.split(':');
@@ -18,8 +23,8 @@ function timeSlotToTimeObject(timeSlot: string): { start: string; end: string; d
   const hours = parseInt(hoursStr, 10) || 0;
   const minutes = parseInt(minutesStr, 10) || 0;
   
-  // Default duration is 1 hour (60 minutes)
-  const durationMinutes = 60;
+  // Calculate total duration by adding up main service + extra services
+  const durationMinutes = mainServiceDuration + extraServiceDurations.reduce((total, duration) => total + duration, 0);
   
   // Calculate end time
   const startDate = new Date();
@@ -106,8 +111,38 @@ export async function createBooking(
     throw new Error('Not authenticated');
   }
   
-  // Parse the time slot
-  const timeInfo = timeSlotToTimeObject(formData.timeSlot);
+  // Get main service details including duration
+  const { data: mainService, error: mainServiceError } = await supabase
+    .from('services')
+    .select('price, duration')
+    .eq('id', formData.serviceId)
+    .single();
+  
+  if (mainServiceError || !mainService) {
+    throw new Error(`Error fetching main service: ${mainServiceError?.message || 'Service not found'}`);
+  }
+  
+  // Get extra services details including durations if any
+  let extraServiceDurations: number[] = [];
+  if (formData.extraServiceIds.length > 0) {
+    const { data: extraServices, error: extraServicesError } = await supabase
+      .from('services')
+      .select('id, price, duration')
+      .in('id', formData.extraServiceIds);
+    
+    if (extraServicesError) {
+      throw new Error(`Error fetching extra services: ${extraServicesError.message}`);
+    }
+    
+    extraServiceDurations = extraServices?.map(service => service.duration) || [];
+  }
+  
+  // Parse the time slot with correct service durations
+  const timeInfo = timeSlotToTimeObject(
+    formData.timeSlot,
+    mainService.duration,
+    extraServiceDurations
+  );
   
   // Format date for database
   const dateFormatted = format(formData.date, 'yyyy-MM-dd');
@@ -161,29 +196,18 @@ export async function createBooking(
       throw new Error(`Error creating appointment: ${appointmentError.message}`);
     }
     
-    // Get service details for booking_services table
-    const { data: serviceDetails } = await supabase
-      .from('services')
-      .select('price, duration')
-      .eq('id', formData.serviceId)
-      .single();
-    
-    if (!serviceDetails) {
-      throw new Error('Service details not found');
-    }
-    
     // Insert main service into booking_services
-    const { error: mainServiceError } = await supabase
+    const { error: mainServiceInsertError } = await supabase
       .from('booking_services')
       .insert({
         booking_id: booking.id,
         service_id: formData.serviceId,
-        price: serviceDetails.price,
-        duration: serviceDetails.duration,
+        price: mainService.price,
+        duration: mainService.duration,
       });
     
-    if (mainServiceError) {
-      throw new Error(`Error adding main service: ${mainServiceError.message}`);
+    if (mainServiceInsertError) {
+      throw new Error(`Error adding main service: ${mainServiceInsertError.message}`);
     }
     
     // Insert extra services into booking_services
@@ -371,6 +395,8 @@ export async function getAvailableTimeSlots(
       .eq('bookings.professional_profile_id', professionalProfileId)
       .eq('date', date)
       .neq('status', 'cancelled');
+
+    console.log('bookedAppointments', bookedAppointments);
     
     if (appointmentsError) {
       console.error('Error fetching booked appointments:', appointmentsError);
