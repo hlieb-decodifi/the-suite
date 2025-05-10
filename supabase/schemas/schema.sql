@@ -845,6 +845,17 @@ create policy "Professionals can view appointments for their profile"
     )
   );
 
+-- Add policy to allow clients to create appointments for their bookings
+create policy "Clients can create appointments for their bookings"
+  on appointments for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = appointments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
 -- Booking services policies
 create policy "Users can view booking services for their bookings"
   on booking_services for select

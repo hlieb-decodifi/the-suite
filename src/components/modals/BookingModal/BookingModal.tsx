@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { BookingModalTemplate } from '@/components/templates/BookingModalTemplate';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
+import { cn } from '@/utils';
 
 /**
  * Component for booking a service
@@ -23,24 +25,32 @@ export type BookingModalProps = {
 };
 
 // Extracted footer component to reduce main function size
-function BookingModalFooter({ onCancel }: { onCancel: () => void }) {
+function BookingModalFooter({
+  onCancel,
+  isCompleted,
+}: {
+  onCancel: () => void;
+  isCompleted?: boolean;
+}) {
   return (
     <DialogFooter className="flex items-center justify-between p-4 border-t bg-background sticky bottom-0 left-0 right-0">
       <div className="w-full flex flex-col-reverse sm:flex-row gap-3 sm:gap-2 sm:justify-end">
         <Button
-          variant="outline"
+          variant={isCompleted ? 'default' : 'outline'}
           onClick={onCancel}
           className="sm:flex-initial w-full sm:w-auto"
         >
-          Cancel
+          {isCompleted ? 'Close' : 'Cancel'}
         </Button>
-        <Button
-          type="submit"
-          form="booking-form"
-          className="sm:flex-initial w-full sm:w-auto"
-        >
-          Book Now
-        </Button>
+        {!isCompleted && (
+          <Button
+            type="submit"
+            form="booking-form"
+            className="sm:flex-initial w-full sm:w-auto"
+          >
+            Book Now
+          </Button>
+        )}
       </div>
     </DialogFooter>
   );
@@ -53,12 +63,38 @@ export function BookingModal(props: BookingModalProps) {
   const { isOpen, onOpenChange } = props;
   const onCancel = () => onOpenChange(false);
 
+  // Track if we're in the completed state
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  // Reset completed state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsCompleted(false);
+    }
+  }, [isOpen]);
+
+  // Handler for when booking is completed
+  const handleBookingComplete = (bookingId: string) => {
+    setIsCompleted(true);
+    if (props.onBookingComplete) {
+      props.onBookingComplete(bookingId);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex flex-col p-0 sm:max-w-[600px] md:max-w-[800px] max-h-[90vh] h-[90vh] overflow-hidden">
+      <DialogContent
+        className={cn(
+          'flex flex-col p-0 overflow-hidden',
+          !isCompleted &&
+            'sm:max-w-[600px] md:max-w-[800px] max-h-[90vh] h-[90vh]',
+        )}
+      >
         <DialogHeader className="p-4 border-b sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
-            <DialogTitle>Book a Service</DialogTitle>
+            <DialogTitle>
+              {isCompleted ? 'Booking Confirmed' : 'Book a Service'}
+            </DialogTitle>
             <Button
               variant="ghost"
               size="icon"
@@ -71,9 +107,12 @@ export function BookingModal(props: BookingModalProps) {
           </div>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <BookingModalTemplate {...props} />
+          <BookingModalTemplate
+            {...props}
+            onBookingComplete={(bookingId) => handleBookingComplete(bookingId)}
+          />
         </div>
-        <BookingModalFooter onCancel={onCancel} />
+        <BookingModalFooter onCancel={onCancel} isCompleted={isCompleted} />
       </DialogContent>
     </Dialog>
   );

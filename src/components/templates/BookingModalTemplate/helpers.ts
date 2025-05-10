@@ -7,20 +7,6 @@ export type BookingDetailsState = {
 };
 
 /**
- * Formats a booking ID with a prefix for display
- */
-export function formatBookingId(id: number): string {
-  return `BK-${id.toString().padStart(5, '0')}`;
-}
-
-/**
- * Generates a random booking ID for demo purposes
- */
-export function generateBookingId(): string {
-  return formatBookingId(Math.floor(Math.random() * 10000));
-}
-
-/**
  * Creates booking details from form data
  */
 export function createBookingDetails(formData: BookingFormValues, price: number): BookingDetailsState {
@@ -36,13 +22,11 @@ export function createBookingDetails(formData: BookingFormValues, price: number)
  */
 export function resetBookingState(
   setBookingCompleted: (value: boolean) => void,
-  setBookingId: (value: string | null) => void,
   setBookingDetails: (value: BookingDetailsState) => void,
   delay = 300
 ): void {
   setTimeout(() => {
     setBookingCompleted(false);
-    setBookingId(null);
     setBookingDetails({});
   }, delay);
 } 

@@ -14,6 +14,7 @@ export type BookingModalTemplateProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   service: ServiceListItem;
+  onBookingComplete?: (bookingId: string) => void;
 };
 
 /**
@@ -21,10 +22,8 @@ export type BookingModalTemplateProps = {
  */
 export function BookingModalTemplate(props: BookingModalTemplateProps) {
   const {
-    isOpen,
     service,
     bookingCompleted,
-    bookingId,
     bookingDetails,
     additionalServices,
     isLoadingAdditionalServices,
@@ -33,7 +32,6 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     paymentMethods,
     isLoadingPaymentMethods,
     isLoadingTimeSlots,
-    handleOpenChange,
     handleSuccess,
     selectedDate,
     handleDateSelect,
@@ -45,14 +43,8 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     : [];
 
   // Render completed view or booking form based on state
-  if (bookingCompleted && bookingId) {
-    const completedProps = createCompletedViewProps(
-      isOpen,
-      handleOpenChange,
-      service,
-      bookingId,
-      bookingDetails,
-    );
+  if (bookingCompleted) {
+    const completedProps = createCompletedViewProps(service, bookingDetails);
     return <BookingCompleted {...completedProps} />;
   }
 

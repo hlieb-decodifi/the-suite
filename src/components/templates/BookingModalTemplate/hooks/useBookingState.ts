@@ -16,7 +16,6 @@ import { format } from 'date-fns';
 
 export type BookingModalProps = {
   isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
   service: ServiceListItem;
   onBookingComplete?: (bookingId: string) => void;
 };
@@ -28,7 +27,6 @@ export type BookingModalProps = {
 export function useBookingState(props: BookingModalProps) {
   const { 
     isOpen, 
-    onOpenChange, 
     service, 
     onBookingComplete 
   } = props;
@@ -36,7 +34,6 @@ export function useBookingState(props: BookingModalProps) {
   // State for tracking booking process
   const { toast } = useToast();
   const [bookingCompleted, setBookingCompleted] = useState(false);
-  const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookingDetails, setBookingDetails] = useState<BookingDetailsState>({});
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -82,11 +79,10 @@ export function useBookingState(props: BookingModalProps) {
   // Reset state when modal closes
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      resetBookingState(setBookingCompleted, setBookingId, setBookingDetails);
+      resetBookingState(setBookingCompleted, setBookingDetails);
       setSelectedDate(undefined);
       setIsSubmitting(false);
     }
-    onOpenChange(open);
   };
   
   // Date selection handler
@@ -102,14 +98,13 @@ export function useBookingState(props: BookingModalProps) {
     try {
       setIsSubmitting(true);
       
-      // Execute the server action to create the booking - not needed as we already have the bookingId
+      // Execute the server action to create the booking
       await createBooking(
         formData,
         professionalProfileId
       );
       
       // Update UI state
-      setBookingId(bookingId);
       setBookingDetails(createBookingDetails(formData, totalPrice));
       setBookingCompleted(true);
       
@@ -135,7 +130,6 @@ export function useBookingState(props: BookingModalProps) {
     isOpen,
     service,
     bookingCompleted,
-    bookingId,
     bookingDetails,
     additionalServices,
     isLoadingAdditionalServices,
