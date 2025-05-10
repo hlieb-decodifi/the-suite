@@ -332,6 +332,7 @@ function timeToMinutes(timeString: string): number {
     
     return hour * 60 + minute;
   } catch (error) {
+    console.error('Error in timeToMinutes:', error);
     return 0;
   }
 }
