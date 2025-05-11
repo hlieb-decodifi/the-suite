@@ -411,7 +411,7 @@ function DatePickerSection({
         </Typography>
       </div>
 
-      <div className="min-w-[242px]flex justify-start">
+      <div className="min-w-[242px] flex justify-start">
         {isLoading ? (
           <div className="border rounded-md p-2 w-full h-[300px] flex items-center justify-center">
             <Typography variant="small" className="text-muted-foreground">
