@@ -2,8 +2,8 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { format } from 'date-fns';
 import { isValidWorkingHours } from '@/types/working_hours';
+import { format } from 'date-fns';
 
 /**
  * Converts a timeSlot string (e.g., "14:00") to a time object
@@ -14,14 +14,14 @@ function timeSlotToTimeObject(
   mainServiceDuration: number,
   extraServiceDurations: number[] = []
 ): { start: string; end: string; durationMinutes: number } {
-  // Add debug logging
-  console.log(`[BOOKING DEBUG] Converting time slot: "${timeSlot}"`);
-  console.log(`[BOOKING DEBUG] Main service duration: ${mainServiceDuration} minutes`);
-  console.log(`[BOOKING DEBUG] Extra services durations:`, extraServiceDurations);
-  
   // Safely handle timeSlot parsing
   const timeString = timeSlot || '00:00';
-  const parts = timeString.split(':');
+  
+  // Convert local time to UTC for storage in database
+  // const utcTimeString = convertToUTC(timeString) || timeString;
+  const utcTimeString = timeString;
+  
+  const parts = utcTimeString.split(':');
   const hoursStr = parts[0] || '0';
   const minutesStr = parts[1] || '0';
   
@@ -38,14 +38,11 @@ function timeSlotToTimeObject(
   const endDate = new Date(startDate);
   endDate.setMinutes(endDate.getMinutes() + durationMinutes);
   
-  const result = {
+  return {
     start: format(startDate, 'HH:mm:ss'),
     end: format(endDate, 'HH:mm:ss'),
     durationMinutes
   };
-  
-  console.log(`[BOOKING DEBUG] Time object result:`, result);
-  return result;
 }
 
 /**
@@ -112,19 +109,6 @@ export async function createBooking(
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
   
-  // Log timezone info
-  const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const serverDateTime = new Date().toString();
-  console.log(`[BOOKING DEBUG] Creating booking in timezone: ${serverTimezone}`);
-  console.log(`[BOOKING DEBUG] Server datetime: ${serverDateTime}`);
-  console.log(`[BOOKING DEBUG] Form data:`, JSON.stringify({
-    serviceId: formData.serviceId,
-    date: formData.date,
-    timeSlot: formData.timeSlot,
-    extraServiceIds: formData.extraServiceIds,
-    paymentMethodId: formData.paymentMethodId
-  }));
-  
   // Get the current user
   const { data: { user } } = await supabase.auth.getUser();
   
@@ -159,6 +143,7 @@ export async function createBooking(
   }
   
   // Parse the time slot with correct service durations
+  // This will convert local time to UTC for database storage
   const timeInfo = timeSlotToTimeObject(
     formData.timeSlot,
     mainService.duration,
@@ -168,9 +153,6 @@ export async function createBooking(
   // Format date for database
   const dateObject = new Date(formData.date);
   const dateFormatted = format(dateObject, 'yyyy-MM-dd');
-  console.log(`[BOOKING DEBUG] Input date object: ${dateObject.toString()}`);
-  console.log(`[BOOKING DEBUG] Formatted date for DB: ${dateFormatted}`);
-  console.log(`[BOOKING DEBUG] Time info:`, timeInfo);
   
   // Calculate total price
   const { total: totalPrice, serviceFee } = await calculateTotalPrice(
@@ -290,6 +272,7 @@ export async function createBooking(
     return { bookingId: booking.id, totalPrice };
     
   } catch (error) {
+    // We need to keep this error to log and re-throw it
     console.error('Error in createBooking:', error);
     throw error;
   }
@@ -309,12 +292,8 @@ function processTimeString(timeString: string): { hour: number; minute: number }
  * Convert a time to minutes since midnight
  */
 function timeToMinutes(timeString: string): number {
-  // Add debug logging
-  console.log(`[TIME DEBUG] Converting time string to minutes: "${timeString}"`);
-  
   try {
     if (!timeString || timeString.trim() === '') {
-      console.error(`[TIME DEBUG] Empty time string provided`);
       return 0;
     }
     
@@ -327,13 +306,11 @@ function timeToMinutes(timeString: string): number {
       const meridiem = parts[1]?.toLowerCase();
       
       if (!timePart || !meridiem) {
-        console.error(`[TIME DEBUG] Invalid AM/PM time format: ${timeString}`);
         return 0;
       }
       
       const [hourStr, minuteStr] = timePart.split(':');
       if (!hourStr || !minuteStr) {
-        console.error(`[TIME DEBUG] Invalid time parts in: ${timeString}`);
         return 0;
       }
       
@@ -341,7 +318,6 @@ function timeToMinutes(timeString: string): number {
       const minute = parseInt(minuteStr, 10);
       
       if (isNaN(hour) || isNaN(minute)) {
-        console.error(`[TIME DEBUG] Non-numeric time parts in: ${timeString}`);
         return 0;
       }
       
@@ -349,7 +325,6 @@ function timeToMinutes(timeString: string): number {
       if (meridiem === 'am' && hour === 12) hour = 0;
       
       adjustedTimeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      console.log(`[TIME DEBUG] Converted ${timeString} to 24h format: ${adjustedTimeString}`);
     }
     
     // Now process the 24-hour format (HH:MM or HH:MM:SS)
@@ -358,16 +333,12 @@ function timeToMinutes(timeString: string): number {
     const minute = parseInt(parts[1] || '0', 10);
     
     if (isNaN(hour) || isNaN(minute)) {
-      console.error(`[TIME DEBUG] Invalid time format after adjustment: ${adjustedTimeString}`);
       return 0;
     }
     
-    const totalMinutes = hour * 60 + minute;
-    console.log(`[TIME DEBUG] ${timeString} converted to ${totalMinutes} minutes`);
-    
-    return totalMinutes;
+    return hour * 60 + minute;
   } catch (error) {
-    console.error(`[TIME DEBUG] Error processing time string "${timeString}":`, error);
+    console.error('Error in timeToMinutes:', error);
     return 0;
   }
 }
@@ -391,14 +362,10 @@ function isSlotOverlapping(
   appointmentStart: number,
   appointmentEnd: number
 ): boolean {
-  const isOverlapping = (
+  return (
     (slotStart < appointmentEnd && slotEnd > appointmentStart) ||
     (appointmentStart < slotEnd && appointmentEnd > slotStart)
   );
-  
-  console.log(`[OVERLAP DEBUG] Checking overlap: Slot [${slotStart}-${slotEnd}] with Appointment [${appointmentStart}-${appointmentEnd}] => ${isOverlapping ? 'OVERLAPS' : 'NO OVERLAP'}`);
-  
-  return isOverlapping;
 }
 
 /**
@@ -415,22 +382,9 @@ export async function getAvailableTimeSlots(
   const supabase = await createClient();
   
   try {
-    // Add debug logging
-    console.log(`[TIMESLOT DEBUG] Getting slots for date: ${date} (type: ${typeof date})`);
-    console.log(`[TIMESLOT DEBUG] Professional ID: ${professionalProfileId}`);
-    
-    // Log timezone info
-    const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const serverDateTime = new Date().toString();
-    console.log(`[TIMESLOT DEBUG] Server timezone: ${serverTimezone}`);
-    console.log(`[TIMESLOT DEBUG] Server datetime: ${serverDateTime}`);
-    
     // Step 1: Get the professional's working hours for the day of week
     const dateObj = new Date(date);
     const dayOfWeek = format(dateObj, 'EEEE').toLowerCase(); // e.g., "monday"
-    
-    console.log(`[TIMESLOT DEBUG] Date parsed as: ${dateObj.toISOString()}`);
-    console.log(`[TIMESLOT DEBUG] Day of week: ${dayOfWeek}`);
     
     const { data: professionalProfile, error: profileError } = await supabase
       .from('professional_profiles')
@@ -439,43 +393,36 @@ export async function getAvailableTimeSlots(
       .single();
 
     if (profileError || !professionalProfile?.working_hours) {
-      console.error('[TIMESLOT DEBUG] Error fetching professional working hours:', profileError);
       return [];
     }
     
     // Parse working hours using our type guard
     if (!isValidWorkingHours(professionalProfile.working_hours)) {
-      console.error('[TIMESLOT DEBUG] Invalid working hours format');
       return [];
     }
     
     // Now TypeScript knows this is WorkingHoursEntry[]
     const workingHours = professionalProfile.working_hours;
-    console.log(`[TIMESLOT DEBUG] Working hours:`, JSON.stringify(workingHours));
 
     // Find the entry for the current day
     const dayEntry = workingHours.find(entry => 
       entry.day.toLowerCase() === dayOfWeek && entry.enabled
     );
-
-    console.log('[TIMESLOT DEBUG] Day entry found:', dayEntry ? 'Yes' : 'No', 
-      dayEntry ? JSON.stringify(dayEntry) : '');
     
     if (!dayEntry) {
       // Professional doesn't work on this day
-      console.log(`[TIMESLOT DEBUG] Professional doesn't work on ${dayOfWeek}`);
       return [];
     }
 
+    // Convert UTC times from database to local time for display
     const daySchedule = {
+      // start: convertToLocal(dayEntry.startTime),
       start: dayEntry.startTime,
+      // end: convertToLocal(dayEntry.endTime)
       end: dayEntry.endTime
     };
 
-    console.log(`[TIMESLOT DEBUG] Day schedule: ${JSON.stringify(daySchedule)}`);
-
     if (!daySchedule.start || !daySchedule.end) {
-      console.log('[TIMESLOT DEBUG] Missing start or end time in schedule');
       return [];
     }
 
@@ -483,8 +430,6 @@ export async function getAvailableTimeSlots(
     const allTimeSlots: string[] = [];
     const startMinutes = timeToMinutes(daySchedule.start);
     const endMinutes = timeToMinutes(daySchedule.end);
-    
-    console.log(`[TIMESLOT DEBUG] Working hours in minutes: start=${startMinutes}, end=${endMinutes}`);
     
     // Generate 30-minute slots
     for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
@@ -494,8 +439,6 @@ export async function getAvailableTimeSlots(
       const formattedMinute = minute.toString().padStart(2, '0');
       allTimeSlots.push(`${formattedHour}:${formattedMinute}`);
     }
-    
-    console.log(`[TIMESLOT DEBUG] Generated ${allTimeSlots.length} possible time slots`);
     
     // Step 3: Get booked appointments for the date to filter out unavailable slots
     const { data: bookedAppointments, error: appointmentsError } = await supabase
@@ -510,12 +453,8 @@ export async function getAvailableTimeSlots(
       .neq('status', 'cancelled');
 
     if (appointmentsError) {
-      console.error('[TIMESLOT DEBUG] Error fetching booked appointments:', appointmentsError);
       return allTimeSlots.map(formatTimeForDisplay); // Return all slots if we can't check appointments
     }
-
-    console.log(`[TIMESLOT DEBUG] Found ${bookedAppointments.length} booked appointments for the date`);
-    console.log('[TIMESLOT DEBUG] Booked appointments:', JSON.stringify(bookedAppointments));
 
     // Step 4: Filter out booked time slots
     const availableTimeSlots = allTimeSlots.filter(timeSlot => {
@@ -526,40 +465,33 @@ export async function getAvailableTimeSlots(
       const isSlotBooked = bookedAppointments.some(appointment => {
         if (!appointment.start_time || !appointment.end_time) return false;
         
-        // Convert appointment times to minutes
-        const apptStartTime = appointment.start_time.substring(0, 5); // Format: "14:00:00" -> "14:00"
-        const apptEndTime = appointment.end_time.substring(0, 5);
+        // Convert appointment times to minutes - first convert UTC to local
+        const apptStartTimeUTC = appointment.start_time.substring(0, 5); // Format: "14:00:00" -> "14:00"
+        const apptEndTimeUTC = appointment.end_time.substring(0, 5);
         
-        const apptStartMinutes = timeToMinutes(apptStartTime);
-        const apptEndMinutes = timeToMinutes(apptEndTime);
+        // const apptStartTimeLocal = convertToLocal(apptStartTimeUTC) || apptStartTimeUTC;
+        const apptStartTimeLocal = apptStartTimeUTC;
+        // const apptEndTimeLocal = convertToLocal(apptEndTimeUTC) || apptEndTimeUTC;
+        const apptEndTimeLocal = apptEndTimeUTC;
         
-        const overlap = isSlotOverlapping(
+        const apptStartMinutes = timeToMinutes(apptStartTimeLocal);
+        const apptEndMinutes = timeToMinutes(apptEndTimeLocal);
+        
+        return isSlotOverlapping(
           slotStartMinutes, 
           slotEndMinutes,
           apptStartMinutes,
           apptEndMinutes
         );
-        
-        if (overlap) {
-          console.log(`[TIMESLOT DEBUG] Slot ${timeSlot} overlaps with appointment ${apptStartTime}-${apptEndTime}`);
-        }
-        
-        return overlap;
       });
       
       return !isSlotBooked;
     });
-
-    console.log(`[TIMESLOT DEBUG] After filtering, ${availableTimeSlots.length} slots remain available`);
     
     // Format time slots for display
-    const formattedSlots = availableTimeSlots.map(formatTimeForDisplay);
-    console.log(`[TIMESLOT DEBUG] Final formatted slots:`, formattedSlots);
+    return availableTimeSlots.map(formatTimeForDisplay);
     
-    return formattedSlots;
-    
-  } catch (error) {
-    console.error('[TIMESLOT DEBUG] Unexpected error in getAvailableTimeSlots:', error);
+  } catch {
     return [];
   }
 }
@@ -583,18 +515,19 @@ export async function getAvailableDates(
       .single();
     
     if (profileError || !professionalProfile?.working_hours) {
-      console.error('Error fetching professional working hours:', profileError);
       return [];
     }
     
     // Parse working hours to determine which days the professional works
-    const workingHours = professionalProfile.working_hours as Record<string, { startTime: string; endTime: string } | null>;
+    const workingHours = professionalProfile.working_hours as Record<string, { startTime: string; endTime: string; enabled: boolean } | null>;
     
     // Map day names to day numbers (0 is Monday, not Sunday)
     // Get days of week when the professional is available (as numbers)
     const availableDaysOfWeek = Object.entries(workingHours)
-      .filter(([, schedule]) => schedule?.startTime && schedule?.endTime)
+      .filter(([, schedule]) => schedule?.startTime && schedule?.endTime && schedule?.enabled)
       .map(([day]) => day); // Convert to day number
+      
+    console.log(availableDaysOfWeek)
 
     // Filter out any empty strings (in case of invalid day names)
     const validDays = availableDaysOfWeek.filter(day => day !== '');
@@ -605,8 +538,7 @@ export async function getAvailableDates(
     
     return validDays;
     
-  } catch (error) {
-    console.error('Unexpected error in getAvailableDates:', error);
+  } catch {
     return [];
   }
 }
@@ -617,12 +549,11 @@ export async function getAvailableDates(
 export async function getAvailablePaymentMethods(): Promise<Array<{ id: string; name: string }>> {
   const supabase = await createClient();
   
-  const { data, error } = await supabase
+  const { data, error: supabaseError } = await supabase
     .from('payment_methods')
     .select('id, name');
   
-  if (error) {
-    console.error('Error fetching payment methods:', error);
+  if (supabaseError) {
     return [];
   }
   

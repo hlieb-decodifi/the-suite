@@ -1,5 +1,5 @@
 /* eslint-disable max-lines-per-function */
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 import { Form } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
@@ -11,6 +11,7 @@ import { TIME_OPTIONS } from './constants';
 import { ContactHoursFormValues } from './schema';
 import { FormMessage } from '@/components/ui/form';
 import { WorkingHoursEntry } from '@/types/working_hours';
+// import { convertToLocal } from '@/utils';
 
 export type ContactHoursFormProps = {
   onSubmitSuccess: (data: ContactHoursFormValues) => void;
@@ -23,6 +24,19 @@ export function ContactHoursForm({
   onCancel,
   defaultValues,
 }: ContactHoursFormProps) {
+  // Convert UTC times to local time for the form display
+  const localizedDefaultValues = useMemo(
+    () =>
+      defaultValues?.map((entry) => ({
+        ...entry,
+        // startTime: entry.startTime ? convertToLocal(entry.startTime) : null,
+        startTime: entry.startTime,
+        // endTime: entry.endTime ? convertToLocal(entry.endTime) : null,
+        endTime: entry.endTime,
+      })) ?? null,
+    [defaultValues],
+  );
+
   const formId = useId();
   const {
     form,
@@ -31,7 +45,7 @@ export function ContactHoursForm({
     onSubmit: handleFormSubmit,
   } = useContactHoursForm({
     onSubmit: onSubmitSuccess,
-    defaultValues: defaultValues ?? null,
+    defaultValues: localizedDefaultValues ?? null,
   });
   const hoursErrors = form.formState.errors.hours;
 

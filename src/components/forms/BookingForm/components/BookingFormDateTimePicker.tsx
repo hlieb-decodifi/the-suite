@@ -35,6 +35,7 @@ export type BookingFormDateTimePickerProps = {
   service: ServiceListItem;
   selectedExtraServices: ServiceListItem[];
   isLoading?: boolean;
+  isCalendarLoading?: boolean;
 };
 
 // Time slots rendering component
@@ -377,10 +378,12 @@ function DatePickerSection({
   selectedDate,
   onSelectDate,
   availableDays,
+  isLoading,
 }: {
   selectedDate: Date | undefined;
   onSelectDate: (date: Date | undefined) => void;
   availableDays: string[];
+  isLoading?: boolean;
 }) {
   // Use local state to track selected date
   const [localSelectedDate, setLocalSelectedDate] = useState<Date | undefined>(
@@ -409,27 +412,35 @@ function DatePickerSection({
       </div>
 
       <div className="flex justify-start">
-        <Calendar
-          mode="single"
-          selected={localSelectedDate}
-          onSelect={handleDateSelect}
-          defaultMonth={localSelectedDate || new Date()}
-          disabled={(date) => {
-            // Can't book in the past
-            if (date < new Date()) return true;
+        {isLoading ? (
+          <div className="border rounded-md p-2 w-full w-[242px]  h-[279.2px] flex items-center justify-center">
+            <Typography variant="small" className="text-muted-foreground">
+              Loading available dates...
+            </Typography>
+          </div>
+        ) : (
+          <Calendar
+            mode="single"
+            selected={localSelectedDate}
+            onSelect={handleDateSelect}
+            defaultMonth={localSelectedDate || new Date()}
+            disabled={(date) => {
+              // Can't book in the past
+              if (date < new Date()) return true;
 
-            // Check if day is in available days
-            if (availableDays.length > 0) {
-              // Get the day of week as a number where Monday is 0 and Sunday is 6
-              const dayOfWeek = (date.getDay() + 6) % 7;
-              return !availableDays.includes(dayOfWeek.toString());
-            }
+              // Check if day is in available days
+              if (availableDays.length > 0) {
+                // Get the day of week as a number where Monday is 0 and Sunday is 6
+                const dayOfWeek = (date.getDay() + 6) % 7;
+                return !availableDays.includes(dayOfWeek.toString());
+              }
 
-            // Default behavior if no availableDays are provided
-            return date.getDay() === 0 || date.getDay() === 6; // Exclude weekends
-          }}
-          className="border rounded-md p-2"
-        />
+              // Default behavior if no availableDays are provided
+              return date.getDay() === 0 || date.getDay() === 6; // Exclude weekends
+            }}
+            className="border rounded-md p-2"
+          />
+        )}
       </div>
     </div>
   );
@@ -545,6 +556,7 @@ export function BookingFormDateTimePicker({
   service,
   selectedExtraServices,
   isLoading = false,
+  isCalendarLoading = false,
 }: BookingFormDateTimePickerProps) {
   // Use synchronized date state
   const { localDate, handleLocalDateChange } = useSynchronizedDateState(
@@ -589,6 +601,7 @@ export function BookingFormDateTimePicker({
             selectedDate={localDate}
             onSelectDate={handleLocalDateChange}
             availableDays={availableDays}
+            isLoading={isCalendarLoading}
           />
         </div>
 

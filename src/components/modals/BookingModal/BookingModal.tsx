@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { BookingModalTemplate } from '@/components/templates/BookingModalTemplate';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { Button } from '@/components/ui/button';
@@ -11,8 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { X } from 'lucide-react';
 import { cn } from '@/utils';
+import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 /**
  * Component for booking a service
@@ -28,27 +28,32 @@ export type BookingModalProps = {
 function BookingModalFooter({
   onCancel,
   isCompleted,
+  isSubmitting = true,
 }: {
   onCancel: () => void;
   isCompleted?: boolean;
+  isSubmitting?: boolean;
 }) {
   return (
     <DialogFooter className="flex items-center justify-between p-4 border-t bg-background sticky bottom-0 left-0 right-0">
       <div className="w-full flex flex-col-reverse sm:flex-row gap-3 sm:gap-2 sm:justify-end">
-        <Button
-          variant={isCompleted ? 'default' : 'outline'}
-          onClick={onCancel}
-          className="sm:flex-initial w-full sm:w-auto"
-        >
-          {isCompleted ? 'Close' : 'Cancel'}
-        </Button>
+        {!isSubmitting && (
+          <Button
+            variant={isCompleted ? 'default' : 'outline'}
+            onClick={onCancel}
+            className="sm:flex-initial w-full sm:w-auto"
+          >
+            {isCompleted ? 'Close' : 'Cancel'}
+          </Button>
+        )}
         {!isCompleted && (
           <Button
             type="submit"
             form="booking-form"
             className="sm:flex-initial w-full sm:w-auto"
+            disabled={isSubmitting}
           >
-            Book Now
+            {isSubmitting ? 'Processing...' : 'Book Now'}
           </Button>
         )}
       </div>
@@ -65,6 +70,7 @@ export function BookingModal(props: BookingModalProps) {
 
   // Track if we're in the completed state
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset completed state when modal closes
   useEffect(() => {
@@ -110,9 +116,14 @@ export function BookingModal(props: BookingModalProps) {
           <BookingModalTemplate
             {...props}
             onBookingComplete={(bookingId) => handleBookingComplete(bookingId)}
+            onSubmitStateChange={setIsSubmitting}
           />
         </div>
-        <BookingModalFooter onCancel={onCancel} isCompleted={isCompleted} />
+        <BookingModalFooter
+          onCancel={onCancel}
+          isSubmitting={isSubmitting}
+          isCompleted={isCompleted}
+        />
       </DialogContent>
     </Dialog>
   );
