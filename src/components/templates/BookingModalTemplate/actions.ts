@@ -515,12 +515,12 @@ export async function getAvailableDates(
     }
     
     // Parse working hours to determine which days the professional works
-    const workingHours = professionalProfile.working_hours as Record<string, { startTime: string; endTime: string } | null>;
+    const workingHours = professionalProfile.working_hours as Record<string, { startTime: string; endTime: string; enabled: boolean } | null>;
     
     // Map day names to day numbers (0 is Monday, not Sunday)
     // Get days of week when the professional is available (as numbers)
     const availableDaysOfWeek = Object.entries(workingHours)
-      .filter(([, schedule]) => schedule?.startTime && schedule?.endTime)
+      .filter(([, schedule]) => schedule?.startTime && schedule?.endTime && schedule?.enabled)
       .map(([day]) => day); // Convert to day number
       
     console.log(availableDaysOfWeek)
