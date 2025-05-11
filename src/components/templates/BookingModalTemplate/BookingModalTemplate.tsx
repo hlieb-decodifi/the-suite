@@ -35,6 +35,7 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     paymentMethods,
     isLoadingPaymentMethods,
     isLoadingTimeSlots,
+    isLoadingCalendar,
     handleSuccess,
     selectedDate,
     handleDateSelect,
@@ -72,6 +73,7 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
       selectedDate={selectedDate}
       onSelectDate={handleDateSelect}
       onSubmitStateChange={handleSubmitStateChange}
+      isCalendarLoading={isLoadingCalendar}
     />
   );
 }

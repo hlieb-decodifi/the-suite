@@ -49,7 +49,8 @@ export function useBookingState(props: BookingModalProps) {
   // Fetch available dates
   const { 
     data: availableDays = [],
-    refetch: refetchAvailableDays 
+    refetch: refetchAvailableDays,
+    isPending: isLoadingCalendar
   } = useAvailableDates(professionalProfileId, isOpen);
 
   // Fetch available time slots when a date is selected
@@ -171,6 +172,7 @@ export function useBookingState(props: BookingModalProps) {
     handleSuccess,
     handleDateSelect,
     selectedDate,
-    isLoadingTimeSlots
+    isLoadingTimeSlots,
+    isLoadingCalendar
   };
 } 

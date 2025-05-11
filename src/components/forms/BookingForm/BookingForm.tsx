@@ -35,6 +35,7 @@ export type BookingFormProps = {
   onSelectDate?: (date: Date | undefined) => void;
   onSubmitSuccess: (formData: BookingFormValues, totalPrice: number) => void;
   onSubmitStateChange?: (isSubmitting: boolean) => void;
+  isCalendarLoading?: boolean;
 };
 
 export function BookingForm({
@@ -50,6 +51,7 @@ export function BookingForm({
   onSelectDate,
   onSubmitSuccess,
   onSubmitStateChange,
+  isCalendarLoading = false,
 }: BookingFormProps) {
   // Use local state for date to ensure component has control
   const [localSelectedDate, setLocalSelectedDate] = useState<Date | undefined>(
@@ -173,6 +175,7 @@ export function BookingForm({
           service={service}
           selectedExtraServices={selectedExtraServices}
           isLoading={isLoadingTimeSlots}
+          isCalendarLoading={isCalendarLoading}
         />
 
         {/* Show form errors for date and time */}
