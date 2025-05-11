@@ -11,7 +11,7 @@ import { TIME_OPTIONS } from './constants';
 import { ContactHoursFormValues } from './schema';
 import { FormMessage } from '@/components/ui/form';
 import { WorkingHoursEntry } from '@/types/working_hours';
-import { convertToLocal } from '@/utils';
+// import { convertToLocal } from '@/utils';
 
 export type ContactHoursFormProps = {
   onSubmitSuccess: (data: ContactHoursFormValues) => void;
@@ -29,8 +29,10 @@ export function ContactHoursForm({
     () =>
       defaultValues?.map((entry) => ({
         ...entry,
-        startTime: entry.startTime ? convertToLocal(entry.startTime) : null,
-        endTime: entry.endTime ? convertToLocal(entry.endTime) : null,
+        // startTime: entry.startTime ? convertToLocal(entry.startTime) : null,
+        startTime: entry.startTime,
+        // endTime: entry.endTime ? convertToLocal(entry.endTime) : null,
+        endTime: entry.endTime,
       })) ?? null,
     [defaultValues],
   );

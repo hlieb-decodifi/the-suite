@@ -1,27 +1,28 @@
 /* eslint-disable max-lines-per-function */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { User } from '@supabase/supabase-js';
 import { ContactHoursFormValues } from '@/components/forms/ContactHoursForm';
 import { ContactHoursModal } from '@/components/modals/ContactHoursModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
+import { User } from '@supabase/supabase-js';
 import { Pencil } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-import { toast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WorkingHoursEntry } from '@/types/working_hours';
+import { toast } from '@/components/ui/use-toast';
 import { updateWorkingHoursAction } from '@/server/domains/working_hours/actions';
-import { formatTime, convertToUTC, convertToLocal } from '@/utils';
+import { WorkingHoursEntry } from '@/types/working_hours';
+import { formatTime } from '@/utils';
 
 // Helper function to safely format time strings that might be null
 function safeFormatTime(timeString: string | null): string {
   if (!timeString) return 'Invalid Time';
 
   // First convert UTC time to local time, then format it
-  const localTime = convertToLocal(timeString);
+  // const localTime = convertToLocal(timeString);
+  const localTime = timeString;
   return localTime ? formatTime(localTime) : 'Invalid Time';
 }
 
@@ -90,8 +91,10 @@ export function ContactSection({
           `[Working Hours] Local start time: ${h.startTime}, end time: ${h.endTime}`,
         );
 
-        const utcStartTime = convertToUTC(h.startTime);
-        const utcEndTime = convertToUTC(h.endTime);
+        // const utcStartTime = convertToUTC(h.startTime);
+        const utcStartTime = h.startTime;
+        // const utcEndTime = convertToUTC(h.endTime);
+        const utcEndTime = h.endTime;
 
         console.log(
           `[Working Hours] UTC start time: ${utcStartTime}, end time: ${utcEndTime}`,

@@ -30,6 +30,10 @@ export function formatTime(time: string): string {
  * @returns The time string in "HH:MM" format in UTC timezone
  */
 export function convertToUTC(timeString: string | null | undefined): string | null {
+  // QUICK WORKAROUND: Just return the input time string without conversion
+  return timeString || null;
+  
+  /* 
   if (!timeString) return null;
   
   try {
@@ -63,6 +67,7 @@ export function convertToUTC(timeString: string | null | undefined): string | nu
     console.error('Error converting time to UTC:', error);
     return null;
   }
+  */
 }
 
 /**
@@ -71,6 +76,10 @@ export function convertToUTC(timeString: string | null | undefined): string | nu
  * @returns The time string in "HH:MM" format in local timezone
  */
 export function convertToLocal(timeString: string | null | undefined): string | null {
+  // QUICK WORKAROUND: Just return the input time string without conversion
+  return timeString || null;
+  
+  /*
   if (!timeString) return null;
   
   try {
@@ -106,4 +115,5 @@ export function convertToLocal(timeString: string | null | undefined): string | 
     console.error('Error converting UTC time to local:', error);
     return null;
   }
-} 
+  */
+}

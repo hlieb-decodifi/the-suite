@@ -2,9 +2,8 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { format } from 'date-fns';
 import { isValidWorkingHours } from '@/types/working_hours';
-import { convertToUTC, convertToLocal } from '@/utils/formatDate';
+import { format } from 'date-fns';
 
 /**
  * Converts a timeSlot string (e.g., "14:00") to a time object
@@ -19,7 +18,8 @@ function timeSlotToTimeObject(
   const timeString = timeSlot || '00:00';
   
   // Convert local time to UTC for storage in database
-  const utcTimeString = convertToUTC(timeString) || timeString;
+  // const utcTimeString = convertToUTC(timeString) || timeString;
+  const utcTimeString = timeString;
   
   const parts = utcTimeString.split(':');
   const hoursStr = parts[0] || '0';
@@ -416,8 +416,10 @@ export async function getAvailableTimeSlots(
 
     // Convert UTC times from database to local time for display
     const daySchedule = {
-      start: convertToLocal(dayEntry.startTime),
-      end: convertToLocal(dayEntry.endTime)
+      // start: convertToLocal(dayEntry.startTime),
+      start: dayEntry.startTime,
+      // end: convertToLocal(dayEntry.endTime)
+      end: dayEntry.endTime
     };
 
     if (!daySchedule.start || !daySchedule.end) {
@@ -467,8 +469,10 @@ export async function getAvailableTimeSlots(
         const apptStartTimeUTC = appointment.start_time.substring(0, 5); // Format: "14:00:00" -> "14:00"
         const apptEndTimeUTC = appointment.end_time.substring(0, 5);
         
-        const apptStartTimeLocal = convertToLocal(apptStartTimeUTC) || apptStartTimeUTC;
-        const apptEndTimeLocal = convertToLocal(apptEndTimeUTC) || apptEndTimeUTC;
+        // const apptStartTimeLocal = convertToLocal(apptStartTimeUTC) || apptStartTimeUTC;
+        const apptStartTimeLocal = apptStartTimeUTC;
+        // const apptEndTimeLocal = convertToLocal(apptEndTimeUTC) || apptEndTimeUTC;
+        const apptEndTimeLocal = apptEndTimeUTC;
         
         const apptStartMinutes = timeToMinutes(apptStartTimeLocal);
         const apptEndMinutes = timeToMinutes(apptEndTimeLocal);
