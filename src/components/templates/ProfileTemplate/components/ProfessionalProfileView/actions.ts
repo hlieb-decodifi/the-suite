@@ -18,6 +18,7 @@ export type UserData = {
   roleName: string;
   isProfessional: boolean;
   subscriptionStatus: boolean | null;
+  isPublished: boolean | null;
   email?: string | undefined;
   subscriptionDetails?: {
     planName: string;
@@ -72,19 +73,21 @@ export async function getUserData(userId: string): Promise<UserData> {
       console.error('Error checking professional status:', roleError);
     }
     
-    // If professional, fetch subscription status
+    // If professional, fetch subscription status and publish status
     let subscriptionStatus = null;
+    let isPublished = null;
     let subscriptionDetails = undefined;
     
     if (isProfessional) {
       const { data: profileData, error: profileError } = await supabase
         .from('professional_profiles')
-        .select('is_subscribed')
+        .select('is_subscribed, is_published')
         .eq('user_id', userId)
         .single();
       
       if (!profileError && profileData) {
         subscriptionStatus = profileData.is_subscribed;
+        isPublished = profileData.is_published;
         
         // If subscribed, check if we have professional_subscriptions record
         if (subscriptionStatus) {
@@ -130,6 +133,7 @@ export async function getUserData(userId: string): Promise<UserData> {
       roleName: userData.roles?.name || 'User',
       isProfessional: !!isProfessional,
       subscriptionStatus,
+      isPublished,
       email,
       subscriptionDetails
     };
