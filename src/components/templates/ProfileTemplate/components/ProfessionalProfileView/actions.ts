@@ -195,4 +195,33 @@ export async function handleCancelSubscriptionRedirect(userId: string): Promise<
     // Redirect back to subscription page with error
     redirect('/profile?tab=subscription&error=cancel_failed');
   }
+}
+
+export async function toggleProfilePublishStatus(userId: string, isPublished: boolean): Promise<{ success: boolean; message: string }> {
+  try {
+    const supabase = await createClient();
+    
+    const { error } = await supabase
+      .from('professional_profiles')
+      .update({ 
+        is_published: isPublished,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId);
+    
+    if (error) {
+      throw new Error(`Failed to update publish status: ${error.message}`);
+    }
+    
+    return {
+      success: true,
+      message: `Profile ${isPublished ? 'published' : 'unpublished'} successfully.`
+    };
+  } catch (error) {
+    console.error('Error toggling publish status:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to update publish status'
+    };
+  }
 } 

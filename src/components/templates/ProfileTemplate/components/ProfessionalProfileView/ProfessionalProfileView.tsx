@@ -1,5 +1,9 @@
 import { User } from '@supabase/supabase-js';
-import { getUserData, getStripeConnectStatus } from './actions';
+import {
+  getUserData,
+  getStripeConnectStatus,
+  getSubscriptionPlans,
+} from './actions';
 import { ProfessionalProfileViewClient } from './ProfessionalProfileViewClient';
 
 export type ProfessionalProfileViewProps = {
@@ -26,11 +30,23 @@ export async function ProfessionalProfileView({
     }
   }
 
+  // Fetch subscription plans for the subscription section
+  let subscriptionPlans = null;
+  if (!isPublicView && userData.isProfessional) {
+    try {
+      subscriptionPlans = await getSubscriptionPlans();
+    } catch (error) {
+      console.error('Error fetching subscription plans:', error);
+      subscriptionPlans = [];
+    }
+  }
+
   return (
     <ProfessionalProfileViewClient
       user={user}
       userData={userData}
       connectStatus={connectStatus}
+      subscriptionPlans={subscriptionPlans}
       searchParams={searchParams}
       isPublicView={isPublicView}
     />

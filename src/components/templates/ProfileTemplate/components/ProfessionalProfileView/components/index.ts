@@ -3,7 +3,6 @@ export * from './ProfileOverviewSection/ProfileOverviewSection';
 export * from './LocationSection/LocationSection';
 export * from './ContactSection/ContactSection';
 export * from './PaymentMethodsSection/PaymentMethodsSection';
-export * from './SubscriptionSection/SubscriptionSection';
 export * from './ServicesSection/ServicesSection';
 export * from './PortfolioSection/PortfolioSection';
 export * from './ReviewsSection/ReviewsSection';
