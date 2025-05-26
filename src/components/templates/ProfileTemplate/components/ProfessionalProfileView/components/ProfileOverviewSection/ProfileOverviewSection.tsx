@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,7 @@ import Image from 'next/image';
 
 export type ProfileOverviewSectionProps = {
   user: User;
-  onEditPortfolio: () => void;
+  onEditPortfolio?: () => void;
   isEditable?: boolean;
 };
 
@@ -70,7 +69,7 @@ export function ProfileOverviewSection({
           <Button
             variant="outline"
             size="icon"
-            onClick={onEditPortfolio}
+            onClick={() => onEditPortfolio?.()}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
           >
             <Pencil className="h-4 w-4" />
@@ -103,7 +102,7 @@ export function ProfileOverviewSection({
                   variant="outline"
                   size="sm"
                   className="mt-2"
-                  onClick={onEditPortfolio}
+                  onClick={() => onEditPortfolio?.()}
                 >
                   Add Photos
                 </Button>

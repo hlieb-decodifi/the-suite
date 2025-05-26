@@ -409,7 +409,11 @@ function ProfessionalDashboardContent({
         value={activeTab}
         onValueChange={setActiveTab}
       >
-        <DashboardTemplateTabs className="mb-4" />
+        <DashboardTemplateTabs
+          className="mb-4"
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
 
         <OverviewTabContent
           dateRange={dateRange}

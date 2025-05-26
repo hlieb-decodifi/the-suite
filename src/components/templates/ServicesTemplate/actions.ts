@@ -123,7 +123,6 @@ function createEmptyPaginationResult(page: number, pageSize: number): ServicesWi
 /**
  * Fetches services with professional information from Supabase with pagination
  */
-/* eslint-disable-next-line max-lines-per-function */
 export async function getServices(
   page = 1,
   pageSize = 12,

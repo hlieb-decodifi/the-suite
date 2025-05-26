@@ -15,8 +15,8 @@ import { ReviewsSection } from '../ReviewsSection/ReviewsSection';
 // Type for ProfileTabContent props
 export type ProfileTabContentProps = {
   user: User;
-  onEditPortfolio: () => void;
-  onPublishToggle: () => void;
+  onEditPortfolio?: () => void;
+  onPublishToggle?: () => void;
   isEditable?: boolean;
 };
 
@@ -71,12 +71,12 @@ export function ProfileTabContent({
         <div className="md:col-span-2 space-y-8">
           <HeaderSection
             user={user}
-            onPublishToggle={onPublishToggle}
+            {...(onPublishToggle && { onPublishToggle })}
             isEditable={isEditable}
           />
           <ProfileOverviewSection
             user={user}
-            onEditPortfolio={onEditPortfolio}
+            {...(onEditPortfolio && { onEditPortfolio })}
             isEditable={isEditable}
           />
         </div>

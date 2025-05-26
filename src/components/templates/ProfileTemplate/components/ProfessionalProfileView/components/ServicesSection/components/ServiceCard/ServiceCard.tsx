@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 import { Card, CardContent } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';

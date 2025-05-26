@@ -1,4 +1,4 @@
-/* eslint-disable max-lines-per-function */
+ 
 'use client';
 
 import { useProfile, useUpdateProfileHeader } from '@/api/profiles/hooks';
@@ -24,7 +24,7 @@ import { useState } from 'react';
 
 export type HeaderSectionProps = {
   user: User;
-  onPublishToggle: () => void;
+  onPublishToggle?: () => void;
   isEditable?: boolean;
 };
 

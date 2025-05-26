@@ -24,7 +24,6 @@ export type BookingModalProps = {
 /**
  * Custom hook to manage booking states and data fetching
  */
-/* eslint-disable-next-line max-lines-per-function */
 export function useBookingState(props: BookingModalProps) {
   const { 
     isOpen, 

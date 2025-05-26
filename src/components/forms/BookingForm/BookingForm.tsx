@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 'use client';
 
 import { FormFieldWrapper } from '@/components/forms/common/FormFieldWrapper';

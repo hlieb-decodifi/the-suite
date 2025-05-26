@@ -102,7 +102,7 @@ async function calculateTotalPrice(
  * @param professionalProfileId The ID of the professional's profile
  * @returns Object containing the booking ID and total price
  */
-/* eslint-disable-next-line max-lines-per-function */
+ 
 export async function createBooking(
   formData: BookingFormValues,
   professionalProfileId: string
@@ -374,7 +374,6 @@ function isSlotOverlapping(
  * @param date - The date in YYYY-MM-DD format
  * @returns Array of available time slots formatted as "HH:MM AM/PM"
  */
-/* eslint-disable-next-line max-lines-per-function */
 export async function getAvailableTimeSlots(
   professionalProfileId: string,
   date: string

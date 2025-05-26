@@ -104,11 +104,23 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
-  is_subscribed boolean default true,
+  is_subscribed boolean default false,
+  -- Stripe Connect fields
+  stripe_account_id text,
+  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
+  stripe_connect_updated_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table professional_profiles enable row level security;
+
+-- Create indexes for Stripe Connect fields
+create index if not exists idx_professional_profiles_stripe_account_id 
+on professional_profiles(stripe_account_id) 
+where stripe_account_id is not null;
+
+create index if not exists idx_professional_profiles_stripe_connect_status 
+on professional_profiles(stripe_connect_status);
 
 /**
 * CLIENT_PROFILES
@@ -569,128 +581,138 @@ create policy "Anyone can view payment methods of published professionals"
   );
 
 /**
-* REALTIME SUBSCRIPTIONS
-* Only allow realtime listening on public tables.
+* STRIPE INTEGRATION
+* Tables for Stripe integration
 */
-drop publication if exists supabase_realtime;
-create publication supabase_realtime for table services;
+create table customers (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references users not null unique,
+  stripe_customer_id text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table customers enable row level security;
+
+-- RLS policy for customers table
+create policy "Users can view their own customer data"
+  on customers for select
+  using (auth.uid() = user_id);
 
 /**
-* STORAGE BUCKETS
-* Define storage buckets and their policies
+* SUBSCRIPTION SYSTEM
+* Tables for managing professional subscriptions
 */
--- Create profile-photos bucket
-insert into storage.buckets (id, name, public)
-  values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
-
--- Create portfolio-photos bucket (not public)
-insert into storage.buckets (id, name, public)
-  values ('portfolio-photos', 'Portfolio Photos', false);
-
--- Policies for profile-photos bucket
-create policy "Allow authenticated uploads to profile-photos"
-  on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to modify their own profile photos"
-  on storage.objects for update to authenticated
-  with check (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to delete their own profile photos"
-  on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to see all profile photos"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'profile-photos'
-  );
-
--- Policies for portfolio-photos bucket
-create policy "Allow authenticated uploads to portfolio-photos"
-  on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to modify their own portfolio photos"
-  on storage.objects for update to authenticated
-  with check (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to delete their own portfolio photos"
-  on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow viewing portfolio photos of published professionals"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.user_id::text = (storage.foldername(name))[1]
-      and professional_profiles.is_published = true
-    )
-  );
 
 /**
-* USER POLICIES
-* Define RLS policies for users after all tables are created
+* SUBSCRIPTION_PLANS
+* Available subscription plans for professionals
 */
--- RLS policies for users
-drop policy if exists "Users can view their own data" on users;
+create table subscription_plans (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  price decimal(10, 2) not null,
+  interval text not null check (interval in ('month', 'year')),
+  stripe_price_id text, -- For Stripe integration
+  is_active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table subscription_plans enable row level security;
 
-create policy "Users can view their own data"
-  on users for select
-  using (auth.uid() = id);
+-- Insert default subscription plans
+insert into subscription_plans (name, description, price, interval) 
+values 
+  ('Monthly', 'Standard monthly subscription', 19.99, 'month'),
+  ('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year');
 
--- Modified policy to avoid circular reference
-drop policy if exists "Anyone can view user data for published professionals" on users;
-create policy "Anyone can view user data for published professionals"
-  on users for select
-  using (
-    id in (
-      select user_id from professional_profiles
-      where is_published = true
-    )
-  );
+/**
+* PROFESSIONAL_SUBSCRIPTIONS
+* Tracks active subscriptions for professionals
+*/
+create table professional_subscriptions (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null,
+  subscription_plan_id uuid references subscription_plans not null,
+  status text not null check (status in ('active', 'cancelled', 'expired')),
+  start_date timestamp with time zone default timezone('utc'::text, now()) not null,
+  end_date timestamp with time zone,
+  stripe_subscription_id text, -- For Stripe integration
+  cancel_at_period_end boolean default false not null, -- Track if subscription is scheduled to cancel at period end
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table professional_subscriptions enable row level security;
 
--- Add back the update policy that was missing
-drop policy if exists "Users can update their own basic data" on users;
-create policy "Users can update their own basic data"
-  on users for update
-  using (auth.uid() = id)
-  with check (
-    -- Can't change their own role - using a parameter instead of a subquery
-    auth.uid() = id AND
-    role_id IS NOT NULL
-  );
+/**
+* Create a function to update is_subscribed flag on professional_profiles
+* whenever a subscription is created, updated, or deleted
+*/
+create or replace function update_professional_subscription_status()
+returns trigger as $$
+begin
+  -- If the subscription is being created or updated
+  if (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') then
+    -- Set is_subscribed to true if the professional has an active subscription
+    update professional_profiles
+    set is_subscribed = true, updated_at = now()
+    where id = new.professional_profile_id
+    and exists (
+      select 1 from professional_subscriptions
+      where professional_profile_id = new.professional_profile_id
+      and status = 'active'
+    );
+  end if;
+  
+  -- If the subscription is being deleted or updated (to non-active)
+  if (TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND new.status != 'active')) then
+    -- Set is_subscribed to false if the professional has no active subscriptions
+    update professional_profiles
+    set is_subscribed = false, updated_at = now()
+    where id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
+    and not exists (
+      select 1 from professional_subscriptions
+      where professional_profile_id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
+      and status = 'active'
+    );
+  end if;
+  
+  return CASE WHEN TG_OP = 'DELETE' THEN old ELSE new END;
+end;
+$$ language plpgsql;
 
--- RLS policies for profile photos
-drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
+-- Create triggers for the update_professional_subscription_status function
+create trigger after_professional_subscription_insert
+  after insert on professional_subscriptions
+  for each row
+  execute function update_professional_subscription_status();
+  
+create trigger after_professional_subscription_update
+  after update on professional_subscriptions
+  for each row
+  execute function update_professional_subscription_status();
+  
+create trigger after_professional_subscription_delete
+  after delete on professional_subscriptions
+  for each row
+  execute function update_professional_subscription_status();
 
-create policy "Anyone can view profile photos of published professionals"
-  on profile_photos for select
+/**
+* RLS policies for subscription tables
+*/
+
+-- Subscription plans - visible to all, only editable by admins
+create policy "Anyone can view subscription plans"
+  on subscription_plans for select
+  using (true);
+
+-- Professional subscriptions - visible to the professional or admins
+create policy "Professionals can view their own subscriptions"
+  on professional_subscriptions for select
   using (
     exists (
       select 1 from professional_profiles
-      where professional_profiles.user_id = profile_photos.user_id
-      and professional_profiles.is_published = true
+      where professional_profiles.id = professional_subscriptions.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
     )
   );
 
@@ -916,5 +938,129 @@ create policy "Clients can create booking payments for their bookings"
 * Update realtime subscriptions to include booking tables
 */
 drop publication if exists supabase_realtime;
-create publication supabase_realtime for table services, bookings, appointments;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions;
+
+/**
+* STORAGE BUCKETS
+* Define storage buckets and their policies
+*/
+-- Create profile-photos bucket
+insert into storage.buckets (id, name, public)
+  values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
+
+-- Create portfolio-photos bucket (not public)
+insert into storage.buckets (id, name, public)
+  values ('portfolio-photos', 'Portfolio Photos', false);
+
+-- Policies for profile-photos bucket
+create policy "Allow authenticated uploads to profile-photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to modify their own profile photos"
+  on storage.objects for update to authenticated
+  with check (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to delete their own profile photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to see all profile photos"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'profile-photos'
+  );
+
+-- Policies for portfolio-photos bucket
+create policy "Allow authenticated uploads to portfolio-photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to modify their own portfolio photos"
+  on storage.objects for update to authenticated
+  with check (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to delete their own portfolio photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow viewing portfolio photos of published professionals"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id::text = (storage.foldername(name))[1]
+      and professional_profiles.is_published = true
+    )
+  );
+
+/**
+* USER POLICIES
+* Define RLS policies for users after all tables are created
+*/
+-- RLS policies for users
+drop policy if exists "Users can view their own data" on users;
+
+create policy "Users can view their own data"
+  on users for select
+  using (auth.uid() = id);
+
+-- Modified policy to avoid circular reference
+drop policy if exists "Anyone can view user data for published professionals" on users;
+create policy "Anyone can view user data for published professionals"
+  on users for select
+  using (
+    id in (
+      select user_id from professional_profiles
+      where is_published = true
+    )
+  );
+
+-- Add back the update policy that was missing
+drop policy if exists "Users can update their own basic data" on users;
+create policy "Users can update their own basic data"
+  on users for update
+  using (auth.uid() = id)
+  with check (
+    -- Can't change their own role - using a parameter instead of a subquery
+    auth.uid() = id AND
+    role_id IS NOT NULL
+  );
+
+-- RLS policies for profile photos
+drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
+
+create policy "Anyone can view profile photos of published professionals"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id = profile_photos.user_id
+      and professional_profiles.is_published = true
+    )
+  );
 

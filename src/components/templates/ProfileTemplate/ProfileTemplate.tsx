@@ -1,5 +1,3 @@
-'use client';
-
 import { User } from '@supabase/supabase-js';
 import { ClientProfileView } from './components/ClientProfileView/ClientProfileView';
 import { ProfessionalProfileView } from './components/ProfessionalProfileView/ProfessionalProfileView';
@@ -7,9 +5,10 @@ import { notFound } from 'next/navigation';
 
 export type ProfileTemplateProps = {
   user: User | null;
+  searchParams?: { [key: string]: string | string[] | undefined };
 };
 
-export function ProfileTemplate({ user }: ProfileTemplateProps) {
+export async function ProfileTemplate({ user, searchParams }: ProfileTemplateProps) {
   if (!user) {
     return null;
   }
@@ -25,7 +24,7 @@ export function ProfileTemplate({ user }: ProfileTemplateProps) {
   const renderProfileView = () => {
     switch (userRole) {
       case 'professional':
-        return <ProfessionalProfileView user={user} />;
+        return <ProfessionalProfileView user={user} searchParams={searchParams || {}} />;
       case 'client':
         return <ClientProfileView user={user} />;
       default:

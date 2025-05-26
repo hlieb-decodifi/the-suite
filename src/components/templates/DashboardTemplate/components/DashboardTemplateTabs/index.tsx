@@ -1,42 +1,45 @@
 'use client';
 
-import { TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TabNavigation, type TabItem } from '@/components/common/TabNavigation';
+import { cn } from '@/utils';
 
 type DashboardTemplateTabsProps = {
   className?: string;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
 };
+
+const DASHBOARD_TABS: TabItem[] = [
+  {
+    key: 'overview',
+    label: 'Overview',
+  },
+  {
+    key: 'appointments',
+    label: 'Appointments',
+  },
+  {
+    key: 'messages',
+    label: 'Messages',
+  },
+  {
+    key: 'refunds',
+    label: 'Refunds',
+  },
+];
 
 export function DashboardTemplateTabs({
   className = '',
+  activeTab,
+  onTabChange,
 }: DashboardTemplateTabsProps) {
   return (
-    <TabsList
-      className={`gap-1 w-full max-w-md bg-muted/50 p-1 rounded-full ${className}`}
-    >
-      <TabsTrigger
-        value="overview"
-        className="border-primary flex items-center justify-center gap-1.5 flex-1 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-      >
-        Overview
-      </TabsTrigger>
-      <TabsTrigger
-        value="appointments"
-        className="border-primary flex items-center justify-center gap-1.5 flex-1 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-      >
-        Appointments
-      </TabsTrigger>
-      <TabsTrigger
-        value="messages"
-        className="border-primary flex items-center justify-center gap-1.5 flex-1 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-      >
-        Messages
-      </TabsTrigger>
-      <TabsTrigger
-        value="refunds"
-        className="border-primary flex items-center justify-center gap-1.5 flex-1 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-      >
-        Refunds
-      </TabsTrigger>
-    </TabsList>
+    <TabNavigation
+      tabs={DASHBOARD_TABS}
+      variant="value"
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      className={cn(className, 'mb-8')}
+    />
   );
 }
