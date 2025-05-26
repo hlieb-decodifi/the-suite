@@ -1,6 +1,7 @@
 'use client';
 
 import { Logo } from '@/components/common/Logo/Logo';
+import { useSearch } from '@/stores/searchStore';
 import { cn } from '@/utils/cn';
 import { AuthButtons } from './components/AuthButtons';
 import { MobileMenu } from './components/MobileMenu/MobileMenu';
@@ -8,15 +9,13 @@ import { Modals } from './components/Modals';
 import { SearchBox } from './components/SearchBox/SearchBox';
 import { UserMenu } from './components/UserMenu/UserMenu';
 import { useAuthData, useAuthModals } from './hooks';
-import { LoadingOverlay } from '@/components/common/LoadingOverlay';
-import { useSearch } from '@/stores/searchStore';
 
 export type HeaderProps = {
   className?: string;
 };
 
 export function Header({ className }: HeaderProps) {
-  const { isAuthenticated, userInfo, isLoading } = useAuthData();
+  const { isAuthenticated, userInfo } = useAuthData();
   const {
     isSignUpModalOpen,
     isSignInModalOpen,
@@ -54,7 +53,8 @@ export function Header({ className }: HeaderProps) {
 
         {/* Authentication / User Profile (Desktop) */}
         <div className="hidden md:flex items-center gap-4">
-          {isLoading ? <LoadingOverlay /> : content}
+          {/* {isLoading ? <LoadingOverlay /> : content} */}
+          {content}
         </div>
 
         {/* Mobile Menu */}
