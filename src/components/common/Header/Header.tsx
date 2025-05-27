@@ -8,14 +8,21 @@ import { MobileMenu } from './components/MobileMenu/MobileMenu';
 import { Modals } from './components/Modals';
 import { SearchBox } from './components/SearchBox/SearchBox';
 import { UserMenu } from './components/UserMenu/UserMenu';
-import { useAuthData, useAuthModals } from './hooks';
+import { useAuthModals } from './hooks';
+
+export type UserInfo = {
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+};
 
 export type HeaderProps = {
   className?: string;
+  isAuthenticated: boolean;
+  userInfo: UserInfo | null;
 };
 
-export function Header({ className }: HeaderProps) {
-  const { isAuthenticated, userInfo } = useAuthData();
+export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
   const {
     isSignUpModalOpen,
     isSignInModalOpen,
@@ -35,6 +42,15 @@ export function Header({ className }: HeaderProps) {
       />
     );
 
+  // Convert userInfo to match MobileMenu expected type
+  const mobileUserInfo = userInfo
+    ? {
+        name: userInfo.name,
+        email: userInfo.email,
+        avatarUrl: userInfo.avatarUrl,
+      }
+    : undefined;
+
   return (
     <header
       className={cn(
@@ -52,15 +68,12 @@ export function Header({ className }: HeaderProps) {
         </div>
 
         {/* Authentication / User Profile (Desktop) */}
-        <div className="hidden md:flex items-center gap-4">
-          {/* {isLoading ? <LoadingOverlay /> : content} */}
-          {content}
-        </div>
+        <div className="hidden md:flex items-center gap-4">{content}</div>
 
         {/* Mobile Menu */}
         <MobileMenu
           isAuthenticated={isAuthenticated}
-          userInfo={isAuthenticated ? userInfo : undefined}
+          userInfo={mobileUserInfo}
           onSignUpClick={authHandlers.handleSignUpClick}
           onSignInClick={authHandlers.handleSignInClick}
           onSearch={handleSearch}

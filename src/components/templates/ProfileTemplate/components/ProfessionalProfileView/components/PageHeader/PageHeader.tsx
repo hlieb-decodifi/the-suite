@@ -112,13 +112,6 @@ export function PageHeader({
                 </Button>
               </Link>
             )}
-            {!isPreviewMode && (
-              <Link href="/profile/subscription">
-                <Button variant="outline" className="w-full md:w-auto">
-                  Subscription
-                </Button>
-              </Link>
-            )}
             {onPreview && (
               <Button
                 variant="outline"

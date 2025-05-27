@@ -128,7 +128,7 @@ export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath('/');
-  // Note: The auth store will be cleared client-side after this action completes
+  redirect('/');
 }
 
 /**

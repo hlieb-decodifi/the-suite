@@ -1,2 +1,2 @@
-export * from './ProfessionalProfileView';
+export * from './ProfessionalProfileView'; 
 export * from './ProfessionalProfileViewClient'; 
