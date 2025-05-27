@@ -4,9 +4,9 @@ import { User } from '@supabase/supabase-js';
 import { useTransition } from 'react';
 import { usePathname } from 'next/navigation';
 import { toast } from '@/components/ui/use-toast';
-import { PageHeader } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components';
+import { ProfilePageHeader } from '@/components/common/ProfilePageHeader';
 import { TabNavigation, type TabItem } from '@/components/common/TabNavigation';
-import { SubscriptionTooltip } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components';
+import { SubscriptionTooltip } from '@/components/common/SubscriptionTooltip';
 import { toggleProfilePublishStatus, type UserData } from './ProfilePageLayout';
 
 type ConnectStatus = {
@@ -73,6 +73,11 @@ export function ProfilePageLayoutClient({
     });
   };
 
+  const handlePreview = () => {
+    // Navigate to the public profile view in the same tab
+    window.location.href = `/professional/${user.id}`;
+  };
+
   const isSubscribed = userData.subscriptionStatus === true;
   const isConnected = connectStatus?.connectStatus === 'complete';
   const isPublished = userData.isPublished === true;
@@ -118,9 +123,10 @@ export function ProfilePageLayoutClient({
 
   return (
     <div className="w-full">
-      <PageHeader
+      <ProfilePageHeader
         isPublished={isPublished}
         onPublishToggle={handlePublishToggle}
+        onPreview={handlePreview}
         isPreviewMode={false}
         isPublicView={false}
         user={user}

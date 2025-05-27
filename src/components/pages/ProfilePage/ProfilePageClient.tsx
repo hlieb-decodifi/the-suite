@@ -6,9 +6,9 @@ import type { ProfileData } from '@/types/profiles';
 import type { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
 import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PaymentMethod } from '@/types/payment_methods';
-import { ContactSection } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components/ContactSection/ContactSection';
-import { LocationSection } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components/LocationSection/LocationSection';
-import { ReviewsSection } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components/ReviewsSection/ReviewsSection';
+import { ContactSection } from './components/ContactSection/ContactSection';
+import { LocationSection } from './components/LocationSection/LocationSection';
+import { ReviewsSection } from './components/ReviewsSection/ReviewsSection';
 import { AvatarUpload } from '@/components/common/AvatarUpload';
 import { ExpandableText } from '@/components/common/ExpandableText';
 import { HeaderModal } from '@/components/modals';
@@ -47,15 +47,18 @@ export type ProfilePageClientProps = {
   profileData: ProfileData | null;
   workingHours: WorkingHoursEntry[];
   paymentMethods: PaymentMethod[];
+  isEditable?: boolean;
 };
 
 // Inline HeaderSection component
 function InlineHeaderSection({
   user,
   profileData,
+  isEditable = true,
 }: {
   user: User;
   profileData: ProfileData;
+  isEditable?: boolean;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -118,16 +121,18 @@ function InlineHeaderSection({
               {isPublished ? 'Published' : 'Not Published'}
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsModalOpen(true)}
-            className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label="Edit professional information"
-            disabled={isPending}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {isEditable && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsModalOpen(true)}
+              className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label="Edit professional information"
+              disabled={isPending}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex items-start flex-col md:flex-row gap-6">
@@ -136,7 +141,7 @@ function InlineHeaderSection({
               fallbackName={fallbackName}
               size="lg"
               avatarContainerClassName="border-muted"
-              uploadEnabled={true}
+              uploadEnabled={isEditable}
             />
 
             <div className="flex-1 space-y-2">
@@ -218,7 +223,13 @@ function InlineHeaderSection({
 }
 
 // Inline ProfileOverviewSection component
-function InlineProfileOverviewSection({ user }: { user: User }) {
+function InlineProfileOverviewSection({
+  user,
+  isEditable = true,
+}: {
+  user: User;
+  isEditable?: boolean;
+}) {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Fetch portfolio photos from the API
@@ -251,14 +262,16 @@ function InlineProfileOverviewSection({ user }: { user: User }) {
         <Typography variant="h3" className="font-bold text-foreground">
           Portfolio
         </Typography>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => (window.location.href = '/profile/portfolio')}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+        {isEditable && (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => (window.location.href = '/profile/portfolio')}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-2">
         <div className="space-y-6">
@@ -352,7 +365,13 @@ function InlineProfileOverviewSection({ user }: { user: User }) {
 }
 
 // Inline PaymentMethodsSection component
-function InlinePaymentMethodsSection({ user }: { user: User }) {
+function InlinePaymentMethodsSection({
+  user,
+  isEditable = true,
+}: {
+  user: User;
+  isEditable?: boolean;
+}) {
   const [isEditing, setIsEditing] = useState(false);
 
   // Fetch data using React Query
@@ -439,15 +458,17 @@ function InlinePaymentMethodsSection({ user }: { user: User }) {
         <Typography variant="h3" className="font-bold text-foreground">
           Payment Methods
         </Typography>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleEditToggle}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          disabled={updatePaymentMethods.isPending}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+        {isEditable && (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleEditToggle}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            disabled={updatePaymentMethods.isPending}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-2">
         {isEditing ? (
@@ -483,6 +504,7 @@ export function ProfilePageClient({
   profileData,
   workingHours,
   paymentMethods,
+  isEditable = true,
 }: ProfilePageClientProps) {
   // Handle error state
   if (!profileData) {
@@ -500,21 +522,27 @@ export function ProfilePageClient({
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-8">
-          <InlineHeaderSection user={user} profileData={profileData} />
-          <InlineProfileOverviewSection user={user} />
+          <InlineHeaderSection
+            user={user}
+            profileData={profileData}
+            isEditable={isEditable}
+          />
+          <InlineProfileOverviewSection isEditable={isEditable} user={user} />
         </div>
         <div className="md:col-span-1 space-y-8">
           <ContactSection
             user={user}
             workingHours={workingHours}
             isLoading={false}
-            isEditable={true}
+            isEditable={isEditable}
           />
-          <LocationSection user={user} isEditable={true} />
-          {showPaymentMethods && <InlinePaymentMethodsSection user={user} />}
+          <LocationSection user={user} isEditable={isEditable} />
+          {showPaymentMethods && (
+            <InlinePaymentMethodsSection user={user} isEditable={isEditable} />
+          )}
         </div>
       </div>
-      <ReviewsSection user={user} isEditable={true} />
+      <ReviewsSection user={user} isEditable={isEditable} />
     </div>
   );
 }

@@ -14,8 +14,5 @@ export default async function ServicesPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  // Await the searchParams before passing to the template
-  const resolvedSearchParams = await searchParams;
-
-  return <ServicesTemplate searchParams={resolvedSearchParams} />;
+  return <ServicesTemplate searchParams={searchParams} />;
 }

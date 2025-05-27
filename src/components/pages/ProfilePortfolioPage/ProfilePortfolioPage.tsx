@@ -6,36 +6,73 @@ import { ProfilePortfolioPageClient } from './ProfilePortfolioPageClient';
 import { getPortfolioPhotos } from '@/server/domains/portfolio-photos/actions';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
 import { revalidatePath } from 'next/cache';
+import type { User } from '@supabase/supabase-js';
 
 export type ProfilePortfolioPageProps = {
   searchParams?: { [key: string]: string | string[] | undefined };
+  userId?: string;
+  isEditable?: boolean;
 };
 
-export async function ProfilePortfolioPage() {
+export async function ProfilePortfolioPage({
+  userId,
+  isEditable = true,
+}: ProfilePortfolioPageProps = {}) {
   const supabase = await createClient();
 
-  // Get the current user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let targetUserId = userId;
+  let user = null;
 
-  if (!user) {
+  if (!userId) {
+    // Get the current user if no userId provided (original behavior)
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    if (!currentUser) {
+      redirect('/');
+    }
+
+    // Check if user is professional
+    const userRole = currentUser.user_metadata?.role;
+    if (userRole !== 'professional') {
+      redirect('/dashboard');
+    }
+
+    targetUserId = currentUser.id;
+    user = currentUser;
+  } else {
+    // For public viewing, create a mock user object
+    const { data: userData } = await supabase
+      .from('users')
+      .select('id, first_name, last_name')
+      .eq('id', userId)
+      .single();
+
+    if (userData) {
+      user = {
+        id: userData.id,
+        email: '', // Email not available for public viewing
+        user_metadata: {
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+        },
+      };
+    }
+  }
+
+  if (!targetUserId || !user) {
     redirect('/');
   }
 
-  // Check if user is professional
-  const userRole = user.user_metadata?.role;
-  if (userRole !== 'professional') {
-    redirect('/dashboard');
-  }
-
   // Fetch portfolio photos data on the server
-  const portfolioResult = await getPortfolioPhotosData(user.id);
+  const portfolioResult = await getPortfolioPhotosData(targetUserId);
 
   return (
     <ProfilePortfolioPageClient
-      user={user}
+      user={user as User}
       initialPhotos={portfolioResult.photos}
+      isEditable={isEditable}
     />
   );
 }

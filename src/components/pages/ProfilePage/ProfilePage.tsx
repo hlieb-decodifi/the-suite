@@ -15,32 +15,72 @@ import type { WorkingHoursEntry } from '@/types/working_hours';
 import { revalidatePath } from 'next/cache';
 import { redirect, RedirectType } from 'next/navigation';
 import { ProfilePageClient } from './ProfilePageClient';
+import type { User } from '@supabase/supabase-js';
 
-export async function ProfilePage() {
+export type ProfilePageProps = {
+  userId?: string;
+  isEditable?: boolean;
+};
+
+export async function ProfilePage({
+  userId,
+  isEditable = true,
+}: ProfilePageProps = {}) {
   const supabase = await createClient();
 
-  // Get the current user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let targetUserId = userId;
+  let user = null;
 
-  if (!user) {
+  if (!userId) {
+    // Get the current user if no userId provided (original behavior)
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    if (!currentUser) {
+      redirect('/');
+    }
+
+    if (currentUser.user_metadata?.role === 'client') {
+      redirect('/client-profile', RedirectType.replace);
+    }
+
+    targetUserId = currentUser.id;
+    user = currentUser;
+  } else {
+    // For public viewing, create a mock user object
+    const { data: userData } = await supabase
+      .from('users')
+      .select('id, first_name, last_name')
+      .eq('id', userId)
+      .single();
+
+    if (userData) {
+      user = {
+        id: userData.id,
+        email: '', // Email not available for public viewing
+        user_metadata: {
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+        },
+      };
+    }
+  }
+
+  if (!targetUserId || !user) {
     redirect('/');
   }
 
-  if (user.user_metadata?.role === 'client') {
-    redirect('/client-profile', RedirectType.replace);
-  }
-
   // Fetch all data on the server
-  const profileData = await getProfileData(user.id);
+  const profileData = await getProfileData(targetUserId);
 
   return (
     <ProfilePageClient
-      user={user}
+      user={user as User}
       profileData={profileData.profile}
       workingHours={profileData.workingHours}
       paymentMethods={profileData.paymentMethods}
+      isEditable={isEditable}
     />
   );
 }

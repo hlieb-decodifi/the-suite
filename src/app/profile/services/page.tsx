@@ -5,6 +5,5 @@ export default async function ServicesPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const resolvedSearchParams = await searchParams;
-  return <ProfileServicesPage searchParams={resolvedSearchParams} />;
+  return <ProfileServicesPage searchParams={searchParams} />;
 }

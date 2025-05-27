@@ -1,4 +1,4 @@
-import { ProfessionalPublicTemplate } from '@/components/templates/ProfessionalPublicTemplate';
+import { ProfilePage } from '@/components/pages/ProfilePage/ProfilePage';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -9,5 +9,5 @@ export default async function ProfessionalPublicPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <ProfessionalPublicTemplate profileId={id} />;
+  return <ProfilePage userId={id} isEditable={false} />;
 }
