@@ -1,9 +1,9 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { getStripeConnectStatus as domainGetStripeConnectStatus } from '@/server/domains/subscriptions/actions';
 import { redirect } from 'next/navigation';
 import { ProfilePageLayoutClient } from './ProfilePageLayoutClient';
-import { getStripeConnectStatus as domainGetStripeConnectStatus } from '@/server/domains/subscriptions/actions';
 
 export type UserData = {
   id: string;
@@ -42,6 +42,11 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
 
   // Check if user is professional
   const userRole = user.user_metadata?.role;
+
+  if (userRole === 'client') {
+    redirect('/client-profile');
+  }
+
   if (userRole !== 'professional') {
     redirect('/dashboard');
   }

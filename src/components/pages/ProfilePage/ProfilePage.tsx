@@ -1,20 +1,20 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
-import { ProfilePageClient } from './ProfilePageClient';
-import { getProfileAction } from '@/server/domains/profiles/actions';
-import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
 import { getProfessionalPaymentMethodsAction } from '@/server/domains/payment_methods/actions';
-import type { HeaderFormValues } from '@/types/profiles';
-import type { WorkingHoursEntry } from '@/types/working_hours';
-import type { PaymentMethod } from '@/types/payment_methods';
-import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
+import { getProfileAction } from '@/server/domains/profiles/actions';
 import {
-  updateProfileHeaderInDb,
   toggleProfilePublishStatusInDb,
+  updateProfileHeaderInDb,
 } from '@/server/domains/profiles/db';
+import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
+import type { PaymentMethod } from '@/types/payment_methods';
+import type { HeaderFormValues } from '@/types/profiles';
+import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
+import type { WorkingHoursEntry } from '@/types/working_hours';
 import { revalidatePath } from 'next/cache';
+import { redirect, RedirectType } from 'next/navigation';
+import { ProfilePageClient } from './ProfilePageClient';
 
 export async function ProfilePage() {
   const supabase = await createClient();
@@ -26,6 +26,10 @@ export async function ProfilePage() {
 
   if (!user) {
     redirect('/');
+  }
+
+  if (user.user_metadata?.role === 'client') {
+    redirect('/client-profile', RedirectType.replace);
   }
 
   // Fetch all data on the server

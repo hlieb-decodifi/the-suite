@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { ProfilePortfolioPageClient } from './ProfilePortfolioPageClient';
 import { getPortfolioPhotos } from '@/server/domains/portfolio-photos/actions';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
+import { revalidatePath } from 'next/cache';
 
 export type ProfilePortfolioPageProps = {
   searchParams?: { [key: string]: string | string[] | undefined };
@@ -69,6 +70,7 @@ export async function uploadPortfolioPhotoAction({
   const { uploadPortfolioPhoto } = await import(
     '@/server/domains/portfolio-photos/actions'
   );
+  revalidatePath('/profile');
   return uploadPortfolioPhoto(userId, formData);
 }
 
@@ -82,6 +84,7 @@ export async function deletePortfolioPhotoAction({
   const { deletePortfolioPhoto } = await import(
     '@/server/domains/portfolio-photos/actions'
   );
+  revalidatePath('/profile');
   return deletePortfolioPhoto(id, userId);
 }
 
@@ -97,5 +100,6 @@ export async function updatePortfolioPhotoAction({
   const { updatePortfolioPhoto } = await import(
     '@/server/domains/portfolio-photos/actions'
   );
+  revalidatePath('/profile');
   return updatePortfolioPhoto(id, userId, updates);
 }
