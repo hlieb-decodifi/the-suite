@@ -7,10 +7,7 @@ import { toast } from '@/components/ui/use-toast';
 import { PageHeader } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components';
 import { TabNavigation, type TabItem } from '@/components/common/TabNavigation';
 import { SubscriptionTooltip } from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/components';
-import {
-  toggleProfilePublishStatus,
-  type UserData,
-} from '@/components/templates/ProfileTemplate/components/ProfessionalProfileView/actions';
+import { toggleProfilePublishStatus, type UserData } from './ProfilePageLayout';
 
 type ConnectStatus = {
   isConnected: boolean;
@@ -18,19 +15,19 @@ type ConnectStatus = {
   connectStatus?: string;
 } | null;
 
-export type ProfileLayoutClientProps = {
+export type ProfilePageLayoutClientProps = {
   user: User;
   userData: UserData;
   connectStatus: ConnectStatus;
   children: React.ReactNode;
 };
 
-export function ProfileLayoutClient({
+export function ProfilePageLayoutClient({
   user,
   userData,
   connectStatus,
   children,
-}: ProfileLayoutClientProps) {
+}: ProfilePageLayoutClientProps) {
   const [isPending, startTransition] = useTransition();
   const pathname = usePathname();
 

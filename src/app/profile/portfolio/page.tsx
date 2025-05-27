@@ -1,5 +1,5 @@
-import { PortfolioTabTemplate } from './PortfolioTabTemplate';
+import { ProfilePortfolioPage } from '@/components/pages/ProfilePortfolioPage/ProfilePortfolioPage';
 
 export default function PortfolioPage() {
-  return <PortfolioTabTemplate />;
+  return <ProfilePortfolioPage />;
 }

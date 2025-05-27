@@ -1,5 +1,10 @@
-import { ServicesTabTemplate } from './ServicesTabTemplate';
+import { ProfileServicesPage } from '@/components/pages/ProfileServicesPage/ProfileServicesPage';
 
-export default function ServicesPage() {
-  return <ServicesTabTemplate />;
+export default async function ServicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  return <ProfileServicesPage searchParams={resolvedSearchParams} />;
 }

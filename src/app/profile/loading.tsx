@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ProfileLoading() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="mx-auto">
       {/* Page Header Skeleton */}
       <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
         <div>

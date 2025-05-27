@@ -1,9 +1,10 @@
-import { SubscriptionTabTemplate } from './SubscriptionTabTemplate';
+import { ProfileSubscriptionPage } from '@/components/pages/ProfileSubscriptionPage/ProfileSubscriptionPage';
 
-export default function SubscriptionPage({
+export default async function SubscriptionPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  return <SubscriptionTabTemplate searchParams={searchParams} />;
+  const resolvedSearchParams = await searchParams;
+  return <ProfileSubscriptionPage searchParams={resolvedSearchParams} />;
 }
