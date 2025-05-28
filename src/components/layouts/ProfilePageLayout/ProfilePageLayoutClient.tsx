@@ -1,7 +1,7 @@
 'use client';
 
 import { User } from '@supabase/supabase-js';
-import { useTransition } from 'react';
+import { useTransition, useOptimistic } from 'react';
 import { usePathname } from 'next/navigation';
 import { toast } from '@/components/ui/use-toast';
 import { ProfilePageHeader } from '@/components/common/ProfilePageHeader';
@@ -31,6 +31,15 @@ export function ProfilePageLayoutClient({
   const [isPending, startTransition] = useTransition();
   const pathname = usePathname();
 
+  // Optimistic state for publish status
+  const [optimisticUserData, setOptimisticUserData] = useOptimistic(
+    userData,
+    (state, newIsPublished: boolean) => ({
+      ...state,
+      isPublished: newIsPublished,
+    }),
+  );
+
   // Determine active tab from pathname
   const getActiveTabFromPath = (path: string): string => {
     if (path === '/profile' || path === '/profile/') return 'profile';
@@ -43,19 +52,22 @@ export function ProfilePageLayoutClient({
   const activeTab = getActiveTabFromPath(pathname);
 
   const handlePublishToggle = () => {
+    const newPublishStatus = !optimisticUserData.isPublished;
+
     startTransition(async () => {
+      // Optimistically update the UI
+      setOptimisticUserData(newPublishStatus);
+
       try {
         const result = await toggleProfilePublishStatus(
           user.id,
-          !userData.isPublished,
+          newPublishStatus,
         );
 
         if (result.success) {
           toast({
             description: result.message,
           });
-          // Note: We could add optimistic updates here if needed
-          // For now, the page will refresh on navigation
         } else {
           toast({
             variant: 'destructive',
@@ -78,9 +90,9 @@ export function ProfilePageLayoutClient({
     window.location.href = `/professional/${user.id}`;
   };
 
-  const isSubscribed = userData.subscriptionStatus === true;
+  const isSubscribed = optimisticUserData.subscriptionStatus === true;
   const isConnected = connectStatus?.connectStatus === 'complete';
-  const isPublished = userData.isPublished === true;
+  const isPublished = optimisticUserData.isPublished === true;
 
   // Create tabs array for TabNavigation component
   const tabs: TabItem[] = [

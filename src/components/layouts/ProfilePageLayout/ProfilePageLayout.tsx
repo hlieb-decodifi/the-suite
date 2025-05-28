@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getStripeConnectStatus as domainGetStripeConnectStatus } from '@/server/domains/subscriptions/actions';
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { ProfilePageLayoutClient } from './ProfilePageLayoutClient';
 
 export type UserData = {
@@ -228,6 +229,9 @@ export async function toggleProfilePublishStatus(
     if (error) {
       throw new Error(`Failed to update publish status: ${error.message}`);
     }
+
+    // Revalidate the profile layout to refresh the userData
+    revalidatePath('/profile', 'layout');
 
     return {
       success: true,

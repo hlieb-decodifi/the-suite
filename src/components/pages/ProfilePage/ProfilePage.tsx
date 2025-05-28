@@ -151,7 +151,11 @@ export async function toggleProfilePublishStatusAction(
     const validatedData = publishToggleSchema.parse({ isPublished });
 
     await toggleProfilePublishStatusInDb(userId, validatedData.isPublished);
+
+    // Revalidate both the page and layout to ensure all components get fresh data
+    revalidatePath('/profile', 'layout');
     revalidatePath('/profile');
+
     return { success: true };
   } catch (error) {
     console.error('Error toggling publish status:', error);

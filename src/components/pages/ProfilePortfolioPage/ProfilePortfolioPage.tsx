@@ -107,8 +107,15 @@ export async function uploadPortfolioPhotoAction({
   const { uploadPortfolioPhoto } = await import(
     '@/server/domains/portfolio-photos/actions'
   );
+
+  const result = await uploadPortfolioPhoto(userId, formData);
+
+  // Revalidate all pages that might show portfolio photos
+  // revalidatePath('/profile', 'layout'); // Revalidate the entire layout
+  revalidatePath('/profile/portfolio');
   revalidatePath('/profile');
-  return uploadPortfolioPhoto(userId, formData);
+
+  return result;
 }
 
 export async function deletePortfolioPhotoAction({
@@ -121,8 +128,15 @@ export async function deletePortfolioPhotoAction({
   const { deletePortfolioPhoto } = await import(
     '@/server/domains/portfolio-photos/actions'
   );
+
+  const result = await deletePortfolioPhoto(id, userId);
+
+  // Revalidate all pages that might show portfolio photos
+  revalidatePath('/profile', 'layout'); // Revalidate the entire layout
+  revalidatePath('/profile/portfolio');
   revalidatePath('/profile');
-  return deletePortfolioPhoto(id, userId);
+
+  return result;
 }
 
 export async function updatePortfolioPhotoAction({
@@ -137,6 +151,13 @@ export async function updatePortfolioPhotoAction({
   const { updatePortfolioPhoto } = await import(
     '@/server/domains/portfolio-photos/actions'
   );
+
+  const result = await updatePortfolioPhoto(id, userId, updates);
+
+  // Revalidate all pages that might show portfolio photos
+  revalidatePath('/profile', 'layout'); // Revalidate the entire layout
+  revalidatePath('/profile/portfolio');
   revalidatePath('/profile');
-  return updatePortfolioPhoto(id, userId, updates);
+
+  return result;
 }

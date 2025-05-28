@@ -104,10 +104,14 @@ export function ProfilePageHeader({
             variant="h2"
             className="leading-5 border-none font-bold text-foreground"
           >
-            {showLoading ? <Skeleton className="h-10 w-60" /> : displayTitle}
+            {showLoading ? <Skeleton className="h-5 w-60" /> : displayTitle}
           </Typography>
-          <Typography className="text-muted-foreground">
-            {showLoading ? <Skeleton className="h-5 w-96" /> : displaySubtitle}
+          <Typography className="text-muted-foreground" as="div">
+            {showLoading ? (
+              <Skeleton className="mt-2 h-5 w-96" />
+            ) : (
+              displaySubtitle
+            )}
           </Typography>
         </div>
         {!isPublicView && (
@@ -192,7 +196,7 @@ export function ProfilePageHeader({
               </p>
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-3 mt-6">
+          <span className="flex justify-end gap-3 mt-6">
             <Button
               variant="outline"
               onClick={() => setShowBlockingDialog(false)}
@@ -204,7 +208,7 @@ export function ProfilePageHeader({
                 Complete Setup
               </Button>
             </Link>
-          </div>
+          </span>
         </DialogContent>
       </Dialog>
     </>
