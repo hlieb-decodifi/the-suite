@@ -112,6 +112,20 @@ export async function POST(req: Request) {
         await handleAccountUpdated(event.data.object as Stripe.Account);
         break;
         
+      case 'capability.updated':
+        await handleCapabilityUpdated(event.data.object as Stripe.Capability);
+        break;
+        
+      case 'person.updated':
+        await handlePersonUpdated(event.data.object as Stripe.Person);
+        break;
+        
+      // Events we don't need to handle (created by our own API calls)
+      case 'price.created':
+      case 'product.created':
+        console.log(`Ignoring ${event.type} - handled synchronously by our app`);
+        break;
+        
       // Add more event handlers as needed
       
       default:
@@ -674,20 +688,137 @@ async function handleAccountUpdated(account: Stripe.Account) {
   try {
     // Determine simple status based on account capabilities
     let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
-    if (account.charges_enabled && account.payouts_enabled) {
+    const wasComplete = account.charges_enabled && account.payouts_enabled;
+    
+    if (wasComplete) {
       connectStatus = 'complete';
     } else if (!account.details_submitted) {
       connectStatus = 'not_connected';
     }
     
     // Update our database with the latest account status
-    await updateStripeConnectStatus(userId, {
+    const updateResult = await updateStripeConnectStatus(userId, {
       accountId: account.id,
       connectStatus
     });
     
-    console.log(`Successfully updated Stripe Connect status for user: ${userId}`);
+    if (updateResult.success) {
+      console.log(`Successfully updated Stripe Connect status for user: ${userId} to ${connectStatus}`);
+      
+      // If the account just became complete, trigger service synchronization
+      if (connectStatus === 'complete') {
+        console.log(`Triggering service sync for newly connected account: ${userId}`);
+        
+        // Import the sync action dynamically to avoid circular dependencies
+        const { onSubscriptionChangeAction } = await import('@/server/domains/stripe-services');
+        
+        try {
+          const syncResult = await onSubscriptionChangeAction(userId);
+          if (syncResult.success) {
+            console.log(`Successfully synced ${syncResult.syncResult?.successCount || 0} services after Stripe Connect completion`);
+          } else {
+            console.error('Service sync failed after Stripe Connect completion:', syncResult.message);
+          }
+        } catch (syncError) {
+          console.error('Error triggering service sync after Stripe Connect completion:', syncError);
+        }
+      }
+    } else {
+      console.error('Failed to update Stripe Connect status:', updateResult.error);
+    }
   } catch (error) {
     console.error('Error updating Stripe Connect status:', error);
+  }
+}
+
+// Handle Stripe Connect capability updates
+async function handleCapabilityUpdated(capability: Stripe.Capability) {
+  console.log(`Capability updated: ${capability.id} for account: ${capability.account}`);
+  
+  try {
+    // Get the account to find the user ID
+    const account = await stripe.accounts.retrieve(capability.account as string);
+    const userId = account.metadata?.userId;
+    
+    if (!userId) {
+      console.log(`No userId in metadata for account: ${capability.account}`);
+      return;
+    }
+    
+    // Determine if this capability change affects the overall account status
+    // We mainly care about card_payments and transfers capabilities
+    if (capability.id === 'card_payments' || capability.id === 'transfers') {
+      console.log(`Important capability ${capability.id} updated to status: ${capability.status}`);
+      
+      // Refresh the account status to get the latest capability information
+      let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
+      
+      if (account.charges_enabled && account.payouts_enabled) {
+        connectStatus = 'complete';
+      } else if (!account.details_submitted) {
+        connectStatus = 'not_connected';
+      }
+      
+      // Update our database
+      const updateResult = await updateStripeConnectStatus(userId, {
+        accountId: account.id,
+        connectStatus
+      });
+      
+      if (updateResult.success) {
+        console.log(`Updated Stripe Connect status after capability change: ${userId} to ${connectStatus}`);
+        
+        // If the account just became complete due to capability approval, trigger service sync
+        if (connectStatus === 'complete') {
+          console.log(`Triggering service sync after capability completion: ${userId}`);
+          
+          try {
+            const { onSubscriptionChangeAction } = await import('@/server/domains/stripe-services');
+            const syncResult = await onSubscriptionChangeAction(userId);
+            
+            if (syncResult.success) {
+              console.log(`Successfully synced ${syncResult.syncResult?.successCount || 0} services after capability completion`);
+            } else {
+              console.error('Service sync failed after capability completion:', syncResult.message);
+            }
+          } catch (syncError) {
+            console.error('Error triggering service sync after capability completion:', syncError);
+          }
+        }
+      } else {
+        console.error('Failed to update Stripe Connect status after capability change:', updateResult.error);
+      }
+    } else {
+      console.log(`Capability ${capability.id} updated but not critical for our app`);
+    }
+  } catch (error) {
+    console.error('Error handling capability update:', error);
+  }
+}
+
+// Handle Stripe Connect person updates
+async function handlePersonUpdated(person: Stripe.Person) {
+  console.log(`Person updated: ${person.id} for account: ${person.account}`);
+  
+  try {
+    // Get the account to find the user ID
+    const account = await stripe.accounts.retrieve(person.account as string);
+    const userId = account.metadata?.userId;
+    
+    if (!userId) {
+      console.log(`No userId in metadata for account: ${person.account}`);
+      return;
+    }
+    
+    // Log person verification status for debugging
+    console.log(`Person verification status: ${JSON.stringify(person.verification)}`);
+    
+    // We could potentially update our database with person verification status
+    // For now, we'll just log it as it's mainly informational
+    // The main account status is handled by account.updated events
+    
+    console.log(`Person update processed for user: ${userId}`);
+  } catch (error) {
+    console.error('Error handling person update:', error);
   }
 } 

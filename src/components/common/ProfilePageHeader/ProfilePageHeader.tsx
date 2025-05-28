@@ -203,7 +203,7 @@ export function ProfilePageHeader({
             >
               Cancel
             </Button>
-            <Link href="/profile?tab=subscription">
+            <Link href="/profile/subscription">
               <Button onClick={() => setShowBlockingDialog(false)}>
                 Complete Setup
               </Button>

@@ -11,6 +11,8 @@ import {
   createStripeConnectLink as domainCreateStripeConnectLink,
   getStripeConnectStatus as domainGetStripeConnectStatus,
 } from '@/server/domains/subscriptions/actions';
+// Import Stripe service synchronization
+import { onSubscriptionChangeAction } from '@/server/domains/stripe-services';
 
 export type ProfileSubscriptionPageProps = {
   searchParams?: { [key: string]: string | string[] | undefined };
@@ -145,6 +147,87 @@ export async function handleCancelSubscriptionRedirectAction({
   } else {
     // Redirect back to subscription page with error
     redirect('/profile/subscription?error=cancel_failed');
+  }
+}
+
+/**
+ * Enhanced subscription action that includes Stripe service sync
+ * Called after successful subscription webhook processing
+ */
+export async function onSubscriptionStatusChangeAction({
+  userId,
+}: {
+  userId: string;
+}): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  try {
+    // Trigger Stripe service synchronization
+    const syncResult = await onSubscriptionChangeAction(userId);
+
+    if (syncResult.success) {
+      return {
+        success: true,
+        message: `Subscription updated and ${syncResult.syncResult?.successCount || 0} services synced with Stripe`,
+      };
+    } else {
+      console.error(
+        'Stripe service sync failed after subscription change:',
+        syncResult.message,
+      );
+      // Don't fail the subscription change, just log the sync error
+      return {
+        success: true,
+        message: 'Subscription updated, but service sync encountered issues',
+      };
+    }
+  } catch (error) {
+    console.error('Error in onSubscriptionStatusChangeAction:', error);
+    return {
+      success: true, // Don't fail subscription change due to sync issues
+      message: 'Subscription updated, but service sync failed',
+    };
+  }
+}
+
+/**
+ * Enhanced Stripe Connect action that includes service sync
+ * Called after successful Stripe Connect completion
+ */
+export async function onStripeConnectStatusChangeAction({
+  userId,
+}: {
+  userId: string;
+}): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  try {
+    // Trigger Stripe service synchronization
+    const syncResult = await onSubscriptionChangeAction(userId);
+
+    if (syncResult.success) {
+      return {
+        success: true,
+        message: `Stripe Connect updated and ${syncResult.syncResult?.successCount || 0} services synced`,
+      };
+    } else {
+      console.error(
+        'Stripe service sync failed after Connect status change:',
+        syncResult.message,
+      );
+      return {
+        success: false,
+        message: 'Stripe Connect updated, but service sync encountered issues',
+      };
+    }
+  } catch (error) {
+    console.error('Error in onStripeConnectStatusChangeAction:', error);
+    return {
+      success: false,
+      message: 'Failed to sync services after Stripe Connect update',
+    };
   }
 }
 

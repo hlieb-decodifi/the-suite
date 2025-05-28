@@ -148,10 +148,28 @@ create table services (
   description text,
   price decimal(10, 2) not null,
   duration integer not null, -- in minutes
+  -- Stripe integration fields
+  stripe_product_id text,
+  stripe_price_id text,
+  stripe_status text default 'draft' not null check (stripe_status in ('draft', 'active', 'inactive')),
+  stripe_sync_status text default 'pending' not null check (stripe_sync_status in ('pending', 'synced', 'error')),
+  stripe_sync_error text,
+  stripe_synced_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table services enable row level security;
+
+-- Create indexes for Stripe fields
+create index if not exists idx_services_stripe_product_id 
+on services(stripe_product_id) 
+where stripe_product_id is not null;
+
+create index if not exists idx_services_stripe_status 
+on services(stripe_status);
+
+create index if not exists idx_services_stripe_sync_status 
+on services(stripe_sync_status);
 
 -- Constraint to limit services to 10 per professional
 create or replace function check_service_limit()
@@ -1063,4 +1081,90 @@ create policy "Anyone can view profile photos of published professionals"
       and professional_profiles.is_published = true
     )
   );
+
+/**
+* STRIPE SYNCHRONIZATION FUNCTIONS AND TRIGGERS
+* Functions and triggers to handle Stripe product synchronization
+*/
+
+-- Function to mark services for Stripe sync when they are modified
+create or replace function handle_service_stripe_sync()
+returns trigger as $$
+begin
+  -- Mark service for Stripe sync on any change
+  new.stripe_sync_status = 'pending';
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger to mark services for sync when they are created or updated
+create trigger service_stripe_sync_trigger
+  before insert or update on services
+  for each row
+  execute function handle_service_stripe_sync();
+
+-- Function to handle professional profile changes that affect Stripe sync
+create or replace function handle_professional_profile_stripe_changes()
+returns trigger as $$
+begin
+  -- Mark all services for re-sync when key fields change that affect Stripe status
+  if (old.is_published is distinct from new.is_published or 
+      old.is_subscribed is distinct from new.is_subscribed or 
+      old.stripe_connect_status is distinct from new.stripe_connect_status) then
+    
+    update services 
+    set stripe_sync_status = 'pending', 
+        updated_at = timezone('utc'::text, now())
+    where professional_profile_id = new.id;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger for professional profile changes
+create trigger professional_profile_stripe_sync_trigger
+  after update on professional_profiles
+  for each row
+  execute function handle_professional_profile_stripe_changes();
+
+-- Function to handle payment method changes that affect Stripe sync
+create or replace function handle_payment_method_stripe_changes()
+returns trigger as $$
+declare
+  credit_card_method_id uuid;
+  professional_has_credit_card boolean;
+begin
+  -- Get the credit card payment method ID
+  select id into credit_card_method_id 
+  from payment_methods 
+  where name = 'Credit Card' or name = 'credit card' or name = 'Card'
+  limit 1;
+  
+  if credit_card_method_id is null then
+    return coalesce(new, old);
+  end if;
+  
+  -- Check if this change involves the credit card payment method
+  if (tg_op = 'INSERT' and new.payment_method_id = credit_card_method_id) or
+     (tg_op = 'DELETE' and old.payment_method_id = credit_card_method_id) or
+     (tg_op = 'UPDATE' and (old.payment_method_id = credit_card_method_id or new.payment_method_id = credit_card_method_id)) then
+    
+    -- Mark all services for this professional for re-sync
+    update services 
+    set stripe_sync_status = 'pending', 
+        updated_at = timezone('utc'::text, now())
+    where professional_profile_id = coalesce(new.professional_profile_id, old.professional_profile_id);
+  end if;
+  
+  return coalesce(new, old);
+end;
+$$ language plpgsql;
+
+-- Trigger for payment method changes
+create trigger payment_method_stripe_sync_trigger
+  after insert or update or delete on professional_payment_methods
+  for each row
+  execute function handle_payment_method_stripe_changes();
 

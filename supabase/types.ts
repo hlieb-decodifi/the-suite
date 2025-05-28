@@ -593,6 +593,12 @@ export type Database = {
           name: string
           price: number
           professional_profile_id: string
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_status: string
+          stripe_sync_error: string | null
+          stripe_sync_status: string
+          stripe_synced_at: string | null
           updated_at: string
         }
         Insert: {
@@ -603,6 +609,12 @@ export type Database = {
           name: string
           price: number
           professional_profile_id: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_status?: string
+          stripe_sync_error?: string | null
+          stripe_sync_status?: string
+          stripe_synced_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -613,6 +625,12 @@ export type Database = {
           name?: string
           price?: number
           professional_profile_id?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_status?: string
+          stripe_sync_error?: string | null
+          stripe_sync_status?: string
+          stripe_synced_at?: string | null
           updated_at?: string
         }
         Relationships: [

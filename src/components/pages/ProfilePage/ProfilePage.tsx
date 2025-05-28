@@ -9,6 +9,7 @@ import {
 } from '@/server/domains/profiles/db';
 import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
 import { getPortfolioPhotos } from '@/server/domains/portfolio-photos/actions';
+import { onSubscriptionChangeAction } from '@/server/domains/stripe-services';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { HeaderFormValues } from '@/types/profiles';
 import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
@@ -166,6 +167,24 @@ export async function toggleProfilePublishStatusAction(
     // Revalidate both the page and layout to ensure all components get fresh data
     revalidatePath('/profile', 'layout');
     revalidatePath('/profile');
+
+    // Sync services with Stripe after publish status change
+    try {
+      const syncResult = await onSubscriptionChangeAction(userId);
+      if (!syncResult.success) {
+        console.error(
+          'Stripe service sync failed after publish status change:',
+          syncResult.message,
+        );
+        // Don't fail the publish action, just log the sync error
+      }
+    } catch (syncError) {
+      console.error(
+        'Error syncing services with Stripe after publish status change:',
+        syncError,
+      );
+      // Don't fail the publish action due to sync issues
+    }
 
     return { success: true };
   } catch (error) {

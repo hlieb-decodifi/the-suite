@@ -171,8 +171,8 @@ export async function createCheckoutSession(planId: string, userId: string): Pro
       },
     ],
     mode: 'subscription',
-    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile?tab=subscription&success=subscription&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile?tab=subscription`,
+    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile/subscription?success=subscription&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile/subscription`,
     client_reference_id: userId,
     customer_email: email, // Pre-fill and disable email field
     metadata: {
@@ -270,7 +270,7 @@ export async function cancelSubscription(userId: string): Promise<{ success: boo
     return { 
       success: true, 
       message: 'Your subscription has been scheduled to cancel at the end of your current billing period. You will continue to have access until then.',
-      redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/profile?tab=subscription&success=cancel`
+      redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/profile/subscription?success=cancel`
     };
   } catch (error) {
     console.error('Error cancelling subscription:', error);
@@ -381,8 +381,8 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
     // from where they left off
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile?tab=subscription&refresh=true&message=Please%20complete%20your%20Stripe%20setup`,
-      return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile?tab=subscription&stripe_return=true&completed=true`,
+      refresh_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile/subscription?refresh=true&message=Please%20complete%20your%20Stripe%20setup`,
+      return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/profile/subscription?stripe_return=true&completed=true`,
       type: 'account_onboarding',
       collect: 'currently_due' // Only collect what's immediately needed for faster onboarding
     });

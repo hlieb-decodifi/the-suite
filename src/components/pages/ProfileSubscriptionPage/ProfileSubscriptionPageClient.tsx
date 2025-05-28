@@ -229,8 +229,9 @@ export function ProfileSubscriptionPageClient({
             Subscription
           </Typography>
           <Typography className="text-muted-foreground">
-            Choose a subscription plan to publish your profile and start
-            receiving clients
+            {isSubscribed
+              ? 'Check your subscription details and billing information'
+              : 'Choose a subscription plan to publish your profile and start receiving clients'}
           </Typography>
         </div>
       </div>
