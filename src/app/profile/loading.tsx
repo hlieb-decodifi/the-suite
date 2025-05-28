@@ -11,18 +11,6 @@ export default function ProfileLoading() {
         </div>
         <div className="flex flex-col md:flex-row items-stretch gap-3 w-full md:w-auto">
           <Skeleton className="h-10 w-full md:w-32" />
-          <Skeleton className="h-10 w-full md:w-32" />
-          <Skeleton className="h-10 w-full md:w-32" />
-        </div>
-      </div>
-
-      {/* Tab Navigation Skeleton */}
-      <div className="mb-8">
-        <div className="flex gap-6">
-          <Skeleton className="h-10 w-16" />
-          <Skeleton className="h-10 w-20" />
-          <Skeleton className="h-10 w-18" />
-          <Skeleton className="h-10 w-24" />
         </div>
       </div>
 

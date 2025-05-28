@@ -9,11 +9,6 @@ export default function ServicesLoading() {
         <Skeleton className="h-4 w-96" />
       </div>
 
-      {/* Add Service Button */}
-      <div className="flex justify-end">
-        <Skeleton className="h-10 w-32" />
-      </div>
-
       {/* Services Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.from({ length: 6 }).map((_, i) => (
