@@ -397,7 +397,10 @@ export type Database = {
         Row: {
           address_id: string | null
           appointment_requirements: string | null
+          balance_payment_method: string | null
           created_at: string
+          deposit_type: string | null
+          deposit_value: number | null
           description: string | null
           facebook_url: string | null
           id: string
@@ -407,6 +410,7 @@ export type Database = {
           location: string | null
           phone_number: string | null
           profession: string | null
+          requires_deposit: boolean
           stripe_account_id: string | null
           stripe_connect_status: string
           stripe_connect_updated_at: string | null
@@ -418,7 +422,10 @@ export type Database = {
         Insert: {
           address_id?: string | null
           appointment_requirements?: string | null
+          balance_payment_method?: string | null
           created_at?: string
+          deposit_type?: string | null
+          deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
           id?: string
@@ -428,6 +435,7 @@ export type Database = {
           location?: string | null
           phone_number?: string | null
           profession?: string | null
+          requires_deposit?: boolean
           stripe_account_id?: string | null
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
@@ -439,7 +447,10 @@ export type Database = {
         Update: {
           address_id?: string | null
           appointment_requirements?: string | null
+          balance_payment_method?: string | null
           created_at?: string
+          deposit_type?: string | null
+          deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
           id?: string
@@ -449,6 +460,7 @@ export type Database = {
           location?: string | null
           phone_number?: string | null
           profession?: string | null
+          requires_deposit?: boolean
           stripe_account_id?: string | null
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null

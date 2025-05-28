@@ -109,6 +109,15 @@ create table professional_profiles (
   stripe_account_id text,
   stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
   stripe_connect_updated_at timestamp with time zone,
+  -- Payment settings
+  requires_deposit boolean default false not null,
+  deposit_type text default 'percentage' check (deposit_type in ('percentage', 'fixed')),
+  deposit_value decimal(10, 2) check (
+    (requires_deposit = false) OR
+    (requires_deposit = true AND deposit_type = 'percentage' AND deposit_value >= 0 AND deposit_value <= 100) OR
+    (requires_deposit = true AND deposit_type = 'fixed' AND deposit_value >= 0)
+  ),
+  balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

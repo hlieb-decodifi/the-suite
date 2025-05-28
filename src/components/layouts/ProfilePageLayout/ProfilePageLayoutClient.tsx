@@ -46,6 +46,7 @@ export function ProfilePageLayoutClient({
     if (path.includes('/profile/services')) return 'services';
     if (path.includes('/profile/portfolio')) return 'portfolio';
     if (path.includes('/profile/subscription')) return 'subscription';
+    if (path.includes('/profile/settings')) return 'settings';
     return 'profile';
   };
 
@@ -113,6 +114,12 @@ export function ProfilePageLayoutClient({
       label: 'portfolio',
       href: '/profile/portfolio',
       isActive: activeTab === 'portfolio',
+    },
+    {
+      key: 'settings',
+      label: 'settings',
+      href: '/profile/settings',
+      isActive: activeTab === 'settings',
     },
     {
       key: 'subscription',
