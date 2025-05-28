@@ -1,7 +1,8 @@
 import { ProfilePortfolioPage } from '@/components/pages/ProfilePortfolioPage/ProfilePortfolioPage';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Cache the page for a reasonable time since professional profiles don't change frequently
+// This provides good performance while ensuring data freshness
+export const revalidate = 300; // Revalidate every 5 minutes
 
 export default async function ProfessionalPublicPortfolioPage({
   params,
