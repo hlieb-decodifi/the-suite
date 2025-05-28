@@ -8,10 +8,12 @@ import {
   updateProfileHeaderInDb,
 } from '@/server/domains/profiles/db';
 import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
+import { getPortfolioPhotos } from '@/server/domains/portfolio-photos/actions';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { HeaderFormValues } from '@/types/profiles';
 import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
 import type { WorkingHoursEntry } from '@/types/working_hours';
+import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
 import { revalidatePath } from 'next/cache';
 import { redirect, RedirectType } from 'next/navigation';
 import { ProfilePageClient } from './ProfilePageClient';
@@ -80,6 +82,7 @@ export async function ProfilePage({
       profileData={profileData.profile}
       workingHours={profileData.workingHours}
       paymentMethods={profileData.paymentMethods}
+      portfolioPhotos={profileData.portfolioPhotos}
       isEditable={isEditable}
     />
   );
@@ -106,10 +109,17 @@ export async function getProfileData(userId: string) {
       ? paymentMethodsResult.methods || []
       : [];
 
+    // Fetch portfolio photos
+    const portfolioPhotosResult = await getPortfolioPhotos(userId);
+    const portfolioPhotos = portfolioPhotosResult.success
+      ? portfolioPhotosResult.photos || []
+      : [];
+
     return {
       profile,
       workingHours,
       paymentMethods,
+      portfolioPhotos,
     };
   } catch (error) {
     console.error('Error fetching profile data:', error);
@@ -117,6 +127,7 @@ export async function getProfileData(userId: string) {
       profile: null,
       workingHours: [] as WorkingHoursEntry[],
       paymentMethods: [] as PaymentMethod[],
+      portfolioPhotos: [] as PortfolioPhotoUI[],
     };
   }
 }

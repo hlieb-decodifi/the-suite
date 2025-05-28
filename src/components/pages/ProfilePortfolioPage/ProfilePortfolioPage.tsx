@@ -111,7 +111,7 @@ export async function uploadPortfolioPhotoAction({
   const result = await uploadPortfolioPhoto(userId, formData);
 
   // Revalidate all pages that might show portfolio photos
-  // revalidatePath('/profile', 'layout'); // Revalidate the entire layout
+  revalidatePath('/profile', 'layout'); // Revalidate the entire layout
   revalidatePath('/profile/portfolio');
   revalidatePath('/profile');
 

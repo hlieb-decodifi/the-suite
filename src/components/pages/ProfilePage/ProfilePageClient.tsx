@@ -6,6 +6,7 @@ import type { ProfileData } from '@/types/profiles';
 import type { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
 import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PaymentMethod } from '@/types/payment_methods';
+import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
 import { ContactSection } from './components/ContactSection/ContactSection';
 import { LocationSection } from './components/LocationSection/LocationSection';
 import { ReviewsSection } from './components/ReviewsSection/ReviewsSection';
@@ -16,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 import { toast } from '@/components/ui/use-toast';
-import { usePortfolioPhotos } from '@/api/portfolio-photos/hooks';
 import {
   useProfessionalPaymentMethods,
   useAvailablePaymentMethods,
@@ -47,6 +47,7 @@ export type ProfilePageClientProps = {
   profileData: ProfileData | null;
   workingHours: WorkingHoursEntry[];
   paymentMethods: PaymentMethod[];
+  portfolioPhotos: PortfolioPhotoUI[];
   isEditable?: boolean;
 };
 
@@ -224,20 +225,17 @@ function InlineHeaderSection({
 
 // Inline ProfileOverviewSection component
 function InlineProfileOverviewSection({
-  user,
+  portfolioPhotos,
   isEditable = true,
 }: {
-  user: User;
+  portfolioPhotos: PortfolioPhotoUI[];
   isEditable?: boolean;
 }) {
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Fetch portfolio photos from the API
-  const {
-    data: portfolioPhotos = [],
-    isLoading,
-    error,
-  } = usePortfolioPhotos(user.id);
+  // Use server-fetched portfolio photos directly
+  const isLoading = false; // No loading state needed since data is pre-fetched
+  const error = null; // No error state needed since data is pre-fetched
 
   const nextSlide = () => {
     if (portfolioPhotos.length === 0) return;
@@ -316,7 +314,7 @@ function InlineProfileOverviewSection({
                   alt={currentPhoto.description || 'Portfolio image'}
                   fill
                   sizes="(max-width: 768px) 100vw, 800px"
-                  className="object-cover"
+                  className="object-contain"
                   priority
                 />
 
@@ -504,6 +502,7 @@ export function ProfilePageClient({
   profileData,
   workingHours,
   paymentMethods,
+  portfolioPhotos,
   isEditable = true,
 }: ProfilePageClientProps) {
   // Handle error state
@@ -527,7 +526,10 @@ export function ProfilePageClient({
             profileData={profileData}
             isEditable={isEditable}
           />
-          <InlineProfileOverviewSection isEditable={isEditable} user={user} />
+          <InlineProfileOverviewSection
+            isEditable={isEditable}
+            portfolioPhotos={portfolioPhotos}
+          />
         </div>
         <div className="md:col-span-1 space-y-8">
           <ContactSection
