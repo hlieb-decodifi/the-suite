@@ -13,14 +13,16 @@ import { Sparkles } from 'lucide-react';
 
 type SubscriptionTooltipProps = {
   isSubscribed: boolean;
+  isConnected: boolean;
   activeTab: string;
 };
 
 export const SubscriptionTooltip = ({
   isSubscribed,
+  isConnected,
   activeTab,
 }: SubscriptionTooltipProps) => {
-  if (isSubscribed) return null;
+  if (isSubscribed && isConnected) return null;
 
   return (
     <TooltipProvider>
@@ -47,7 +49,11 @@ export const SubscriptionTooltip = ({
           className="bg-white border border-primary text-primary"
           sideOffset={5}
         >
-          <p>Subscribe to enable client bookings and appointment scheduling</p>
+          <p>
+            {isConnected
+              ? 'Subscribe to enable client bookings and appointment scheduling'
+              : 'Connect your Stripe account to enable client bookings and appointment scheduling'}
+          </p>
           <TooltipArrow className="ml-1 fill-primary" width={11} height={5} />
         </TooltipContent>
       </Tooltip>

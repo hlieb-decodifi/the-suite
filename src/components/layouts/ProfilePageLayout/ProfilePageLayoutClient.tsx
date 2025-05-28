@@ -122,10 +122,12 @@ export function ProfilePageLayoutClient({
       ...((!isSubscribed || !isConnected) && {
         badge: (
           <SubscriptionTooltip
+            isConnected={isConnected}
             isSubscribed={isSubscribed}
             activeTab={activeTab}
           />
         ),
+        className: 'border border-primary/50',
       }),
       ...(!isSubscribed && {
         className: 'border border-primary/50',
