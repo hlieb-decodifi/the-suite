@@ -77,6 +77,8 @@ export async function ProfilePage({
   // Fetch all data on the server
   const profileData = await getProfileData(targetUserId);
 
+  console.log('profileData', profileData.paymentMethods);
+
   return (
     <ProfilePageClient
       user={user as User}
