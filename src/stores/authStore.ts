@@ -8,12 +8,14 @@ type AuthState = {
   isLoading: boolean;
   isAuthenticated: boolean;
   avatarUrl: string | null;
+  hasHydrated: boolean;
   
   // Actions
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
   setIsLoading: (isLoading: boolean) => void;
   setAvatarUrl: (url: string | null) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
   signOut: () => void;
   
   // Derived state
@@ -29,6 +31,7 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       isAuthenticated: false,
       avatarUrl: null,
+      hasHydrated: false,
       
       // Actions
       setUser: (user) => set({ 
@@ -47,6 +50,8 @@ export const useAuthStore = create<AuthState>()(
       setIsLoading: (isLoading) => set({ isLoading }),
       
       setAvatarUrl: (url) => set({ avatarUrl: url }),
+      
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       
       signOut: () => set({ 
         user: null,
@@ -78,6 +83,9 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         avatarUrl: state.avatarUrl,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 ); 

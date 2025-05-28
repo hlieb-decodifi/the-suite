@@ -65,7 +65,12 @@ export function TabNavigation({
 
         if (variant === 'link' && tab.href) {
           return (
-            <Link key={tab.key} href={tab.href} className={tabClasses}>
+            <Link
+              key={tab.key}
+              href={tab.href}
+              className={tabClasses}
+              prefetch={true}
+            >
               <span>{tab.label}</span>
               {tab.badge}
             </Link>

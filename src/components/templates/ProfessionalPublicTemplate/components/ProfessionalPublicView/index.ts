@@ -1,1 +1,0 @@
-export { ProfessionalPublicView } from './ProfessionalPublicView'; 

@@ -2,17 +2,35 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { setSession, setUser, setIsLoading, signOut } = useAuthStore();
+  const {
+    setSession,
+    setUser,
+    setIsLoading,
+    signOut,
+    isLoading,
+    user,
+    hasHydrated,
+  } = useAuthStore();
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
+    // Wait for Zustand to hydrate before initializing auth
+    if (!hasHydrated) return;
+
     const supabase = createClient();
 
     // Initialize: Check if we have a session already
     const initializeAuth = async () => {
       try {
+        // If auth state is already synced from server (not loading and has user), skip initialization
+        if (!isLoading && user) {
+          hasInitialized.current = true;
+          return;
+        }
+
         setIsLoading(true);
 
         // Get the current session
@@ -31,11 +49,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut();
       } finally {
         setIsLoading(false);
+        hasInitialized.current = true;
       }
     };
 
-    // Call initialization
-    initializeAuth();
+    // Only initialize if we haven't already
+    if (!hasInitialized.current) {
+      initializeAuth();
+    }
 
     // Listen for auth state changes
     const {
@@ -57,7 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [setUser, setSession, setIsLoading, signOut]);
+  }, [
+    setUser,
+    setSession,
+    setIsLoading,
+    signOut,
+    isLoading,
+    user,
+    hasHydrated,
+  ]);
 
   return <>{children}</>;
 }

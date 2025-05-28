@@ -1,15 +1,14 @@
 'use server';
 
-import { 
-  getPortfolioPhotosForUser, 
-  getPortfolioPhotoById, 
-  deletePortfolioPhoto as deletePhotoFromDb,
-  updatePortfolioPhoto as updatePhotoInDb,
-  countPortfolioPhotos
-} from './db';
-import { PortfolioPhotoDB, PortfolioPhotoUI, PortfolioPhotosResponse, PortfolioPhotoResponse } from '@/types/portfolio-photos';
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { PortfolioPhotoDB, PortfolioPhotoResponse, PortfolioPhotoUI, PortfolioPhotosResponse } from '@/types/portfolio-photos';
+import {
+  countPortfolioPhotos,
+  deletePortfolioPhoto as deletePhotoFromDb,
+  getPortfolioPhotoById,
+  getPortfolioPhotosForUser,
+  updatePortfolioPhoto as updatePhotoInDb
+} from './db';
 
 // Transform DB model to UI model
 function transformToUI(dbPhoto: PortfolioPhotoDB): PortfolioPhotoUI {
@@ -177,9 +176,6 @@ async function processPhotoUpload(
     };
   }
 
-  // Revalidate paths that might show portfolio photos
-  revalidatePath(`/profile/${userId}`);
-  
   return {
     success: true,
     photo: transformToUI(photoData)
@@ -223,9 +219,6 @@ export async function deletePortfolioPhoto(
       // Continue anyway since the database record is deleted
     }
     
-    // Revalidate paths that might show portfolio photos
-    revalidatePath(`/profile/${userId}`);
-    
     return {
       success: true
     };
@@ -261,9 +254,6 @@ export async function updatePortfolioPhoto(
     
     // Update in database
     const updatedPhoto = await updatePhotoInDb(id, userId, dbUpdates);
-    
-    // Revalidate paths that might show portfolio photos
-    revalidatePath(`/profile/${userId}`);
     
     return {
       success: true,

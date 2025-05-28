@@ -2,23 +2,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ProfileLoading() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="mx-auto">
       {/* Page Header Skeleton */}
-      <div className="flex justify-between items-center mb-8">
-        <Skeleton className="h-8 w-48" />
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-24" />
-          <Skeleton className="h-10 w-32" />
+      <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+        <div>
+          <Skeleton className="h-10 w-60" />
+          <Skeleton className="h-5 w-96 mt-2" />
         </div>
-      </div>
-
-      {/* Tab Navigation Skeleton */}
-      <div className="flex justify-center mb-8">
-        <div className="gap-1 w-full max-w-md bg-muted/50 p-1 rounded-full flex">
-          <Skeleton className="h-10 flex-1 rounded-full" />
-          <Skeleton className="h-10 flex-1 rounded-full" />
-          <Skeleton className="h-10 flex-1 rounded-full" />
-          <Skeleton className="h-10 flex-1 rounded-full" />
+        <div className="flex flex-col md:flex-row items-stretch gap-3 w-full md:w-auto">
+          <Skeleton className="h-10 w-full md:w-32" />
         </div>
       </div>
 
