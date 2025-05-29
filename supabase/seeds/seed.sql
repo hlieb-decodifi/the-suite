@@ -12,4 +12,12 @@ ON CONFLICT (name) DO UPDATE SET
   is_online = EXCLUDED.is_online,
   created_at = public.payment_methods.created_at; -- preserve original creation timestamp
 
+-- Clear existing data from subscription_plans
+DELETE FROM public.subscription_plans;
+
+-- Insert subscription plans with Stripe price IDs
+INSERT INTO public.subscription_plans (name, description, price, interval, stripe_price_id, is_active) VALUES
+('Monthly', 'Standard monthly subscription', 19.99, 'month', 'price_1RRXNtLMOPuguC73GyfxSC26', true),
+('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true)
+
 -- You can add other seed data for other tables here if needed 

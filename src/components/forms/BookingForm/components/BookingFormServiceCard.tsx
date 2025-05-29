@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 import { useState } from 'react';
 import { Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { Typography } from '@/components/ui/typography';

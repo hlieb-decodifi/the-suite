@@ -11,7 +11,7 @@ import { usePaymentMethods } from './usePaymentMethods';
 import { useAdditionalServices } from './useAdditionalServices';
 import { useAvailableDates } from './useAvailableDates';
 import { useAvailableTimeSlots } from './useAvailableTimeSlots';
-import { createBooking } from '../actions';
+import { createBookingWithStripePayment } from '@/server/domains/stripe-payments/actions';
 import { format } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -24,7 +24,6 @@ export type BookingModalProps = {
 /**
  * Custom hook to manage booking states and data fetching
  */
-/* eslint-disable-next-line max-lines-per-function */
 export function useBookingState(props: BookingModalProps) {
   const { 
     isOpen, 
@@ -105,7 +104,7 @@ export function useBookingState(props: BookingModalProps) {
     setSelectedDate(newDate);
   };
   
-  // Success handler
+  // Success handler with Stripe payment integration
   const handleSuccess = async (
     formData: BookingFormValues, 
     totalPrice: number
@@ -113,12 +112,32 @@ export function useBookingState(props: BookingModalProps) {
     try {
       setIsSubmitting(true);
       
-      // Execute the server action to create the booking
-      const { bookingId } = await createBooking(
+      // Execute the server action to create the booking with Stripe payment
+      const paymentResult = await createBookingWithStripePayment(
         formData,
         professionalProfileId
       );
       
+      if (!paymentResult.success) {
+        throw new Error(paymentResult.error || 'Failed to process booking');
+      }
+
+      // If payment is required, redirect to Stripe checkout
+      if (paymentResult.requiresPayment && paymentResult.checkoutUrl) {
+        // Store booking details for when user returns
+        setBookingDetails(createBookingDetails(formData, totalPrice));
+        
+        toast({
+          title: 'Redirecting to Payment',
+          description: 'You will be redirected to complete your payment.',
+        });
+        
+        // Redirect to Stripe checkout
+        window.location.href = paymentResult.checkoutUrl;
+        return;
+      }
+      
+      // If no payment required or payment completed, show success
       // Manually invalidate and refetch data to ensure up-to-date availability
       queryClient.invalidateQueries({ 
         queryKey: ['availableTimeSlots', professionalProfileId]
@@ -142,13 +161,15 @@ export function useBookingState(props: BookingModalProps) {
         description: `Your booking with ${professional?.name || 'the professional'} has been confirmed.`,
       });
       
-      // Use the real booking ID from the server
-      if (onBookingComplete) onBookingComplete(bookingId);
+      // Use the booking ID from the payment result
+      if (onBookingComplete && paymentResult.bookingId) {
+        onBookingComplete(paymentResult.bookingId);
+      }
     } catch (error) {
       console.error('Error creating booking:', error);
       toast({
         title: 'Booking Failed',
-        description: 'There was an error processing your booking. Please try again.',
+        description: error instanceof Error ? error.message : 'There was an error processing your booking. Please try again.',
         variant: 'destructive',
       });
     } finally {

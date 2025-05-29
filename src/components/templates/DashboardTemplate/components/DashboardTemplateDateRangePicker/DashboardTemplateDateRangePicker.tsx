@@ -155,8 +155,8 @@ function CalendarFooter({
 // Button content component to display the selected date range or placeholder
 function DateRangeDisplay({ dateRange }: { dateRange: DateRange | undefined }) {
   return (
-    <>
-      <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+    <div className="text-primary hover:text-accent-foreground flex items-center gap-2">
+      <CalendarIcon className="mr-2 h-4 w-4 " />
       {dateRange?.from ? (
         dateRange.to ? (
           <>
@@ -169,7 +169,7 @@ function DateRangeDisplay({ dateRange }: { dateRange: DateRange | undefined }) {
       ) : (
         <span>Filter by date range</span>
       )}
-    </>
+    </div>
   );
 }
 
@@ -262,7 +262,7 @@ export function DashboardTemplateDateRangePicker({
             id="date"
             variant="outline"
             className={cn(
-              'w-full justify-start text-left font-normal border-primary/20 bg-primary/5',
+              'w-full justify-start text-left border-primary',
               !dateRange && 'text-muted-foreground',
             )}
           >

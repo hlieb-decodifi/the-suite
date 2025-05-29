@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 import {
   FormCheckbox,
   FormFieldWrapper, // Use wrapper for structure, though label might be empty

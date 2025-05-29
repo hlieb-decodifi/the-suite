@@ -39,8 +39,7 @@ export function DashboardTemplate() {
 
   // Render appropriate view based on user type
   return (
-    <div className="w-full bg-gradient-to-b rounded-t-lg from-muted/50 to-background">
-      <div className="container mx-auto py-4 px-4">
+    <div className="w-full">
         {isProfessional ? (
           <DashboardTemplateProfessionalView
             user={user}
@@ -54,7 +53,6 @@ export function DashboardTemplate() {
             onDateRangeChange={setDateRange}
           />
         )}
-      </div>
     </div>
   );
 }

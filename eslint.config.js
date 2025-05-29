@@ -3,6 +3,7 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
+import nextPlugin from '@next/eslint-plugin-next';
 
 export default [
   js.configs.recommended,
@@ -28,8 +29,13 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tseslint,
+      '@next/next': nextPlugin,
     },
     rules: {
+      // Next.js rules
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+
       // TypeScript rules
       'no-unused-vars': 'off', // Turn off base rule
       '@typescript-eslint/no-unused-vars': 'error',
@@ -40,9 +46,6 @@ export default [
       // Next.js specific rules
       'react/react-in-jsx-scope': 'off',
       'jsx-a11y/anchor-is-valid': 'off',
-
-      // Function/code complexity
-      'max-lines-per-function': ['error', { max: 80 }],
 
       // Error rules (no warnings)
       'no-console': ['error', { allow: ['error', 'log'] }], // Allow console.error

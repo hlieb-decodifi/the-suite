@@ -104,11 +104,32 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
-  is_subscribed boolean default true,
+  is_subscribed boolean default false,
+  -- Stripe Connect fields
+  stripe_account_id text,
+  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
+  stripe_connect_updated_at timestamp with time zone,
+  -- Payment settings
+  requires_deposit boolean default false not null,
+  deposit_type text default 'percentage' check (deposit_type in ('percentage', 'fixed')),
+  deposit_value decimal(10, 2) check (
+    (requires_deposit = false) OR
+    (requires_deposit = true AND deposit_type = 'percentage' AND deposit_value >= 0 AND deposit_value <= 100) OR
+    (requires_deposit = true AND deposit_type = 'fixed' AND deposit_value >= 0)
+  ),
+  balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table professional_profiles enable row level security;
+
+-- Create indexes for Stripe Connect fields
+create index if not exists idx_professional_profiles_stripe_account_id 
+on professional_profiles(stripe_account_id) 
+where stripe_account_id is not null;
+
+create index if not exists idx_professional_profiles_stripe_connect_status 
+on professional_profiles(stripe_connect_status);
 
 /**
 * CLIENT_PROFILES
@@ -136,10 +157,28 @@ create table services (
   description text,
   price decimal(10, 2) not null,
   duration integer not null, -- in minutes
+  -- Stripe integration fields
+  stripe_product_id text,
+  stripe_price_id text,
+  stripe_status text default 'draft' not null check (stripe_status in ('draft', 'active', 'inactive')),
+  stripe_sync_status text default 'pending' not null check (stripe_sync_status in ('pending', 'synced', 'error')),
+  stripe_sync_error text,
+  stripe_synced_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table services enable row level security;
+
+-- Create indexes for Stripe fields
+create index if not exists idx_services_stripe_product_id 
+on services(stripe_product_id) 
+where stripe_product_id is not null;
+
+create index if not exists idx_services_stripe_status 
+on services(stripe_status);
+
+create index if not exists idx_services_stripe_sync_status 
+on services(stripe_sync_status);
 
 -- Constraint to limit services to 10 per professional
 create or replace function check_service_limit()
@@ -569,128 +608,146 @@ create policy "Anyone can view payment methods of published professionals"
   );
 
 /**
-* REALTIME SUBSCRIPTIONS
-* Only allow realtime listening on public tables.
+* STRIPE INTEGRATION
+* Tables for Stripe integration
 */
-drop publication if exists supabase_realtime;
-create publication supabase_realtime for table services;
+create table customers (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references users not null unique,
+  stripe_customer_id text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table customers enable row level security;
+
+-- RLS policy for customers table
+create policy "Users can view their own customer data"
+  on customers for select
+  using (auth.uid() = user_id);
+
+create policy "Users can create their own customer record"
+  on customers for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own customer record"
+  on customers for update
+  using (auth.uid() = user_id);
 
 /**
-* STORAGE BUCKETS
-* Define storage buckets and their policies
+* SUBSCRIPTION SYSTEM
+* Tables for managing professional subscriptions
 */
--- Create profile-photos bucket
-insert into storage.buckets (id, name, public)
-  values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
-
--- Create portfolio-photos bucket (not public)
-insert into storage.buckets (id, name, public)
-  values ('portfolio-photos', 'Portfolio Photos', false);
-
--- Policies for profile-photos bucket
-create policy "Allow authenticated uploads to profile-photos"
-  on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to modify their own profile photos"
-  on storage.objects for update to authenticated
-  with check (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to delete their own profile photos"
-  on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to see all profile photos"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'profile-photos'
-  );
-
--- Policies for portfolio-photos bucket
-create policy "Allow authenticated uploads to portfolio-photos"
-  on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to modify their own portfolio photos"
-  on storage.objects for update to authenticated
-  with check (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow authenticated users to delete their own portfolio photos"
-  on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-create policy "Allow viewing portfolio photos of published professionals"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.user_id::text = (storage.foldername(name))[1]
-      and professional_profiles.is_published = true
-    )
-  );
 
 /**
-* USER POLICIES
-* Define RLS policies for users after all tables are created
+* SUBSCRIPTION_PLANS
+* Available subscription plans for professionals
 */
--- RLS policies for users
-drop policy if exists "Users can view their own data" on users;
+create table subscription_plans (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  price decimal(10, 2) not null,
+  interval text not null check (interval in ('month', 'year')),
+  stripe_price_id text, -- For Stripe integration
+  is_active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table subscription_plans enable row level security;
 
-create policy "Users can view their own data"
-  on users for select
-  using (auth.uid() = id);
+-- Insert default subscription plans
+insert into subscription_plans (name, description, price, interval) 
+values 
+  ('Monthly', 'Standard monthly subscription', 19.99, 'month'),
+  ('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year');
 
--- Modified policy to avoid circular reference
-drop policy if exists "Anyone can view user data for published professionals" on users;
-create policy "Anyone can view user data for published professionals"
-  on users for select
-  using (
-    id in (
-      select user_id from professional_profiles
-      where is_published = true
-    )
-  );
+/**
+* PROFESSIONAL_SUBSCRIPTIONS
+* Tracks active subscriptions for professionals
+*/
+create table professional_subscriptions (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null,
+  subscription_plan_id uuid references subscription_plans not null,
+  status text not null check (status in ('active', 'cancelled', 'expired')),
+  start_date timestamp with time zone default timezone('utc'::text, now()) not null,
+  end_date timestamp with time zone,
+  stripe_subscription_id text, -- For Stripe integration
+  cancel_at_period_end boolean default false not null, -- Track if subscription is scheduled to cancel at period end
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table professional_subscriptions enable row level security;
 
--- Add back the update policy that was missing
-drop policy if exists "Users can update their own basic data" on users;
-create policy "Users can update their own basic data"
-  on users for update
-  using (auth.uid() = id)
-  with check (
-    -- Can't change their own role - using a parameter instead of a subquery
-    auth.uid() = id AND
-    role_id IS NOT NULL
-  );
+/**
+* Create a function to update is_subscribed flag on professional_profiles
+* whenever a subscription is created, updated, or deleted
+*/
+create or replace function update_professional_subscription_status()
+returns trigger as $$
+begin
+  -- If the subscription is being created or updated
+  if (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') then
+    -- Set is_subscribed to true if the professional has an active subscription
+    update professional_profiles
+    set is_subscribed = true, updated_at = now()
+    where id = new.professional_profile_id
+    and exists (
+      select 1 from professional_subscriptions
+      where professional_profile_id = new.professional_profile_id
+      and status = 'active'
+    );
+  end if;
+  
+  -- If the subscription is being deleted or updated (to non-active)
+  if (TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND new.status != 'active')) then
+    -- Set is_subscribed to false if the professional has no active subscriptions
+    update professional_profiles
+    set is_subscribed = false, updated_at = now()
+    where id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
+    and not exists (
+      select 1 from professional_subscriptions
+      where professional_profile_id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
+      and status = 'active'
+    );
+  end if;
+  
+  return CASE WHEN TG_OP = 'DELETE' THEN old ELSE new END;
+end;
+$$ language plpgsql;
 
--- RLS policies for profile photos
-drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
+-- Create triggers for the update_professional_subscription_status function
+create trigger after_professional_subscription_insert
+  after insert on professional_subscriptions
+  for each row
+  execute function update_professional_subscription_status();
+  
+create trigger after_professional_subscription_update
+  after update on professional_subscriptions
+  for each row
+  execute function update_professional_subscription_status();
+  
+create trigger after_professional_subscription_delete
+  after delete on professional_subscriptions
+  for each row
+  execute function update_professional_subscription_status();
 
-create policy "Anyone can view profile photos of published professionals"
-  on profile_photos for select
+/**
+* RLS policies for subscription tables
+*/
+
+-- Subscription plans - visible to all, only editable by admins
+create policy "Anyone can view subscription plans"
+  on subscription_plans for select
+  using (true);
+
+-- Professional subscriptions - visible to the professional or admins
+create policy "Professionals can view their own subscriptions"
+  on professional_subscriptions for select
   using (
     exists (
       select 1 from professional_profiles
-      where professional_profiles.user_id = profile_photos.user_id
-      and professional_profiles.is_published = true
+      where professional_profiles.id = professional_subscriptions.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
     )
   );
 
@@ -755,12 +812,24 @@ create table booking_payments (
   amount decimal(10, 2) not null,
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
-  status text not null check (status in ('pending', 'completed', 'failed', 'refunded')),
+  status text not null check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance')),
   stripe_payment_intent_id text, -- For Stripe integration
+  -- Stripe checkout session fields
+  stripe_checkout_session_id text,
+  deposit_amount decimal(10, 2) default 0 not null,
+  balance_amount decimal(10, 2) default 0 not null,
+  payment_type text default 'full' not null check (payment_type in ('full', 'deposit', 'balance')),
+  requires_balance_payment boolean default false not null,
+  balance_payment_method text check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table booking_payments enable row level security;
+
+-- Create index for checkout session lookups
+create index if not exists idx_booking_payments_stripe_checkout_session_id 
+on booking_payments(stripe_checkout_session_id) 
+where stripe_checkout_session_id is not null;
 
 /**
 * Function to check professional availability
@@ -916,5 +985,215 @@ create policy "Clients can create booking payments for their bookings"
 * Update realtime subscriptions to include booking tables
 */
 drop publication if exists supabase_realtime;
-create publication supabase_realtime for table services, bookings, appointments;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions;
+
+/**
+* STORAGE BUCKETS
+* Define storage buckets and their policies
+*/
+-- Create profile-photos bucket
+insert into storage.buckets (id, name, public)
+  values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
+
+-- Create portfolio-photos bucket (not public)
+insert into storage.buckets (id, name, public)
+  values ('portfolio-photos', 'Portfolio Photos', false);
+
+-- Policies for profile-photos bucket
+create policy "Allow authenticated uploads to profile-photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to modify their own profile photos"
+  on storage.objects for update to authenticated
+  with check (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to delete their own profile photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'profile-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to see all profile photos"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'profile-photos'
+  );
+
+-- Policies for portfolio-photos bucket
+create policy "Allow authenticated uploads to portfolio-photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to modify their own portfolio photos"
+  on storage.objects for update to authenticated
+  with check (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow authenticated users to delete their own portfolio photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow viewing portfolio photos of published professionals"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id::text = (storage.foldername(name))[1]
+      and professional_profiles.is_published = true
+    )
+  );
+
+/**
+* USER POLICIES
+* Define RLS policies for users after all tables are created
+*/
+-- RLS policies for users
+drop policy if exists "Users can view their own data" on users;
+
+create policy "Users can view their own data"
+  on users for select
+  using (auth.uid() = id);
+
+-- Modified policy to avoid circular reference
+drop policy if exists "Anyone can view user data for published professionals" on users;
+create policy "Anyone can view user data for published professionals"
+  on users for select
+  using (
+    id in (
+      select user_id from professional_profiles
+      where is_published = true
+    )
+  );
+
+-- Add back the update policy that was missing
+drop policy if exists "Users can update their own basic data" on users;
+create policy "Users can update their own basic data"
+  on users for update
+  using (auth.uid() = id)
+  with check (
+    -- Can't change their own role - using a parameter instead of a subquery
+    auth.uid() = id AND
+    role_id IS NOT NULL
+  );
+
+-- RLS policies for profile photos
+drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
+
+create policy "Anyone can view profile photos of published professionals"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.user_id = profile_photos.user_id
+      and professional_profiles.is_published = true
+    )
+  );
+
+/**
+* STRIPE SYNCHRONIZATION FUNCTIONS AND TRIGGERS
+* Functions and triggers to handle Stripe product synchronization
+*/
+
+-- Function to mark services for Stripe sync when they are modified
+create or replace function handle_service_stripe_sync()
+returns trigger as $$
+begin
+  -- Mark service for Stripe sync on any change
+  new.stripe_sync_status = 'pending';
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger to mark services for sync when they are created or updated
+create trigger service_stripe_sync_trigger
+  before insert or update on services
+  for each row
+  execute function handle_service_stripe_sync();
+
+-- Function to handle professional profile changes that affect Stripe sync
+create or replace function handle_professional_profile_stripe_changes()
+returns trigger as $$
+begin
+  -- Mark all services for re-sync when key fields change that affect Stripe status
+  if (old.is_published is distinct from new.is_published or 
+      old.is_subscribed is distinct from new.is_subscribed or 
+      old.stripe_connect_status is distinct from new.stripe_connect_status) then
+    
+    update services 
+    set stripe_sync_status = 'pending', 
+        updated_at = timezone('utc'::text, now())
+    where professional_profile_id = new.id;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger for professional profile changes
+create trigger professional_profile_stripe_sync_trigger
+  after update on professional_profiles
+  for each row
+  execute function handle_professional_profile_stripe_changes();
+
+-- Function to handle payment method changes that affect Stripe sync
+create or replace function handle_payment_method_stripe_changes()
+returns trigger as $$
+declare
+  credit_card_method_id uuid;
+  professional_has_credit_card boolean;
+begin
+  -- Get the credit card payment method ID
+  select id into credit_card_method_id 
+  from payment_methods 
+  where name = 'Credit Card' or name = 'credit card' or name = 'Card'
+  limit 1;
+  
+  if credit_card_method_id is null then
+    return coalesce(new, old);
+  end if;
+  
+  -- Check if this change involves the credit card payment method
+  if (tg_op = 'INSERT' and new.payment_method_id = credit_card_method_id) or
+     (tg_op = 'DELETE' and old.payment_method_id = credit_card_method_id) or
+     (tg_op = 'UPDATE' and (old.payment_method_id = credit_card_method_id or new.payment_method_id = credit_card_method_id)) then
+    
+    -- Mark all services for this professional for re-sync
+    update services 
+    set stripe_sync_status = 'pending', 
+        updated_at = timezone('utc'::text, now())
+    where professional_profile_id = coalesce(new.professional_profile_id, old.professional_profile_id);
+  end if;
+  
+  return coalesce(new, old);
+end;
+$$ language plpgsql;
+
+-- Trigger for payment method changes
+create trigger payment_method_stripe_sync_trigger
+  after insert or update or delete on professional_payment_methods
+  for each row
+  execute function handle_payment_method_stripe_changes();
 

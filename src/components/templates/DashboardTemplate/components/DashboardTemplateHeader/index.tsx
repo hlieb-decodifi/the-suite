@@ -24,7 +24,10 @@ export function DashboardTemplateHeader({
   return (
     <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
       <div>
-        <Typography variant="h2" className="font-bold">
+        <Typography
+          variant="h2"
+          className="leading-5 border-none font-bold text-foreground"
+        >
           {title}
         </Typography>
         <Typography className="text-muted-foreground">
@@ -38,7 +41,7 @@ export function DashboardTemplateHeader({
             variant="outline"
             className="w-full font-medium justify-start text-foreground border-border"
           >
-            <UserCircle size={16} className="mr-2 text-primary" />
+            <UserCircle size={16} className="mr-2" />
             Go to Profile
           </Button>
         </Link>

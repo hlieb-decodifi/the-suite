@@ -11,11 +11,14 @@ type SearchParams = {
 export async function ServicesTemplate({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
   // Get page from query params or default to 1
-  const page = searchParams?.page ? parseInt(searchParams.page, 10) : 1;
-  const searchTerm = searchParams?.search || '';
+  const resolvedSearchParams = await searchParams;
+  const page = resolvedSearchParams?.page
+    ? parseInt(resolvedSearchParams.page, 10)
+    : 1;
+  const searchTerm = resolvedSearchParams?.search || '';
   const pageSize = 12;
 
   // Fetch paginated services data on the server with search filter
