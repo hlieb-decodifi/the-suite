@@ -83,36 +83,54 @@ export type Database = {
       booking_payments: {
         Row: {
           amount: number
+          balance_amount: number
+          balance_payment_method: string | null
           booking_id: string
           created_at: string
+          deposit_amount: number
           id: string
           payment_method_id: string
+          payment_type: string
+          requires_balance_payment: boolean
           service_fee: number
           status: string
+          stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
           tip_amount: number
           updated_at: string
         }
         Insert: {
           amount: number
+          balance_amount?: number
+          balance_payment_method?: string | null
           booking_id: string
           created_at?: string
+          deposit_amount?: number
           id?: string
           payment_method_id: string
+          payment_type?: string
+          requires_balance_payment?: boolean
           service_fee: number
           status: string
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           tip_amount?: number
           updated_at?: string
         }
         Update: {
           amount?: number
+          balance_amount?: number
+          balance_payment_method?: string | null
           booking_id?: string
           created_at?: string
+          deposit_amount?: number
           id?: string
           payment_method_id?: string
+          payment_type?: string
+          requires_balance_payment?: boolean
           service_fee?: number
           status?: string
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           tip_amount?: number
           updated_at?: string

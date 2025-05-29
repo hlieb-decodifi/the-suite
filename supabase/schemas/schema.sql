@@ -624,6 +624,14 @@ create policy "Users can view their own customer data"
   on customers for select
   using (auth.uid() = user_id);
 
+create policy "Users can create their own customer record"
+  on customers for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own customer record"
+  on customers for update
+  using (auth.uid() = user_id);
+
 /**
 * SUBSCRIPTION SYSTEM
 * Tables for managing professional subscriptions
@@ -804,12 +812,24 @@ create table booking_payments (
   amount decimal(10, 2) not null,
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
-  status text not null check (status in ('pending', 'completed', 'failed', 'refunded')),
+  status text not null check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance')),
   stripe_payment_intent_id text, -- For Stripe integration
+  -- Stripe checkout session fields
+  stripe_checkout_session_id text,
+  deposit_amount decimal(10, 2) default 0 not null,
+  balance_amount decimal(10, 2) default 0 not null,
+  payment_type text default 'full' not null check (payment_type in ('full', 'deposit', 'balance')),
+  requires_balance_payment boolean default false not null,
+  balance_payment_method text check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table booking_payments enable row level security;
+
+-- Create index for checkout session lookups
+create index if not exists idx_booking_payments_stripe_checkout_session_id 
+on booking_payments(stripe_checkout_session_id) 
+where stripe_checkout_session_id is not null;
 
 /**
 * Function to check professional availability

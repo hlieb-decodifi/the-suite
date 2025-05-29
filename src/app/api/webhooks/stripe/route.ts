@@ -305,14 +305,28 @@ async function createSubscriptionRecord(
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   console.log('=== CHECKOUT SESSION COMPLETED ===');
   console.log('Session ID:', session.id);
-  console.log('Session data:', JSON.stringify(session, null, 2));
+  console.log('Session mode:', session.mode);
+  console.log('Session metadata:', session.metadata);
   
-  // Process the checkout session and activate the subscription in your database
-  if (session.mode !== 'subscription') {
-    console.log('Not a subscription checkout session, mode:', session.mode);
+  // Handle subscription checkout sessions
+  if (session.mode === 'subscription') {
+    console.log('Processing subscription checkout session...');
+    await handleSubscriptionCheckout(session);
     return;
   }
   
+  // Handle booking payment checkout sessions (payment or setup mode)
+  if (session.mode === 'payment' || session.mode === 'setup') {
+    console.log('Processing booking payment checkout session...');
+    await handleBookingPaymentCheckout(session);
+    return;
+  }
+  
+  console.log('Unknown session mode:', session.mode);
+}
+
+// Handle subscription checkout (existing logic)
+async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id;
   console.log('User ID from session:', userId);
   
@@ -333,7 +347,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     console.log('Subscription ID:', subscriptionId);
     console.log('Customer ID:', customerId);
     console.log('Plan ID:', planId);
-    console.log('Session metadata:', session.metadata);
     
     if (!subscriptionId || !customerId || !planId) {
       console.error('Missing required data in checkout session:', {
@@ -439,9 +452,94 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     await saveOrUpdateCustomer(userId, customerId);
     
     console.log(`Successfully updated subscription status for user: ${userId}`);
-    console.log('=== END CHECKOUT SESSION PROCESSING ===');
+    console.log('=== END SUBSCRIPTION CHECKOUT PROCESSING ===');
   } catch (error) {
     console.error('Error updating subscription status:', error);
+  }
+}
+
+// Handle booking payment checkout (new logic)
+async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
+  const userId = session.client_reference_id;
+  const bookingId = session.metadata?.booking_id;
+  
+  console.log('User ID from session:', userId);
+  console.log('Booking ID from metadata:', bookingId);
+  
+  if (!userId || !bookingId) {
+    console.error('Missing user ID or booking ID in checkout session');
+    return;
+  }
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Save customer information if we have it
+    if (session.customer && typeof session.customer === 'string') {
+      console.log('Saving customer record...');
+      await saveOrUpdateCustomer(userId, session.customer);
+    }
+    
+    // Determine payment status
+    let paymentStatus = 'pending';
+    let paymentIntentId: string | undefined;
+    
+    if (session.mode === 'payment') {
+      if (session.payment_status === 'paid') {
+        paymentStatus = 'completed';
+        if (session.payment_intent && typeof session.payment_intent === 'object') {
+          paymentIntentId = session.payment_intent.id;
+        }
+      } else if (session.payment_status === 'unpaid') {
+        paymentStatus = 'failed';
+      }
+    } else if (session.mode === 'setup') {
+      // For setup mode, we consider it successful if setup_intent succeeded
+      if (session.setup_intent && typeof session.setup_intent === 'object') {
+        if (session.setup_intent.status === 'succeeded') {
+          paymentStatus = 'completed';
+        }
+      }
+    }
+    
+    console.log('Payment status determined:', paymentStatus);
+    
+    // Update booking payment status
+    const { error: paymentUpdateError } = await supabase
+      .from('booking_payments')
+      .update({
+        status: paymentStatus,
+        stripe_payment_intent_id: paymentIntentId || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+    
+    if (paymentUpdateError) {
+      console.error('Failed to update booking payment status:', paymentUpdateError);
+    } else {
+      console.log('Successfully updated booking payment status');
+    }
+    
+    // Update booking status to confirmed if payment was successful
+    if (paymentStatus === 'completed') {
+      const { error: bookingUpdateError } = await supabase
+        .from('bookings')
+        .update({ 
+          status: 'confirmed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+      
+      if (bookingUpdateError) {
+        console.error('Failed to update booking status:', bookingUpdateError);
+      } else {
+        console.log('Successfully confirmed booking');
+      }
+    }
+    
+    console.log(`Successfully processed booking payment for booking: ${bookingId}`);
+  } catch (error) {
+    console.error('Error processing booking payment checkout:', error);
   }
 }
 
