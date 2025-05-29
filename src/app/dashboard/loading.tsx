@@ -2,29 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardLoading() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      {/* Dashboard Header Skeleton */}
-      <div className="flex justify-between items-center mb-8">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-32" />
-          <Skeleton className="h-10 w-24" />
-        </div>
-      </div>
-
-      {/* Tab Navigation Skeleton */}
-      <div className="flex justify-center mb-8">
-        <div className="gap-1 w-full max-w-md bg-muted/50 p-1 rounded-full flex">
-          <Skeleton className="h-10 flex-1 rounded-full" />
-          <Skeleton className="h-10 flex-1 rounded-full" />
-          <Skeleton className="h-10 flex-1 rounded-full" />
-          <Skeleton className="h-10 flex-1 rounded-full" />
-        </div>
-      </div>
-
+    <div className="w-full mx-auto">
       {/* Stats Cards Skeleton (for professional view) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Skeleton className="h-24 w-full" />
