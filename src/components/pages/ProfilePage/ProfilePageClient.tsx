@@ -501,7 +501,6 @@ export function ProfilePageClient({
   user,
   profileData,
   workingHours,
-  paymentMethods,
   portfolioPhotos,
   isEditable = true,
 }: ProfilePageClientProps) {
@@ -513,9 +512,6 @@ export function ProfilePageClient({
       </div>
     );
   }
-
-  // Determine if payment methods section should be shown
-  const showPaymentMethods = paymentMethods.length > 0;
 
   return (
     <div className="space-y-8">
@@ -539,9 +535,9 @@ export function ProfilePageClient({
             isEditable={isEditable}
           />
           <LocationSection user={user} isEditable={isEditable} />
-          {showPaymentMethods && (
-            <InlinePaymentMethodsSection user={user} isEditable={isEditable} />
-          )}
+          {/* {showPaymentMethods && ( */}
+          <InlinePaymentMethodsSection user={user} isEditable={isEditable} />
+          {/* )} */}
         </div>
       </div>
       <ReviewsSection user={user} isEditable={isEditable} />

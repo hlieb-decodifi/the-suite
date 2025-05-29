@@ -46,6 +46,7 @@ export function ProfilePageLayoutClient({
     if (path.includes('/profile/services')) return 'services';
     if (path.includes('/profile/portfolio')) return 'portfolio';
     if (path.includes('/profile/subscription')) return 'subscription';
+    if (path.includes('/profile/settings')) return 'settings';
     return 'profile';
   };
 
@@ -115,6 +116,12 @@ export function ProfilePageLayoutClient({
       isActive: activeTab === 'portfolio',
     },
     {
+      key: 'settings',
+      label: 'settings',
+      href: '/profile/settings',
+      isActive: activeTab === 'settings',
+    },
+    {
       key: 'subscription',
       label: 'subscription',
       href: '/profile/subscription',
@@ -122,10 +129,12 @@ export function ProfilePageLayoutClient({
       ...((!isSubscribed || !isConnected) && {
         badge: (
           <SubscriptionTooltip
+            isConnected={isConnected}
             isSubscribed={isSubscribed}
             activeTab={activeTab}
           />
         ),
+        className: 'border border-primary/50',
       }),
       ...(!isSubscribed && {
         className: 'border border-primary/50',

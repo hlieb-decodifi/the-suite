@@ -112,6 +112,20 @@ export async function POST(req: Request) {
         await handleAccountUpdated(event.data.object as Stripe.Account);
         break;
         
+      case 'capability.updated':
+        await handleCapabilityUpdated(event.data.object as Stripe.Capability);
+        break;
+        
+      case 'person.updated':
+        await handlePersonUpdated(event.data.object as Stripe.Person);
+        break;
+        
+      // Events we don't need to handle (created by our own API calls)
+      case 'price.created':
+      case 'product.created':
+        console.log(`Ignoring ${event.type} - handled synchronously by our app`);
+        break;
+        
       // Add more event handlers as needed
       
       default:
@@ -291,14 +305,28 @@ async function createSubscriptionRecord(
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   console.log('=== CHECKOUT SESSION COMPLETED ===');
   console.log('Session ID:', session.id);
-  console.log('Session data:', JSON.stringify(session, null, 2));
+  console.log('Session mode:', session.mode);
+  console.log('Session metadata:', session.metadata);
   
-  // Process the checkout session and activate the subscription in your database
-  if (session.mode !== 'subscription') {
-    console.log('Not a subscription checkout session, mode:', session.mode);
+  // Handle subscription checkout sessions
+  if (session.mode === 'subscription') {
+    console.log('Processing subscription checkout session...');
+    await handleSubscriptionCheckout(session);
     return;
   }
   
+  // Handle booking payment checkout sessions (payment or setup mode)
+  if (session.mode === 'payment' || session.mode === 'setup') {
+    console.log('Processing booking payment checkout session...');
+    await handleBookingPaymentCheckout(session);
+    return;
+  }
+  
+  console.log('Unknown session mode:', session.mode);
+}
+
+// Handle subscription checkout (existing logic)
+async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id;
   console.log('User ID from session:', userId);
   
@@ -319,7 +347,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     console.log('Subscription ID:', subscriptionId);
     console.log('Customer ID:', customerId);
     console.log('Plan ID:', planId);
-    console.log('Session metadata:', session.metadata);
     
     if (!subscriptionId || !customerId || !planId) {
       console.error('Missing required data in checkout session:', {
@@ -425,9 +452,94 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     await saveOrUpdateCustomer(userId, customerId);
     
     console.log(`Successfully updated subscription status for user: ${userId}`);
-    console.log('=== END CHECKOUT SESSION PROCESSING ===');
+    console.log('=== END SUBSCRIPTION CHECKOUT PROCESSING ===');
   } catch (error) {
     console.error('Error updating subscription status:', error);
+  }
+}
+
+// Handle booking payment checkout (new logic)
+async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
+  const userId = session.client_reference_id;
+  const bookingId = session.metadata?.booking_id;
+  
+  console.log('User ID from session:', userId);
+  console.log('Booking ID from metadata:', bookingId);
+  
+  if (!userId || !bookingId) {
+    console.error('Missing user ID or booking ID in checkout session');
+    return;
+  }
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Save customer information if we have it
+    if (session.customer && typeof session.customer === 'string') {
+      console.log('Saving customer record...');
+      await saveOrUpdateCustomer(userId, session.customer);
+    }
+    
+    // Determine payment status
+    let paymentStatus = 'pending';
+    let paymentIntentId: string | undefined;
+    
+    if (session.mode === 'payment') {
+      if (session.payment_status === 'paid') {
+        paymentStatus = 'completed';
+        if (session.payment_intent && typeof session.payment_intent === 'object') {
+          paymentIntentId = session.payment_intent.id;
+        }
+      } else if (session.payment_status === 'unpaid') {
+        paymentStatus = 'failed';
+      }
+    } else if (session.mode === 'setup') {
+      // For setup mode, we consider it successful if setup_intent succeeded
+      if (session.setup_intent && typeof session.setup_intent === 'object') {
+        if (session.setup_intent.status === 'succeeded') {
+          paymentStatus = 'completed';
+        }
+      }
+    }
+    
+    console.log('Payment status determined:', paymentStatus);
+    
+    // Update booking payment status
+    const { error: paymentUpdateError } = await supabase
+      .from('booking_payments')
+      .update({
+        status: paymentStatus,
+        stripe_payment_intent_id: paymentIntentId || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+    
+    if (paymentUpdateError) {
+      console.error('Failed to update booking payment status:', paymentUpdateError);
+    } else {
+      console.log('Successfully updated booking payment status');
+    }
+    
+    // Update booking status to confirmed if payment was successful
+    if (paymentStatus === 'completed') {
+      const { error: bookingUpdateError } = await supabase
+        .from('bookings')
+        .update({ 
+          status: 'confirmed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+      
+      if (bookingUpdateError) {
+        console.error('Failed to update booking status:', bookingUpdateError);
+      } else {
+        console.log('Successfully confirmed booking');
+      }
+    }
+    
+    console.log(`Successfully processed booking payment for booking: ${bookingId}`);
+  } catch (error) {
+    console.error('Error processing booking payment checkout:', error);
   }
 }
 
@@ -674,20 +786,137 @@ async function handleAccountUpdated(account: Stripe.Account) {
   try {
     // Determine simple status based on account capabilities
     let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
-    if (account.charges_enabled && account.payouts_enabled) {
+    const wasComplete = account.charges_enabled && account.payouts_enabled;
+    
+    if (wasComplete) {
       connectStatus = 'complete';
     } else if (!account.details_submitted) {
       connectStatus = 'not_connected';
     }
     
     // Update our database with the latest account status
-    await updateStripeConnectStatus(userId, {
+    const updateResult = await updateStripeConnectStatus(userId, {
       accountId: account.id,
       connectStatus
     });
     
-    console.log(`Successfully updated Stripe Connect status for user: ${userId}`);
+    if (updateResult.success) {
+      console.log(`Successfully updated Stripe Connect status for user: ${userId} to ${connectStatus}`);
+      
+      // If the account just became complete, trigger service synchronization
+      if (connectStatus === 'complete') {
+        console.log(`Triggering service sync for newly connected account: ${userId}`);
+        
+        // Import the sync action dynamically to avoid circular dependencies
+        const { onSubscriptionChangeAction } = await import('@/server/domains/stripe-services');
+        
+        try {
+          const syncResult = await onSubscriptionChangeAction(userId);
+          if (syncResult.success) {
+            console.log(`Successfully synced ${syncResult.syncResult?.successCount || 0} services after Stripe Connect completion`);
+          } else {
+            console.error('Service sync failed after Stripe Connect completion:', syncResult.message);
+          }
+        } catch (syncError) {
+          console.error('Error triggering service sync after Stripe Connect completion:', syncError);
+        }
+      }
+    } else {
+      console.error('Failed to update Stripe Connect status:', updateResult.error);
+    }
   } catch (error) {
     console.error('Error updating Stripe Connect status:', error);
+  }
+}
+
+// Handle Stripe Connect capability updates
+async function handleCapabilityUpdated(capability: Stripe.Capability) {
+  console.log(`Capability updated: ${capability.id} for account: ${capability.account}`);
+  
+  try {
+    // Get the account to find the user ID
+    const account = await stripe.accounts.retrieve(capability.account as string);
+    const userId = account.metadata?.userId;
+    
+    if (!userId) {
+      console.log(`No userId in metadata for account: ${capability.account}`);
+      return;
+    }
+    
+    // Determine if this capability change affects the overall account status
+    // We mainly care about card_payments and transfers capabilities
+    if (capability.id === 'card_payments' || capability.id === 'transfers') {
+      console.log(`Important capability ${capability.id} updated to status: ${capability.status}`);
+      
+      // Refresh the account status to get the latest capability information
+      let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
+      
+      if (account.charges_enabled && account.payouts_enabled) {
+        connectStatus = 'complete';
+      } else if (!account.details_submitted) {
+        connectStatus = 'not_connected';
+      }
+      
+      // Update our database
+      const updateResult = await updateStripeConnectStatus(userId, {
+        accountId: account.id,
+        connectStatus
+      });
+      
+      if (updateResult.success) {
+        console.log(`Updated Stripe Connect status after capability change: ${userId} to ${connectStatus}`);
+        
+        // If the account just became complete due to capability approval, trigger service sync
+        if (connectStatus === 'complete') {
+          console.log(`Triggering service sync after capability completion: ${userId}`);
+          
+          try {
+            const { onSubscriptionChangeAction } = await import('@/server/domains/stripe-services');
+            const syncResult = await onSubscriptionChangeAction(userId);
+            
+            if (syncResult.success) {
+              console.log(`Successfully synced ${syncResult.syncResult?.successCount || 0} services after capability completion`);
+            } else {
+              console.error('Service sync failed after capability completion:', syncResult.message);
+            }
+          } catch (syncError) {
+            console.error('Error triggering service sync after capability completion:', syncError);
+          }
+        }
+      } else {
+        console.error('Failed to update Stripe Connect status after capability change:', updateResult.error);
+      }
+    } else {
+      console.log(`Capability ${capability.id} updated but not critical for our app`);
+    }
+  } catch (error) {
+    console.error('Error handling capability update:', error);
+  }
+}
+
+// Handle Stripe Connect person updates
+async function handlePersonUpdated(person: Stripe.Person) {
+  console.log(`Person updated: ${person.id} for account: ${person.account}`);
+  
+  try {
+    // Get the account to find the user ID
+    const account = await stripe.accounts.retrieve(person.account as string);
+    const userId = account.metadata?.userId;
+    
+    if (!userId) {
+      console.log(`No userId in metadata for account: ${person.account}`);
+      return;
+    }
+    
+    // Log person verification status for debugging
+    console.log(`Person verification status: ${JSON.stringify(person.verification)}`);
+    
+    // We could potentially update our database with person verification status
+    // For now, we'll just log it as it's mainly informational
+    // The main account status is handled by account.updated events
+    
+    console.log(`Person update processed for user: ${userId}`);
+  } catch (error) {
+    console.error('Error handling person update:', error);
   }
 } 

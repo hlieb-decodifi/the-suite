@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ProfileServicesPageClient } from './ProfileServicesPageClient';
 import { getServices } from '@/server/domains/services/actions';
+import {
+  syncServiceAction,
+  archiveServiceAction,
+} from '@/server/domains/stripe-services';
 import type { ServiceUI } from '@/types/services';
 import type { User } from '@supabase/supabase-js';
 
@@ -141,7 +145,29 @@ export async function upsertServiceAction({
   data: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const { upsertService } = await import('@/server/domains/services/actions');
-  return upsertService({ userId, data });
+  const result = await upsertService({ userId, data });
+
+  // If service was successfully created/updated, sync with Stripe
+  if (result.success && result.service?.id) {
+    try {
+      const syncResult = await syncServiceAction(result.service.id);
+      if (!syncResult.success) {
+        console.error(
+          'Stripe service sync failed after upsert:',
+          syncResult.error,
+        );
+        // Don't fail the service operation, just log the sync error
+      }
+    } catch (syncError) {
+      console.error(
+        'Error syncing service with Stripe after upsert:',
+        syncError,
+      );
+      // Don't fail the service operation due to sync issues
+    }
+  }
+
+  return result;
 }
 
 export async function deleteServiceAction({
@@ -151,6 +177,22 @@ export async function deleteServiceAction({
   userId: string;
   serviceId: string;
 }) {
+  // First archive the service from Stripe
+  try {
+    const archiveResult = await archiveServiceAction(serviceId);
+    if (!archiveResult.success) {
+      console.error(
+        'Failed to archive service from Stripe:',
+        archiveResult.error,
+      );
+      // Continue with deletion even if Stripe archive fails
+    }
+  } catch (archiveError) {
+    console.error('Error archiving service from Stripe:', archiveError);
+    // Continue with deletion even if Stripe archive fails
+  }
+
+  // Then delete from our database
   const { deleteService } = await import('@/server/domains/services/actions');
   return deleteService({ userId, serviceId });
 }

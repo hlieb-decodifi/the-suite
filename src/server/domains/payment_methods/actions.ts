@@ -7,6 +7,7 @@ import {
   getProfessionalPaymentMethodsFromDb,
   updateProfessionalPaymentMethodsInDb
 } from './db';
+import { onSubscriptionChangeAction } from '@/server/domains/stripe-services';
 
 /**
  * Server Action: Fetch all available payment methods from the master list.
@@ -59,6 +60,19 @@ export async function updateProfessionalPaymentMethodsAction({
     
     // Revalidate relevant paths
     revalidatePath('/profile');
+    
+    // Sync services with Stripe after payment method changes
+    // This is important because credit card availability affects service status
+    try {
+      const syncResult = await onSubscriptionChangeAction(userId);
+      if (!syncResult.success) {
+        console.error('Stripe service sync failed after payment method update:', syncResult.message);
+        // Don't fail the payment method update, just log the sync error
+      }
+    } catch (syncError) {
+      console.error('Error syncing services with Stripe after payment method update:', syncError);
+      // Don't fail the payment method update due to sync issues
+    }
     
     return { success: true };
   } catch (error) {

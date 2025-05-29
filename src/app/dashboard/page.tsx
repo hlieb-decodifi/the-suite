@@ -1,8 +1,8 @@
-import { DashboardTemplate } from '@/components/templates/DashboardTemplate';
+import { DashboardPage } from '@/components/pages/DashboardPage/DashboardPage';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0; // Disable cache for this route
+// Enable caching for 1 minute
+export const revalidate = 60;
 
-export default function DashboardPage() {
-  return <DashboardTemplate />;
+export default function DashboardOverviewPage() {
+  return <DashboardPage />;
 }

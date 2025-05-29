@@ -83,36 +83,54 @@ export type Database = {
       booking_payments: {
         Row: {
           amount: number
+          balance_amount: number
+          balance_payment_method: string | null
           booking_id: string
           created_at: string
+          deposit_amount: number
           id: string
           payment_method_id: string
+          payment_type: string
+          requires_balance_payment: boolean
           service_fee: number
           status: string
+          stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
           tip_amount: number
           updated_at: string
         }
         Insert: {
           amount: number
+          balance_amount?: number
+          balance_payment_method?: string | null
           booking_id: string
           created_at?: string
+          deposit_amount?: number
           id?: string
           payment_method_id: string
+          payment_type?: string
+          requires_balance_payment?: boolean
           service_fee: number
           status: string
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           tip_amount?: number
           updated_at?: string
         }
         Update: {
           amount?: number
+          balance_amount?: number
+          balance_payment_method?: string | null
           booking_id?: string
           created_at?: string
+          deposit_amount?: number
           id?: string
           payment_method_id?: string
+          payment_type?: string
+          requires_balance_payment?: boolean
           service_fee?: number
           status?: string
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
           tip_amount?: number
           updated_at?: string
@@ -397,7 +415,10 @@ export type Database = {
         Row: {
           address_id: string | null
           appointment_requirements: string | null
+          balance_payment_method: string | null
           created_at: string
+          deposit_type: string | null
+          deposit_value: number | null
           description: string | null
           facebook_url: string | null
           id: string
@@ -407,6 +428,7 @@ export type Database = {
           location: string | null
           phone_number: string | null
           profession: string | null
+          requires_deposit: boolean
           stripe_account_id: string | null
           stripe_connect_status: string
           stripe_connect_updated_at: string | null
@@ -418,7 +440,10 @@ export type Database = {
         Insert: {
           address_id?: string | null
           appointment_requirements?: string | null
+          balance_payment_method?: string | null
           created_at?: string
+          deposit_type?: string | null
+          deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
           id?: string
@@ -428,6 +453,7 @@ export type Database = {
           location?: string | null
           phone_number?: string | null
           profession?: string | null
+          requires_deposit?: boolean
           stripe_account_id?: string | null
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
@@ -439,7 +465,10 @@ export type Database = {
         Update: {
           address_id?: string | null
           appointment_requirements?: string | null
+          balance_payment_method?: string | null
           created_at?: string
+          deposit_type?: string | null
+          deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
           id?: string
@@ -449,6 +478,7 @@ export type Database = {
           location?: string | null
           phone_number?: string | null
           profession?: string | null
+          requires_deposit?: boolean
           stripe_account_id?: string | null
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
@@ -593,6 +623,12 @@ export type Database = {
           name: string
           price: number
           professional_profile_id: string
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_status: string
+          stripe_sync_error: string | null
+          stripe_sync_status: string
+          stripe_synced_at: string | null
           updated_at: string
         }
         Insert: {
@@ -603,6 +639,12 @@ export type Database = {
           name: string
           price: number
           professional_profile_id: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_status?: string
+          stripe_sync_error?: string | null
+          stripe_sync_status?: string
+          stripe_synced_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -613,6 +655,12 @@ export type Database = {
           name?: string
           price?: number
           professional_profile_id?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_status?: string
+          stripe_sync_error?: string | null
+          stripe_sync_status?: string
+          stripe_synced_at?: string | null
           updated_at?: string
         }
         Relationships: [
