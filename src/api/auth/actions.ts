@@ -228,3 +228,128 @@ export async function updateEmailAction(newEmail: string, password: string) {
     };
   }
 }
+
+/**
+ * Server action for Google OAuth sign in/sign up
+ */
+export async function signInWithGoogleAction(redirectTo: string = '/profile') {
+  console.log('signInWithGoogleAction called with redirectTo:', redirectTo);
+  const supabase = await createClient();
+  
+  try {
+    console.log('Calling Supabase OAuth with provider: google');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${getURL()}auth/callback?redirect_to=${redirectTo}`,
+      },
+    });
+
+    if (error) {
+      console.error('Google OAuth error:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    console.log('OAuth data received:', data);
+    
+    // Redirect to the OAuth provider
+    if (data.url) {
+      console.log('Redirecting to:', data.url);
+      redirect(data.url);
+    }
+
+    console.log('No redirect URL received from Supabase');
+    return {
+      success: false,
+      error: 'Failed to initiate Google OAuth',
+    };
+  } catch (error) {
+    console.error('Google OAuth action error:', error);
+    return {
+      success: false,
+      error: "Failed to sign in with Google. Please try again.",
+    };
+  }
+}
+
+/**
+ * Form action wrapper for Google OAuth
+ */
+export async function googleOAuthFormAction(formData: FormData) {
+  console.log('Google OAuth form action called');
+  const redirectTo = formData.get('redirectTo') as string || '/profile';
+  console.log('Redirect to:', redirectTo);
+  // await signInWithGoogleAction(redirectTo);
+}
+
+/**
+ * Server action to get Google OAuth URL (without redirecting)
+ */
+export async function getGoogleOAuthUrlAction(
+  redirectTo: string = '/profile', 
+  mode: 'signin' | 'signup' = 'signin',
+  role?: 'client' | 'professional'
+) {
+  console.log('getGoogleOAuthUrlAction called with:', { redirectTo, mode, role });
+  const supabase = await createClient();
+  
+  try {
+    console.log('Calling Supabase OAuth with provider: google');
+    
+    // Build the callback URL with mode and role parameters
+    const callbackParams = new URLSearchParams();
+    callbackParams.set('redirect_to', redirectTo);
+    callbackParams.set('mode', mode);
+    if (mode === 'signup' && role) {
+      callbackParams.set('role', role);
+    }
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${getURL()}auth/callback?${callbackParams.toString()}`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+
+    if (error) {
+      console.error('Google OAuth error:', error);
+      return {
+        success: false,
+        error: error.message,
+        url: null,
+      };
+    }
+
+    console.log('OAuth data received:', data);
+    
+    if (data.url) {
+      console.log('OAuth URL generated:', data.url);
+      return {
+        success: true,
+        error: null,
+        url: data.url,
+      };
+    }
+
+    console.log('No redirect URL received from Supabase');
+    return {
+      success: false,
+      error: 'Failed to generate OAuth URL',
+      url: null,
+    };
+  } catch (error) {
+    console.error('Google OAuth action error:', error);
+    return {
+      success: false,
+      error: "Failed to get Google OAuth URL",
+      url: null,
+    };
+  }
+}

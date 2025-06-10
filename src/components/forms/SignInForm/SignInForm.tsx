@@ -36,6 +36,7 @@ export function SignInForm({
         onSubmit={handleSubmit}
         onSignUpClick={onSignUpClick || (() => {})}
         onForgotPasswordClick={onForgotPasswordClick || (() => {})}
+        redirectTo={redirectTo}
       />
     </div>
   );

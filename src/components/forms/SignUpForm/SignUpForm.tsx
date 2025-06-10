@@ -9,6 +9,7 @@ export type SignUpFormProps = {
   onLoginClick?: () => void;
   className?: string;
   redirectToDashboard?: boolean;
+  redirectTo?: string;
 };
 
 export function SignUpForm({
@@ -16,6 +17,7 @@ export function SignUpForm({
   onLoginClick,
   className = '',
   redirectToDashboard = false,
+  redirectTo = '/profile',
 }: SignUpFormProps) {
   const {
     form,
@@ -33,6 +35,7 @@ export function SignUpForm({
         isPending={isPending}
         onSubmit={handleSubmit}
         onLoginClick={onLoginClick!}
+        redirectTo={redirectTo}
       />
     </div>
   );
