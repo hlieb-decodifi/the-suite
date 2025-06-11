@@ -18,6 +18,7 @@ export type UserDashboardData = {
     cancelled: number;
     total: number;
   };
+  unreadMessagesCount?: number;
 };
 
 export type DashboardPageLayoutProps = {
@@ -107,6 +108,9 @@ export async function getUserDashboardData(
     // Get appointment counts
     const appointmentCounts = await getAppointmentsCountByStatus(userId);
 
+    // Get unread messages count
+    const unreadMessagesCount = await getUnreadMessagesCount(userId);
+
     return {
       id: userData.id,
       firstName: userData.first_name,
@@ -115,6 +119,7 @@ export async function getUserDashboardData(
       isProfessional: !!isProfessional,
       email,
       appointmentCounts,
+      unreadMessagesCount,
     };
   } catch (error) {
     console.error('Error in getUserDashboardData:', error);
@@ -387,5 +392,47 @@ export async function getDashboardAppointments(
   } catch (error) {
     console.error('Error in getDashboardAppointments:', error);
     return []; // Return empty array instead of throwing
+  }
+}
+
+// Get unread messages count
+export async function getUnreadMessagesCount(userId: string): Promise<number> {
+  try {
+    const supabase = await createClient();
+
+    // Get all conversations for this user
+    const { data: conversations, error: conversationsError } = await supabase
+      .from('conversations')
+      .select('id')
+      .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
+
+    if (conversationsError || !conversations) {
+      console.error('Error fetching conversations for unread count:', conversationsError);
+      return 0;
+    }
+
+    if (conversations.length === 0) {
+      return 0;
+    }
+
+    const conversationIds = conversations.map(conv => conv.id);
+
+    // Count unread messages where sender is not the current user
+    const { count, error: messagesError } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .in('conversation_id', conversationIds)
+      .eq('is_read', false)
+      .neq('sender_id', userId);
+
+    if (messagesError) {
+      console.error('Error counting unread messages:', messagesError);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error in getUnreadMessagesCount:', error);
+    return 0;
   }
 }
