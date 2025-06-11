@@ -146,8 +146,9 @@ export async function updateUserDetailsAction(
         user_id: userId,
         phone_number: details.phone,
         updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId);
+      }, {
+        onConflict: 'user_id'
+      });
 
     if (profileError) {
       console.error('Error updating client profile:', profileError);
@@ -223,8 +224,9 @@ export async function updateClientLocationAction(
           address_id: addressId,
           location: `${addressData.city}, ${addressData.state}`,
           updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+        }, {
+          onConflict: 'user_id'
+        });
 
       if (profileError) {
         console.error('Error updating client profile:', profileError);

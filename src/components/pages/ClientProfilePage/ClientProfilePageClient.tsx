@@ -122,11 +122,6 @@ function InlineDetailsSection({
         if (result.success) {
           setFormData(data);
           setIsEditing(false);
-          toast({
-            description: 'Personal details updated successfully.',
-          });
-          // Refresh the page to show updated data
-          window.location.reload();
         } else {
           toast({
             variant: 'destructive',
@@ -152,14 +147,14 @@ function InlineDetailsSection({
       <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
         <div className="flex items-center">
           <UserRound size={18} className="text-[#DEA85B] mr-2" />
-          <CardTitle className="text-[#313131]">Personal Details</CardTitle>
+          <CardTitle className="text-[#313131] text-lg">Personal Details</CardTitle>
         </div>
         {!isEditing && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsEditing(true)}
-            className="text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
+            className="text-sm text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
             disabled={isPending}
           >
             <Edit2 size={16} className="mr-2" />
@@ -260,8 +255,6 @@ function InlineLocationSection({
           toast({
             description: 'Location updated successfully.',
           });
-          // Refresh the page to show updated data
-          window.location.reload();
         } else {
           toast({
             variant: 'destructive',
@@ -287,14 +280,14 @@ function InlineLocationSection({
       <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
         <div className="flex items-center">
           <MapPinned size={18} className="text-[#DEA85B] mr-2" />
-          <CardTitle className="text-[#313131]">Location</CardTitle>
+          <CardTitle className="text-[#313131] text-lg">Location</CardTitle>
         </div>
         {!isEditing && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsEditing(true)}
-            className="text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
+            className="text-sm text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
             disabled={isPending}
           >
             <Edit2 size={16} className="mr-2" />

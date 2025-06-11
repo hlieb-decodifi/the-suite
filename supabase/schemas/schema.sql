@@ -325,6 +325,10 @@ create policy "Clients can update their own profile"
   on client_profiles for update
   using (auth.uid() = user_id);
 
+create policy "Clients can create their own profile"
+  on client_profiles for insert
+  with check (auth.uid() = user_id);
+
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
 returns trigger as $$
