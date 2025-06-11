@@ -33,29 +33,43 @@ export function SignUpFormContent({
 
   const selectedRole = watch('userType');
 
+  const handleOAuthClick = () => {
+    // Trigger form validation for userType field
+    if (!selectedRole) {
+      form.setError('userType', {
+        type: 'manual',
+        message: 'Please select your role before continuing with Google',
+      });
+      return;
+    }
+    // Clear any existing error
+    form.clearErrors('userType');
+  };
+
   return (
     <div className="w-full">
-      {/* Google OAuth Button */}
-      <div className="mb-6">
-        <GoogleOAuthButton
-          mode="signup"
-          redirectTo={redirectTo}
-          role={selectedRole}
-          disabled={!selectedRole}
-        />
-      </div>
-
-      {/* Divider */}
-      <div className="relative mb-6">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-gray-300" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="bg-white px-4 text-gray-500">or</span>
-        </div>
-      </div>
-
       <form onSubmit={handleSubmit(onSubmit)}>
+
+        {/* Google OAuth Button */}
+        <div className="mb-4">
+          <GoogleOAuthButton
+            mode="signup"
+            redirectTo={redirectTo}
+            role={selectedRole}
+            onClickValidation={handleOAuthClick}
+          />
+        </div>
+
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-4 text-gray-500">or</span>
+          </div>
+        </div>
+
         <NameFields register={register} errors={errors} />
 
         {/* Email and Password in one row on desktop, column on mobile */}
@@ -80,6 +94,7 @@ export function SignUpFormContent({
         <div className="mt-2">
           <UserTypesFields errors={errors} control={control} />
         </div>
+
 
         <div className="pt-4">
           <Button

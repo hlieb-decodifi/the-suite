@@ -22,8 +22,6 @@ export async function GET(request: Request) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       
       if (data.session && !error) {
-        console.log('OAuth successful:', { mode, role, userId: data.user?.id });
-        
         // For signin mode, check if user already exists in our database
         if (mode === 'signin') {
           const { data: existingUser, error: userError } = await supabase
@@ -33,7 +31,6 @@ export async function GET(request: Request) {
             .single();
           
           if (userError || !existingUser) {
-            console.log('User does not exist in signin mode, signing out');
             // User doesn't exist, sign them out and redirect with error
             await supabase.auth.signOut();
             return NextResponse.redirect(new URL('/auth/confirmed?verified=false&error=user_not_found', baseUrl));
@@ -42,8 +39,6 @@ export async function GET(request: Request) {
         
         // For signup mode, handle role assignment and profile creation
         if (mode === 'signup' && role) {
-          console.log('Processing signup mode with role:', role);
-          
           // Get the role ID for the selected role
           const { data: roleData } = await supabase
             .from('roles')
@@ -64,7 +59,6 @@ export async function GET(request: Request) {
             .single();
           
           const currentRole = currentUser?.roles?.name;
-          console.log('Current user role:', currentRole, 'Requested role:', role);
           
           // Extract names from Google metadata
           const firstName = data.user.user_metadata?.given_name || 
@@ -90,7 +84,6 @@ export async function GET(request: Request) {
           
           // Handle profile creation/switching
           if (currentRole !== role) {
-            console.log('Role change detected, updating profiles');
             
             // If switching from client to professional
             if (currentRole === 'client' && role === 'professional') {

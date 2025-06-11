@@ -71,8 +71,6 @@ function InlineHeaderSection({
         if (result.success) {
           toast({ description: 'Profile information updated successfully.' });
           setIsModalOpen(false);
-          // Refresh the page to show updated data
-          window.location.reload();
         } else {
           toast({
             variant: 'destructive',

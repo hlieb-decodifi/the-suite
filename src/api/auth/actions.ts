@@ -27,7 +27,6 @@ export async function signUpAction(data: SignUpFormValues) {
   try {
     // Ensure userType is set
     if (!data.userType) {
-      console.log('No userType provided, defaulting to client');
       data.userType = 'client';
     }
     
@@ -233,11 +232,9 @@ export async function updateEmailAction(newEmail: string, password: string) {
  * Server action for Google OAuth sign in/sign up
  */
 export async function signInWithGoogleAction(redirectTo: string = '/profile') {
-  console.log('signInWithGoogleAction called with redirectTo:', redirectTo);
   const supabase = await createClient();
   
   try {
-    console.log('Calling Supabase OAuth with provider: google');
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -252,16 +249,12 @@ export async function signInWithGoogleAction(redirectTo: string = '/profile') {
         error: error.message,
       };
     }
-
-    console.log('OAuth data received:', data);
     
     // Redirect to the OAuth provider
     if (data.url) {
-      console.log('Redirecting to:', data.url);
       redirect(data.url);
     }
 
-    console.log('No redirect URL received from Supabase');
     return {
       success: false,
       error: 'Failed to initiate Google OAuth',
@@ -279,10 +272,10 @@ export async function signInWithGoogleAction(redirectTo: string = '/profile') {
  * Form action wrapper for Google OAuth
  */
 export async function googleOAuthFormAction(formData: FormData) {
-  console.log('Google OAuth form action called');
   const redirectTo = formData.get('redirectTo') as string || '/profile';
   console.log('Redirect to:', redirectTo);
   // await signInWithGoogleAction(redirectTo);
+  await signInWithGoogleAction(redirectTo);
 }
 
 /**
@@ -293,12 +286,9 @@ export async function getGoogleOAuthUrlAction(
   mode: 'signin' | 'signup' = 'signin',
   role?: 'client' | 'professional'
 ) {
-  console.log('getGoogleOAuthUrlAction called with:', { redirectTo, mode, role });
   const supabase = await createClient();
   
   try {
-    console.log('Calling Supabase OAuth with provider: google');
-    
     // Build the callback URL with mode and role parameters
     const callbackParams = new URLSearchParams();
     callbackParams.set('redirect_to', redirectTo);
@@ -326,11 +316,8 @@ export async function getGoogleOAuthUrlAction(
         url: null,
       };
     }
-
-    console.log('OAuth data received:', data);
     
     if (data.url) {
-      console.log('OAuth URL generated:', data.url);
       return {
         success: true,
         error: null,
@@ -338,7 +325,6 @@ export async function getGoogleOAuthUrlAction(
       };
     }
 
-    console.log('No redirect URL received from Supabase');
     return {
       success: false,
       error: 'Failed to generate OAuth URL',
