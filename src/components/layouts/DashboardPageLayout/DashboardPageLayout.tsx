@@ -35,7 +35,7 @@ export async function DashboardPageLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/signin');
+    redirect('/');
   }
 
   // Fetch user data on the server

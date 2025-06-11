@@ -47,9 +47,6 @@ export async function RootLayoutTemplate({
       lastName = user.user_metadata?.last_name || '';
     }
 
-    console.log('user', user);
-    console.log('firstName from DB:', firstName, 'lastName from DB:', lastName);
-
     userInfo = {
       name: `${firstName} ${lastName}`.trim() || 'User',
       email: user.email || '',

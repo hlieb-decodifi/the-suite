@@ -12,7 +12,6 @@ export type GoogleOAuthButtonProps = {
   redirectTo?: string;
   role?: UserType; // Required for signup mode
   disabled?: boolean;
-  onClickValidation?: () => void; // Optional validation function called before OAuth
 };
 
 export function GoogleOAuthButton({
@@ -21,22 +20,12 @@ export function GoogleOAuthButton({
   redirectTo = '/profile',
   role,
   disabled = false,
-  onClickValidation,
 }: GoogleOAuthButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   
   const handleGoogleAuth = async () => {
     // Don't proceed if disabled
     if (disabled) return;
-    
-    // Call validation function if provided
-    if (onClickValidation) {
-      onClickValidation();
-      // Check if validation failed (for signup mode without role)
-      if (mode === 'signup' && !role) {
-        return;
-      }
-    }
     
     setIsLoading(true);
     
@@ -117,5 +106,5 @@ export function GoogleOAuthButton({
     );
   }
 
-  return <div />;
+  return button;
 } 
