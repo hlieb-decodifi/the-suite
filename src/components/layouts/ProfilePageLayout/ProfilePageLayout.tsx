@@ -41,8 +41,12 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
     redirect('/');
   }
 
-  // Check if user is professional
-  const userRole = user.user_metadata?.role;
+  // Fetch user data first to get the role from database
+  const userData = await getUserData(user.id);
+  const userRole = userData.roleName;
+
+  console.log('user', user);
+  console.log('userRole from database:', userRole);
 
   if (userRole === 'client') {
     redirect('/client-profile');
@@ -51,9 +55,6 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
   if (userRole !== 'professional') {
     redirect('/dashboard');
   }
-
-  // Fetch user data on the server
-  const userData = await getUserData(user.id);
 
   // Get Stripe Connect status if user is subscribed
   let connectStatus = null;

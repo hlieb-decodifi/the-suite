@@ -133,16 +133,59 @@ export async function getDashboardAppointments(
   try {
     const supabase = await createClient();
 
+    // First, verify the user exists in our users table and check auth status
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    console.log('Auth user in getDashboardAppointments:', authUser?.id, 'Expected userId:', userId);
+    
+    const { data: dbUser, error: dbUserError } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, role_id, roles(name)')
+      .eq('id', userId)
+      .single();
+    
+    console.log('Database user:', dbUser, 'Error:', dbUserError);
+    
+    if (dbUserError || !dbUser) {
+      console.error('User not found in database or error fetching user:', dbUserError);
+      return [];
+    }
+
     // Get professional profile ID if user is a professional
     let professionalProfileId: string | null = null;
     if (isProfessional) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('professional_profiles')
         .select('id')
         .eq('user_id', userId)
         .single();
 
-      professionalProfileId = profile?.id || null;
+      if (profileError) {
+        console.error('Error fetching professional profile for appointments:', profileError);
+        // If profile doesn't exist but user is professional, try to create it
+        if (profileError.code === 'PGRST116') {
+          console.log('Professional profile not found, attempting to create one for user:', userId);
+          
+          const { data: newProfile, error: createError } = await supabase
+            .from('professional_profiles')
+            .insert({ user_id: userId })
+            .select('id')
+            .single();
+          
+          if (createError) {
+            console.error('Error creating professional profile:', createError);
+            return []; // Return empty array if we can't create profile
+          }
+          
+          if (newProfile) {
+            professionalProfileId = newProfile.id;
+            console.log('Created new professional profile with ID:', newProfile.id);
+          }
+        } else {
+          return []; // Return empty array for other errors
+        }
+      } else {
+        professionalProfileId = profile?.id || null;
+      }
     }
 
     // First, get the bookings that belong to this user
@@ -155,6 +198,36 @@ export async function getDashboardAppointments(
         professionalProfileId,
       );
     } else {
+      // For clients, ensure they have a client profile
+      const { error: clientError } = await supabase
+        .from('client_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+      
+      if (clientError) {
+        console.error('Error fetching client profile for appointments:', clientError);
+        // If profile doesn't exist but user is client, try to create it
+        if (clientError.code === 'PGRST116') {
+          console.log('Client profile not found, attempting to create one for user:', userId);
+          
+          const { error: createClientError } = await supabase
+            .from('client_profiles')
+            .insert({ user_id: userId })
+            .select('id')
+            .single();
+          
+          if (createClientError) {
+            console.error('Error creating client profile:', createClientError);
+            return []; // Return empty array if we can't create profile
+          }
+          
+          console.log('Created new client profile for user:', userId);
+        } else {
+          return []; // Return empty array for other errors
+        }
+      }
+      
       bookingsQuery = bookingsQuery.eq('client_id', userId);
     }
 
@@ -165,7 +238,7 @@ export async function getDashboardAppointments(
 
     const { data: bookingsData, error: bookingsError } = await bookingsQuery;
 
-    if (bookingsError) {
+    if (bookingsError !== null) {
       console.error('Error fetching bookings:', bookingsError);
       return [];
     }

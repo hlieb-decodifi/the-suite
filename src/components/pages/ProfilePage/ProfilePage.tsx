@@ -44,7 +44,12 @@ export async function ProfilePage({
       redirect('/');
     }
 
-    if (currentUser.user_metadata?.role === 'client') {
+    // Check user role from database instead of metadata
+    const { data: isProfessional } = await supabase.rpc('is_professional', {
+      user_uuid: currentUser.id,
+    });
+
+    if (!isProfessional) {
       redirect('/client-profile', RedirectType.replace);
     }
 
@@ -76,8 +81,6 @@ export async function ProfilePage({
 
   // Fetch all data on the server
   const profileData = await getProfileData(targetUserId);
-
-  console.log('profileData', profileData.paymentMethods);
 
   return (
     <ProfilePageClient

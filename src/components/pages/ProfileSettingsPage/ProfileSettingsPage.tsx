@@ -38,9 +38,12 @@ export async function ProfileSettingsPage({
       redirect('/');
     }
 
-    // Check if user is professional
-    const userRole = currentUser.user_metadata?.role;
-    if (userRole !== 'professional') {
+    // Check if user is professional from database instead of metadata
+    const { data: isProfessional } = await supabase.rpc('is_professional', {
+      user_uuid: currentUser.id,
+    });
+
+    if (!isProfessional) {
       redirect('/dashboard');
     }
 

@@ -54,6 +54,8 @@ export function SignUpModal({
     }
   };
 
+  const redirectTo = redirectToDashboard ? '/profile' : '/profile';
+
   return (
     <Modal
       isOpen={isOpen}
@@ -67,6 +69,7 @@ export function SignUpModal({
         onLoginClick={handleSignInClick}
         className="w-full"
         redirectToDashboard={redirectToDashboard}
+        redirectTo={redirectTo}
       />
     </Modal>
   );
