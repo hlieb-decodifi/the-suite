@@ -36,7 +36,7 @@ export async function getAppointmentsCountByStatus(userId: string) {
     
     const { data: bookingsData, error: bookingsError } = await bookingsQuery;
     
-    if (bookingsError || !bookingsData || bookingsData.length === 0) {
+    if (bookingsError !== null || !bookingsData) {
       console.error('Error fetching bookings:', bookingsError);
       return {
         upcoming: 0,
