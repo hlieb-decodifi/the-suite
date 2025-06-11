@@ -118,6 +118,8 @@ create table professional_profiles (
     (requires_deposit = true AND deposit_type = 'fixed' AND deposit_value >= 0)
   ),
   balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
+  -- Messaging settings
+  allow_messages boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -1252,4 +1254,134 @@ create trigger payment_method_stripe_sync_trigger
   after insert or update or delete on professional_payment_methods
   for each row
   execute function handle_payment_method_stripe_changes();
+
+/**
+* MESSAGING SYSTEM
+* Tables for real-time messaging between professionals and clients
+*/
+
+/**
+* CONVERSATIONS
+* Tracks conversations between two users
+*/
+create table conversations (
+  id uuid primary key default uuid_generate_v4(),
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure unique conversation between client and professional
+  constraint unique_conversation unique (client_id, professional_id),
+  -- Ensure client is actually a client and professional is actually a professional
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id))
+);
+alter table conversations enable row level security;
+
+/**
+* MESSAGES
+* Individual messages within conversations
+*/
+create table messages (
+  id uuid primary key default uuid_generate_v4(),
+  conversation_id uuid references conversations not null,
+  sender_id uuid references users not null,
+  content text not null,
+  is_read boolean default false not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table messages enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_conversations_client_id on conversations(client_id);
+create index if not exists idx_conversations_professional_id on conversations(professional_id);
+create index if not exists idx_messages_conversation_id on messages(conversation_id);
+create index if not exists idx_messages_created_at on messages(created_at);
+create index if not exists idx_messages_sender_id on messages(sender_id);
+
+-- Function to update conversation updated_at when a new message is added
+create or replace function update_conversation_timestamp()
+returns trigger as $$
+begin
+  update conversations
+  set updated_at = timezone('utc'::text, now())
+  where id = new.conversation_id;
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger to update conversation timestamp on new message
+create trigger update_conversation_on_new_message
+  after insert on messages
+  for each row
+  execute function update_conversation_timestamp();
+
+/**
+* RLS policies for messaging tables
+*/
+
+-- Conversation policies
+create policy "Users can view their own conversations"
+  on conversations for select
+  using (auth.uid() = client_id or auth.uid() = professional_id);
+
+create policy "Clients can create conversations with professionals who allow messages"
+  on conversations for insert
+  with check (
+    auth.uid() = client_id
+    and is_client(auth.uid())
+    and is_professional(professional_id)
+    and exists (
+      select 1 from professional_profiles
+      where user_id = professional_id
+      and allow_messages = true
+    )
+  );
+
+-- Message policies
+create policy "Users can view messages in their conversations"
+  on messages for select
+  using (
+    exists (
+      select 1 from conversations
+      where conversations.id = messages.conversation_id
+      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    )
+  );
+
+create policy "Users can send messages in their conversations"
+  on messages for insert
+  with check (
+    auth.uid() = sender_id
+    and exists (
+      select 1 from conversations
+      where conversations.id = messages.conversation_id
+      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    )
+  );
+
+create policy "Users can update their own messages"
+  on messages for update
+  using (
+    auth.uid() = sender_id
+    or exists (
+      select 1 from conversations
+      where conversations.id = messages.conversation_id
+      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    )
+  );
+
+/**
+* Update realtime publication to include messaging tables
+*/
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions,
+  conversations,
+  messages;
 

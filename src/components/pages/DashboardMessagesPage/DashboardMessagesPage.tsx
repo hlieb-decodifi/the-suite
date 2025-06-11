@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardMessagesPageClient } from './DashboardMessagesPageClient';
+import { getConversations, getAvailableProfessionals } from '@/server/domains/messages/actions';
 
 export async function DashboardMessagesPage() {
   const supabase = await createClient();
@@ -13,7 +14,7 @@ export async function DashboardMessagesPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/signin');
+    redirect('/');
   }
 
   // Check if user is professional
@@ -21,5 +22,30 @@ export async function DashboardMessagesPage() {
     user_uuid: user.id,
   });
 
-  return <DashboardMessagesPageClient isProfessional={!!isProfessional} />;
+  // Fetch conversations
+  const conversationsResult = await getConversations();
+  const conversations = conversationsResult.success ? conversationsResult.conversations || [] : [];
+
+  // For clients, also fetch available professionals
+  let availableProfessionals: Array<{
+    id: string;
+    first_name: string;
+    last_name: string;
+    profession?: string | undefined;
+    profile_photo_url?: string | undefined;
+  }> = [];
+
+  if (!isProfessional) {
+    const professionalsResult = await getAvailableProfessionals();
+    availableProfessionals = professionalsResult.success ? professionalsResult.professionals || [] : [];
+      }
+
+    return (
+    <DashboardMessagesPageClient 
+      isProfessional={!!isProfessional}
+      initialConversations={conversations}
+      availableProfessionals={availableProfessionals}
+      currentUserId={user.id}
+    />
+  );
 }
