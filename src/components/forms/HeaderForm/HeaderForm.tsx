@@ -5,6 +5,8 @@ import {
   FormInput,
   FormTextarea,
 } from '@/components/forms/common';
+import { PhoneInput } from 'react-international-phone';
+import 'react-international-phone/style.css';
 import { useHeaderForm } from './useHeaderForm';
 import { HeaderFormValues } from './schema';
 import { Typography } from '@/components/ui/typography';
@@ -85,11 +87,19 @@ export function HeaderForm({
           label="Phone Number (Optional)"
         >
           {(field) => (
-            <FormInput
-              type="tel"
-              placeholder="+1234567890" // E.164 format example
-              {...field}
-              value={(field.value as string) ?? ''}
+            <PhoneInput
+              defaultCountry="us"
+              value={field.value || ''}
+              onChange={(value) => {
+                // Clear phone errors when user types
+                form.clearErrors('phoneNumber');
+                field.onChange(value);
+              }}
+              inputClassName={`flex h-10 w-full rounded-md border px-3 py-2 text-sm ring-offset-background focus:ring-primary ${
+                form.formState.errors.phoneNumber 
+                  ? 'border-red-500 focus:border-red-500' 
+                  : 'border-border focus:border-primary'
+              }`}
             />
           )}
         </FormFieldWrapper>

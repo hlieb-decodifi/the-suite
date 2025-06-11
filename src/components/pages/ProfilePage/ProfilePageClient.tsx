@@ -7,6 +7,7 @@ import type { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
 import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
+import { PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber';
 import { ContactSection } from './components/ContactSection/ContactSection';
 import { LocationSection } from './components/LocationSection/LocationSection';
 import { ReviewsSection } from './components/ReviewsSection/ReviewsSection';
@@ -41,6 +42,27 @@ import {
   PaymentMethodsForm,
   PaymentMethodsFormValues,
 } from '@/components/forms/PaymentMethodsForm';
+
+const phoneUtil = PhoneNumberUtil.getInstance();
+
+const formatPhoneNumber = (phone: string): string => {
+  if (!phone || phone.trim() === '') {
+    return phone;
+  }
+  
+  try {
+    const parsed = phoneUtil.parseAndKeepRawInput(phone);
+    if (phoneUtil.isValidNumber(parsed)) {
+      // Use INTERNATIONAL format for a clean, professional display
+      return phoneUtil.format(parsed, PhoneNumberFormat.INTERNATIONAL);
+    }
+    // If parsing fails or number is invalid, return the original phone number
+    return phone;
+  } catch {
+    // If parsing fails, return the original phone number
+    return phone;
+  }
+};
 
 export type ProfilePageClientProps = {
   user: User;
@@ -168,7 +190,7 @@ function InlineHeaderSection({
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Phone className="h-3.5 w-3.5 mr-1.5" />
                     <Link href={`tel:${headerFormData.phoneNumber}`}>
-                      {headerFormData.phoneNumber}
+                      {formatPhoneNumber(headerFormData.phoneNumber)}
                     </Link>
                   </div>
                 )}

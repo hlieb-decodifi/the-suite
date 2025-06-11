@@ -11,18 +11,28 @@ import {
 } from '@/components/forms/components';
 import { DetailsFormValues } from '../schema';
 
+// Phone validation is handled by the schema, no need for real-time validation
+
 // Component to render all form fields
 function DetailsFields({
   register,
   errors,
   phone,
   onPhoneChange,
+  clearErrors,
 }: {
   register: UseFormReturn<DetailsFormValues>['register'];
   errors: UseFormReturn<DetailsFormValues>['formState']['errors'];
   phone: string | undefined;
   onPhoneChange: (value: string) => void;
+  clearErrors: UseFormReturn<DetailsFormValues>['clearErrors'];
 }) {
+  const handlePhoneChange = (value: string) => {
+    // Clear phone errors when user types
+    clearErrors('phone');
+    onPhoneChange(value);
+  };
+
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -45,12 +55,20 @@ function DetailsFields({
         />
       </div>
 
-      <FormField id="phone" label="Phone Number" error={errors.phone?.message}>
+      <FormField 
+        id="phone" 
+        label="Phone Number (Optional)" 
+        error={errors.phone?.message}
+      >
         <PhoneInput
           defaultCountry="us"
           value={phone || ''}
-          onChange={onPhoneChange}
-          inputClassName="flex h-10 w-full rounded-md border border-[#ECECEC] px-3 py-2 text-sm ring-offset-background focus:border-[#DEA85B] focus:ring-[#DEA85B]"
+          onChange={handlePhoneChange}
+          inputClassName={`flex h-10 w-full rounded-md border px-3 py-2 text-sm ring-offset-background focus:ring-[#DEA85B] ${
+            errors.phone 
+              ? 'border-red-500 focus:border-red-500' 
+              : 'border-[#ECECEC] focus:border-[#DEA85B]'
+          }`}
         />
       </FormField>
     </>
@@ -77,6 +95,7 @@ export function DetailsFormContent({
     handleSubmit,
     setValue,
     watch,
+    clearErrors,
     formState: { errors },
   } = form;
 
@@ -89,6 +108,7 @@ export function DetailsFormContent({
         errors={errors}
         phone={phone}
         onPhoneChange={(value) => setValue('phone', value)}
+        clearErrors={clearErrors}
       />
 
       <Separator className="my-3" />
