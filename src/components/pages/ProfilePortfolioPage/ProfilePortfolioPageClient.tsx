@@ -115,69 +115,155 @@ function PortfolioUploader({
   onUploadSuccess: (photo: PortfolioPhotoUI) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, { progress: number; status: 'uploading' | 'success' | 'error' }>>({});
   const { toast } = useToast();
 
   const isMaxPhotosReached = currentPhotosCount >= maxPhotos;
+  const isUploading = Object.keys(uploadProgress).length > 0;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const file = files[0] as File;
-    setIsUploading(true);
-
-    try {
-      // Compress the image with 2MB limit
-      const compressedFile = await compressImage(file, { maxSizeMB: 2 });
-
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', compressedFile);
-
-      // Upload the photo
-      const result = await uploadPortfolioPhotoAction({
-        userId,
-        formData,
+    const fileArray = Array.from(files);
+    const remainingSlots = maxPhotos - currentPhotosCount;
+    
+    if (fileArray.length > remainingSlots) {
+      toast({
+        variant: 'destructive',
+        title: 'Too Many Files',
+        description: `You can only upload ${remainingSlots} more photo${remainingSlots === 1 ? '' : 's'}.`,
       });
+      // Only process the allowed number of files
+      fileArray.splice(remainingSlots);
+    }
 
-      if (result.success && result.photo) {
-        onUploadSuccess(result.photo);
-        toast({
-          title: 'Success',
-          description: 'Portfolio photo uploaded successfully!',
+    // Initialize progress tracking for all files
+    const initialProgress: Record<string, { progress: number; status: 'uploading' | 'success' | 'error' }> = {};
+    fileArray.forEach((file, index) => {
+      initialProgress[`${file.name}_${index}`] = { progress: 0, status: 'uploading' };
+    });
+    setUploadProgress(initialProgress);
+
+    // Process uploads in parallel
+    const uploadPromises = fileArray.map(async (file, index) => {
+      const fileKey = `${file.name}_${index}`;
+      
+      try {
+        // Update progress to show compression phase
+        setUploadProgress(prev => ({
+          ...prev,
+          [fileKey]: { progress: 25, status: 'uploading' }
+        }));
+
+        // Compress the image with 2MB limit
+        const compressedFile = await compressImage(file, { maxSizeMB: 2 });
+
+        // Update progress to show upload phase
+        setUploadProgress(prev => ({
+          ...prev,
+          [fileKey]: { progress: 50, status: 'uploading' }
+        }));
+
+        // Create form data
+        const formData = new FormData();
+        formData.append('file', compressedFile);
+
+        // Upload the photo
+        const result = await uploadPortfolioPhotoAction({
+          userId,
+          formData,
         });
-      } else {
+
+        if (result.success && result.photo) {
+          // Update progress to success
+          setUploadProgress(prev => ({
+            ...prev,
+            [fileKey]: { progress: 100, status: 'success' }
+          }));
+          
+          onUploadSuccess(result.photo);
+          return { success: true, photo: result.photo, fileName: file.name };
+        } else {
+          // Update progress to error
+          setUploadProgress(prev => ({
+            ...prev,
+            [fileKey]: { progress: 0, status: 'error' }
+          }));
+          
+          return { success: false, error: result.error, fileName: file.name };
+        }
+      } catch {
         toast({
           variant: 'destructive',
           title: 'Upload Failed',
-          description: result.error || 'Failed to upload portfolio photo',
+          description: 'An unexpected error occurred during upload.',
+        });
+        setUploadProgress({});
+      } finally {
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    });
+
+    // Wait for all uploads to complete
+    try {
+      const results = await Promise.all(uploadPromises);
+      
+      // Count successes and failures
+      const successes = results.filter(r => r && r.success);
+      const failures = results.filter(r => r && !r.success);
+
+      // Show summary toast
+      if (successes.length > 0 && failures.length === 0) {
+        toast({
+          title: 'Upload Complete',
+          description: `Successfully uploaded ${successes.length} photo${successes.length === 1 ? '' : 's'}!`,
+        });
+      } else if (successes.length > 0 && failures.length > 0) {
+        toast({
+          title: 'Partial Success',
+          description: `Uploaded ${successes.length} photo${successes.length === 1 ? '' : 's'}, ${failures.length} failed.`,
+        });
+      } else if (failures.length > 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Upload Failed',
+          description: `Failed to upload ${failures.length} photo${failures.length === 1 ? '' : 's'}.`,
         });
       }
+
+      // Clear progress after a short delay to show completion
+      setTimeout(() => {
+        setUploadProgress({});
+      }, 1500);
+
     } catch {
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: 'Failed to process or upload the image.',
+        description: 'An unexpected error occurred during upload.',
       });
-    } finally {
-      setIsUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setUploadProgress({});
     }
   };
 
   const triggerFileSelect = () => fileInputRef.current?.click();
 
+  const activeUploads = Object.values(uploadProgress).filter(p => p.status === 'uploading').length;
+  const completedUploads = Object.values(uploadProgress).filter(p => p.status === 'success').length;
+  const failedUploads = Object.values(uploadProgress).filter(p => p.status === 'error').length;
+
   return (
-    <div>
+    <div className="flex flex-col items-end space-y-3">
       <input
         type="file"
         ref={fileInputRef}
         className="hidden"
         accept="image/*"
+        multiple
         onChange={handleFileChange}
         disabled={isUploading || isMaxPhotosReached}
       />
@@ -192,8 +278,27 @@ function PortfolioUploader({
         ) : (
           <UploadCloud className="h-4 w-4" />
         )}
-        Upload Photos
+        {isUploading ? 'Uploading...' : 'Upload Photos'}
       </Button>
+
+      {/* Upload Progress Display */}
+      {isUploading && (
+        <div className="text-sm text-muted-foreground space-y-1">
+          <div className="flex items-center gap-2">
+            <span>Uploading {activeUploads} photo{activeUploads === 1 ? '' : 's'}...</span>
+            {completedUploads > 0 && (
+              <span className="text-green-600">
+                {completedUploads} completed
+              </span>
+            )}
+            {failedUploads > 0 && (
+              <span className="text-red-600">
+                {failedUploads} failed
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
