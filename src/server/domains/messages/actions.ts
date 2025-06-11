@@ -41,12 +41,12 @@ export async function getConversations(): Promise<{
       return { success: false, error: 'Failed to fetch conversations' };
     }
 
-    // Get user details and messages for each conversation
-    const conversationsWithDetails = await Promise.all(
-      (conversations || []).map(async (conversation) => {
+    // Transform conversations to include other user details
+    const conversationsWithUsers = await Promise.all(
+      conversations.map(async (conversation) => {
         // Get the other user's details
         const otherUserId = isProfessional ? conversation.client_id : conversation.professional_id;
-        const { data: otherUser } = await supabase
+        const { data: otherUser, error: userError } = await supabase
           .from('users')
           .select(`
             id,
@@ -57,6 +57,11 @@ export async function getConversations(): Promise<{
           .eq('id', otherUserId)
           .single();
 
+        if (userError) {
+          console.error('Error fetching other user:', userError);
+          return null;
+        }
+
         // Get last message
         const { data: lastMessage } = await supabase
           .from('messages')
@@ -64,15 +69,15 @@ export async function getConversations(): Promise<{
           .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: false })
           .limit(1)
-          .maybeSingle();
+          .single();
 
-        // Get unread count for current user
+        // Count unread messages for the current user
         const { count: unreadCount } = await supabase
           .from('messages')
           .select('*', { count: 'exact', head: true })
           .eq('conversation_id', conversation.id)
-          .eq('is_read', false)
-          .neq('sender_id', user.id);
+          .neq('sender_id', user.id)
+          .eq('is_read', false);
 
         return {
           ...conversation,
@@ -80,7 +85,9 @@ export async function getConversations(): Promise<{
             id: otherUser?.id || '',
             first_name: otherUser?.first_name || '',
             last_name: otherUser?.last_name || '',
-            profile_photo_url: Array.isArray(otherUser?.profile_photos) ? otherUser.profile_photos[0]?.url : undefined,
+            profile_photo_url: Array.isArray(otherUser?.profile_photos) 
+              ? otherUser.profile_photos[0]?.url 
+              : otherUser?.profile_photos?.url || undefined,
           },
           last_message: lastMessage || undefined,
           unread_count: unreadCount || 0,
@@ -88,7 +95,10 @@ export async function getConversations(): Promise<{
       })
     );
 
-    return { success: true, conversations: conversationsWithDetails };
+    // Filter out null values and return valid conversations
+    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => conv !== null);
+    
+    return { success: true, conversations: validConversations };
   } catch (error) {
     console.error('Error in getConversations:', error);
     return { success: false, error: 'An unexpected error occurred' };
@@ -372,7 +382,9 @@ export async function getAvailableProfessionals(): Promise<{
       first_name: prof.users.first_name,
       last_name: prof.users.last_name,
       profession: prof.profession || undefined,
-      profile_photo_url: Array.isArray(prof.users.profile_photos) ? prof.users.profile_photos[0]?.url : undefined,
+      profile_photo_url: Array.isArray(prof.users.profile_photos) 
+        ? prof.users.profile_photos[0]?.url 
+        : prof.users.profile_photos?.url || undefined,
     }));
 
     return { success: true, professionals: formattedProfessionals };

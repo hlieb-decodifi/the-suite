@@ -11,6 +11,7 @@ import { MessageCircleIcon, SendIcon, PlusIcon } from 'lucide-react';
 // import { createClient } from '@/lib/supabase/client'; // Removed since we're using polling instead of realtime
 import { ConversationWithUser, ChatMessage } from '@/types/messages';
 import { sendMessage, getMessages, markMessagesAsRead, createOrGetConversation } from '@/server/domains/messages/actions';
+import { cn } from '@/utils';
 
 type DashboardMessagesPageClientProps = {
   isProfessional: boolean;
@@ -80,11 +81,25 @@ export function DashboardMessagesPageClient({
     }
   }, [selectedConversation]);
 
-  // Polling for conversations list updates (fallback for realtime issues)
+  // Enhanced polling for conversations with tab visibility and longer intervals
   useEffect(() => {
+    let conversationInterval: ReturnType<typeof setInterval>;
+    let isTabVisible = true;
+
+    // Check if tab is visible to avoid polling when user is away
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        // Immediately check for updates when user comes back
+        pollForConversations();
+      }
+    };
+
     const pollForConversations = async () => {
+      // Only poll if tab is visible
+      if (!isTabVisible) return;
+      
       try {
-        // Re-fetch conversations to get updated unread counts and latest messages
         const { getConversations } = await import('@/server/domains/messages/actions');
         const result = await getConversations();
         if (result.success && result.conversations) {
@@ -95,19 +110,52 @@ export function DashboardMessagesPageClient({
       }
     };
 
-    // Poll every 5 seconds for conversation updates
-    const interval = setInterval(pollForConversations, 5000);
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Poll every 30 seconds instead of 5 seconds (6x less frequent)
+    const startPolling = () => {
+      conversationInterval = setInterval(() => {
+        if (isTabVisible) {
+          pollForConversations();
+        }
+      }, 30000);
+    };
+    
+    startPolling();
+
+    // Cleanup
     return () => {
-      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(conversationInterval);
     };
   }, []);
 
-  // Polling for new messages in selected conversation
+  // Enhanced polling for messages with user interaction awareness
   useEffect(() => {
     if (!selectedConversation) return;
 
+    let messageInterval: ReturnType<typeof setTimeout>;
+    let isTabVisible = true;
+    let lastInteractionTime = Date.now();
+
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        lastInteractionTime = Date.now();
+        // Only poll when user returns to tab
+        pollForMessages();
+      }
+    };
+
+    const handleUserInteraction = () => {
+      lastInteractionTime = Date.now();
+    };
+
     const pollForMessages = async () => {
+      // Only poll if tab is visible
+      if (!isTabVisible) return;
+      
       const result = await getMessages(selectedConversation.id);
       if (result.success && result.messages) {
         const newMessages = result.messages;
@@ -121,11 +169,35 @@ export function DashboardMessagesPageClient({
       }
     };
 
-    // Poll every 3 seconds for new messages
-    const interval = setInterval(pollForMessages, 3000);
+    // Add event listeners for user interaction
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('mousedown', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
 
+    // Very conservative polling: only poll every 5 minutes if user is completely inactive
+    const conservativePolling = () => {
+      if (!isTabVisible) return;
+      
+      const timeSinceInteraction = Date.now() - lastInteractionTime;
+      
+      // Only poll if user has been inactive for more than 5 minutes
+      if (timeSinceInteraction > 300000) {
+        pollForMessages();
+      }
+      
+      // Check again in 5 minutes
+      messageInterval = setTimeout(conservativePolling, 300000);
+    };
+
+    // Start conservative polling (every 5 minutes for inactive users only)
+    messageInterval = setTimeout(conservativePolling, 300000);
+
+    // Cleanup
     return () => {
-      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('mousedown', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+      clearTimeout(messageInterval);
     };
   }, [selectedConversation]);
 
@@ -524,11 +596,14 @@ export function DashboardMessagesPageClient({
                           <div
                             className={`max-w-[85%] sm:max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
                               message.sender_id === currentUserId
-                                ? 'bg-primary text-white'
+                                ? 'bg-primary'
                                 : 'bg-muted/30'
                             }`}
                           >
-                            <Typography variant="small" className="leading-relaxed text-sm break-words">
+                            <Typography variant="small" className={cn(
+                              "leading-relaxed text-sm break-words",
+                              message.sender_id === currentUserId && "text-white"
+                            )}>
                               {message.content}
                             </Typography>
                             <Typography

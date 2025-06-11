@@ -1372,6 +1372,29 @@ create policy "Users can update their own messages"
     )
   );
 
+-- Additional policies for cross-user visibility in messaging contexts
+-- Allow users to view basic data of other users they have conversations with
+create policy "Users can view other users in their conversations"
+  on users for select
+  using (
+    exists (
+      select 1 from conversations
+      where (conversations.client_id = auth.uid() and conversations.professional_id = users.id)
+         or (conversations.professional_id = auth.uid() and conversations.client_id = users.id)
+    )
+  );
+
+-- Allow users to view profile photos of other users they have conversations with
+create policy "Users can view profile photos of other users in their conversations"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from conversations
+      where (conversations.client_id = auth.uid() and conversations.professional_id = profile_photos.user_id)
+         or (conversations.professional_id = auth.uid() and conversations.client_id = profile_photos.user_id)
+    )
+  );
+
 /**
 * Update realtime publication to include messaging tables
 */
