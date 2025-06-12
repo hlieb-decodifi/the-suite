@@ -5,7 +5,18 @@ import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { UploadCloud, X, ImageIcon } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { UploadCloud, Trash2, ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 import { PortfolioPhotoUI } from '@/types/portfolio-photos';
 import { cn } from '@/utils/cn';
@@ -47,11 +58,15 @@ function PortfolioEmptyState({ isEditable = true }: { isEditable?: boolean }) {
 function PortfolioItem({
   photo,
   isEditable = true,
-  onRemove,
+  isSelected = false,
+  onSelectionChange,
+  onDelete,
 }: {
   photo: PortfolioPhotoUI;
   isEditable?: boolean;
-  onRemove?: () => void;
+  isSelected?: boolean;
+  onSelectionChange?: ((photoId: string, selected: boolean) => void) | undefined;
+  onDelete?: ((photoId: string) => void) | undefined;
 }) {
   return (
     <div className="relative group aspect-square bg-muted rounded-md overflow-hidden">
@@ -62,17 +77,34 @@ function PortfolioItem({
         sizes="(max-width: 768px) 100vw, 400px"
         className="object-contain"
       />
-      {isEditable && onRemove && (
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Button
-            variant="destructive"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onRemove}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+      {isEditable && (onSelectionChange || onDelete) && (
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+          {onSelectionChange && (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => 
+                onSelectionChange(photo.id, checked as boolean)
+              }
+              aria-label={`Select ${photo.description || 'portfolio image'}`}
+              className="bg-white size-5 rounded-md"
+            />
+          )}
+          {onDelete && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="size-6 p-0"
+              onClick={() => onDelete(photo.id)}
+              aria-label={`Delete ${photo.description || 'portfolio image'}`}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          )}
         </div>
+      )}
+      {/* Optional: Add a semi-transparent overlay when selected */}
+      {isSelected && (
+        <div className="absolute inset-0 bg-primary/20 transition-all duration-200" />
       )}
     </div>
   );
@@ -82,11 +114,15 @@ function PortfolioItem({
 function PortfolioGrid({
   photos,
   isEditable = true,
-  onRemovePhoto,
+  selectedPhotos,
+  onSelectionChange,
+  onDeleteSingle,
 }: {
   photos: PortfolioPhotoUI[];
   isEditable?: boolean;
-  onRemovePhoto?: ((photoId: string) => void) | undefined;
+  selectedPhotos?: Set<string>;
+  onSelectionChange?: ((photoId: string, selected: boolean) => void) | undefined;
+  onDeleteSingle?: ((photoId: string) => void) | undefined;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -95,7 +131,9 @@ function PortfolioGrid({
           key={photo.id}
           photo={photo}
           isEditable={isEditable}
-          onRemove={() => onRemovePhoto?.(photo.id)}
+          isSelected={selectedPhotos?.has(photo.id) || false}
+          onSelectionChange={onSelectionChange}
+          onDelete={onDeleteSingle}
         />
       ))}
     </div>
@@ -310,7 +348,10 @@ export function ProfilePortfolioPageClient({
 }: ProfilePortfolioPageClientProps) {
   // State
   const [photos, setPhotos] = useState<PortfolioPhotoUI[]>(initialPhotos);
-  const [isDeletingPhoto, setIsDeletingPhoto] = useState<string | null>(null);
+  const [isDeletingPhotos, setIsDeletingPhotos] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [photoToDelete, setPhotoToDelete] = useState<string | null>(null);
 
   // Hooks
   const { toast } = useToast();
@@ -323,41 +364,83 @@ export function ProfilePortfolioPageClient({
     setPhotos((prev) => [...prev, newPhoto]);
   };
 
-  const handleRemovePhoto = (photoId: string) => {
-    if (isDeletingPhoto) return; // Prevent multiple deletions
+  const handleSelectionChange = (photoId: string, selected: boolean) => {
+    if (selected) {
+      setSelectedPhotos(prev => new Set(prev).add(photoId));
+    } else {
+      setSelectedPhotos(prev => {
+        const newSelectedPhotos = new Set(prev);
+        newSelectedPhotos.delete(photoId);
+        return newSelectedPhotos;
+      });
+    }
+  };
 
-    setIsDeletingPhoto(photoId);
+  const handleDeleteSingle = (photoId: string) => {
+    setPhotoToDelete(photoId);
+    setShowDeleteDialog(true);
+  };
 
-    deletePortfolioPhotoAction({
-      id: photoId,
-      userId: user.id,
-    })
-      .then((result) => {
-        if (result.success) {
-          setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
-          toast({
-            title: 'Success',
-            description: 'Portfolio photo deleted successfully!',
-          });
-        } else {
-          toast({
-            variant: 'destructive',
-            title: 'Delete Failed',
-            description: result.error || 'Failed to delete portfolio photo',
-          });
-        }
-      })
-      .catch(() => {
+  const handleDeleteSelected = () => {
+    if (selectedPhotos.size === 0) return;
+    setPhotoToDelete(null);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    if (isDeletingPhotos) return;
+
+    const photosToDelete = photoToDelete ? [photoToDelete] : Array.from(selectedPhotos);
+    if (photosToDelete.length === 0) return;
+
+    setIsDeletingPhotos(true);
+    setShowDeleteDialog(false);
+
+    try {
+      // Delete photos in parallel
+      const deletePromises = photosToDelete.map(photoId =>
+        deletePortfolioPhotoAction({
+          id: photoId,
+          userId: user.id,
+        })
+      );
+
+      const results = await Promise.all(deletePromises);
+      const successCount = results.filter(result => result.success).length;
+      const failureCount = results.filter(result => !result.success).length;
+
+      if (successCount > 0) {
+        // Remove successfully deleted photos from state
+        setPhotos(prev => prev.filter(photo => !photosToDelete.includes(photo.id)));
+        setSelectedPhotos(new Set());
+
+        toast({
+          title: 'Success',
+          description: `${successCount} photo${successCount === 1 ? '' : 's'} deleted successfully!`,
+        });
+      }
+
+      if (failureCount > 0) {
         toast({
           variant: 'destructive',
-          title: 'Delete Failed',
-          description: 'An unexpected error occurred while deleting the photo',
+          title: 'Partial Deletion',
+          description: `${failureCount} photo${failureCount === 1 ? '' : 's'} failed to delete.`,
         });
-      })
-      .finally(() => {
-        setIsDeletingPhoto(null);
+      }
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Delete Failed',
+        description: 'An unexpected error occurred while deleting photos',
       });
+    } finally {
+      setIsDeletingPhotos(false);
+      setPhotoToDelete(null);
+    }
   };
+
+  const selectedCount = selectedPhotos.size;
+  const deleteCount = photoToDelete ? 1 : selectedCount;
 
   return (
     <div className="space-y-6">
@@ -374,12 +457,25 @@ export function ProfilePortfolioPageClient({
         </div>
 
         {isEditable && (
-          <PortfolioUploader
-            userId={user.id}
-            maxPhotos={MAX_PHOTOS}
-            currentPhotosCount={photos.length}
-            onUploadSuccess={handleUploadSuccess}
-          />
+          <div className="flex justify-end items-end gap-3">
+            {selectedCount > 0 && (
+              <Button
+                variant="destructive"
+                onClick={handleDeleteSelected}
+                disabled={isDeletingPhotos}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Photo{selectedCount === 1 ? '' : 's'} ({selectedCount})
+              </Button>
+            )}
+            <PortfolioUploader
+              userId={user.id}
+              maxPhotos={MAX_PHOTOS}
+              currentPhotosCount={photos.length}
+              onUploadSuccess={handleUploadSuccess}
+            />
+          </div>
         )}
       </div>
 
@@ -389,9 +485,34 @@ export function ProfilePortfolioPageClient({
         <PortfolioGrid
           photos={photos}
           isEditable={isEditable}
-          onRemovePhoto={isDeletingPhoto ? undefined : handleRemovePhoto}
+          selectedPhotos={selectedPhotos}
+          onSelectionChange={isEditable ? handleSelectionChange : undefined}
+          onDeleteSingle={isEditable ? handleDeleteSingle : undefined}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Portfolio Photo{deleteCount === 1 ? '' : 's'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {deleteCount} photo{deleteCount === 1 ? '' : 's'}? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeletingPhotos}
+            >
+              {isDeletingPhotos ? 'Deleting...' : `Delete Photo${deleteCount === 1 ? '' : 's'}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
