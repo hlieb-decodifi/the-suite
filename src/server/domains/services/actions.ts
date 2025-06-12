@@ -185,11 +185,6 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
     // If no custom limit is set or query failed, use default of 50
     const maxServices = limitData?.max_services || 50;
     
-      professionalProfileId: professionalProfile.id,
-      limitData,
-      maxServices,
-      currentCount: currentCount || 0
-    });
     const currentCountNum = currentCount || 0;
     const remaining = Math.max(0, maxServices - currentCountNum);
     const isAtLimit = currentCountNum >= maxServices;
