@@ -392,4 +392,110 @@ export async function getAvailableProfessionals(): Promise<{
     console.error('Error in getAvailableProfessionals:', error);
     return { success: false, error: 'An unexpected error occurred' };
   }
+}
+
+/**
+ * Get recent conversations for dashboard (limit 2)
+ */
+export async function getRecentConversations(): Promise<{
+  success: boolean;
+  conversations?: ConversationWithUser[];
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Check if user is professional or client
+    const { data: isProfessional } = await supabase.rpc('is_professional', {
+      user_uuid: user.id,
+    });
+
+    // Get recent conversations for current user (limit to 2 for dashboard)
+    const { data: conversations, error: conversationsError } = await supabase
+      .from('conversations')
+      .select('*')
+      .or(isProfessional 
+        ? `professional_id.eq.${user.id}`
+        : `client_id.eq.${user.id}`
+      )
+      .order('updated_at', { ascending: false })
+      .limit(2);
+
+    if (conversationsError) {
+      console.error('Error fetching recent conversations:', conversationsError);
+      return { success: false, error: 'Failed to fetch conversations' };
+    }
+
+    if (!conversations || conversations.length === 0) {
+      return { success: true, conversations: [] };
+    }
+
+    // Transform conversations to include other user details
+    const conversationsWithUsers = await Promise.all(
+      conversations.map(async (conversation) => {
+        // Get the other user's details
+        const otherUserId = isProfessional ? conversation.client_id : conversation.professional_id;
+        const { data: otherUser, error: userError } = await supabase
+          .from('users')
+          .select(`
+            id,
+            first_name,
+            last_name,
+            profile_photos (url)
+          `)
+          .eq('id', otherUserId)
+          .single();
+
+        if (userError) {
+          console.error('Error fetching other user:', userError);
+          return null;
+        }
+
+        // Get last message
+        const { data: lastMessage } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        // Count unread messages for the current user
+        const { count: unreadCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conversation.id)
+          .neq('sender_id', user.id)
+          .eq('is_read', false);
+
+        return {
+          ...conversation,
+          other_user: {
+            id: otherUser?.id || '',
+            first_name: otherUser?.first_name || '',
+            last_name: otherUser?.last_name || '',
+            profile_photo_url: Array.isArray(otherUser?.profile_photos) 
+              ? otherUser.profile_photos[0]?.url 
+              : otherUser?.profile_photos?.url || undefined,
+          },
+          last_message: lastMessage || undefined,
+          unread_count: unreadCount || 0,
+        };
+      })
+    );
+
+    // Filter out null values and return valid conversations
+    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => conv !== null);
+    
+    return { success: true, conversations: validConversations };
+  } catch (error) {
+    console.error('Error in getRecentConversations:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
 } 

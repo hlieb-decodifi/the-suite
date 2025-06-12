@@ -1,10 +1,11 @@
 'use server';
 
+import { AppointmentType } from '@/components/common/AppointmentItem';
+import { getDashboardAppointments } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
 import { createClient } from '@/lib/supabase/server';
+import { getRecentConversations } from '@/server/domains/messages/actions';
 import { redirect } from 'next/navigation';
 import { DashboardPageClient } from './DashboardPageClient';
-import { getDashboardAppointments } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
-import { AppointmentType } from '@/components/common/AppointmentItem';
 
 // Define our own type for how the appointment data is actually structured
 type AppointmentWithServices = {
@@ -53,11 +54,16 @@ export async function DashboardPage() {
   // Get stats for the dashboard
   const stats = await getDashboardStats(user.id, !!isProfessional);
 
+  // Get recent conversations for the dashboard
+  const recentConversationsResult = await getRecentConversations();
+  const recentConversations = recentConversationsResult.success ? recentConversationsResult.conversations || [] : [];
+
   return (
     <DashboardPageClient
       isProfessional={!!isProfessional}
       upcomingAppointments={appointmentsForDashboard as AppointmentType[]}
       stats={stats}
+      recentConversations={recentConversations}
     />
   );
 }

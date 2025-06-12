@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -39,7 +40,19 @@ export function DashboardMessagesPageClient({
   const [isLoading, setIsLoading] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
   // const supabase = createClient(); // Removed since we're using polling instead of realtime
+
+  // Handle conversation selection from URL parameters
+  useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    if (conversationId && conversations.length > 0) {
+      const conversation = conversations.find(conv => conv.id === conversationId);
+      if (conversation && (!selectedConversation || selectedConversation.id !== conversationId)) {
+        setSelectedConversation(conversation);
+      }
+    }
+  }, [searchParams, conversations, selectedConversation]);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {

@@ -1,8 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { AppointmentType } from '@/components/common/AppointmentItem';
 import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/utils/cn';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
@@ -15,6 +17,7 @@ import {
   UserIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { ConversationWithUser } from '@/types/messages';
 
 // Define stats type
 type DashboardStats = {
@@ -30,13 +33,68 @@ type DashboardPageClientProps = {
   isProfessional: boolean;
   upcomingAppointments: AppointmentType[];
   stats: DashboardStats;
+  recentConversations: ConversationWithUser[];
 };
 
 export function DashboardPageClient({
   isProfessional,
   upcomingAppointments = [],
   stats,
+  recentConversations = [],
 }: DashboardPageClientProps) {
+  // State for conversations to enable real-time updates
+  const [conversations, setConversations] = useState<ConversationWithUser[]>(recentConversations);
+
+  // Polling for conversation updates
+  useEffect(() => {
+    let conversationInterval: ReturnType<typeof setInterval>;
+    let isTabVisible = true;
+
+    // Check if tab is visible to avoid polling when user is away
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        // Immediately check for updates when user comes back
+        pollForConversations();
+      }
+    };
+
+    const pollForConversations = async () => {
+      // Only poll if tab is visible
+      if (!isTabVisible) return;
+      
+      try {
+        const { getRecentConversations } = await import('@/server/domains/messages/actions');
+        const result = await getRecentConversations();
+        if (result.success && result.conversations) {
+          setConversations(result.conversations);
+        }
+      } catch (error) {
+        console.error('Failed to poll conversations:', error);
+      }
+    };
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Poll every 30 seconds for dashboard conversations
+    const startPolling = () => {
+      conversationInterval = setInterval(() => {
+        if (isTabVisible) {
+          pollForConversations();
+        }
+      }, 30000);
+    };
+    
+    startPolling();
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(conversationInterval);
+    };
+  }, []);
+
   // Use stats data
   const totalBookings = stats.totalAppointments;
   const totalRevenue = stats.totalRevenue || 0;
@@ -51,29 +109,10 @@ export function DashboardPageClient({
     0,
   );
 
-  // Messages data - mock data for now
-  const messages = [
-    {
-      id: '1',
-      sender: {
-        name: 'Mock Data',
-      },
-      content:
-        'I might be running about 10 minutes late for my appointment tomorrow. Is that okay?',
-      isRead: false,
-      createdAt: '2023-11-24T10:00:00Z',
-    },
-    {
-      id: '2',
-      sender: {
-        name: 'Mock Data',
-      },
-      content:
-        'Could you bring an extra mirror for my makeup session? I want to see the details up close.',
-      isRead: false,
-      createdAt: '2023-11-22T14:00:00Z',
-    },
-  ];
+  // Count unread messages from recent conversations
+  const unreadCount = conversations.reduce((total, conversation) => {
+    return total + (conversation.unread_count || 0);
+  }, 0);
 
   // Refunds data - mock data for now
   const refunds = [
@@ -93,9 +132,12 @@ export function DashboardPageClient({
     },
   ];
 
-  const unreadCount = 1;
   const pendingRefunds = 1;
   const totalRefunds = 2;
+
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
 
   return (
     <div className="space-y-6">
@@ -187,22 +229,56 @@ export function DashboardPageClient({
           viewAllText="View all messages"
         >
           <div className="space-y-4">
-            {messages.map((message) => (
-              <div key={message.id} className="p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-2 w-2 rounded-full bg-primary"></div>
-                  <Typography className="font-medium">
-                    {message.sender?.name}
-                  </Typography>
-                  <Typography className="text-xs text-muted-foreground ml-auto">
-                    {format(new Date(message.createdAt), 'MMM d, yyyy')}
-                  </Typography>
-                </div>
-                <Typography className="text-sm text-muted-foreground line-clamp-2">
-                  {message.content}
-                </Typography>
+            {conversations.length > 0 ? (
+              conversations.map((conversation) => (
+                <Link
+                  key={conversation.id}
+                  href={`/dashboard/messages?conversation=${conversation.id}`}
+                  className="block"
+                >
+                  <div className="p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 flex-1">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={conversation.other_user.profile_photo_url} />
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                            {getInitials(
+                              conversation.other_user.first_name,
+                              conversation.other_user.last_name
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
+                        {conversation.unread_count > 0 && (
+                          <div className="h-2 w-2 rounded-full bg-primary"></div>
+                        )}
+                        <Typography className="font-medium text-sm">
+                          {conversation.other_user.first_name} {conversation.other_user.last_name}
+                        </Typography>
+                      </div>
+                      {conversation.last_message && (
+                        <Typography className="text-xs text-muted-foreground">
+                          {format(new Date(conversation.last_message.created_at), 'MMM d, yyyy')}
+                        </Typography>
+                      )}
+                    </div>
+                    {conversation.last_message && (
+                      <Typography className="text-sm text-muted-foreground line-clamp-2 ml-8">
+                        {conversation.last_message.content}
+                      </Typography>
+                    )}
+                    {!conversation.last_message && (
+                      <Typography className="text-sm text-muted-foreground italic ml-8">
+                        No messages yet
+                      </Typography>
+                    )}
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="py-4 text-center text-muted-foreground">
+                <Typography className="text-sm">No recent conversations</Typography>
               </div>
-            ))}
+            )}
           </div>
         </WidgetCard>
 
