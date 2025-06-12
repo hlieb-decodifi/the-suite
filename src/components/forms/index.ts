@@ -4,6 +4,7 @@ export * from './SignInForm';
 export * from './ForgotPasswordForm';
 export * from './LocationForm';
 export * from './DetailsForm';
-export * from './ChangePasswordForm/ChangePasswordForm';
+export * from './ChangeEmailForm';
+export * from './ChangePasswordForm';
 export * from './UpdateEmailForm/UpdateEmailForm';
 export * from './DepositSettingsForm';

@@ -137,9 +137,28 @@ export async function changePasswordAction(currentPassword: string, newPassword:
   const supabase = await createClient();
   
   try {
+    // Get current user info
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user?.email) {
+      return {
+        success: false,
+        error: "No user found",
+      };
+    }
+
+    // Check if user is OAuth user (can't change password)
+    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    if (isOAuth) {
+      return {
+        success: false,
+        error: "Cannot change password for Google OAuth accounts",
+      };
+    }
+
     // First verify the current password is correct by attempting to sign in
     const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: '', // This will be filled from the session
+      email: user.email,
       password: currentPassword,
     });
 
@@ -190,6 +209,15 @@ export async function updateEmailAction(newEmail: string, password: string) {
         error: "No user email found",
       };
     }
+
+    // Check if user is OAuth user (can't change email)
+    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    if (isOAuth) {
+      return {
+        success: false,
+        error: "Cannot change email for Google OAuth accounts",
+      };
+    }
     
     const { error: verifyError } = await supabase.auth.signInWithPassword({
       email: user.email,
@@ -203,9 +231,11 @@ export async function updateEmailAction(newEmail: string, password: string) {
       };
     }
 
-    // Update the email
+    // Update the email with confirmation redirect
     const { error } = await supabase.auth.updateUser({
       email: newEmail,
+    }, {
+      emailRedirectTo: `${getURL()}auth/email-confirmed`,
     });
 
     if (error) {
@@ -216,6 +246,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
     }
 
     revalidatePath('/profile');
+    revalidatePath('/client-profile');
     return {
       success: true,
     };

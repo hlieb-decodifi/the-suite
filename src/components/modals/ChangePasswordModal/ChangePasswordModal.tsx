@@ -61,7 +61,6 @@ export function ChangePasswordModal({
       ) : (
         <ChangePasswordForm
           onSubmit={handleSubmit}
-          onCancel={handleClose}
           className="w-full"
         />
       )}
