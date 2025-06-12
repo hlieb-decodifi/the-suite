@@ -33,19 +33,6 @@ export function SignUpFormContent({
 
   const selectedRole = watch('userType');
 
-  const handleOAuthClick = () => {
-    // Trigger form validation for userType field
-    if (!selectedRole) {
-      form.setError('userType', {
-        type: 'manual',
-        message: 'Please select your role before continuing with Google',
-      });
-      return;
-    }
-    // Clear any existing error
-    form.clearErrors('userType');
-  };
-
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -56,7 +43,7 @@ export function SignUpFormContent({
             mode="signup"
             redirectTo={redirectTo}
             role={selectedRole}
-            onClickValidation={handleOAuthClick}
+            disabled={!selectedRole}
           />
         </div>
 
