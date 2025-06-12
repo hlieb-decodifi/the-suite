@@ -701,6 +701,38 @@ export type Database = {
         }
         Relationships: []
       }
+      service_limits: {
+        Row: {
+          created_at: string
+          id: string
+          max_services: number
+          professional_profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          max_services?: number
+          professional_profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          max_services?: number
+          professional_profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_limits_professional_profile_id_fkey"
+            columns: ["professional_profile_id"]
+            isOneToOne: true
+            referencedRelation: "professional_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       services: {
         Row: {
           created_at: string
@@ -836,12 +868,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_service_limit: {
+        Args: { prof_profile_id: string }
+        Returns: number
+      }
       is_client: {
         Args: { user_uuid: string }
         Returns: boolean
       }
       is_professional: {
         Args: { user_uuid: string }
+        Returns: boolean
+      }
+      update_service_limit: {
+        Args: { prof_profile_id: string; new_limit: number }
         Returns: boolean
       }
     }

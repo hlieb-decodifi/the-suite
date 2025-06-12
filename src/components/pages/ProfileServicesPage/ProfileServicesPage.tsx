@@ -3,12 +3,15 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ProfileServicesPageClient } from './ProfileServicesPageClient';
-import { getServices } from '@/server/domains/services/actions';
+import {
+  getServices,
+  getServiceLimitInfo,
+} from '@/server/domains/services/actions';
 import {
   syncServiceAction,
   archiveServiceAction,
 } from '@/server/domains/stripe-services';
-import type { ServiceUI } from '@/types/services';
+import type { ServiceUI, ServiceLimitInfo } from '@/types/services';
 import type { User } from '@supabase/supabase-js';
 
 export type ProfileServicesPageProps = {
@@ -92,6 +95,15 @@ export async function ProfileServicesPage({
     search,
   );
 
+  // Fetch service limit info for editable pages
+  let serviceLimitInfo: ServiceLimitInfo | null = null;
+  if (isEditable) {
+    const limitResult = await getServiceLimitInfo({ userId: targetUserId });
+    if (limitResult.success && limitResult.data) {
+      serviceLimitInfo = limitResult.data;
+    }
+  }
+
   return (
     <ProfileServicesPageClient
       user={user as User}
@@ -99,6 +111,7 @@ export async function ProfileServicesPage({
       initialPagination={servicesResult.pagination}
       initialSearch={search}
       isEditable={isEditable}
+      serviceLimitInfo={serviceLimitInfo}
     />
   );
 }

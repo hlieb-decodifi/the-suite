@@ -182,13 +182,64 @@ on services(stripe_status);
 create index if not exists idx_services_stripe_sync_status 
 on services(stripe_sync_status);
 
--- Constraint to limit services to 10 per professional
+/**
+* SERVICE_LIMITS
+* Table to store customizable service limits per professional
+*/
+create table service_limits (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null unique,
+  max_services integer not null default 50,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table service_limits enable row level security;
+
+-- RLS policies for service_limits
+create policy "Professionals can view their own service limits"
+  on service_limits for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = service_limits.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Function to get service limit for a professional (with default of 50)
+create or replace function get_service_limit(prof_profile_id uuid)
+returns integer as $$
+declare
+  limit_value integer;
+begin
+  select max_services into limit_value
+  from service_limits
+  where professional_profile_id = prof_profile_id;
+  
+  -- Return default of 50 if no custom limit is set
+  return coalesce(limit_value, 50);
+end;
+$$ language plpgsql security definer;
+
+-- Updated constraint to use customizable service limits
 create or replace function check_service_limit()
 returns trigger as $$
+declare
+  current_count integer;
+  max_allowed integer;
 begin
-  if (select count(*) from services where professional_profile_id = new.professional_profile_id) >= 10 then
-    raise exception 'Maximum of 10 services allowed per professional';
+  -- Get current service count
+  select count(*) into current_count
+  from services
+  where professional_profile_id = new.professional_profile_id;
+  
+  -- Get the limit for this professional
+  max_allowed := get_service_limit(new.professional_profile_id);
+  
+  if current_count >= max_allowed then
+    raise exception 'Maximum of % services allowed for this professional. Contact support to increase your limit.', max_allowed;
   end if;
+  
   return new;
 end;
 $$ language plpgsql;
@@ -197,6 +248,27 @@ create trigger enforce_service_limit
   before insert on services
   for each row
   execute function check_service_limit();
+
+-- Function to update service limit (admin only - to be used by admin functions)
+create or replace function update_service_limit(prof_profile_id uuid, new_limit integer)
+returns boolean as $$
+begin
+  -- Validate input
+  if new_limit < 1 then
+    raise exception 'Service limit must be at least 1';
+  end if;
+  
+  -- Insert or update the service limit
+  insert into service_limits (professional_profile_id, max_services)
+  values (prof_profile_id, new_limit)
+  on conflict (professional_profile_id)
+  do update set 
+    max_services = new_limit,
+    updated_at = timezone('utc'::text, now());
+    
+  return true;
+end;
+$$ language plpgsql security definer;
 
 /**
 * PROFESSIONAL_SERVICES

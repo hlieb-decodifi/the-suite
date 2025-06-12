@@ -20,4 +20,19 @@ INSERT INTO public.subscription_plans (name, description, price, interval, strip
 ('Monthly', 'Standard monthly subscription', 19.99, 'month', 'price_1RRXNtLMOPuguC73GyfxSC26', true),
 ('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true)
 
+
+-- Insert default service limits (50) for all existing professional profiles
+-- This will only insert records for professionals who don't already have a limit set
+INSERT INTO service_limits (professional_profile_id, max_services)
+SELECT 
+    pp.id as professional_profile_id,
+    50 as max_services
+FROM professional_profiles pp
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM service_limits sl 
+    WHERE sl.professional_profile_id = pp.id
+);
+
+
 -- You can add other seed data for other tables here if needed 

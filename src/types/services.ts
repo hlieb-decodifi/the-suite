@@ -55,4 +55,11 @@ export type DeleteServiceParams = {
   userId: string;
   serviceId: string;
   serviceName: string; // For optimistic updates
+};
+
+export type ServiceLimitInfo = {
+  currentCount: number;
+  maxServices: number;
+  remaining: number;
+  isAtLimit: boolean;
 }; 
