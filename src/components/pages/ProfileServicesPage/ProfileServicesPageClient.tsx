@@ -5,7 +5,7 @@ import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Clock, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Clock, Pencil, Trash2, Copy } from 'lucide-react';
 import { ServiceUI } from '@/types/services';
 import { cn } from '@/utils/cn';
 import { ExpandableText } from '@/components/common/ExpandableText/ExpandableText';
@@ -37,6 +37,7 @@ function ServiceCard({
   service,
   onEdit,
   onDelete,
+  onDuplicate,
   isUpdating = false,
   isBeingEdited = false,
   isEditable = true,
@@ -45,6 +46,7 @@ function ServiceCard({
   service: ServiceUI;
   onEdit: (service: ServiceUI) => void;
   onDelete: () => void;
+  onDuplicate?: (service: ServiceUI) => void;
   isUpdating?: boolean;
   isBeingEdited?: boolean;
   isEditable?: boolean;
@@ -90,6 +92,18 @@ function ServiceCard({
             </div>
           </div>
           <div className="flex space-x-1">
+            {isEditable && onDuplicate && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                onClick={() => onDuplicate(service)}
+                disabled={isUpdating}
+                title="Duplicate service"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            )}
             {isEditable && (
               <Button
                 variant="ghost"
@@ -100,6 +114,7 @@ function ServiceCard({
                 )}
                 onClick={() => onEdit(service)}
                 disabled={isUpdating}
+                title="Edit service"
               >
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -111,6 +126,7 @@ function ServiceCard({
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                 onClick={onDelete}
                 disabled={isUpdating}
+                title="Delete service"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -141,7 +157,8 @@ function InlineServiceForm({
   editingService: ServiceUI | null;
   onCancel: () => void;
 }) {
-  const isEditMode = !!editingService;
+  const isEditMode = !!editingService?.id; // Only true edit mode if service has an ID
+  const isDuplicateMode = !!editingService && !editingService.id; // Has service data but no ID
   const [submitCount, setSubmitCount] = useState(0);
 
   const defaultValues = editingService
@@ -167,19 +184,35 @@ function InlineServiceForm({
 
   const formKey = isEditMode
     ? `edit-${editingService.id}`
+    : isDuplicateMode
+    ? `duplicate-${editingService.name}-${submitCount}`
     : `new-service-${submitCount}`;
 
+  // Determine the form title
+  const getFormTitle = () => {
+    if (isEditMode) return 'Edit service';
+    if (isDuplicateMode) return 'Duplicate service';
+    return 'Add new service';
+  };
+
   return (
-    <Card className="border border-muted bg-background h-full">
+    <Card 
+      className={cn(
+        'border bg-background h-full',
+        (isEditMode || isDuplicateMode)
+          ? 'border-primary ring-1 ring-primary/20 shadow-sm' 
+          : 'border-muted'
+      )}
+    >
       <CardContent className="p-6">
         <Typography variant="h3" className="font-semibold mb-6">
-          {isEditMode ? 'Edit service' : 'Add new service'}
+          {getFormTitle()}
         </Typography>
 
         <div key={formKey}>
           <ServiceForm
             onSubmitSuccess={handleFormSubmitSuccess}
-            {...(isEditMode ? { onCancel } : {})}
+            {...((isEditMode || isDuplicateMode) ? { onCancel } : {})}
             defaultValues={defaultValues}
           />
         </div>
@@ -244,6 +277,29 @@ export function ProfileServicesPageClient({
     if (!isEditable) return;
     setServiceToDelete(service);
     setIsConfirmDeleteOpen(true);
+  };
+
+  const handleDuplicateService = (service: ServiceUI) => {
+    if (!isEditable) return;
+    
+    // Create a new service object with copied data but without ID
+    const duplicatedService: ServiceUI = {
+      ...service,
+      id: '', // Clear ID so it creates a new service
+      name: `${service.name} (Copy)`, // Add "(Copy)" suffix to name
+    };
+    
+    // Set as editing service to open in form
+    setEditingService(duplicatedService);
+    
+    if (isMobile) {
+      setIsServiceModalOpen(true);
+    }
+    
+    toast({
+      title: 'Service duplicated',
+      description: `"${service.name}" has been duplicated. Make any changes and save.`,
+    });
   };
 
   const handleConfirmDeleteService = async () => {
@@ -383,6 +439,7 @@ export function ProfileServicesPageClient({
                 service={service}
                 onEdit={handleEditService}
                 onDelete={() => handleDeleteServiceClick(service)}
+                onDuplicate={handleDuplicateService}
                 isUpdating={
                   isSubmittingService && editingService?.id === service.id
                 }
@@ -427,6 +484,7 @@ export function ProfileServicesPageClient({
                     service={service}
                     onEdit={handleEditService}
                     onDelete={() => handleDeleteServiceClick(service)}
+                    onDuplicate={handleDuplicateService}
                     isUpdating={
                       isSubmittingService && editingService?.id === service.id
                     }
