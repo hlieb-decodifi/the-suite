@@ -364,8 +364,8 @@ export function ProfileServicesPageClient({
             description: `"${result.service.name}" has been updated successfully.`,
           });
         } else {
-          // Add new service
-          setServices((prev) => [...prev, result.service!]);
+          // Add new service at the top of the list
+          setServices((prev) => [result.service!, ...prev]);
           toast({
             title: 'Service added',
             description: `"${result.service.name}" has been added successfully.`,
