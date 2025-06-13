@@ -8,9 +8,7 @@ import { Clock, MapPin } from 'lucide-react';
 import { ServiceListItem, AuthStatus } from '../../../../types';
 import { ExpandableText } from '@/components/common/ExpandableText/ExpandableText';
 import { formatDuration } from '@/utils/formatDuration';
-import { useState } from 'react';
-import { SignInModal } from '@/components/modals/SignInModal';
-import { BookingModal } from '@/components/modals/BookingModal/BookingModal';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export type ServicesTemplateServiceCardProps = {
@@ -25,8 +23,7 @@ export function ServicesTemplateServiceCard({
   const { name, description, price, duration, professional, isBookable } =
     service;
   const { isAuthenticated, isLoading, isClient } = authStatus;
-  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
-  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const router = useRouter();
 
   // Build the professional profile URL
   const professionalProfileUrl = `/professional/${professional.id}`;
@@ -38,18 +35,8 @@ export function ServicesTemplateServiceCard({
       isClient); // Client role
 
   const handleBookNowClick = () => {
-    if (!isAuthenticated) {
-      // Open sign-in modal for unauthenticated users
-      setIsSignInModalOpen(true);
-    } else {
-      // Open booking modal for authenticated clients
-      setIsBookingModalOpen(true);
-    }
-  };
-
-  const handleBookingComplete = (bookingId: string) => {
-    console.log('Booking completed with ID:', bookingId);
-    // Additional logic after booking completion could go here
+    // Always redirect to the booking page - it supports both authenticated and unauthenticated users
+    router.push(`/booking/${service.id}`);
   };
 
   const getInitials = (name: string) => {
@@ -251,23 +238,6 @@ export function ServicesTemplateServiceCard({
           </div>
         </CardContent>
       </Card>
-
-      {/* Sign-in modal */}
-      <SignInModal
-        isOpen={isSignInModalOpen}
-        onOpenChange={setIsSignInModalOpen}
-        redirectTo={`/services?booking=${service.id}`}
-      />
-
-      {/* Booking modal */}
-      {isAuthenticated && (
-        <BookingModal
-          isOpen={isBookingModalOpen}
-          onOpenChange={setIsBookingModalOpen}
-          service={service}
-          onBookingComplete={handleBookingComplete}
-        />
-      )}
     </>
   );
 }

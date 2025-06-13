@@ -43,9 +43,6 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     clientTimezone,
   } = useBookingState(props);
 
-  console.log('availableDays 1', availableDays);
-  console.log('availableTimeSlots', availableTimeSlots);
-
   // Ensure we always have an array of payment methods
   const availablePaymentMethods: PaymentMethod[] = Array.isArray(paymentMethods)
     ? paymentMethods
