@@ -1,6 +1,5 @@
-import { useId, useMemo } from 'react';
+import { useId, useMemo, forwardRef } from 'react';
 import { Form } from '@/components/ui/form';
-import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
 import { Controller } from 'react-hook-form';
 import { FormSelect } from '@/components/forms/common';
@@ -14,15 +13,13 @@ import { WorkingHoursEntry } from '@/types/working_hours';
 
 export type ContactHoursFormProps = {
   onSubmitSuccess: (data: ContactHoursFormValues) => void;
-  onCancel: () => void;
   defaultValues?: WorkingHoursEntry[] | null;
 };
 
-export function ContactHoursForm({
-  onSubmitSuccess,
-  onCancel,
-  defaultValues,
-}: ContactHoursFormProps) {
+export const ContactHoursForm = forwardRef<
+  HTMLFormElement,
+  ContactHoursFormProps
+>(({ onSubmitSuccess, defaultValues }, ref) => {
   // Convert UTC times to local time for the form display
   const localizedDefaultValues = useMemo(
     () =>
@@ -40,7 +37,6 @@ export function ContactHoursForm({
   const {
     form,
     fields,
-    isPending,
     onSubmit: handleFormSubmit,
   } = useContactHoursForm({
     onSubmit: onSubmitSuccess,
@@ -50,42 +46,9 @@ export function ContactHoursForm({
 
   return (
     <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(handleFormSubmit)}
-        className="space-y-6"
-        noValidate
-      >
+      <form ref={ref} onSubmit={form.handleSubmit(handleFormSubmit)} noValidate>
         {/* Working Hours - Table Layout */}
-        <div className="space-y-3">
-          {/* Header Row - Adjust column spans */}
-          <div className="grid grid-cols-7 gap-x-4 px-1 pb-2 border-b border-border">
-            <Typography
-              variant="small"
-              className="col-span-1 font-medium text-muted-foreground"
-            >
-              Day
-            </Typography>
-            <Typography
-              variant="small"
-              className="col-span-1 text-center font-medium text-muted-foreground"
-            >
-              Status
-            </Typography>
-            <div className="col-span-1" />
-            <Typography
-              variant="small"
-              className="col-span-2 font-medium text-muted-foreground"
-            >
-              Start Time
-            </Typography>
-            <Typography
-              variant="small"
-              className="col-span-2 font-medium text-muted-foreground"
-            >
-              End Time
-            </Typography>
-          </div>
-
+        <div>
           {/* Data Rows */}
           {fields.map((item, index) => {
             const dayName = item.day;
@@ -172,22 +135,9 @@ export function ContactHoursForm({
             );
           })}
         </div>
-
-        {/* Buttons */}
-        <div className="flex justify-end gap-2 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </div>
       </form>
     </Form>
   );
-}
+});
+
+ContactHoursForm.displayName = 'ContactHoursForm';
