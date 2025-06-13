@@ -63,13 +63,36 @@ export async function getConversations(): Promise<{
         }
 
         // Get last message
-        const { data: lastMessage } = await supabase
+        const { data: lastMessageData } = await supabase
           .from('messages')
-          .select('*')
+          .select(`
+            *,
+            attachments:message_attachments(*)
+          `)
           .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
+
+        // Transform lastMessage to match ChatMessage type
+        const lastMessage = lastMessageData ? {
+          id: lastMessageData.id,
+          conversation_id: lastMessageData.conversation_id,
+          sender_id: lastMessageData.sender_id,
+          content: lastMessageData.content,
+          is_read: lastMessageData.is_read,
+          created_at: lastMessageData.created_at,
+          updated_at: lastMessageData.updated_at,
+          attachments: lastMessageData.attachments?.map(att => ({
+            id: att.id,
+            message_id: att.message_id,
+            url: att.url,
+            type: 'image' as const,
+            file_name: att.file_name,
+            file_size: att.file_size,
+            created_at: att.created_at
+          })) || []
+        } : undefined;
 
         // Count unread messages for the current user
         const { count: unreadCount } = await supabase
@@ -89,7 +112,7 @@ export async function getConversations(): Promise<{
               ? otherUser.profile_photos[0]?.url 
               : otherUser?.profile_photos?.url || undefined,
           },
-          last_message: lastMessage || undefined,
+          last_message: lastMessage,
           unread_count: unreadCount || 0,
         };
       })
@@ -135,9 +158,12 @@ export async function getMessages(conversationId: string): Promise<{
     }
 
     // Get messages
-    const { data: messages, error: messagesError } = await supabase
+    const { data: messagesData, error: messagesError } = await supabase
       .from('messages')
-      .select('*')
+      .select(`
+        *,
+        attachments:message_attachments(*)
+      `)
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
@@ -146,7 +172,27 @@ export async function getMessages(conversationId: string): Promise<{
       return { success: false, error: 'Failed to fetch messages' };
     }
 
-    return { success: true, messages: messages || [] };
+    // Transform the data to match our ChatMessage type
+    const messages = (messagesData || []).map(msg => ({
+      id: msg.id,
+      conversation_id: msg.conversation_id,
+      sender_id: msg.sender_id,
+      content: msg.content,
+      is_read: msg.is_read,
+      created_at: msg.created_at,
+      updated_at: msg.updated_at,
+      attachments: msg.attachments?.map(att => ({
+        id: att.id,
+        message_id: att.message_id,
+        url: att.url,
+        type: 'image' as const,
+        file_name: att.file_name,
+        file_size: att.file_size,
+        created_at: att.created_at
+      })) || []
+    })) as ChatMessage[];
+
+    return { success: true, messages: messages };
   } catch (error) {
     console.error('Error in getMessages:', error);
     return { success: false, error: 'An unexpected error occurred' };
@@ -158,7 +204,13 @@ export async function getMessages(conversationId: string): Promise<{
  */
 export async function sendMessage(
   conversationId: string,
-  content: string
+  content: string,
+  attachments?: Array<{
+    url: string;
+    type: 'image';
+    file_name: string;
+    file_size: number;
+  }>
 ): Promise<{
   success: boolean;
   message?: ChatMessage;
@@ -185,7 +237,7 @@ export async function sendMessage(
       return { success: false, error: 'Conversation not found or access denied' };
     }
 
-    // Send message
+    // Start a transaction
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -201,8 +253,63 @@ export async function sendMessage(
       return { success: false, error: 'Failed to send message' };
     }
 
+    // If there are attachments, insert them
+    if (attachments && attachments.length > 0) {
+      const { error: attachmentsError } = await supabase
+        .from('message_attachments')
+        .insert(
+          attachments.map(attachment => ({
+            message_id: message.id,
+            url: attachment.url,
+            type: attachment.type,
+            file_name: attachment.file_name,
+            file_size: attachment.file_size,
+          }))
+        );
+
+      if (attachmentsError) {
+        console.error('Error saving attachments:', attachmentsError);
+        // We don't return error here as the message was sent successfully
+      }
+    }
+
+    // Get the complete message with attachments
+    const { data: completeMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        attachments:message_attachments(*)
+      `)
+      .eq('id', message.id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching complete message:', fetchError);
+      return { success: true, message }; // Return message without attachments if fetch fails
+    }
+
+    // Transform the data to match our ChatMessage type
+    const transformedMessage: ChatMessage = {
+      id: completeMessage.id,
+      conversation_id: completeMessage.conversation_id,
+      sender_id: completeMessage.sender_id,
+      content: completeMessage.content,
+      is_read: completeMessage.is_read,
+      created_at: completeMessage.created_at,
+      updated_at: completeMessage.updated_at,
+      attachments: completeMessage.attachments?.map(att => ({
+        id: att.id,
+        message_id: att.message_id,
+        url: att.url,
+        type: 'image' as const,
+        file_name: att.file_name,
+        file_size: att.file_size,
+        created_at: att.created_at
+      })) || []
+    };
+
     revalidatePath('/dashboard/messages');
-    return { success: true, message };
+    return { success: true, message: transformedMessage };
   } catch (error) {
     console.error('Error in sendMessage:', error);
     return { success: false, error: 'An unexpected error occurred' };
@@ -458,13 +565,36 @@ export async function getRecentConversations(): Promise<{
         }
 
         // Get last message
-        const { data: lastMessage } = await supabase
+        const { data: lastMessageData } = await supabase
           .from('messages')
-          .select('*')
+          .select(`
+            *,
+            attachments:message_attachments(*)
+          `)
           .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
+
+        // Transform lastMessage to match ChatMessage type
+        const lastMessage = lastMessageData ? {
+          id: lastMessageData.id,
+          conversation_id: lastMessageData.conversation_id,
+          sender_id: lastMessageData.sender_id,
+          content: lastMessageData.content,
+          is_read: lastMessageData.is_read,
+          created_at: lastMessageData.created_at,
+          updated_at: lastMessageData.updated_at,
+          attachments: lastMessageData.attachments?.map(att => ({
+            id: att.id,
+            message_id: att.message_id,
+            url: att.url,
+            type: 'image' as const,
+            file_name: att.file_name,
+            file_size: att.file_size,
+            created_at: att.created_at
+          })) || []
+        } : undefined;
 
         // Count unread messages for the current user
         const { count: unreadCount } = await supabase
@@ -484,7 +614,7 @@ export async function getRecentConversations(): Promise<{
               ? otherUser.profile_photos[0]?.url 
               : otherUser?.profile_photos?.url || undefined,
           },
-          last_message: lastMessage || undefined,
+          last_message: lastMessage,
           unread_count: unreadCount || 0,
         };
       })

@@ -1,3 +1,13 @@
+export type MessageAttachment = {
+  id: string;
+  message_id: string;
+  url: string;
+  type: 'image';
+  file_name: string;
+  file_size: number;
+  created_at: string;
+}
+
 export type ChatMessage = {
   id: string;
   conversation_id: string;
@@ -6,6 +16,7 @@ export type ChatMessage = {
   is_read: boolean;
   created_at: string;
   updated_at: string;
+  attachments?: MessageAttachment[];
 }
 
 export type Conversation = {

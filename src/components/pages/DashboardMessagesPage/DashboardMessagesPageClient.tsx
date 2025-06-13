@@ -2,16 +2,36 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import NextImage from 'next/image';
 
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
-// import { Input } from '@/components/ui/input'; // Replaced with textarea
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-// import { Badge } from '@/components/ui/badge'; // Removed as we're using custom unread count styling
-import { MessageCircleIcon, SendIcon, PlusIcon } from 'lucide-react';
-// import { createClient } from '@/lib/supabase/client'; // Removed since we're using polling instead of realtime
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogTitle,
+  DialogClose,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  MessageCircleIcon,
+  SendIcon,
+  PlusIcon,
+  ImageIcon,
+  XIcon,
+} from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 import { ConversationWithUser, ChatMessage } from '@/types/messages';
-import { sendMessage, getMessages, markMessagesAsRead, createOrGetConversation } from '@/server/domains/messages/actions';
+import {
+  sendMessage,
+  getMessages,
+  markMessagesAsRead,
+  createOrGetConversation,
+} from '@/server/domains/messages/actions';
 import { cn } from '@/utils';
 
 type DashboardMessagesPageClientProps = {
@@ -27,28 +47,93 @@ type DashboardMessagesPageClientProps = {
   currentUserId: string;
 };
 
+// Image compression utility
+const compressImage = (file: File, quality = 0.8): Promise<File> => {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const img = new Image();
+
+    img.onload = () => {
+      // Calculate new dimensions (max 1920x1080)
+      let { width, height } = img;
+      const maxWidth = 1920;
+      const maxHeight = 1080;
+
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width *= ratio;
+        height *= ratio;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, '.webp'),
+              {
+                type: 'image/webp',
+                lastModified: Date.now(),
+              },
+            );
+            resolve(compressedFile);
+          } else {
+            resolve(file);
+          }
+        },
+        'image/webp',
+        quality,
+      );
+    };
+
+    img.src = URL.createObjectURL(file);
+  });
+};
+
 export function DashboardMessagesPageClient({
   isProfessional,
   initialConversations,
   availableProfessionals,
   currentUserId,
 }: DashboardMessagesPageClientProps) {
-  const [conversations, setConversations] = useState<ConversationWithUser[]>(initialConversations);
-  const [selectedConversation, setSelectedConversation] = useState<ConversationWithUser | null>(null);
+  const [conversations, setConversations] =
+    useState<ConversationWithUser[]>(initialConversations);
+  const [selectedConversation, setSelectedConversation] =
+    useState<ConversationWithUser | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<
+    Array<{ file: File; preview: string }>
+  >([]);
+  const [expandedMessageImages, setExpandedMessageImages] = useState<
+    Set<string>
+  >(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();
-  // const supabase = createClient(); // Removed since we're using polling instead of realtime
+  const supabase = createClient();
+  const { toast } = useToast();
 
   // Handle conversation selection from URL parameters
   useEffect(() => {
     const conversationId = searchParams.get('conversation');
     if (conversationId && conversations.length > 0) {
-      const conversation = conversations.find(conv => conv.id === conversationId);
-      if (conversation && (!selectedConversation || selectedConversation.id !== conversationId)) {
+      const conversation = conversations.find(
+        (conv) => conv.id === conversationId,
+      );
+      if (
+        conversation &&
+        (!selectedConversation || selectedConversation.id !== conversationId)
+      ) {
         setSelectedConversation(conversation);
       }
     }
@@ -61,18 +146,19 @@ export function DashboardMessagesPageClient({
 
   // Scroll to first unread message or bottom if no unread messages
   const scrollToFirstUnreadOrBottom = (messages: ChatMessage[]) => {
-    const firstUnreadMessage = messages.find(msg => !msg.is_read && msg.sender_id !== currentUserId);
+    const firstUnreadMessage = messages.find(
+      (msg) => !msg.is_read && msg.sender_id !== currentUserId,
+    );
     if (firstUnreadMessage) {
-      // Scroll to first unread message
-      const messageElement = document.getElementById(`message-${firstUnreadMessage.id}`);
+      const messageElement = document.getElementById(
+        `message-${firstUnreadMessage.id}`,
+      );
       if (messageElement) {
         messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else {
-        // Fallback to bottom if element not found
         setTimeout(() => scrollToBottom(), 100);
       }
     } else {
-      // No unread messages, scroll to bottom
       setTimeout(() => scrollToBottom(), 100);
     }
   };
@@ -82,14 +168,13 @@ export function DashboardMessagesPageClient({
     if (selectedConversation) {
       loadMessages(selectedConversation.id);
       markMessagesAsRead(selectedConversation.id);
-      
-      // Update the conversation's unread count to 0 when selected
-      setConversations(prev =>
-        prev.map(conv =>
+
+      setConversations((prev) =>
+        prev.map((conv) =>
           conv.id === selectedConversation.id
             ? { ...conv, unread_count: 0 }
-            : conv
-        )
+            : conv,
+        ),
       );
     }
   }, [selectedConversation]);
@@ -99,21 +184,20 @@ export function DashboardMessagesPageClient({
     let conversationInterval: ReturnType<typeof setInterval>;
     let isTabVisible = true;
 
-    // Check if tab is visible to avoid polling when user is away
     const handleVisibilityChange = () => {
       isTabVisible = !document.hidden;
       if (isTabVisible) {
-        // Immediately check for updates when user comes back
         pollForConversations();
       }
     };
 
     const pollForConversations = async () => {
-      // Only poll if tab is visible
       if (!isTabVisible) return;
-      
+
       try {
-        const { getConversations } = await import('@/server/domains/messages/actions');
+        const { getConversations } = await import(
+          '@/server/domains/messages/actions'
+        );
         const result = await getConversations();
         if (result.success && result.conversations) {
           setConversations(result.conversations);
@@ -123,10 +207,8 @@ export function DashboardMessagesPageClient({
       }
     };
 
-    // Add visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Poll every 30 seconds instead of 5 seconds (6x less frequent)
     const startPolling = () => {
       conversationInterval = setInterval(() => {
         if (isTabVisible) {
@@ -134,10 +216,9 @@ export function DashboardMessagesPageClient({
         }
       }, 30000);
     };
-    
+
     startPolling();
 
-    // Cleanup
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(conversationInterval);
@@ -156,7 +237,6 @@ export function DashboardMessagesPageClient({
       isTabVisible = !document.hidden;
       if (isTabVisible) {
         lastInteractionTime = Date.now();
-        // Only poll when user returns to tab
         pollForMessages();
       }
     };
@@ -166,14 +246,12 @@ export function DashboardMessagesPageClient({
     };
 
     const pollForMessages = async () => {
-      // Only poll if tab is visible
       if (!isTabVisible) return;
-      
+
       const result = await getMessages(selectedConversation.id);
       if (result.success && result.messages) {
         const newMessages = result.messages;
-        setMessages(prev => {
-          // Only update if there are actually new messages
+        setMessages((prev) => {
           if (newMessages.length !== prev.length) {
             return newMessages;
           }
@@ -182,30 +260,24 @@ export function DashboardMessagesPageClient({
       }
     };
 
-    // Add event listeners for user interaction
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('mousedown', handleUserInteraction);
     document.addEventListener('keydown', handleUserInteraction);
 
-    // Very conservative polling: only poll every 5 minutes if user is completely inactive
     const conservativePolling = () => {
       if (!isTabVisible) return;
-      
+
       const timeSinceInteraction = Date.now() - lastInteractionTime;
-      
-      // Only poll if user has been inactive for more than 5 minutes
+
       if (timeSinceInteraction > 300000) {
         pollForMessages();
       }
-      
-      // Check again in 5 minutes
+
       messageInterval = setTimeout(conservativePolling, 300000);
     };
 
-    // Start conservative polling (every 5 minutes for inactive users only)
-    messageInterval = setTimeout(conservativePolling, 300000);
+    conservativePolling();
 
-    // Cleanup
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('mousedown', handleUserInteraction);
@@ -215,98 +287,259 @@ export function DashboardMessagesPageClient({
   }, [selectedConversation]);
 
   const loadMessages = async (conversationId: string) => {
-    setIsLoading(true);
     const result = await getMessages(conversationId);
-    if (result.success) {
-      const loadedMessages = result.messages || [];
-      setMessages(loadedMessages);
-      // Scroll to first unread or bottom after messages are loaded
-      setTimeout(() => scrollToFirstUnreadOrBottom(loadedMessages), 100);
-    } else {
-      console.error('Failed to load messages:', result.error);
+    if (result.success && result.messages) {
+      setMessages(result.messages);
+      setTimeout(() => scrollToFirstUnreadOrBottom(result.messages!), 100);
     }
-    setIsLoading(false);
+  };
+
+  const handleImageSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    const maxFiles = 5;
+    const currentCount = selectedImages.length;
+    const availableSlots = maxFiles - currentCount;
+
+    if (files.length > availableSlots) {
+      toast({
+        variant: 'destructive',
+        title: 'Too many files',
+        description: `You can only upload ${availableSlots} more image(s). Maximum is ${maxFiles} images per message.`,
+      });
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+    ];
+
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid file type',
+          description:
+            'Only JPEG, PNG, GIF, WebP, and HEIC images are allowed.',
+        });
+        return;
+      }
+      if (file.size > maxSize) {
+        toast({
+          variant: 'destructive',
+          title: 'File too large',
+          description: `"${file.name}" is too large. Maximum size is 10MB.`,
+        });
+        return;
+      }
+    }
+
+    try {
+      const newImages = await Promise.all(
+        files.map(async (file) => {
+          const compressedFile = await compressImage(file);
+          return {
+            file: compressedFile,
+            preview: URL.createObjectURL(compressedFile),
+          };
+        }),
+      );
+
+      setSelectedImages((prev) => [...prev, ...newImages]);
+      toast({
+        title: 'Images selected',
+        description: `${newImages.length} image(s) ready to send.`,
+      });
+    } catch (error) {
+      console.error('Error processing images:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error processing images',
+        description: 'Failed to process selected images.',
+      });
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages((prev) => {
+      const newImages = [...prev];
+      if (newImages[index]) {
+        URL.revokeObjectURL(newImages[index].preview);
+      }
+      newImages.splice(index, 1);
+      return newImages;
+    });
+  };
+
+  const uploadImages = async (): Promise<
+    Array<{ url: string; type: 'image'; file_name: string; file_size: number }>
+  > => {
+    if (selectedImages.length === 0) return [];
+
+    try {
+      const uploadPromises = selectedImages.map(async (image) => {
+        const formData = new FormData();
+        formData.append('file', image.file);
+
+        const { data, error } = await supabase.storage
+          .from('message-attachments')
+          .upload(`${Date.now()}-${image.file.name}`, image.file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (error) throw error;
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage
+          .from('message-attachments')
+          .getPublicUrl(data.path);
+
+        return {
+          url: publicUrl,
+          type: 'image' as const,
+          file_name: image.file.name,
+          file_size: image.file.size,
+        };
+      });
+
+      return await Promise.all(uploadPromises);
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Upload failed',
+        description: 'Failed to upload images. Please try again.',
+      });
+      return [];
+    }
   };
 
   const handleSendMessage = async () => {
-    if (!selectedConversation || !newMessage.trim()) return;
+    if (
+      !selectedConversation ||
+      (!newMessage.trim() && selectedImages.length === 0)
+    )
+      return;
 
     setIsLoading(true);
-    const result = await sendMessage(selectedConversation.id, newMessage);
-    
-    if (result.success) {
-      setNewMessage('');
-      // Immediately refresh messages to show the new message
-      const messagesResult = await getMessages(selectedConversation.id);
-      if (messagesResult.success && messagesResult.messages) {
-        setMessages(messagesResult.messages);
-        
-        // Immediately update the conversation list with the new message and move to top
-        if (result.message) {
-          setConversations(prev => {
-            const updatedConversations = prev.map(conv =>
-              conv.id === selectedConversation.id
-                ? { 
-                    ...conv, 
-                    last_message: result.message!, 
-                    updated_at: result.message!.created_at,
-                    unread_count: 0 // Reset unread count since user is viewing
-                  }
-                : conv
-            );
-            
-            // Move the updated conversation to the top
-            const targetConv = updatedConversations.find(conv => conv.id === selectedConversation.id);
-            const otherConvs = updatedConversations.filter(conv => conv.id !== selectedConversation.id);
-            
-            return targetConv ? [targetConv, ...otherConvs] : updatedConversations;
-          });
-          
-          // Update selected conversation with new message
-          setSelectedConversation(prev => prev ? {
-            ...prev,
-            last_message: result.message!,
-            updated_at: result.message!.created_at,
-            unread_count: 0
-          } : null);
+    try {
+      const attachments = await uploadImages();
+      const result = await sendMessage(
+        selectedConversation.id,
+        newMessage,
+        attachments,
+      );
+
+      if (result.success) {
+        setNewMessage('');
+        setSelectedImages([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
         }
-        
-        // Scroll to bottom after sending message
-        setTimeout(() => scrollToBottom(), 100);
+
+        const messagesResult = await getMessages(selectedConversation.id);
+        if (messagesResult.success && messagesResult.messages) {
+          setMessages(messagesResult.messages);
+
+          if (result.message) {
+            setConversations((prev) => {
+              const updatedConversations = prev.map((conv) =>
+                conv.id === selectedConversation.id
+                  ? {
+                      ...conv,
+                      last_message: result.message!,
+                      updated_at: result.message!.created_at,
+                      unread_count: 0,
+                    }
+                  : conv,
+              );
+
+              const targetConv = updatedConversations.find(
+                (conv) => conv.id === selectedConversation.id,
+              );
+              const otherConvs = updatedConversations.filter(
+                (conv) => conv.id !== selectedConversation.id,
+              );
+
+              return targetConv
+                ? [targetConv, ...otherConvs]
+                : updatedConversations;
+            });
+
+            setSelectedConversation((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    last_message: result.message!,
+                    updated_at: result.message!.created_at,
+                    unread_count: 0,
+                  }
+                : null,
+            );
+          }
+
+          setTimeout(() => scrollToBottom(), 100);
+        }
+      } else {
+        console.error('Failed to send message:', result.error);
+        toast({
+          variant: 'destructive',
+          title: 'Failed to send message',
+          description: result.error || 'Please try again.',
+        });
       }
-    } else {
-      console.error('Failed to send message:', result.error);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error sending message',
+        description: 'An unexpected error occurred.',
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleStartConversation = async (professionalId: string) => {
     setIsLoading(true);
     const result = await createOrGetConversation(professionalId);
-    
+
     if (result.success && result.conversation) {
-      // Find the professional in the available list to create a conversation object
-      const professional = availableProfessionals.find(p => p.id === professionalId);
+      const professional = availableProfessionals.find(
+        (p) => p.id === professionalId,
+      );
       if (professional) {
         const otherUser: ConversationWithUser['other_user'] = {
           id: professional.id,
           first_name: professional.first_name,
           last_name: professional.last_name,
         };
-        
+
         if (professional.profile_photo_url) {
           otherUser.profile_photo_url = professional.profile_photo_url;
         }
-        
+
         const newConversation: ConversationWithUser = {
           ...result.conversation,
           other_user: otherUser,
           unread_count: 0,
         };
-        
-        setConversations(prev => {
-          // Remove any existing conversation with the same ID, then add the new one at the top
-          const filtered = prev.filter(conv => conv.id !== newConversation.id);
+
+        setConversations((prev) => {
+          const filtered = prev.filter(
+            (conv) => conv.id !== newConversation.id,
+          );
           return [newConversation, ...filtered];
         });
         setSelectedConversation(newConversation);
@@ -323,9 +556,12 @@ export function DashboardMessagesPageClient({
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
-    
+
     if (hours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     } else {
       return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
@@ -347,7 +583,54 @@ export function DashboardMessagesPageClient({
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
-  if (conversations.length === 0 && !isProfessional && availableProfessionals.length === 0) {
+  // Get display text for last message
+  const getLastMessageDisplay = (message: ChatMessage | undefined) => {
+    if (!message) return 'No messages yet';
+
+    if (
+      message.attachments &&
+      message.attachments.length > 0 &&
+      !message.content.trim()
+    ) {
+      const count = message.attachments.length;
+      return count === 1 ? '📷 Photo' : `📷 ${count} Photos`;
+    }
+
+    if (
+      message.attachments &&
+      message.attachments.length > 0 &&
+      message.content.trim()
+    ) {
+      return `📷 ${message.content}`;
+    }
+
+    return message.content;
+  };
+
+  const toggleExpandedImages = (messageId: string) => {
+    setExpandedMessageImages((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  // Cleanup image previews on unmount
+  useEffect(() => {
+    return () => {
+      selectedImages.forEach((image) => URL.revokeObjectURL(image.preview));
+    };
+  }, [selectedImages]);
+
+  if (
+    conversations.length === 0 &&
+    !isProfessional &&
+    availableProfessionals.length === 0
+  ) {
     return (
       <div className="space-y-6">
         <Typography variant="h3" className="font-semibold">
@@ -395,9 +678,11 @@ export function DashboardMessagesPageClient({
           </div>
           <div className="p-6 space-y-3">
             {availableProfessionals
-              .filter(professional => 
-                // Only show professionals who don't already have a conversation
-                !conversations.some(conv => conv.other_user.id === professional.id)
+              .filter(
+                (professional) =>
+                  !conversations.some(
+                    (conv) => conv.other_user.id === professional.id,
+                  ),
               )
               .map((professional) => (
                 <div
@@ -409,7 +694,10 @@ export function DashboardMessagesPageClient({
                     <Avatar className="h-12 w-12">
                       <AvatarImage src={professional.profile_photo_url} />
                       <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                        {getInitials(professional.first_name, professional.last_name)}
+                        {getInitials(
+                          professional.first_name,
+                          professional.last_name,
+                        )}
                       </AvatarFallback>
                     </Avatar>
                     <div>
@@ -417,23 +705,34 @@ export function DashboardMessagesPageClient({
                         {professional.first_name} {professional.last_name}
                       </Typography>
                       {professional.profession && (
-                        <Typography variant="small" className="text-muted-foreground">
+                        <Typography
+                          variant="small"
+                          className="text-muted-foreground"
+                        >
                           {professional.profession}
                         </Typography>
                       )}
                     </div>
                   </div>
-                  <Button size="sm" disabled={isLoading} className="rounded-full px-6">
+                  <Button
+                    size="sm"
+                    disabled={isLoading}
+                    className="rounded-full px-6"
+                  >
                     Message
                   </Button>
                 </div>
               ))}
-            {availableProfessionals.filter(professional => 
-              !conversations.some(conv => conv.other_user.id === professional.id)
+            {availableProfessionals.filter(
+              (professional) =>
+                !conversations.some(
+                  (conv) => conv.other_user.id === professional.id,
+                ),
             ).length === 0 && (
               <div className="text-center py-8">
                 <Typography className="text-muted-foreground">
-                  You already have conversations with all available professionals.
+                  You already have conversations with all available
+                  professionals.
                 </Typography>
               </div>
             )}
@@ -443,11 +742,18 @@ export function DashboardMessagesPageClient({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 h-[calc(100vh-200px)] lg:h-auto max-h-[600px]">
         {/* Conversations List */}
-        <div className={`lg:col-span-1 bg-white rounded-lg border shadow-sm ${
-          selectedConversation ? 'hidden lg:block' : 'block'
-        }`}>
+        <div
+          className={`lg:col-span-1 bg-white rounded-lg border shadow-sm ${
+            selectedConversation ? 'hidden lg:block' : 'block'
+          }`}
+        >
           <div className="p-4 lg:p-6 border-b">
-            <Typography variant="h4" className="font-semibold text-lg lg:text-xl">Conversations</Typography>
+            <Typography
+              variant="h4"
+              className="font-semibold text-lg lg:text-xl"
+            >
+              Conversations
+            </Typography>
           </div>
           <div className="p-0">
             <div className="h-[400px] lg:h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
@@ -459,15 +765,17 @@ export function DashboardMessagesPageClient({
                 </div>
               ) : (
                 conversations.map((conversation) => {
-                  // Calculate unread count for display (should be 0 if this conversation is selected)
-                  const displayUnreadCount = selectedConversation?.id === conversation.id ? 0 : conversation.unread_count;
-                  
+                  const displayUnreadCount =
+                    selectedConversation?.id === conversation.id
+                      ? 0
+                      : conversation.unread_count;
+
                   return (
                     <div
                       key={conversation.id}
                       className={`p-3 lg:p-4 cursor-pointer transition-all duration-200 border-l-4 ${
-                        selectedConversation?.id === conversation.id 
-                          ? 'bg-muted/30 border-l-primary' 
+                        selectedConversation?.id === conversation.id
+                          ? 'bg-muted/30 border-l-primary'
                           : 'border-l-transparent hover:bg-muted/20 hover:border-l-muted'
                       }`}
                       onClick={() => setSelectedConversation(conversation)}
@@ -475,18 +783,22 @@ export function DashboardMessagesPageClient({
                       <div className="flex items-start gap-3">
                         <div className="relative flex-shrink-0">
                           <Avatar className="h-10 w-10 lg:h-12 lg:w-12">
-                            <AvatarImage src={conversation.other_user.profile_photo_url} />
+                            <AvatarImage
+                              src={conversation.other_user.profile_photo_url}
+                            />
                             <AvatarFallback className="bg-muted text-foreground text-sm font-medium">
                               {getInitials(
                                 conversation.other_user.first_name,
-                                conversation.other_user.last_name
+                                conversation.other_user.last_name,
                               )}
                             </AvatarFallback>
                           </Avatar>
                           {displayUnreadCount > 0 && (
                             <div className="absolute -top-1 -right-1 h-4 w-4 bg-primary rounded-full flex items-center justify-center">
                               <span className="text-xs text-primary-foreground font-bold">
-                                {displayUnreadCount > 9 ? '9+' : displayUnreadCount}
+                                {displayUnreadCount > 9
+                                  ? '9+'
+                                  : displayUnreadCount}
                               </span>
                             </div>
                           )}
@@ -494,35 +806,39 @@ export function DashboardMessagesPageClient({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex-1 min-w-0 mr-2">
-                              <Typography className="font-medium truncate text-sm" title={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}>
-                                {conversation.other_user.first_name} {conversation.other_user.last_name}
+                              <Typography
+                                className="font-medium truncate text-sm"
+                                title={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                              >
+                                {conversation.other_user.first_name}{' '}
+                                {conversation.other_user.last_name}
                               </Typography>
                             </div>
                             {conversation.last_message && (
-                              <Typography variant="small" className="text-muted-foreground text-xs flex-shrink-0">
-                                {formatTime(conversation.last_message.created_at)}
+                              <Typography
+                                variant="small"
+                                className="text-muted-foreground text-xs flex-shrink-0"
+                              >
+                                {formatTime(
+                                  conversation.last_message.created_at,
+                                )}
                               </Typography>
                             )}
                           </div>
                           <div className="min-w-0">
-                            {conversation.last_message && (
-                              <Typography 
-                                variant="small" 
-                                className={`truncate text-xs block ${
-                                  displayUnreadCount > 0 
-                                    ? 'text-foreground font-medium' 
-                                    : 'text-muted-foreground'
-                                }`}
-                                title={conversation.last_message.content}
-                              >
-                                {conversation.last_message.content}
-                              </Typography>
-                            )}
-                            {!conversation.last_message && (
-                              <Typography variant="small" className="text-muted-foreground italic text-xs">
-                                No messages yet
-                              </Typography>
-                            )}
+                            <Typography
+                              variant="small"
+                              className={`truncate text-xs block ${
+                                displayUnreadCount > 0
+                                  ? 'text-foreground font-medium'
+                                  : 'text-muted-foreground'
+                              }`}
+                              title={getLastMessageDisplay(
+                                conversation.last_message,
+                              )}
+                            >
+                              {getLastMessageDisplay(conversation.last_message)}
+                            </Typography>
                           </div>
                         </div>
                       </div>
@@ -535,39 +851,59 @@ export function DashboardMessagesPageClient({
         </div>
 
         {/* Messages View */}
-        <div className={`lg:col-span-2 bg-white rounded-lg border shadow-sm ${
-          selectedConversation ? 'block' : 'hidden lg:block'
-        }`}>
+        <div
+          className={`lg:col-span-2 bg-white rounded-lg border shadow-sm ${
+            selectedConversation ? 'block' : 'hidden lg:block'
+          }`}
+        >
           {selectedConversation ? (
             <>
               <div className="p-4 lg:p-6 border-b">
                 <div className="flex items-center gap-3 lg:gap-4">
-                  {/* Back button for mobile */}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="lg:hidden h-8 w-8"
                     onClick={() => setSelectedConversation(null)}
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
                     </svg>
                   </Button>
-                  
+
                   <Avatar className="h-10 w-10 lg:h-12 lg:w-12">
-                    <AvatarImage src={selectedConversation.other_user.profile_photo_url} />
+                    <AvatarImage
+                      src={selectedConversation.other_user.profile_photo_url}
+                    />
                     <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20 text-primary font-semibold">
                       {getInitials(
                         selectedConversation.other_user.first_name,
-                        selectedConversation.other_user.last_name
+                        selectedConversation.other_user.last_name,
                       )}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <Typography variant="h4" className="font-semibold text-base lg:text-xl truncate">
-                      {selectedConversation.other_user.first_name} {selectedConversation.other_user.last_name}
+                    <Typography
+                      variant="h4"
+                      className="font-semibold text-base lg:text-xl truncate"
+                    >
+                      {selectedConversation.other_user.first_name}{' '}
+                      {selectedConversation.other_user.last_name}
                     </Typography>
-                    <Typography variant="small" className="text-muted-foreground text-xs lg:text-sm">
+                    <Typography
+                      variant="small"
+                      className="text-muted-foreground text-xs lg:text-sm"
+                    >
                       {isProfessional ? 'Client' : 'Professional'}
                     </Typography>
                   </div>
@@ -577,7 +913,9 @@ export function DashboardMessagesPageClient({
                 <div className="flex-1 p-3 lg:p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
                   {isLoading && messages.length === 0 ? (
                     <div className="text-center py-8">
-                      <Typography className="text-muted-foreground">Loading messages...</Typography>
+                      <Typography className="text-muted-foreground">
+                        Loading messages...
+                      </Typography>
                     </div>
                   ) : messages.length === 0 ? (
                     <div className="text-center py-8">
@@ -587,59 +925,273 @@ export function DashboardMessagesPageClient({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {messages.map((message) => (
-                        <div
-                          key={message.id}
-                          id={`message-${message.id}`}
-                          className={`flex items-end gap-2 ${
-                            message.sender_id === currentUserId ? 'justify-end' : 'justify-start'
-                          }`}
-                        >
-                          {message.sender_id !== currentUserId && (
-                            <Avatar className="h-5 w-5 lg:h-6 lg:w-6 mb-1 hidden sm:block">
-                              <AvatarImage src={selectedConversation.other_user.profile_photo_url} />
-                              <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
-                                {getInitials(
-                                  selectedConversation.other_user.first_name,
-                                  selectedConversation.other_user.last_name
-                                )}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
+                      {messages.map((message) => {
+                        const isExpanded = expandedMessageImages.has(
+                          message.id,
+                        );
+
+                        return (
                           <div
-                            className={`max-w-[85%] sm:max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
+                            key={message.id}
+                            id={`message-${message.id}`}
+                            className={`flex items-end gap-2 ${
                               message.sender_id === currentUserId
-                                ? 'bg-primary'
-                                : 'bg-muted/30'
+                                ? 'justify-end'
+                                : 'justify-start'
                             }`}
                           >
-                            <Typography variant="small" className={cn(
-                              "leading-relaxed text-sm break-words",
-                              message.sender_id === currentUserId && "text-white"
-                            )}>
-                              {message.content}
-                            </Typography>
-                            <Typography
-                              variant="small"
-                              className={`text-xs mt-1 block ${
+                            {message.sender_id !== currentUserId && (
+                              <Avatar className="h-5 w-5 lg:h-6 lg:w-6 mb-1 hidden sm:block">
+                                <AvatarImage
+                                  src={
+                                    selectedConversation.other_user
+                                      .profile_photo_url
+                                  }
+                                />
+                                <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
+                                  {getInitials(
+                                    selectedConversation.other_user.first_name,
+                                    selectedConversation.other_user.last_name,
+                                  )}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div
+                              className={`max-w-[85%] sm:max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
                                 message.sender_id === currentUserId
-                                  ? 'text-white/70 text-right'
-                                  : 'text-muted-foreground'
+                                  ? 'bg-primary'
+                                  : 'bg-muted/30'
                               }`}
                             >
-                              {formatMessageTime(message.created_at)}
-                            </Typography>
+                              {message.attachments &&
+                                message.attachments.length > 0 && (
+                                  <div className="mb-2">
+                                    {/* Horizontal layout for images */}
+                                    {isExpanded ||
+                                    message.attachments.length <= 2 ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {message.attachments.map(
+                                          (attachment) => (
+                                            <Dialog key={attachment.id}>
+                                              <DialogTrigger asChild>
+                                                <div className="relative w-20 h-20 cursor-pointer hover:opacity-90 transition-opacity">
+                                                  <NextImage
+                                                    src={attachment.url}
+                                                    alt={attachment.file_name}
+                                                    width={80}
+                                                    height={80}
+                                                    className="w-full h-full object-cover rounded-lg"
+                                                  />
+                                                </div>
+                                              </DialogTrigger>
+                                              <DialogContent
+                                                closeButton={false}
+                                                className="max-w-4xl max-h-[90vh] w-full h-full p-0 border-0"
+                                              >
+                                                <VisuallyHidden>
+                                                  <DialogTitle>
+                                                    Image:{' '}
+                                                    {attachment.file_name}
+                                                  </DialogTitle>
+                                                  <DialogDescription>
+                                                    Full size view of{' '}
+                                                    {attachment.file_name}
+                                                  </DialogDescription>
+                                                </VisuallyHidden>
+                                                <div className="relative w-full h-[90vh] bg-black/90 flex items-center justify-center">
+                                                  <div className="relative w-full h-full max-w-4xl max-h-full">
+                                                    <NextImage
+                                                      src={attachment.url}
+                                                      alt={attachment.file_name}
+                                                      fill
+                                                      className="object-contain"
+                                                    />
+                                                  </div>
+                                                  <DialogClose asChild>
+                                                    <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-primary/90 hover:bg-primary text-primary-foreground flex items-center justify-center transition-colors shadow-lg backdrop-blur-sm">
+                                                      <svg
+                                                        className="w-5 h-5"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                      >
+                                                        <path
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                          strokeWidth={2}
+                                                          d="M6 18L18 6M6 6l12 12"
+                                                        />
+                                                      </svg>
+                                                    </button>
+                                                  </DialogClose>
+                                                </div>
+                                              </DialogContent>
+                                            </Dialog>
+                                          ),
+                                        )}
+                                        {message.attachments.length > 2 &&
+                                          !isExpanded && (
+                                            <button
+                                              onClick={() =>
+                                                toggleExpandedImages(message.id)
+                                              }
+                                              className="relative w-20 h-20 bg-black/50 rounded-lg flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+                                            >
+                                              <span className="text-sm font-semibold">
+                                                +
+                                                {message.attachments.length - 2}
+                                              </span>
+                                            </button>
+                                          )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex gap-1">
+                                        {message.attachments
+                                          .slice(0, 2)
+                                          .map((attachment) => (
+                                            <Dialog key={attachment.id}>
+                                              <DialogTrigger asChild>
+                                                <div className="relative w-20 h-20 cursor-pointer hover:opacity-90 transition-opacity">
+                                                  <NextImage
+                                                    src={attachment.url}
+                                                    alt={attachment.file_name}
+                                                    width={80}
+                                                    height={80}
+                                                    className="w-full h-full object-cover rounded-lg"
+                                                  />
+                                                </div>
+                                              </DialogTrigger>
+                                              <DialogContent
+                                                closeButton={false}
+                                                className="max-w-4xl max-h-[90vh] w-full h-full p-0 border-0"
+                                              >
+                                                <VisuallyHidden>
+                                                  <DialogTitle>
+                                                    Image:{' '}
+                                                    {attachment.file_name}
+                                                  </DialogTitle>
+                                                  <DialogDescription>
+                                                    Full size view of{' '}
+                                                    {attachment.file_name}
+                                                  </DialogDescription>
+                                                </VisuallyHidden>
+                                                <div className="relative w-full h-[90vh] bg-black/90 flex items-center justify-center">
+                                                  <div className="relative w-full h-full max-w-4xl max-h-full">
+                                                    <NextImage
+                                                      src={attachment.url}
+                                                      alt={attachment.file_name}
+                                                      fill
+                                                      className="object-contain"
+                                                    />
+                                                  </div>
+                                                  <DialogClose asChild>
+                                                    <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-primary/90 hover:bg-primary text-primary-foreground flex items-center justify-center transition-colors shadow-lg backdrop-blur-sm">
+                                                      <svg
+                                                        className="w-5 h-5"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                      >
+                                                        <path
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                          strokeWidth={2}
+                                                          d="M6 18L18 6M6 6l12 12"
+                                                        />
+                                                      </svg>
+                                                    </button>
+                                                  </DialogClose>
+                                                </div>
+                                              </DialogContent>
+                                            </Dialog>
+                                          ))}
+                                        {message.attachments.length > 2 && (
+                                          <button
+                                            onClick={() =>
+                                              toggleExpandedImages(message.id)
+                                            }
+                                            className="relative w-20 h-20 bg-black/50 rounded-lg flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+                                          >
+                                            <span className="text-sm font-semibold">
+                                              +{message.attachments.length - 2}
+                                            </span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                    {message.attachments.length > 2 &&
+                                      isExpanded && (
+                                        <button
+                                          onClick={() =>
+                                            toggleExpandedImages(message.id)
+                                          }
+                                          className={`text-xs mt-1 hover:underline ${
+                                            message.sender_id === currentUserId
+                                              ? 'text-white/70 text-right w-full'
+                                              : 'text-muted-foreground'
+                                          }`}
+                                        >
+                                          Show less
+                                        </button>
+                                      )}
+                                  </div>
+                                )}
+                              {message.content && (
+                                <Typography
+                                  variant="small"
+                                  className={cn(
+                                    'leading-relaxed text-sm break-words',
+                                    message.sender_id === currentUserId &&
+                                      'text-white',
+                                  )}
+                                >
+                                  {message.content}
+                                </Typography>
+                              )}
+                              <Typography
+                                variant="small"
+                                className={`text-xs mt-1 block ${
+                                  message.sender_id === currentUserId
+                                    ? 'text-white/70 text-right'
+                                    : 'text-muted-foreground'
+                                }`}
+                              >
+                                {formatMessageTime(message.created_at)}
+                              </Typography>
+                            </div>
+                            {message.sender_id === currentUserId && (
+                              <div className="h-5 w-5 lg:h-6 lg:w-6 mb-1 hidden sm:block" />
+                            )}
                           </div>
-                          {message.sender_id === currentUserId && (
-                            <div className="h-5 w-5 lg:h-6 lg:w-6 mb-1 hidden sm:block" /> /* Spacer for alignment */
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </div>
                   )}
                 </div>
                 <div className="border-t p-3 lg:p-4">
+                  {selectedImages.length > 0 && (
+                    <div className="mb-3 flex gap-3 overflow-x-auto pb-2">
+                      {selectedImages.map((image, index) => (
+                        <div key={index} className="relative flex-shrink-0">
+                          <NextImage
+                            src={image.preview}
+                            alt={`Preview ${index + 1}`}
+                            width={80}
+                            height={80}
+                            className="h-20 w-20 object-cover rounded-lg border"
+                          />
+                          <button
+                            onClick={() => removeImage(index)}
+                            className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors"
+                            style={{ width: '20px', height: '20px' }}
+                          >
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2 lg:gap-3 items-end">
                     <div className="flex-1">
                       <textarea
@@ -668,9 +1220,29 @@ export function DashboardMessagesPageClient({
                         }}
                       />
                     </div>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageSelect}
+                      accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+                      multiple
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 rounded-lg flex-shrink-0"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </Button>
                     <Button
                       onClick={handleSendMessage}
-                      disabled={isLoading || !newMessage.trim()}
+                      disabled={
+                        isLoading ||
+                        (!newMessage.trim() && selectedImages.length === 0)
+                      }
                       size="icon"
                       className="h-10 w-10 rounded-lg flex-shrink-0"
                     >
@@ -678,13 +1250,13 @@ export function DashboardMessagesPageClient({
                     </Button>
                   </div>
                   <div className="mt-2 text-xs text-right">
-                    <span 
+                    <span
                       className={
-                        newMessage.length > 900 
-                          ? 'text-destructive' 
-                          : newMessage.length > 800 
-                          ? 'text-orange-500' 
-                          : 'text-muted-foreground'
+                        newMessage.length > 900
+                          ? 'text-destructive'
+                          : newMessage.length > 800
+                            ? 'text-orange-500'
+                            : 'text-muted-foreground'
                       }
                     >
                       {newMessage.length}/1000
@@ -702,7 +1274,8 @@ export function DashboardMessagesPageClient({
                 Select a Conversation
               </Typography>
               <Typography className="text-muted-foreground max-w-sm">
-                Choose a conversation from the list to start messaging, or create a new conversation with an available professional.
+                Choose a conversation from the list to start messaging, or
+                create a new conversation with an available professional.
               </Typography>
             </div>
           )}

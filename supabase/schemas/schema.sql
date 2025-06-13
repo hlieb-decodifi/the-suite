@@ -1,6 +1,9 @@
 -- Enable UUID generation
 create extension if not exists "uuid-ossp";
 
+-- Enable moddatetime extension
+create extension if not exists moddatetime schema extensions;
+
 /**
 * ROLES
 * Defines user roles in the system (client, professional, admin)
@@ -1483,4 +1486,45 @@ create publication supabase_realtime for table
   professional_subscriptions,
   conversations,
   messages;
+
+-- Message attachments table
+create table if not exists public.message_attachments (
+  id uuid default gen_random_uuid() primary key,
+  message_id uuid references public.messages(id) on delete cascade not null,
+  url text not null,
+  type text not null check (type = 'image'),
+  file_name text not null,
+  file_size integer not null check (file_size > 0),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add RLS policies for message attachments
+alter table public.message_attachments enable row level security;
+
+create policy "Users can view attachments in their conversations"
+  on public.message_attachments for select
+  using (
+    exists (
+      select 1 from public.messages m
+      join public.conversations c on c.id = m.conversation_id
+      where m.id = message_attachments.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
+    )
+  );
+
+create policy "Users can insert attachments in their conversations"
+  on public.message_attachments for insert
+  with check (
+    exists (
+      select 1 from public.messages m
+      join public.conversations c on c.id = m.conversation_id
+      where m.id = message_attachments.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
+    )
+  );
+
+-- Add trigger for updated_at
+create trigger handle_updated_at before update on public.message_attachments
+  for each row execute procedure moddatetime (updated_at);
 
