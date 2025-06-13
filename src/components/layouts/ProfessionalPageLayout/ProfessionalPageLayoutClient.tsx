@@ -8,12 +8,18 @@ export type ProfessionalPageLayoutClientProps = {
   profileId: string;
   children: React.ReactNode;
   isOwnProfile?: boolean;
+  allowMessages?: boolean;
+  isCurrentUserClient?: boolean;
+  professionalName?: string;
 };
 
 export function ProfessionalPageLayoutClient({
   profileId,
   children,
   isOwnProfile = false,
+  allowMessages = false,
+  isCurrentUserClient = false,
+  professionalName = '',
 }: ProfessionalPageLayoutClientProps) {
   const pathname = usePathname();
 
@@ -70,6 +76,10 @@ export function ProfessionalPageLayoutClient({
         isSubscribed={true} // Assume subscribed since profile is published
         connectStatus={{ isConnected: true }}
         isLoading={false}
+        title={professionalName}
+        allowMessages={allowMessages}
+        isCurrentUserClient={isCurrentUserClient}
+        professionalId={profileId}
       />
 
       <div className="w-full">

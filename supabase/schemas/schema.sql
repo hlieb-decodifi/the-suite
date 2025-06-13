@@ -123,7 +123,7 @@ create table professional_profiles (
   ),
   balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
   -- Messaging settings
-  allow_messages boolean default false not null,
+  allow_messages boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
