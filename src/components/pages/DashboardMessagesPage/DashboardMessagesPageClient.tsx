@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import NextImage from 'next/image';
+import heic2any from 'heic2any';
 
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -48,53 +49,81 @@ type DashboardMessagesPageClientProps = {
 };
 
 // Image compression utility
-const compressImage = (file: File, quality = 0.8): Promise<File> => {
-  return new Promise((resolve) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d')!;
-    const img = new Image();
+const compressImage = async (file: File, quality = 0.8): Promise<File> => {
+  try {
+    let processedFile = file;
 
-    img.onload = () => {
-      // Calculate new dimensions (max 1920x1080)
-      let { width, height } = img;
-      const maxWidth = 1920;
-      const maxHeight = 1080;
+    // Convert HEIC/HEIF files to JPEG first
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      const convertedBlob = (await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.9,
+      })) as Blob;
 
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width *= ratio;
-        height *= ratio;
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw and compress
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            const compressedFile = new File(
-              [blob],
-              file.name.replace(/\.[^/.]+$/, '.webp'),
-              {
-                type: 'image/webp',
-                lastModified: Date.now(),
-              },
-            );
-            resolve(compressedFile);
-          } else {
-            resolve(file);
-          }
-        },
-        'image/webp',
-        quality,
+      processedFile = new File(
+        [convertedBlob],
+        file.name.replace(/\.(heic|heif)$/i, '.jpg'),
+        { type: 'image/jpeg', lastModified: Date.now() },
       );
-    };
+    }
 
-    img.src = URL.createObjectURL(file);
-  });
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      const img = new Image();
+
+      img.onload = () => {
+        // Calculate new dimensions (max 1920x1080)
+        let { width, height } = img;
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File(
+                [blob],
+                file.name.replace(/\.(heic|heif|jpe?g|png|gif)$/i, '.webp'),
+                {
+                  type: 'image/webp',
+                  lastModified: Date.now(),
+                },
+              );
+              resolve(compressedFile);
+            } else {
+              resolve(processedFile);
+            }
+          },
+          'image/webp',
+          quality,
+        );
+      };
+
+      img.onerror = () => {
+        // If image fails to load, just return the processed file
+        console.log('Failed to compress image, using processed file');
+        resolve(processedFile);
+      };
+
+      img.src = URL.createObjectURL(processedFile);
+    });
+  } catch (error) {
+    console.log('Error processing image:', error);
+    return file;
+  }
 };
 
 export function DashboardMessagesPageClient({
@@ -347,6 +376,7 @@ export function DashboardMessagesPageClient({
       const newImages = await Promise.all(
         files.map(async (file) => {
           const compressedFile = await compressImage(file);
+          // Always use compressed WebP file for both preview and upload
           return {
             file: compressedFile,
             preview: URL.createObjectURL(compressedFile),
@@ -1169,11 +1199,11 @@ export function DashboardMessagesPageClient({
                     </div>
                   )}
                 </div>
-                <div className="border-t p-3 lg:p-4">
+                <div className="border-t p-3 !pt-2 lg:p-4">
                   {selectedImages.length > 0 && (
-                    <div className="mb-3 flex gap-3 overflow-x-auto pb-2">
+                    <div className="mb-2 pt-1 flex gap-3 overflow-x-auto">
                       {selectedImages.map((image, index) => (
-                        <div key={index} className="relative flex-shrink-0">
+                        <div key={index} className="relative flex-shrink-0 p-1">
                           <NextImage
                             src={image.preview}
                             alt={`Preview ${index + 1}`}
@@ -1183,10 +1213,10 @@ export function DashboardMessagesPageClient({
                           />
                           <button
                             onClick={() => removeImage(index)}
-                            className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors"
-                            style={{ width: '20px', height: '20px' }}
+                            className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors z-10"
+                            style={{ width: '24px', height: '24px' }}
                           >
-                            <XIcon className="h-3 w-3" />
+                            <XIcon className="h-4 w-4" />
                           </button>
                         </div>
                       ))}
