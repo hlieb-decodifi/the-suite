@@ -2,8 +2,8 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { isValidWorkingHours } from '@/types/working_hours';
 import { format } from 'date-fns';
+import { parseWorkingHoursFromDB, convertWorkingHoursToClientTimezone, getAvailableDaysWithTimezoneConversion } from '@/utils/timezone';
 
 /**
  * Converts a timeSlot string (e.g., "14:00") to a time object
@@ -369,25 +369,29 @@ function isSlotOverlapping(
 }
 
 /**
- * Get available time slots for a professional
+ * Get available time slots for a professional with timezone conversion
  * @param professionalProfileId - The ID of the professional's profile
  * @param date - The date in YYYY-MM-DD format
- * @returns Array of available time slots formatted as "HH:MM AM/PM"
+ * @param professionalTimezone - Professional's timezone (optional, will fetch if not provided)
+ * @param clientTimezone - Client's timezone (optional, will use professional's timezone if not provided)
+ * @returns Array of available time slots formatted as "HH:MM AM/PM" in client timezone
  */
 export async function getAvailableTimeSlots(
   professionalProfileId: string,
-  date: string
+  date: string,
+  professionalTimezone?: string,
+  clientTimezone?: string
 ): Promise<string[]> {
   const supabase = await createClient();
   
   try {
-    // Step 1: Get the professional's working hours for the day of week
+    // Step 1: Get the professional's working hours and timezone for the day of week
     const dateObj = new Date(date);
     const dayOfWeek = format(dateObj, 'EEEE').toLowerCase(); // e.g., "monday"
     
     const { data: professionalProfile, error: profileError } = await supabase
       .from('professional_profiles')
-      .select('working_hours')
+      .select('working_hours, timezone')
       .eq('id', professionalProfileId)
       .single();
 
@@ -395,35 +399,34 @@ export async function getAvailableTimeSlots(
       return [];
     }
     
-    // Parse working hours using our type guard
-    if (!isValidWorkingHours(professionalProfile.working_hours)) {
-      return [];
-    }
+    // Use provided timezone or fetch from database
+    const profTimezone = professionalTimezone || professionalProfile.timezone || 'UTC';
+    const targetTimezone = clientTimezone || profTimezone;
     
-    // Now TypeScript knows this is WorkingHoursEntry[]
-    const workingHours = professionalProfile.working_hours;
-
-    // Find the entry for the current day
-    const dayEntry = workingHours.find(entry => 
-      entry.day.toLowerCase() === dayOfWeek && entry.enabled
+    // Parse timezone-aware working hours
+    const parsedWorkingHours = parseWorkingHoursFromDB(
+      professionalProfile.working_hours, 
+      profTimezone
     );
     
-    if (!dayEntry) {
-      // Professional doesn't work on this day
+    // Convert to client timezone if different
+    const workingHoursInClientTz = targetTimezone !== profTimezone 
+      ? convertWorkingHoursToClientTimezone(parsedWorkingHours, targetTimezone, dateObj)
+      : parsedWorkingHours;
+
+    // Find the entry for the current day in client timezone
+    const dayEntry = workingHoursInClientTz.hours.find(entry => 
+      entry.day.toLowerCase() === dayOfWeek.toLowerCase() && entry.enabled
+    );
+    
+    if (!dayEntry || !dayEntry.startTime || !dayEntry.endTime) {
       return [];
     }
 
-    // Convert UTC times from database to local time for display
     const daySchedule = {
-      // start: convertToLocal(dayEntry.startTime),
       start: dayEntry.startTime,
-      // end: convertToLocal(dayEntry.endTime)
       end: dayEntry.endTime
     };
-
-    if (!daySchedule.start || !daySchedule.end) {
-      return [];
-    }
 
     // Step 2: Generate all possible 30-minute time slots for the working hours
     const allTimeSlots: string[] = [];
@@ -488,7 +491,9 @@ export async function getAvailableTimeSlots(
     });
     
     // Format time slots for display
-    return availableTimeSlots.map(formatTimeForDisplay);
+    const formattedTimeSlots = availableTimeSlots.map(formatTimeForDisplay);
+    
+    return formattedTimeSlots;
     
   } catch {
     return [];
@@ -497,19 +502,24 @@ export async function getAvailableTimeSlots(
 
 /**
  * Get available dates for a professional based on their working hours
+ * Now with timezone conversion support
  * @param professionalProfileId - The ID of the professional's profile
- * @returns Array of available day numbers (0-6, where 0 is Sunday)
+ * @param professionalTimezone - Professional's timezone (optional, will fetch if not provided)
+ * @param clientTimezone - Client's timezone (optional, will use professional's timezone if not provided)
+ * @returns Array of available day names
  */
 export async function getAvailableDates(
-  professionalProfileId: string
+  professionalProfileId: string,
+  professionalTimezone?: string,
+  clientTimezone?: string
 ): Promise<string[]> {
   const supabase = await createClient();
   
   try {
-    // Get the professional's working hours
+    // Get the professional's working hours and timezone
     const { data: professionalProfile, error: profileError } = await supabase
       .from('professional_profiles')
-      .select('working_hours')
+      .select('working_hours, timezone')
       .eq('id', professionalProfileId)
       .single();
     
@@ -517,28 +527,26 @@ export async function getAvailableDates(
       return [];
     }
     
-    // Parse working hours to determine which days the professional works
-    const workingHours = professionalProfile.working_hours as Record<string, { startTime: string; endTime: string; enabled: boolean } | null>;
+    // Use provided timezone or fetch from database
+    const profTimezone = professionalTimezone || professionalProfile.timezone || 'UTC';
+    const targetTimezone = clientTimezone || profTimezone;
     
-    console.log('workingHours', workingHours);
-    // Map day names to day numbers (0 is Monday, not Sunday)
-    // Get days of week when the professional is available (as numbers)
-    const availableDaysOfWeek = Object.entries(workingHours)
-      .filter(([, schedule]) => schedule?.startTime && schedule?.endTime && schedule?.enabled)
-      .map(([day]) => day); // Convert to day number
+    // Parse timezone-aware working hours
+    const parsedWorkingHours = parseWorkingHoursFromDB(
+      professionalProfile.working_hours, 
+      profTimezone
+    );
+    
+    // Get available days with proper timezone conversion and day boundary crossing
+    const availableDaysOfWeek = getAvailableDaysWithTimezoneConversion(
+      parsedWorkingHours, 
+      targetTimezone
+    );
       
-    console.log(availableDaysOfWeek)
-
-    // Filter out any empty strings (in case of invalid day names)
-    const validDays = availableDaysOfWeek.filter(day => day !== '');
+    return availableDaysOfWeek;
     
-    if (validDays.length === 0) {
-      return [];
-    }
-    
-    return validDays;
-    
-  } catch {
+  } catch (error) {
+    console.error('Error getting available dates:', error);
     return [];
   }
 }
@@ -558,4 +566,6 @@ export async function getAvailablePaymentMethods(): Promise<Array<{ id: string; 
   }
   
   return data || [];
-} 
+}
+
+ 

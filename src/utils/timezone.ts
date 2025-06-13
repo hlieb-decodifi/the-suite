@@ -225,47 +225,233 @@ export function getUserTimezone(): string {
 }
 
 /**
+ * Simple timezone conversion for working hours
+ * Converts a time from professional's timezone to client's timezone
+ */
+export function convertTimeToClientTimezone(
+  timeString: string, // Format: "HH:mm"
+  professionalTimezone: string,
+  clientTimezone: string,
+  targetDate: Date = new Date()
+): { time: string; dayOffset: number } {
+  try {
+    // Create a date object for the time in the professional's timezone
+    const baseDate = new Date(targetDate);
+    baseDate.setHours(0, 0, 0, 0);
+    
+    const timeParts = timeString.split(':');
+    const hours = parseInt(timeParts[0] || '0', 10);
+    const minutes = parseInt(timeParts[1] || '0', 10);
+    baseDate.setHours(hours, minutes, 0, 0);
+    
+    // Convert to professional's timezone first (this gives us the actual moment in time)
+    const timeInProfTz = fromZonedTime(baseDate, professionalTimezone);
+    
+    // Convert to client's timezone
+    const timeInClientTz = toZonedTime(timeInProfTz, clientTimezone);
+    
+    // Calculate day offset (how many days the time shifted)
+    const originalDay = baseDate.getDate();
+    const convertedDay = timeInClientTz.getDate();
+    const dayOffset = convertedDay - originalDay;
+    
+    return {
+      time: format(timeInClientTz, 'HH:mm'),
+      dayOffset
+    };
+  } catch (error) {
+    console.error('Error converting time:', error);
+    return { time: timeString, dayOffset: 0 };
+  }
+}
+
+/**
  * Convert working hours from professional's timezone to client's timezone
+ * Returns working hours with times converted to client's timezone and properly split across days
  */
 export function convertWorkingHoursToClientTimezone(
   professionalHours: TimezoneAwareWorkingHours,
   clientTimezone: string,
   targetDate: Date = new Date()
 ): TimezoneAwareWorkingHours {
-  const convertedHours = professionalHours.hours.map(dayHours => {
+  // If timezones are the same, no conversion needed
+  if (professionalHours.timezone === clientTimezone) {
+    return professionalHours;
+  }
+
+  const dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const resultHours: Array<{
+    day: string;
+    enabled: boolean;
+    startTime: string | null;
+    endTime: string | null;
+  }> = [];
+
+  // Initialize all days as disabled first
+  dayOrder.forEach(day => {
+    resultHours.push({
+      day,
+      enabled: false,
+      startTime: null,
+      endTime: null
+    });
+  });
+
+  professionalHours.hours.forEach(dayHours => {
     if (!dayHours.enabled || !dayHours.startTime || !dayHours.endTime) {
-      return dayHours;
+      return;
     }
 
-    // Create date objects for the times in professional's timezone
-    const baseDate = new Date(targetDate);
-    baseDate.setHours(0, 0, 0, 0);
+    // Convert start and end times
+    const startConversion = convertTimeToClientTimezone(
+      dayHours.startTime,
+      professionalHours.timezone,
+      clientTimezone,
+      targetDate
+    );
     
-    const startTime = parse(dayHours.startTime, 'HH:mm', baseDate);
-    const endTime = parse(dayHours.endTime, 'HH:mm', baseDate);
+    const endConversion = convertTimeToClientTimezone(
+      dayHours.endTime,
+      professionalHours.timezone,
+      clientTimezone,
+      targetDate
+    );
 
-    if (!isValid(startTime) || !isValid(endTime)) {
-      return dayHours;
+    // Determine which day(s) this working period covers in the client timezone
+    const originalDayIndex = dayOrder.indexOf(dayHours.day.toLowerCase());
+    
+    if (originalDayIndex === -1) {
+      console.error('Unknown day:', dayHours.day);
+      return;
     }
 
-    // Convert to UTC first, then to client's timezone
-    const startTimeUTC = fromZonedTime(startTime, professionalHours.timezone);
-    const endTimeUTC = fromZonedTime(endTime, professionalHours.timezone);
+    // Check if working hours cross day boundaries
+    if (startConversion.dayOffset !== endConversion.dayOffset) {
+      // Split across two days
+      const startDayIndex = (originalDayIndex + startConversion.dayOffset + 7) % 7;
+      const endDayIndex = (originalDayIndex + endConversion.dayOffset + 7) % 7;
+      
+      const startDayName = dayOrder[startDayIndex];
+      const endDayName = dayOrder[endDayIndex];
 
-    const startTimeInClientTz = toZonedTime(startTimeUTC, clientTimezone);
-    const endTimeInClientTz = toZonedTime(endTimeUTC, clientTimezone);
+      if (startDayName) {
+        // First part: start time to end of day (23:59)
+        const startDayResultIndex = resultHours.findIndex(h => h.day === startDayName);
+        if (startDayResultIndex !== -1) {
+          resultHours[startDayResultIndex] = {
+            day: startDayName,
+            enabled: true,
+            startTime: startConversion.time,
+            endTime: '23:59'
+          };
+        }
+      }
 
-    return {
-      ...dayHours,
-      startTime: format(startTimeInClientTz, 'HH:mm'),
-      endTime: format(endTimeInClientTz, 'HH:mm'),
-    };
+      if (endDayName) {
+        // Second part: start of day (00:00) to end time
+        const endDayResultIndex = resultHours.findIndex(h => h.day === endDayName);
+        if (endDayResultIndex !== -1) {
+          resultHours[endDayResultIndex] = {
+            day: endDayName,
+            enabled: true,
+            startTime: '00:00',
+            endTime: endConversion.time
+          };
+        }
+      }
+
+    } else {
+      // No day crossing, assign to the appropriate day
+      const targetDayIndex = (originalDayIndex + startConversion.dayOffset + 7) % 7;
+      const targetDayName = dayOrder[targetDayIndex];
+      
+      if (targetDayName) {
+        const targetDayResultIndex = resultHours.findIndex(h => h.day === targetDayName);
+        if (targetDayResultIndex !== -1) {
+          resultHours[targetDayResultIndex] = {
+            day: targetDayName,
+            enabled: true,
+            startTime: startConversion.time,
+            endTime: endConversion.time
+          };
+        }
+      }
+
+    }
   });
 
   return {
     timezone: clientTimezone,
-    hours: convertedHours,
+    hours: resultHours,
   };
+}
+
+/**
+ * Get available days considering timezone conversion and day boundary crossings
+ * This function properly handles when working hours cross midnight after timezone conversion
+ */
+export function getAvailableDaysWithTimezoneConversion(
+  professionalHours: TimezoneAwareWorkingHours,
+  clientTimezone: string,
+  targetDate: Date = new Date()
+): string[] {
+  // If timezones are the same, return enabled days as-is
+  if (professionalHours.timezone === clientTimezone) {
+    return professionalHours.hours
+      .filter(dayHours => dayHours.enabled && dayHours.startTime && dayHours.endTime)
+      .map(dayHours => dayHours.day);
+  }
+
+  const dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const availableDays = new Set<string>();
+
+  professionalHours.hours.forEach(dayHours => {
+    if (!dayHours.enabled || !dayHours.startTime || !dayHours.endTime) {
+      return;
+    }
+
+    // Convert start and end times to detect day shifts
+    const startConversion = convertTimeToClientTimezone(
+      dayHours.startTime,
+      professionalHours.timezone,
+      clientTimezone,
+      targetDate
+    );
+    
+    const endConversion = convertTimeToClientTimezone(
+      dayHours.endTime,
+      professionalHours.timezone,
+      clientTimezone,
+      targetDate
+    );
+
+    // Determine which day(s) this working period covers in the client timezone
+    const originalDayIndex = dayOrder.indexOf(dayHours.day.toLowerCase());
+    
+    if (originalDayIndex === -1) {
+      console.error('Unknown day:', dayHours.day);
+      return;
+    }
+
+    // Add the day where the working hours start
+    const startDayIndex = (originalDayIndex + startConversion.dayOffset + 7) % 7;
+    const startDayName = dayOrder[startDayIndex];
+    if (startDayName) {
+      availableDays.add(startDayName);
+    }
+
+    // If end time shifted to a different day, add that day too
+    if (endConversion.dayOffset !== startConversion.dayOffset) {
+      const endDayIndex = (originalDayIndex + endConversion.dayOffset + 7) % 7;
+      const endDayName = dayOrder[endDayIndex];
+      if (endDayName) {
+        availableDays.add(endDayName);
+      }
+      
+    }
+  });
+
+  return Array.from(availableDays);
 }
 
 /**
@@ -401,4 +587,6 @@ export function prepareWorkingHoursForDB(
     timezone,
     hours,
   };
-} 
+}
+
+ 

@@ -55,16 +55,12 @@ export function ContactHoursModal({
     }
   }, [currentTimezone]);
 
-  // Console log user's browser timezone when modal opens
+  // Reset timezone to browser timezone when modal opens if no current timezone
   useEffect(() => {
-    if (isOpen) {
-      const userBrowserTimezone = getUserTimezone();
-      console.log("🌍 User's browser timezone:", userBrowserTimezone);
-      console.log('🔧 Currently selected timezone:', selectedTimezone);
-      console.log('⚙️ Current timezone prop:', currentTimezone);
-      console.log('📦 Default timezone used:', defaultTimezone);
+    if (isOpen && !currentTimezone) {
+      setSelectedTimezone(getUserTimezone());
     }
-  }, [isOpen, selectedTimezone, currentTimezone, defaultTimezone]);
+  }, [isOpen, currentTimezone]);
 
   // Handle modal closure prevention during submission
   const handleOpenChange = (open: boolean) => {

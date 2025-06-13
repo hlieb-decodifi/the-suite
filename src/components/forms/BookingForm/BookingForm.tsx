@@ -35,6 +35,8 @@ export type BookingFormProps = {
   onSubmitSuccess: (formData: BookingFormValues, totalPrice: number) => void;
   onSubmitStateChange?: (isSubmitting: boolean) => void;
   isCalendarLoading?: boolean;
+  professionalTimezone?: string;
+  clientTimezone?: string;
 };
 
 export function BookingForm({
@@ -51,6 +53,8 @@ export function BookingForm({
   onSubmitSuccess,
   onSubmitStateChange,
   isCalendarLoading = false,
+  professionalTimezone,
+  clientTimezone,
 }: BookingFormProps) {
   // Use local state for date to ensure component has control
   const [localSelectedDate, setLocalSelectedDate] = useState<Date | undefined>(
@@ -175,6 +179,8 @@ export function BookingForm({
           selectedExtraServices={selectedExtraServices}
           isLoading={isLoadingTimeSlots}
           isCalendarLoading={isCalendarLoading}
+          professionalTimezone={professionalTimezone}
+          clientTimezone={clientTimezone}
         />
 
         {/* Show form errors for date and time */}
