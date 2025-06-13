@@ -101,7 +101,7 @@ create table professional_profiles (
   appointment_requirements text,
   phone_number text,
   working_hours jsonb, -- Store as JSON with timezone and days/hours
-  timezone text default 'UTC' not null, -- Professional's timezone
+  timezone text, -- Professional's timezone
   location text,
   address_id uuid references addresses,
   facebook_url text,
