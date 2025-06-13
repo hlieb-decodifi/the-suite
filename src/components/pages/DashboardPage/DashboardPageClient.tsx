@@ -107,10 +107,18 @@ export function DashboardPageClient({
   // Calculate total amount of upcoming appointments
   const upcomingAppointmentsTotal = upcomingAppointments.reduce(
     (total, appointment) => {
-      return total + (appointment.services?.price || 0);
+      const price = appointment.services?.price || 0;
+      console.log(
+        `Appointment ${appointment.id}: service price = ${price}`,
+        appointment.services,
+      );
+      return total + price;
     },
     0,
   );
+
+  console.log('Upcoming appointments:', upcomingAppointments);
+  console.log('Calculated total:', upcomingAppointmentsTotal);
 
   // Count unread messages from recent conversations
   const unreadCount = conversations.reduce((total, conversation) => {
@@ -302,9 +310,7 @@ export function DashboardPageClient({
               ))
             ) : (
               <div className="py-4 text-center text-muted-foreground">
-                <Typography className="text-sm">
-                  No recent conversations
-                </Typography>
+                No recent conversations
               </div>
             )}
           </div>

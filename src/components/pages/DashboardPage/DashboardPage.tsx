@@ -39,14 +39,27 @@ export async function DashboardPage() {
   });
 
   // Get upcoming appointments for the dashboard
-  const currentDate = new Date().toISOString();
-  const upcomingAppointments = await getDashboardAppointments(
+  // Use start of today instead of current time to include appointments scheduled for today
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Set to start of day
+  const startOfToday = today.toISOString();
+
+  // Get all appointments and filter by status on the client side to include multiple statuses
+  const allAppointments = await getDashboardAppointments(
     user.id,
     !!isProfessional,
-    currentDate,
+    startOfToday, // Use start of today instead of current time
     undefined,
-    'confirmed',
+    undefined, // Don't filter by status here
   );
+
+  // Filter for upcoming appointments (confirmed, pending, upcoming statuses)
+  const upcomingAppointments = allAppointments.filter((appointment) =>
+    ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
+  );
+
+  console.log('All appointments:', allAppointments);
+  console.log('Filtered upcoming appointments:', upcomingAppointments);
 
   // Pass all upcoming appointments to the dashboard
   const appointmentsForDashboard = upcomingAppointments;
@@ -56,7 +69,9 @@ export async function DashboardPage() {
 
   // Get recent conversations for the dashboard
   const recentConversationsResult = await getRecentConversations();
-  const recentConversations = recentConversationsResult.success ? recentConversationsResult.conversations || [] : [];
+  const recentConversations = recentConversationsResult.success
+    ? recentConversationsResult.conversations || []
+    : [];
 
   return (
     <DashboardPageClient

@@ -139,19 +139,17 @@ export async function getDashboardAppointments(
     const supabase = await createClient();
 
     // First, verify the user exists in our users table and check auth status
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    console.log('Auth user in getDashboardAppointments:', authUser?.id, 'Expected userId:', userId);
-    
     const { data: dbUser, error: dbUserError } = await supabase
       .from('users')
       .select('id, first_name, last_name, role_id, roles(name)')
       .eq('id', userId)
       .single();
-    
-    console.log('Database user:', dbUser, 'Error:', dbUserError);
-    
+
     if (dbUserError || !dbUser) {
-      console.error('User not found in database or error fetching user:', dbUserError);
+      console.error(
+        'User not found in database or error fetching user:',
+        dbUserError,
+      );
       return [];
     }
 
@@ -165,25 +163,34 @@ export async function getDashboardAppointments(
         .single();
 
       if (profileError) {
-        console.error('Error fetching professional profile for appointments:', profileError);
+        console.error(
+          'Error fetching professional profile for appointments:',
+          profileError,
+        );
         // If profile doesn't exist but user is professional, try to create it
         if (profileError.code === 'PGRST116') {
-          console.log('Professional profile not found, attempting to create one for user:', userId);
-          
+          console.log(
+            'Professional profile not found, attempting to create one for user:',
+            userId,
+          );
+
           const { data: newProfile, error: createError } = await supabase
             .from('professional_profiles')
             .insert({ user_id: userId })
             .select('id')
             .single();
-          
+
           if (createError) {
             console.error('Error creating professional profile:', createError);
             return []; // Return empty array if we can't create profile
           }
-          
+
           if (newProfile) {
             professionalProfileId = newProfile.id;
-            console.log('Created new professional profile with ID:', newProfile.id);
+            console.log(
+              'Created new professional profile with ID:',
+              newProfile.id,
+            );
           }
         } else {
           return []; // Return empty array for other errors
@@ -209,30 +216,36 @@ export async function getDashboardAppointments(
         .select('id')
         .eq('user_id', userId)
         .single();
-      
+
       if (clientError) {
-        console.error('Error fetching client profile for appointments:', clientError);
+        console.error(
+          'Error fetching client profile for appointments:',
+          clientError,
+        );
         // If profile doesn't exist but user is client, try to create it
         if (clientError.code === 'PGRST116') {
-          console.log('Client profile not found, attempting to create one for user:', userId);
-          
+          console.log(
+            'Client profile not found, attempting to create one for user:',
+            userId,
+          );
+
           const { error: createClientError } = await supabase
             .from('client_profiles')
             .insert({ user_id: userId })
             .select('id')
             .single();
-          
+
           if (createClientError) {
             console.error('Error creating client profile:', createClientError);
             return []; // Return empty array if we can't create profile
           }
-          
+
           console.log('Created new client profile for user:', userId);
         } else {
           return []; // Return empty array for other errors
         }
       }
-      
+
       bookingsQuery = bookingsQuery.eq('client_id', userId);
     }
 
@@ -335,7 +348,14 @@ export async function getDashboardAppointments(
         endDate.setHours(endHours, endMinutes, 0);
 
         // Get service information from the first booking service (if available)
-        const service = booking.booking_services?.[0]?.services || null;
+        const bookingService = booking.booking_services?.[0];
+        const service = bookingService?.services
+          ? {
+              ...bookingService.services,
+              price: bookingService.price, // Include price from booking_services
+              duration: bookingService.duration, // Include duration from booking_services
+            }
+          : null;
 
         return {
           id: appointment.id,
@@ -407,7 +427,10 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
       .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
 
     if (conversationsError || !conversations) {
-      console.error('Error fetching conversations for unread count:', conversationsError);
+      console.error(
+        'Error fetching conversations for unread count:',
+        conversationsError,
+      );
       return 0;
     }
 
@@ -415,7 +438,7 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
       return 0;
     }
 
-    const conversationIds = conversations.map(conv => conv.id);
+    const conversationIds = conversations.map((conv) => conv.id);
 
     // Count unread messages where sender is not the current user
     const { count, error: messagesError } = await supabase
