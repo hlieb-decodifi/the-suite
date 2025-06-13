@@ -10,6 +10,9 @@ import { ExpandableText } from '@/components/common/ExpandableText/ExpandableTex
 import { formatDuration } from '@/utils/formatDuration';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useState } from 'react';
+import { SignInModal } from '@/components/modals/SignInModal';
+import { SignUpModal } from '@/components/modals/SignUpModal';
 
 export type ServicesTemplateServiceCardProps = {
   service: ServiceListItem;
@@ -25,6 +28,10 @@ export function ServicesTemplateServiceCard({
   const { isAuthenticated, isLoading, isClient } = authStatus;
   const router = useRouter();
 
+  // Modal states
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
+
   // Build the professional profile URL
   const professionalProfileUrl = `/professional/${professional.id}`;
 
@@ -35,7 +42,30 @@ export function ServicesTemplateServiceCard({
       isClient); // Client role
 
   const handleBookNowClick = () => {
-    // Always redirect to the booking page - it supports both authenticated and unauthenticated users
+    if (!isAuthenticated) {
+      // Show sign-in modal for unauthenticated users
+      setIsSignInModalOpen(true);
+    } else if (isClient) {
+      // Redirect authenticated clients directly to booking page
+      router.push(`/booking/${service.id}`);
+    }
+  };
+
+  // Auth modal handlers
+  const handleSignUpClick = () => {
+    setIsSignInModalOpen(false);
+    setIsSignUpModalOpen(true);
+  };
+
+  const handleSignInClick = () => {
+    setIsSignUpModalOpen(false);
+    setIsSignInModalOpen(true);
+  };
+
+  const handleAuthSuccess = () => {
+    setIsSignInModalOpen(false);
+    setIsSignUpModalOpen(false);
+    // After successful authentication, redirect to booking page
     router.push(`/booking/${service.id}`);
   };
 
@@ -238,6 +268,22 @@ export function ServicesTemplateServiceCard({
           </div>
         </CardContent>
       </Card>
+
+      {/* Authentication Modals */}
+      <SignInModal
+        isOpen={isSignInModalOpen}
+        onOpenChange={setIsSignInModalOpen}
+        onSignUpClick={handleSignUpClick}
+        onSuccess={handleAuthSuccess}
+        redirectTo={`/booking/${service.id}`}
+      />
+
+      <SignUpModal
+        isOpen={isSignUpModalOpen}
+        onOpenChange={setIsSignUpModalOpen}
+        onSignInClick={handleSignInClick}
+        onSuccess={handleAuthSuccess}
+      />
     </>
   );
 }

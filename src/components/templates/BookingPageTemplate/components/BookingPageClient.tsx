@@ -1,20 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { BookingForm } from '@/components/forms/BookingForm/BookingForm';
-import { Button } from '@/components/ui/button';
-import { Typography } from '@/components/ui/typography';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BookingCompleted } from '@/components/templates/BookingModalTemplate/components/BookingCompleted';
 import { useBookingState } from '@/components/templates/BookingModalTemplate/hooks/useBookingState';
-import { ArrowLeft, CheckCircle } from 'lucide-react';
+import { createCompletedViewProps } from '@/components/templates/BookingModalTemplate/utils';
+import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Typography } from '@/components/ui/typography';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
-import { BookingCompleted } from '@/components/templates/BookingModalTemplate/components/BookingCompleted';
-import { createCompletedViewProps } from '@/components/templates/BookingModalTemplate/utils';
-import { Clock, Calendar, MapPin } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export type BookingPageClientProps = {
   service: ServiceListItem;
@@ -101,22 +100,7 @@ export function BookingPageClient({
     const completedProps = createCompletedViewProps(service, bookingDetails);
 
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <CheckCircle className="h-20 w-20 text-green-500" />
-          </div>
-          <Typography
-            variant="h1"
-            className="font-bold text-3xl md:text-4xl mb-2 text-green-600"
-          >
-            Booking Confirmed!
-          </Typography>
-          <Typography className="text-muted-foreground max-w-2xl mx-auto">
-            Your appointment has been successfully scheduled
-          </Typography>
-        </div>
-
+      <div className="w-full">
         <Card className="max-w-3xl mx-auto">
           <CardContent className="p-8">
             <BookingCompleted {...completedProps} />
@@ -144,7 +128,7 @@ export function BookingPageClient({
 
   // Show booking form
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full">
       {/* Back button */}
       <div className="mb-8">
         <Button

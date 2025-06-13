@@ -68,22 +68,34 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
       return null;
     }
 
-    const professionalProfile = service.professional_profile;
-    const user = professionalProfile?.user;
+    // Handle the nested relationship structure
+    const professionalProfile = Array.isArray(service.professional_profile) 
+      ? service.professional_profile[0] 
+      : service.professional_profile;
+    const user = Array.isArray(professionalProfile?.user) 
+      ? professionalProfile.user[0] 
+      : professionalProfile?.user;
     
     // Check if service is bookable
     if (!professionalProfile?.is_published) {
       return null;
     }
 
-    const rawPhotoUrl = user?.profile_photo?.url;
-    const profilePhoto = getPublicImageUrl(rawPhotoUrl);
+    // Handle profile_photo structure safely - it might not exist
+    let profilePhotoUrl: string | undefined = undefined;
+    if (user?.profile_photo) {
+      const profilePhotoData = Array.isArray(user.profile_photo) 
+        ? user.profile_photo[0] 
+        : user.profile_photo;
+      const rawPhotoUrl = profilePhotoData?.url;
+      profilePhotoUrl = getPublicImageUrl(rawPhotoUrl);
+    }
     
     // Create professional object
     const professional = {
       id: user?.id || 'unknown',
       name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
-      avatar: profilePhoto,
+      avatar: profilePhotoUrl, // Will be undefined if no photo exists
       address: professionalProfile?.location || 'Location not specified',
       rating: 4.5, // Mock data, would come from reviews table
       reviewCount: 0, // Mock data, would come from reviews count

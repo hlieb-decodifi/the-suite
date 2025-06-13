@@ -23,9 +23,8 @@ export default async function BookingConfirmationPage({
 
   return (
     <BookingConfirmationTemplate
-      serviceId={serviceId}
-      bookingId={bookingId}
-      sessionId={sessionId}
+      {...(bookingId && { bookingId })}
+      {...(sessionId && { sessionId })}
     />
   );
 }

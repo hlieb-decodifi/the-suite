@@ -1,5 +1,6 @@
 import { BookingPageTemplate } from '@/components/templates/BookingPageTemplate';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 
 type BookingPageProps = {
   params: Promise<{ serviceId: string }>;
@@ -18,18 +19,58 @@ export default async function BookingPage({
   const resolvedSearchParams = await searchParams;
 
   const { serviceId } = resolvedParams;
-  const { date, professional } = resolvedSearchParams;
+  const { date } = resolvedSearchParams;
 
   // Validate serviceId
   if (!serviceId || typeof serviceId !== 'string') {
     notFound();
   }
 
+  // Check authentication and role
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/');
+  }
+
+  // Fetch user data to check role
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select(
+      `
+      id,
+      role_id,
+      roles(name)
+    `,
+    )
+    .eq('id', user.id)
+    .single();
+
+  if (userError || !userData) {
+    console.error('Error fetching user data:', userError);
+    redirect('/');
+  }
+
+  // Check if user has "client" role
+  const userRole = userData.roles?.name;
+  if (userRole !== 'client') {
+    // Redirect based on role
+    if (userRole === 'professional') {
+      redirect('/dashboard');
+    } else if (userRole === 'admin') {
+      redirect('/admin');
+    } else {
+      redirect('/');
+    }
+  }
+
   return (
     <BookingPageTemplate
       serviceId={serviceId}
-      preselectedDate={date}
-      preselectedProfessional={professional}
+      {...(date && { preselectedDate: date })}
     />
   );
 }

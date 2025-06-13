@@ -23,7 +23,7 @@ export async function BookingPageTemplate({
   }
 
   return (
-    <div className="w-full mx-auto min-h-screen bg-background">
+    <div className="w-full mx-auto bg-background">
       {/* Main Content */}
       <Suspense fallback={<BookingPageSkeleton />}>
         <BookingPageClient
