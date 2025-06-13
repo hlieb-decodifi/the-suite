@@ -559,6 +559,7 @@ export type Database = {
           stripe_connect_status: string
           stripe_connect_updated_at: string | null
           tiktok_url: string | null
+          timezone: string
           updated_at: string
           user_id: string
           working_hours: Json | null
@@ -585,6 +586,7 @@ export type Database = {
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
+          timezone?: string
           updated_at?: string
           user_id: string
           working_hours?: Json | null
@@ -611,6 +613,7 @@ export type Database = {
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
+          timezone?: string
           updated_at?: string
           user_id?: string
           working_hours?: Json | null

@@ -87,6 +87,7 @@ export async function ProfilePage({
       user={user as User}
       profileData={profileData.profile}
       workingHours={profileData.workingHours}
+      timezone={profileData.timezone}
       paymentMethods={profileData.paymentMethods}
       portfolioPhotos={profileData.portfolioPhotos}
       isEditable={isEditable}
@@ -102,11 +103,14 @@ export async function getProfileData(userId: string) {
     const profile =
       profileResult.success && profileResult.data ? profileResult.data : null;
 
-    // Fetch working hours
+    // Fetch working hours with timezone
     const workingHoursResult = await getWorkingHoursAction(userId);
     const workingHours = workingHoursResult.success
       ? workingHoursResult.hours || []
       : [];
+    const timezone = workingHoursResult.success
+      ? workingHoursResult.timezone || ''
+      : '';
 
     // Fetch payment methods
     const paymentMethodsResult =
@@ -124,6 +128,7 @@ export async function getProfileData(userId: string) {
     return {
       profile,
       workingHours,
+      timezone,
       paymentMethods,
       portfolioPhotos,
     };
@@ -132,6 +137,7 @@ export async function getProfileData(userId: string) {
     return {
       profile: null,
       workingHours: [] as WorkingHoursEntry[],
+      timezone: '',
       paymentMethods: [] as PaymentMethod[],
       portfolioPhotos: [] as PortfolioPhotoUI[],
     };

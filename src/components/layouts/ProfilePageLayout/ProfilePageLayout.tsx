@@ -45,9 +45,6 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
   const userData = await getUserData(user.id);
   const userRole = userData.roleName;
 
-  console.log('user', user);
-  console.log('userRole from database:', userRole);
-
   if (userRole === 'client') {
     redirect('/client-profile');
   }

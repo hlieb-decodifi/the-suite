@@ -80,7 +80,9 @@ function mapServiceData(service: unknown): ServiceListItem {
     description: serviceData.description || '',
     price: serviceData.price,
     duration: serviceData.duration,
-    isBookable: professionalProfile?.is_subscribed === true,
+    // TODO: Add back in when we have a way to check if a professional is subscribed
+    isBookable: true,
+    // isBookable: professionalProfile?.is_subscribed === true,
     professional,
   };
 }

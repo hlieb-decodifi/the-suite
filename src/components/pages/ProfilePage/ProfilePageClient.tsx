@@ -49,7 +49,7 @@ const formatPhoneNumber = (phone: string): string => {
   if (!phone || phone.trim() === '') {
     return phone;
   }
-  
+
   try {
     const parsed = phoneUtil.parseAndKeepRawInput(phone);
     if (phoneUtil.isValidNumber(parsed)) {
@@ -68,6 +68,7 @@ export type ProfilePageClientProps = {
   user: User;
   profileData: ProfileData | null;
   workingHours: WorkingHoursEntry[];
+  timezone: string;
   paymentMethods: PaymentMethod[];
   portfolioPhotos: PortfolioPhotoUI[];
   isEditable?: boolean;
@@ -521,6 +522,7 @@ export function ProfilePageClient({
   user,
   profileData,
   workingHours,
+  timezone,
   portfolioPhotos,
   isEditable = true,
 }: ProfilePageClientProps) {
@@ -551,6 +553,7 @@ export function ProfilePageClient({
           <ContactSection
             user={user}
             workingHours={workingHours}
+            timezone={timezone}
             isLoading={false}
             isEditable={isEditable}
           />

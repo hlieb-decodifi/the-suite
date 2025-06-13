@@ -100,7 +100,8 @@ create table professional_profiles (
   profession text,
   appointment_requirements text,
   phone_number text,
-  working_hours jsonb, -- Store as JSON with days and hours
+  working_hours jsonb, -- Store as JSON with timezone and days/hours
+  timezone text default 'UTC' not null, -- Professional's timezone
   location text,
   address_id uuid references addresses,
   facebook_url text,
@@ -625,7 +626,7 @@ create policy "Anyone can view profile photos of published professionals"
 
 /**
 * PORTFOLIO_PHOTOS
-* Up to 10 portfolio photos per professional
+* Up to 20 portfolio photos per professional
 */
 create table portfolio_photos (
   id uuid primary key default uuid_generate_v4(),
@@ -640,12 +641,12 @@ create table portfolio_photos (
 );
 alter table portfolio_photos enable row level security;
 
--- Add constraint to limit portfolio photos to 10 per user
+-- Add constraint to limit portfolio photos to 20 per user
 create or replace function check_portfolio_photo_limit()
 returns trigger as $$
 begin
-  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 10 then
-    raise exception 'Maximum of 10 portfolio photos allowed per professional';
+  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 20 then
+    raise exception 'Maximum of 20 portfolio photos allowed per professional';
   end if;
   return new;
 end;
