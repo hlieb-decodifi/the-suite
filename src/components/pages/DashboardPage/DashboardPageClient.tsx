@@ -17,7 +17,7 @@ import {
   UserIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { ConversationWithUser } from '@/types/messages';
+import { ConversationWithUser, ChatMessage } from '@/types/messages';
 
 // Define stats type
 type DashboardStats = {
@@ -43,7 +43,8 @@ export function DashboardPageClient({
   recentConversations = [],
 }: DashboardPageClientProps) {
   // State for conversations to enable real-time updates
-  const [conversations, setConversations] = useState<ConversationWithUser[]>(recentConversations);
+  const [conversations, setConversations] =
+    useState<ConversationWithUser[]>(recentConversations);
 
   // Polling for conversation updates
   useEffect(() => {
@@ -62,9 +63,11 @@ export function DashboardPageClient({
     const pollForConversations = async () => {
       // Only poll if tab is visible
       if (!isTabVisible) return;
-      
+
       try {
-        const { getRecentConversations } = await import('@/server/domains/messages/actions');
+        const { getRecentConversations } = await import(
+          '@/server/domains/messages/actions'
+        );
         const result = await getRecentConversations();
         if (result.success && result.conversations) {
           setConversations(result.conversations);
@@ -85,7 +88,7 @@ export function DashboardPageClient({
         }
       }, 30000);
     };
-    
+
     startPolling();
 
     // Cleanup
@@ -137,6 +140,30 @@ export function DashboardPageClient({
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
+
+  // Get display text for last message (same logic as in messages page)
+  const getLastMessageDisplay = (message: ChatMessage | undefined) => {
+    if (!message) return 'No messages yet';
+
+    if (
+      message.attachments &&
+      message.attachments.length > 0 &&
+      !message.content.trim()
+    ) {
+      const count = message.attachments.length;
+      return count === 1 ? '📷 Photo' : `📷 ${count} Photos`;
+    }
+
+    if (
+      message.attachments &&
+      message.attachments.length > 0 &&
+      message.content.trim()
+    ) {
+      return `📷 ${message.content}`;
+    }
+
+    return message.content;
   };
 
   return (
@@ -240,11 +267,13 @@ export function DashboardPageClient({
                     <div className="flex items-center gap-2 mb-1">
                       <div className="flex items-center gap-2 flex-1">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={conversation.other_user.profile_photo_url} />
+                          <AvatarImage
+                            src={conversation.other_user.profile_photo_url}
+                          />
                           <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                             {getInitials(
                               conversation.other_user.first_name,
-                              conversation.other_user.last_name
+                              conversation.other_user.last_name,
                             )}
                           </AvatarFallback>
                         </Avatar>
@@ -252,31 +281,30 @@ export function DashboardPageClient({
                           <div className="h-2 w-2 rounded-full bg-primary"></div>
                         )}
                         <Typography className="font-medium text-sm">
-                          {conversation.other_user.first_name} {conversation.other_user.last_name}
+                          {conversation.other_user.first_name}{' '}
+                          {conversation.other_user.last_name}
                         </Typography>
                       </div>
                       {conversation.last_message && (
                         <Typography className="text-xs text-muted-foreground">
-                          {format(new Date(conversation.last_message.created_at), 'MMM d, yyyy')}
+                          {format(
+                            new Date(conversation.last_message.created_at),
+                            'MMM d, yyyy',
+                          )}
                         </Typography>
                       )}
                     </div>
-                    {conversation.last_message && (
-                      <Typography className="text-sm text-muted-foreground line-clamp-2 ml-8">
-                        {conversation.last_message.content}
-                      </Typography>
-                    )}
-                    {!conversation.last_message && (
-                      <Typography className="text-sm text-muted-foreground italic ml-8">
-                        No messages yet
-                      </Typography>
-                    )}
+                    <Typography className="text-sm text-muted-foreground line-clamp-2 ml-8">
+                      {getLastMessageDisplay(conversation.last_message)}
+                    </Typography>
                   </div>
                 </Link>
               ))
             ) : (
               <div className="py-4 text-center text-muted-foreground">
-                <Typography className="text-sm">No recent conversations</Typography>
+                <Typography className="text-sm">
+                  No recent conversations
+                </Typography>
               </div>
             )}
           </div>
@@ -409,4 +437,3 @@ function WidgetCard({
     </div>
   );
 }
- 
