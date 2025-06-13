@@ -882,7 +882,7 @@ export function DashboardMessagesPageClient({
 
         {/* Messages View */}
         <div
-          className={`lg:col-span-2 bg-white rounded-lg border shadow-sm ${
+          className={`flex flex-col lg:col-span-2 bg-white rounded-lg border shadow-sm ${
             selectedConversation ? 'block' : 'hidden lg:block'
           }`}
         >
@@ -939,7 +939,7 @@ export function DashboardMessagesPageClient({
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col h-[400px] lg:h-[500px]">
+              <div className="flex flex-col flex-grow h-[400px] lg:h-[500px]">
                 <div className="flex-1 p-3 lg:p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
                   {isLoading && messages.length === 0 ? (
                     <div className="text-center py-8">
