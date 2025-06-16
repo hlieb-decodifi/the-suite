@@ -5,7 +5,8 @@ import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Clock, Pencil, Trash2, Copy } from 'lucide-react';
+import { Plus, Clock, Pencil, Trash2, Copy, Calendar } from 'lucide-react';
+import Link from 'next/link';
 import { ServiceUI, ServiceLimitInfo } from '@/types/services';
 import { cn } from '@/utils/cn';
 import { ExpandableText } from '@/components/common/ExpandableText/ExpandableText';
@@ -72,7 +73,7 @@ function ServiceCard({
       )}
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1">
             <Typography
               variant="large"
               className="font-semibold text-foreground"
@@ -94,54 +95,67 @@ function ServiceCard({
               </div>
             </div>
           </div>
-          <div className="flex space-x-1">
-            {isEditable && onDuplicate && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-8 w-8',
-                  isAtLimit
-                    ? 'text-muted-foreground/50 cursor-not-allowed'
-                    : 'text-muted-foreground',
-                )}
-                onClick={() => onDuplicate(service)}
-                disabled={isUpdating || isAtLimit}
-                title={
-                  isAtLimit
-                    ? 'Cannot duplicate - service limit reached'
-                    : 'Duplicate service'
-                }
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
+          <div className="flex items-center space-x-2 ml-4">
+            {/* Booking button for client view */}
+            {!isEditable && (
+              <Link href={`/booking/${service.id}`}>
+                <Button>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Book Now
+                </Button>
+              </Link>
             )}
+
+            {/* Edit controls for professional view */}
             {isEditable && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-8 w-8',
-                  isBeingEdited ? 'text-primary' : 'text-muted-foreground',
+              <div className="flex space-x-1">
+                {onDuplicate && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-8 w-8',
+                      isAtLimit
+                        ? 'text-muted-foreground/50 cursor-not-allowed'
+                        : 'text-muted-foreground',
+                    )}
+                    onClick={() => onDuplicate(service)}
+                    disabled={isUpdating || isAtLimit}
+                    title={
+                      isAtLimit
+                        ? 'Cannot duplicate - service limit reached'
+                        : 'Duplicate service'
+                    }
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 )}
-                onClick={() => onEdit(service)}
-                disabled={isUpdating}
-                title="Edit service"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
-            {isDeletable && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={onDelete}
-                disabled={isUpdating}
-                title="Delete service"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-8 w-8',
+                    isBeingEdited ? 'text-primary' : 'text-muted-foreground',
+                  )}
+                  onClick={() => onEdit(service)}
+                  disabled={isUpdating}
+                  title="Edit service"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                {isDeletable && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={onDelete}
+                    disabled={isUpdating}
+                    title="Delete service"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>

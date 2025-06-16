@@ -57,13 +57,11 @@ export type AppointmentType = {
 export type AppointmentItemProps = {
   appointment: AppointmentType;
   showDetails?: boolean;
-  isProfessional?: boolean; // To determine if we should show service fee
 };
 
 export function AppointmentItem({
   appointment,
   showDetails = true,
-  isProfessional = false,
 }: AppointmentItemProps) {
   const startDate = new Date(appointment.start_time);
   const endDate = new Date(appointment.end_time);
@@ -146,26 +144,15 @@ export function AppointmentItem({
         {/* Show pricing */}
         {appointment.services && (
           <div className="mt-2 text-sm">
-            {isProfessional ? (
-              // For professionals, show service total (no service fee)
-              <Typography className="font-medium text-primary">
-                {formatCurrency(
-                  appointment.services.totalPrice ||
+            {/* Show total including service fee for both professionals and clients */}
+            <Typography className="font-medium text-primary">
+              {formatCurrency(
+                appointment.services.totalWithServiceFee ||
+                  (appointment.services.totalPrice ||
                     appointment.services.price ||
-                    0,
-                )}
-              </Typography>
-            ) : (
-              // For clients, show total including service fee
-              <Typography className="font-medium text-primary">
-                {formatCurrency(
-                  appointment.services.totalWithServiceFee ||
-                    (appointment.services.totalPrice ||
-                      appointment.services.price ||
-                      0) + 1.0,
-                )}
-              </Typography>
-            )}
+                    0) + 1.0,
+              )}
+            </Typography>
           </div>
         )}
       </div>

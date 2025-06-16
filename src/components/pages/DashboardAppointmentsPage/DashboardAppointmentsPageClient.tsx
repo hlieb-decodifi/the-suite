@@ -393,13 +393,11 @@ export function DashboardAppointmentsPageClient({
         ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
         : 'Professional';
 
-      // Get amount based on user type and available pricing data
-      const amount = isProfessional
-        ? appointment.services?.totalPrice || appointment.services?.price || 0
-        : appointment.services?.totalWithServiceFee ||
-          (appointment.services?.totalPrice ||
-            appointment.services?.price ||
-            0) + 1.0;
+      // Get amount including service fee for both professionals and clients
+      const amount =
+        appointment.services?.totalWithServiceFee ||
+        (appointment.services?.totalPrice || appointment.services?.price || 0) +
+          1.0;
 
       // Map status to expected format
       let formattedStatus: Appointment['status'] = 'upcoming';

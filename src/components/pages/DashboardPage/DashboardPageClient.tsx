@@ -107,13 +107,11 @@ export function DashboardPageClient({
   // Calculate total amount of upcoming appointments
   const upcomingAppointmentsTotal = upcomingAppointments.reduce(
     (total, appointment) => {
-      // Use the appropriate total based on user type
-      const price = isProfessional
-        ? appointment.services?.totalPrice || appointment.services?.price || 0
-        : appointment.services?.totalWithServiceFee ||
-          (appointment.services?.totalPrice ||
-            appointment.services?.price ||
-            0) + 1.0;
+      // Use total including service fee for both professionals and clients
+      const price =
+        appointment.services?.totalWithServiceFee ||
+        (appointment.services?.totalPrice || appointment.services?.price || 0) +
+          1.0;
       console.log(
         `Appointment ${appointment.id}: service price = ${price}`,
         appointment.services,
@@ -219,15 +217,12 @@ export function DashboardPageClient({
                 // Get service name from the appointment
                 const serviceName = appointment.services?.name || 'Service';
 
-                // Get price from the appointment data based on user type
-                const price = isProfessional
-                  ? appointment.services?.totalPrice ||
+                // Get price including service fee for both professionals and clients
+                const price =
+                  appointment.services?.totalWithServiceFee ||
+                  (appointment.services?.totalPrice ||
                     appointment.services?.price ||
-                    0
-                  : appointment.services?.totalWithServiceFee ||
-                    (appointment.services?.totalPrice ||
-                      appointment.services?.price ||
-                      0) + 1.0;
+                    0) + 1.0;
 
                 // Check if there are additional services
                 const hasAdditionalServices =
