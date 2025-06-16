@@ -47,7 +47,7 @@ export async function getWorkingHoursAction(userId: string): Promise<GetWorkingH
     return { 
       success: true, 
       hours: hours,
-      timezone: timezone || 'UTC'
+      timezone,
     };
   } catch (err) {
     console.error('Server error fetching working hours:', err);
