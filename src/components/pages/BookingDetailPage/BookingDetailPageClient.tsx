@@ -329,38 +329,160 @@ export function BookingDetailPageClient({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {appointment.bookings.booking_services.map((bookingService) => (
-                <div key={bookingService.id}>
-                  <Typography variant="large" className="mb-2">
-                    {bookingService.services.name}
-                  </Typography>
-                  {bookingService.services.description && (
-                    <Typography variant="p" className="mb-4">
-                      {bookingService.services.description}
-                    </Typography>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2">
-                      <ClockIcon className="h-4 w-4 text-muted-foreground" />
-                      <Typography className="text-muted-foreground">
-                        Duration:
-                      </Typography>
-                      <Typography className="font-medium">
-                        {bookingService.duration} minutes
-                      </Typography>
+              {(() => {
+                const services = appointment.bookings.booking_services;
+                const mainService = services[0]; // First service is typically the main one
+                const additionalServices = services.slice(1);
+                const totalDuration = services.reduce(
+                  (sum, service) => sum + service.duration,
+                  0,
+                );
+                const subtotal = services.reduce(
+                  (sum, service) => sum + service.price,
+                  0,
+                );
+                const serviceFee = 1.0; // Fixed service fee
+                const total = subtotal + serviceFee;
+
+                return (
+                  <>
+                    {/* Main Service */}
+                    {mainService && (
+                      <div>
+                        <Typography variant="large" className="mb-2">
+                          {mainService.services.name}
+                        </Typography>
+                        {mainService.services.description && (
+                          <Typography
+                            variant="p"
+                            className="mb-4 text-muted-foreground"
+                          >
+                            {mainService.services.description}
+                          </Typography>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                          <div className="flex items-center gap-2">
+                            <ClockIcon className="h-4 w-4 text-muted-foreground" />
+                            <Typography className="text-muted-foreground">
+                              Duration:
+                            </Typography>
+                            <Typography className="font-medium">
+                              {mainService.duration} minutes
+                            </Typography>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <CreditCardIcon className="h-4 w-4 text-muted-foreground" />
+                            <Typography className="text-muted-foreground">
+                              Price:
+                            </Typography>
+                            <Typography className="font-medium">
+                              {formatCurrency(mainService.price)}
+                            </Typography>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Additional Services */}
+                    {additionalServices.length > 0 && (
+                      <>
+                        <Separator />
+                        <div>
+                          <Typography variant="large" className="mb-4">
+                            Additional Services
+                          </Typography>
+                          <div className="space-y-4">
+                            {additionalServices.map((bookingService) => (
+                              <div
+                                key={bookingService.id}
+                                className="flex justify-between items-start"
+                              >
+                                <div className="flex-1">
+                                  <Typography className="font-medium">
+                                    {bookingService.services.name}
+                                  </Typography>
+                                  {bookingService.services.description && (
+                                    <Typography
+                                      variant="small"
+                                      className="text-muted-foreground mt-1"
+                                    >
+                                      {bookingService.services.description}
+                                    </Typography>
+                                  )}
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <ClockIcon className="h-3 w-3 text-muted-foreground" />
+                                    <Typography
+                                      variant="small"
+                                      className="text-muted-foreground"
+                                    >
+                                      {bookingService.duration} minutes
+                                    </Typography>
+                                  </div>
+                                </div>
+                                <Typography className="font-medium">
+                                  {formatCurrency(bookingService.price)}
+                                </Typography>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Duration and Price Summary */}
+                    <Separator />
+                    <div className="space-y-3">
+                      {/* Total Duration */}
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <ClockIcon className="h-4 w-4 text-muted-foreground" />
+                          <Typography className="text-muted-foreground">
+                            Total Duration:
+                          </Typography>
+                        </div>
+                        <Typography className="font-medium">
+                          {totalDuration} minutes
+                        </Typography>
+                      </div>
+
+                      {/* Price Breakdown */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Services Subtotal:
+                          </Typography>
+                          <Typography variant="small" className="font-medium">
+                            {formatCurrency(subtotal)}
+                          </Typography>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Service Fee:
+                          </Typography>
+                          <Typography variant="small" className="font-medium">
+                            {formatCurrency(serviceFee)}
+                          </Typography>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between items-center">
+                          <Typography className="font-semibold">
+                            Total:
+                          </Typography>
+                          <Typography className="font-bold text-primary text-lg">
+                            {formatCurrency(total)}
+                          </Typography>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <CreditCardIcon className="h-4 w-4 text-muted-foreground" />
-                      <Typography className="text-muted-foreground">
-                        Price:
-                      </Typography>
-                      <Typography className="font-medium text-primary">
-                        {formatCurrency(bookingService.price)}
-                      </Typography>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 

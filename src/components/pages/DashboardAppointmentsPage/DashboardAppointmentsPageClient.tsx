@@ -30,6 +30,19 @@ type AppointmentType = {
     description?: string;
     duration?: number;
     price?: number;
+    // Extended fields for service totals and additional services
+    totalPrice?: number;
+    totalDuration?: number;
+    totalWithServiceFee?: number;
+    hasAdditionalServices?: boolean;
+    additionalServicesCount?: number;
+    allServices?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      price: number;
+      duration: number;
+    }>;
   } | null;
   professionals?: {
     id: string;
@@ -365,8 +378,10 @@ export function DashboardAppointmentsPageClient({
     (appointment) => {
       const startTime = new Date(appointment.start_time);
 
-      // Get service name
-      const serviceName = appointment.services?.name || 'Service';
+      // Get service name with additional services indicator
+      const serviceName = appointment.services?.hasAdditionalServices
+        ? `${appointment.services.name} + ${appointment.services.additionalServicesCount} more`
+        : appointment.services?.name || 'Service';
 
       // Get client name
       const clientName = appointment.clients?.users
@@ -378,8 +393,13 @@ export function DashboardAppointmentsPageClient({
         ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
         : 'Professional';
 
-      // Get amount (placeholder since price isn't available)
-      const amount = appointment.services?.price || 75.0;
+      // Get amount based on user type and available pricing data
+      const amount = isProfessional
+        ? appointment.services?.totalPrice || appointment.services?.price || 0
+        : appointment.services?.totalWithServiceFee ||
+          (appointment.services?.totalPrice ||
+            appointment.services?.price ||
+            0) + 1.0;
 
       // Map status to expected format
       let formattedStatus: Appointment['status'] = 'upcoming';

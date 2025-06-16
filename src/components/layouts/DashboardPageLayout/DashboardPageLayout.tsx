@@ -347,13 +347,40 @@ export async function getDashboardAppointments(
         startDate.setHours(startHours, startMinutes, 0);
         endDate.setHours(endHours, endMinutes, 0);
 
-        // Get service information from the first booking service (if available)
-        const bookingService = booking.booking_services?.[0];
-        const service = bookingService?.services
+        // Get all services information and calculate totals
+        const bookingServices = booking.booking_services || [];
+        const mainService = bookingServices[0]; // First service is the main one
+        const additionalServices = bookingServices.slice(1);
+
+        // Calculate totals
+        const totalServicePrice = bookingServices.reduce(
+          (sum, bs) => sum + (bs.price || 0),
+          0,
+        );
+        const totalDuration = bookingServices.reduce(
+          (sum, bs) => sum + (bs.duration || 0),
+          0,
+        );
+        const serviceFee = 1.0; // Fixed service fee
+        const totalWithServiceFee = totalServicePrice + serviceFee;
+
+        // Create service object with main service info plus totals
+        const service = mainService?.services
           ? {
-              ...bookingService.services,
-              price: bookingService.price, // Include price from booking_services
-              duration: bookingService.duration, // Include duration from booking_services
+              ...mainService.services,
+              price: mainService.price, // Main service price
+              duration: mainService.duration, // Main service duration
+              // Add additional fields for UI
+              totalPrice: totalServicePrice, // Total of all services
+              totalDuration: totalDuration, // Total duration
+              totalWithServiceFee: totalWithServiceFee, // Total including service fee
+              hasAdditionalServices: additionalServices.length > 0,
+              additionalServicesCount: additionalServices.length,
+              allServices: bookingServices.map((bs) => ({
+                ...bs.services,
+                price: bs.price,
+                duration: bs.duration,
+              })),
             }
           : null;
 

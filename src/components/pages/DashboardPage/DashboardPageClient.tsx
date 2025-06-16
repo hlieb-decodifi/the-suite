@@ -107,7 +107,13 @@ export function DashboardPageClient({
   // Calculate total amount of upcoming appointments
   const upcomingAppointmentsTotal = upcomingAppointments.reduce(
     (total, appointment) => {
-      const price = appointment.services?.price || 0;
+      // Use the appropriate total based on user type
+      const price = isProfessional
+        ? appointment.services?.totalPrice || appointment.services?.price || 0
+        : appointment.services?.totalWithServiceFee ||
+          (appointment.services?.totalPrice ||
+            appointment.services?.price ||
+            0) + 1.0;
       console.log(
         `Appointment ${appointment.id}: service price = ${price}`,
         appointment.services,
@@ -213,8 +219,21 @@ export function DashboardPageClient({
                 // Get service name from the appointment
                 const serviceName = appointment.services?.name || 'Service';
 
-                // Get price from the appointment data
-                const price = appointment.services?.price || 0;
+                // Get price from the appointment data based on user type
+                const price = isProfessional
+                  ? appointment.services?.totalPrice ||
+                    appointment.services?.price ||
+                    0
+                  : appointment.services?.totalWithServiceFee ||
+                    (appointment.services?.totalPrice ||
+                      appointment.services?.price ||
+                      0) + 1.0;
+
+                // Check if there are additional services
+                const hasAdditionalServices =
+                  appointment.services?.hasAdditionalServices;
+                const additionalServicesCount =
+                  appointment.services?.additionalServicesCount || 0;
 
                 return (
                   <div
@@ -223,9 +242,17 @@ export function DashboardPageClient({
                   >
                     <Link href={`/bookings/${appointment.id}`}>
                       <div className="flex justify-between mb-1">
-                        <Typography className="font-medium">
-                          {serviceName}
-                        </Typography>
+                        <div className="flex-1 min-w-0">
+                          <Typography className="font-medium truncate">
+                            {serviceName}
+                          </Typography>
+                          {hasAdditionalServices && (
+                            <Typography className="text-xs text-muted-foreground">
+                              + {additionalServicesCount} more service
+                              {additionalServicesCount > 1 ? 's' : ''}
+                            </Typography>
+                          )}
+                        </div>
                         <Typography className="font-medium">
                           {formatCurrency(price)}
                         </Typography>

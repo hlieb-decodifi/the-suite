@@ -81,8 +81,8 @@ function mapServiceData(service: unknown): ServiceListItem {
     price: serviceData.price,
     duration: serviceData.duration,
     // TODO: Add back in when we have a way to check if a professional is subscribed
-    isBookable: true,
-    // isBookable: professionalProfile?.is_subscribed === true,
+    // isBookable: true,
+    isBookable: professionalProfile?.is_subscribed === true,
     professional,
   };
 }
