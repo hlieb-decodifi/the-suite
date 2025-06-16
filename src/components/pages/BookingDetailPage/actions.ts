@@ -2,6 +2,20 @@
 
 import { createClient } from '@/lib/supabase/server';
 
+// Type for appointment permission check through bookings
+type AppointmentWithBooking = {
+  id: string;
+  booking_id: string;
+  bookings: {
+    id: string;
+    client_id: string;
+    professional_profile_id: string;
+    professionals: {
+      user_id: string;
+    } | null;
+  } | null;
+};
+
 // Update appointment status
 export async function updateAppointmentStatus(
   appointmentId: string,
@@ -16,7 +30,18 @@ export async function updateAppointmentStatus(
     const { data, error: fetchError } = await supabase
       .from('appointments')
       .select(
-        'id, professional_id, client_id, professionals(user_id), clients(user_id)',
+        `
+        id,
+        booking_id,
+        bookings!booking_id(
+          id,
+          client_id,
+          professional_profile_id,
+          professionals:professional_profile_id(
+            user_id
+          )
+        )
+        `,
       )
       .eq('id', appointmentId)
       .single();
@@ -25,21 +50,24 @@ export async function updateAppointmentStatus(
       throw new Error(`Failed to fetch appointment: ${fetchError.message}`);
     }
 
+    const appointmentData = data as AppointmentWithBooking;
+
     // Check if user has permission (is either the professional or client for this appointment)
     let canUpdate = false;
 
-    if (
-      isProfessional &&
-      (data as any)?.professionals &&
-      (data as any).professionals.user_id === userId
-    ) {
-      canUpdate = true;
-    } else if (
-      !isProfessional &&
-      (data as any)?.clients &&
-      (data as any).clients.user_id === userId
-    ) {
-      canUpdate = true;
+    if (appointmentData?.bookings) {
+      if (
+        isProfessional &&
+        appointmentData.bookings.professionals &&
+        appointmentData.bookings.professionals.user_id === userId
+      ) {
+        canUpdate = true;
+      } else if (
+        !isProfessional &&
+        appointmentData.bookings.client_id === userId
+      ) {
+        canUpdate = true;
+      }
     }
 
     if (!canUpdate) {
