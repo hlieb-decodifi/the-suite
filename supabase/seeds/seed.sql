@@ -18,13 +18,7 @@ DELETE FROM public.subscription_plans;
 -- Insert subscription plans with Stripe price IDs
 INSERT INTO public.subscription_plans (name, description, price, interval, stripe_price_id, is_active) VALUES
 ('Monthly', 'Standard monthly subscription', 19.99, 'month', 'price_1RRXNtLMOPuguC73GyfxSC26', true),
-('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true)
-ON CONFLICT (name) DO UPDATE SET 
-  description = EXCLUDED.description,
-  price = EXCLUDED.price,
-  interval = EXCLUDED.interval,
-  stripe_price_id = EXCLUDED.stripe_price_id,
-  is_active = EXCLUDED.is_active;
+('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true);
 
 -- Clear existing legal documents to avoid duplicates
 DELETE FROM public.legal_documents;
@@ -68,10 +62,6 @@ INSERT INTO public.legal_documents (type, title, content, is_published, effectiv
 <p><em>Last updated: ' || to_char(now(), 'Month DD, YYYY') || '</em></p>',
   true,
   timezone('utc'::text, now())
-)
-ON CONFLICT (type, is_published) DO UPDATE SET 
-  title = EXCLUDED.title,
-  content = EXCLUDED.content,
-  effective_date = EXCLUDED.effective_date;
+);
 
 -- You can add other seed data for other tables here if needed 

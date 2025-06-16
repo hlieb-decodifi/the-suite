@@ -1008,6 +1008,9 @@ create trigger enforce_no_double_booking
 */
 
 -- Booking policies
+drop policy if exists "Clients can view their own bookings" on bookings;
+drop policy if exists "Professionals can view bookings for their profile" on bookings;
+
 create policy "Clients can view their own bookings"
   on bookings for select
   using (auth.uid() = client_id);
@@ -1022,15 +1025,10 @@ create policy "Professionals can view bookings for their profile"
     )
   );
 
-create policy "Clients can create their own bookings"
-  on bookings for insert
-  with check (auth.uid() = client_id);
-
-create policy "Clients can update their own bookings"
-  on bookings for update
-  using (auth.uid() = client_id);
-
 -- Appointment policies
+drop policy if exists "Clients can view their appointments" on appointments;
+drop policy if exists "Professionals can view appointments for their profile" on appointments;
+
 create policy "Clients can view their appointments"
   on appointments for select
   using (
@@ -1041,21 +1039,34 @@ create policy "Clients can view their appointments"
     )
   );
 
+-- Simplified professional appointment policy - remove the join
 create policy "Professionals can view appointments for their profile"
   on appointments for select
   using (
     exists (
-      select 1 from bookings
-      join professional_profiles on bookings.professional_profile_id = professional_profiles.id
-      where bookings.id = appointments.booking_id
-      and professional_profiles.user_id = auth.uid()
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = appointments.booking_id
+      and pp.user_id = auth.uid()
     )
   );
 
--- Add policy to allow clients to create appointments for their bookings
-create policy "Clients can create appointments for their bookings"
-  on appointments for insert
-  with check (
+-- Add missing policy to allow professionals to update appointment status
+create policy "Professionals can update appointments for their profile"
+  on appointments for update
+  using (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = appointments.booking_id
+      and pp.user_id = auth.uid()
+    )
+  );
+
+-- Add missing policy to allow clients to update their appointments (for cancellation)
+create policy "Clients can update their appointments"
+  on appointments for update
+  using (
     exists (
       select 1 from bookings
       where bookings.id = appointments.booking_id
@@ -1601,6 +1612,26 @@ create trigger legal_document_versioning_trigger
 create policy "Anyone can view published legal documents"
   on legal_documents for select
   using (is_published = true);
+
+-- Add missing booking policies
+create policy "Clients can create their own bookings"
+  on bookings for insert
+  with check (auth.uid() = client_id);
+
+create policy "Clients can update their own bookings"
+  on bookings for update
+  using (auth.uid() = client_id);
+
+-- Add missing appointment creation policy
+create policy "Clients can create appointments for their bookings"
+  on appointments for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = appointments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
 
 
 

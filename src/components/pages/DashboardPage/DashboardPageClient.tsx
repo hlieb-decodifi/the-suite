@@ -221,28 +221,30 @@ export function DashboardPageClient({
                     key={appointment.id}
                     className="p-3 bg-muted/30 rounded-lg"
                   >
-                    <div className="flex justify-between mb-1">
-                      <Typography className="font-medium">
-                        {serviceName}
-                      </Typography>
-                      <Typography className="font-medium">
-                        {formatCurrency(price)}
-                      </Typography>
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <CalendarIcon className="mr-1 h-3 w-3" />
-                      {appointment.start_time
-                        ? format(
-                            new Date(appointment.start_time),
-                            'MMM d, yyyy',
-                          )
-                        : 'No date'}
-                      <ClockIcon className="ml-2 mr-1 h-3 w-3" />
-                      {format(
-                        new Date(appointment.start_time || new Date()),
-                        'h:mm a',
-                      )}
-                    </div>
+                    <Link href={`/bookings/${appointment.id}`}>
+                      <div className="flex justify-between mb-1">
+                        <Typography className="font-medium">
+                          {serviceName}
+                        </Typography>
+                        <Typography className="font-medium">
+                          {formatCurrency(price)}
+                        </Typography>
+                      </div>
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <CalendarIcon className="mr-1 h-3 w-3" />
+                        {appointment.start_time
+                          ? format(
+                              new Date(appointment.start_time),
+                              'MMM d, yyyy',
+                            )
+                          : 'No date'}
+                        <ClockIcon className="ml-2 mr-1 h-3 w-3" />
+                        {format(
+                          new Date(appointment.start_time || new Date()),
+                          'h:mm a',
+                        )}
+                      </div>
+                    </Link>
                   </div>
                 );
               })
