@@ -535,8 +535,16 @@ export function ProfilePageClient({
   // Handle error state
   if (!profileData) {
     return (
-      <div className="p-4 border border-red-200 bg-red-50 rounded-md">
-        Error loading profile data. Please try again later.
+      <div className="p-4 border border-red-200 bg-red-50 rounded-md flex items-center gap-3">
+        <AlertCircle className="h-5 w-5 text-red-600" />
+        <div>
+          <Typography variant="h4" className="font-medium text-red-800">
+            Profile Unavailable
+          </Typography>
+          <Typography variant="p" className="text-red-600">
+            Error loading profile data. Please try again later.
+          </Typography>
+        </div>
       </div>
     );
   }

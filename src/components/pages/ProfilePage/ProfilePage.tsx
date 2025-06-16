@@ -1,7 +1,10 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { getProfessionalPaymentMethodsAction } from '@/server/domains/payment_methods/actions';
+import {
+  getProfessionalPaymentMethodsAction,
+  getProfessionalPaymentMethodsReadOnlyAction,
+} from '@/server/domains/payment_methods/actions';
 import { getProfileAction } from '@/server/domains/profiles/actions';
 import {
   toggleProfilePublishStatusInDb,
@@ -17,6 +20,7 @@ import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
 import { revalidatePath } from 'next/cache';
 import { redirect, RedirectType } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { ProfilePageClient } from './ProfilePageClient';
 import type { User } from '@supabase/supabase-js';
 
@@ -80,30 +84,65 @@ export async function ProfilePage({
   }
 
   // Fetch all data on the server
-  const profileData = await getProfileData(targetUserId);
+  try {
+    const profileData = await getProfileData(targetUserId, isEditable);
 
+    return (
+      <ProfilePageClient
+        user={user as User}
+        profileData={profileData.profile}
+        workingHours={profileData.workingHours}
+        timezone={profileData.timezone}
+        paymentMethods={profileData.paymentMethods}
+        portfolioPhotos={profileData.portfolioPhotos}
+        isEditable={isEditable}
+      />
+    );
+  } catch (error) {
+    // Handle specific RLS error for unpublished profiles
+    if (error instanceof Error && error.message === 'PROFILE_NOT_ACCESSIBLE') {
+      notFound();
+    }
+
+    // For other errors, re-throw or handle as needed
+    throw error;
+  }
+}
+
+// Helper function to check if an error is an RLS policy violation
+function isRLSError(error: string | undefined): boolean {
+  if (!error) return false;
   return (
-    <ProfilePageClient
-      user={user as User}
-      profileData={profileData.profile}
-      workingHours={profileData.workingHours}
-      timezone={profileData.timezone}
-      paymentMethods={profileData.paymentMethods}
-      portfolioPhotos={profileData.portfolioPhotos}
-      isEditable={isEditable}
-    />
+    error.includes('row-level security policy') ||
+    error.includes('42501') ||
+    error.includes('RLS') ||
+    error.includes('new row violates row-level security policy')
   );
 }
 
 // Server actions for this page
-export async function getProfileData(userId: string) {
+export async function getProfileData(
+  userId: string,
+  isEditable: boolean = true,
+) {
   try {
     // Fetch profile data
     const profileResult = await getProfileAction(userId);
     const profile =
       profileResult.success && profileResult.data ? profileResult.data : null;
 
-    // Fetch working hours with timezone
+    // If profile fetch failed, check if it's due to RLS policy (unpublished profile)
+    if (!profileResult.success && profileResult.error) {
+      // Check if the error is related to RLS policy violation
+      if (isRLSError(profileResult.error)) {
+        // This is an RLS error - the profile exists but is not published/accessible
+        throw new Error('PROFILE_NOT_ACCESSIBLE');
+      }
+      // For other errors, throw the original error
+      throw new Error(profileResult.error);
+    }
+
+    // Fetch working hours with timezone (silently handle RLS errors)
     const workingHoursResult = await getWorkingHoursAction(userId);
     const workingHours = workingHoursResult.success
       ? workingHoursResult.hours || []
@@ -112,18 +151,41 @@ export async function getProfileData(userId: string) {
       ? workingHoursResult.timezone || ''
       : '';
 
-    // Fetch payment methods
-    const paymentMethodsResult =
-      await getProfessionalPaymentMethodsAction(userId);
-    const paymentMethods = paymentMethodsResult.success
-      ? paymentMethodsResult.methods || []
-      : [];
+    // Fetch payment methods (use read-only action for public viewing to avoid RLS errors)
+    let paymentMethods: PaymentMethod[] = [];
+    try {
+      const paymentMethodsResult = isEditable
+        ? await getProfessionalPaymentMethodsAction(userId)
+        : await getProfessionalPaymentMethodsReadOnlyAction(userId);
+      paymentMethods = paymentMethodsResult.success
+        ? paymentMethodsResult.methods || []
+        : [];
+    } catch (paymentError) {
+      // Silently handle RLS errors for payment methods
+      if (paymentError instanceof Error && !isRLSError(paymentError.message)) {
+        console.error('Non-RLS error fetching payment methods:', paymentError);
+      }
+    }
 
-    // Fetch portfolio photos
-    const portfolioPhotosResult = await getPortfolioPhotos(userId);
-    const portfolioPhotos = portfolioPhotosResult.success
-      ? portfolioPhotosResult.photos || []
-      : [];
+    // Fetch portfolio photos (silently handle RLS errors)
+    let portfolioPhotos: PortfolioPhotoUI[] = [];
+    try {
+      const portfolioPhotosResult = await getPortfolioPhotos(userId);
+      portfolioPhotos = portfolioPhotosResult.success
+        ? portfolioPhotosResult.photos || []
+        : [];
+    } catch (portfolioError) {
+      // Silently handle RLS errors for portfolio photos
+      if (
+        portfolioError instanceof Error &&
+        !isRLSError(portfolioError.message)
+      ) {
+        console.error(
+          'Non-RLS error fetching portfolio photos:',
+          portfolioError,
+        );
+      }
+    }
 
     return {
       profile,
@@ -133,7 +195,16 @@ export async function getProfileData(userId: string) {
       portfolioPhotos,
     };
   } catch (error) {
-    console.error('Error fetching profile data:', error);
+    // Re-throw specific errors for handling in the calling component
+    if (error instanceof Error && error.message === 'PROFILE_NOT_ACCESSIBLE') {
+      throw error;
+    }
+
+    // Log non-RLS errors
+    if (error instanceof Error && !isRLSError(error.message)) {
+      console.error('Error fetching profile data:', error);
+    }
+
     return {
       profile: null,
       workingHours: [] as WorkingHoursEntry[],

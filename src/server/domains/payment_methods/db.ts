@@ -21,6 +21,29 @@ export async function getAvailablePaymentMethodsFromDb(): Promise<PaymentMethod[
 }
 
 /**
+ * Get the professional profile ID for a user (read-only, no auto-creation)
+ */
+export async function getProfessionalProfileIdReadOnly(userId: string): Promise<string | null> {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from('professional_profiles')
+    .select('id')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !data) {
+    // Don't log RLS errors for unpublished profiles 
+    if (error?.code !== '42501' && !error?.message?.includes('row-level security policy')) {
+      console.error('Error fetching professional profile ID (read-only):', error);
+    }
+    return null;
+  }
+  
+  return data.id;
+}
+
+/**
  * Get the professional profile ID for a user
  */
 export async function getProfessionalProfileId(userId: string): Promise<string> {
@@ -75,6 +98,43 @@ export async function getProfessionalProfileId(userId: string): Promise<string> 
   }
   
   return data.id;
+}
+
+/**
+ * Fetch the payment methods accepted by a specific professional (read-only, for public viewing).
+ */
+export async function getProfessionalPaymentMethodsFromDbReadOnly(userId: string): Promise<PaymentMethod[]> {
+  const supabase = await createClient();
+  
+  try {
+    // Get professional profile ID (read-only, no auto-creation)
+    const professionalProfileId = await getProfessionalProfileIdReadOnly(userId);
+    
+    if (!professionalProfileId) {
+      return []; // Profile not found or not accessible, return empty array
+    }
+    
+    // Fetch linked payment methods using the junction table
+    const { data, error } = await supabase
+      .from('professional_payment_methods')
+      .select('payment_methods (*)')
+      .eq('professional_profile_id', professionalProfileId);
+
+    if (error) {
+      // Don't log RLS errors for unpublished profiles
+      if (error.code !== '42501' && !error.message?.includes('row-level security policy')) {
+        console.error('Error fetching professional payment methods (read-only):', error);
+      }
+      return []; // Return empty array for any error including RLS violations
+    }
+
+    // Extract the payment method data from the join result
+    const acceptedMethods = data?.map(item => item.payment_methods).filter(Boolean) as PaymentMethod[];
+    return acceptedMethods;
+  } catch {
+    // Silently handle all errors for read-only access
+    return [];
+  }
 }
 
 /**

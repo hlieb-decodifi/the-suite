@@ -5,6 +5,7 @@ import { PaymentMethod, UpdateProfessionalPaymentMethodsPayload } from '@/types/
 import { 
   getAvailablePaymentMethodsFromDb,
   getProfessionalPaymentMethodsFromDb,
+  getProfessionalPaymentMethodsFromDbReadOnly,
   updateProfessionalPaymentMethodsInDb
 } from './db';
 import { onSubscriptionChangeAction } from '@/server/domains/stripe-services';
@@ -56,6 +57,23 @@ export async function getProfessionalPaymentMethodsAction(userId: string): Promi
     const message = error instanceof Error ? error.message : 'An unexpected server error occurred.';
     console.error('Server error fetching professional payment methods:', message);
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Server Action: Fetch the payment methods accepted by a specific professional (read-only, for public viewing).
+ */
+export async function getProfessionalPaymentMethodsReadOnlyAction(userId: string): Promise<{
+  success: boolean;
+  methods?: PaymentMethod[];
+  error?: string;
+}> {
+  try {
+    const data = await getProfessionalPaymentMethodsFromDbReadOnly(userId);
+    return { success: true, methods: data };
+  } catch {
+    // For read-only access, we silently handle errors and return empty array
+    return { success: true, methods: [] };
   }
 }
 
