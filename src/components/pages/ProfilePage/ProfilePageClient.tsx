@@ -42,6 +42,7 @@ import {
   PaymentMethodsForm,
   PaymentMethodsFormValues,
 } from '@/components/forms/PaymentMethodsForm';
+import { useProfile } from '@/api/profiles/hooks';
 
 const phoneUtil = PhoneNumberUtil.getInstance();
 
@@ -406,6 +407,10 @@ function InlinePaymentMethodsSection({
     error: acceptedError,
   } = useProfessionalPaymentMethods(user.id);
 
+  // Fetch profile data to check if profile is published
+  const { data: profileData } = useProfile(user.id);
+  const isPublished = profileData?.isPublished ?? false;
+
   // Setup mutation for updating payment methods
   const updatePaymentMethods = useUpdateProfessionalPaymentMethods();
 
@@ -497,6 +502,7 @@ function InlinePaymentMethodsSection({
             onSubmitSuccess={handleSave}
             onCancel={handleCancel}
             isSubmitting={updatePaymentMethods.isPending}
+            isPublished={isPublished}
           />
         ) : (
           <div className="space-y-2">

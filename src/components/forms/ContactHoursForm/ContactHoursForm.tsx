@@ -48,7 +48,7 @@ export const ContactHoursForm = forwardRef<
     <Form {...form}>
       <form ref={ref} onSubmit={form.handleSubmit(handleFormSubmit)} noValidate>
         {/* Working Hours - Table Layout */}
-        <div>
+        <div className="space-y-2">
           {/* Data Rows */}
           {fields.map((item, index) => {
             const dayName = item.day;

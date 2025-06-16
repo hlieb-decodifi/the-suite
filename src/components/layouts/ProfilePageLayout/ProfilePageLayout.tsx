@@ -2,9 +2,13 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { getStripeConnectStatus as domainGetStripeConnectStatus } from '@/server/domains/subscriptions/actions';
+import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
+import { getProfessionalPaymentMethodsAction } from '@/server/domains/payment_methods/actions';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { ProfilePageLayoutClient } from './ProfilePageLayoutClient';
+import type { WorkingHoursEntry } from '@/types/working_hours';
+import type { PaymentMethod } from '@/types/payment_methods';
 
 export type UserData = {
   id: string;
@@ -23,6 +27,11 @@ export type UserData = {
         cancelAtPeriodEnd?: boolean;
       }
     | undefined;
+};
+
+export type ProfileValidationData = {
+  workingHours: WorkingHoursEntry[];
+  paymentMethods: PaymentMethod[];
 };
 
 export type ProfilePageLayoutProps = {
@@ -63,12 +72,16 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
     }
   }
 
+  // Fetch validation data (working hours and payment methods)
+  const validationData = await getValidationData(user.id);
+
   return (
     <div className="w-full mx-auto">
       <ProfilePageLayoutClient
         user={user}
         userData={userData}
         connectStatus={connectStatus}
+        validationData={validationData}
       >
         {children}
       </ProfilePageLayoutClient>
@@ -198,6 +211,36 @@ export async function getUserData(userId: string): Promise<UserData> {
   } catch (error) {
     console.error('Error in getUserData:', error);
     throw new Error('Failed to get user data');
+  }
+}
+
+export async function getValidationData(
+  userId: string,
+): Promise<ProfileValidationData> {
+  try {
+    // Fetch working hours
+    const workingHoursResult = await getWorkingHoursAction(userId);
+    const workingHours = workingHoursResult.success
+      ? workingHoursResult.hours || []
+      : [];
+
+    // Fetch payment methods
+    const paymentMethodsResult =
+      await getProfessionalPaymentMethodsAction(userId);
+    const paymentMethods = paymentMethodsResult.success
+      ? paymentMethodsResult.methods || []
+      : [];
+
+    return {
+      workingHours,
+      paymentMethods,
+    };
+  } catch (error) {
+    console.error('Error fetching validation data:', error);
+    return {
+      workingHours: [],
+      paymentMethods: [],
+    };
   }
 }
 
