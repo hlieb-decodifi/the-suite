@@ -45,7 +45,7 @@ export function ProfessionalsTemplateProfessionalCard({
     .slice(0, 2);
 
   return (
-    <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 border-border">
+    <Card className="flex flex-col justify-between group relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 border-border">
       <CardContent className="p-6">
         {/* Header with Avatar and Basic Info */}
         <div className="mb-4 flex items-start space-x-4">
@@ -67,7 +67,7 @@ export function ProfessionalsTemplateProfessionalCard({
               {isSubscribed && (
                 <Badge
                   variant="secondary"
-                  className="bg-primary/10 text-primary text-xs"
+                  className="bg-primary/10 hover:bg-primary/20 text-primary text-xs"
                 >
                   Pro
                 </Badge>
@@ -137,7 +137,7 @@ export function ProfessionalsTemplateProfessionalCard({
         <Link href={`/professionals/${userId}`} className="w-full">
           <Button
             variant="outline"
-            className="w-full font-futura font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+            className="w-full border-primary text-primary font-futura font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
           >
             View Profile
           </Button>
