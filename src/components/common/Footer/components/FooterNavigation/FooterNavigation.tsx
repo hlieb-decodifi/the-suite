@@ -39,16 +39,6 @@ export function FooterNavigation({ className }: FooterNavigationProps) {
             </Link>
           </li>
           <li>
-            <Link href="/blog" className="text-foreground hover:text-primary">
-              Blog
-            </Link>
-          </li>
-          <li>
-            <Link href="/faq" className="text-foreground hover:text-primary">
-              FAQ
-            </Link>
-          </li>
-          <li>
             <Link
               href="/contact"
               className="text-foreground hover:text-primary"

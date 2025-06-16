@@ -29,11 +29,14 @@ export function Footer({ className }: FooterProps) {
           </Typography>
 
           <div className="flex gap-6">
-            <Link href="/terms" className="text-foreground hover:text-primary">
+            <Link
+              href="/terms-and-conditions"
+              className="text-foreground hover:text-primary"
+            >
               Terms & Conditions
             </Link>
             <Link
-              href="/privacy"
+              href="/privacy-policy"
               className="text-foreground hover:text-primary"
             >
               Privacy Policy

@@ -1529,3 +1529,78 @@ create policy "Users can insert attachments in their conversations"
 create trigger handle_updated_at before update on public.message_attachments
   for each row execute procedure moddatetime (updated_at);
 
+/**
+* LEGAL DOCUMENTS
+* Tables for storing Terms & Conditions, Privacy Policy, and other legal documents
+*/
+
+/**
+* LEGAL_DOCUMENTS
+* Stores legal documents with versioning support
+*/
+create table legal_documents (
+  id uuid primary key default uuid_generate_v4(),
+  type text not null check (type in ('terms_and_conditions', 'privacy_policy')),
+  title text not null,
+  content text not null,
+  version integer not null default 1,
+  is_published boolean default false not null,
+  effective_date timestamp with time zone,
+  created_by uuid references users, -- For admin tracking (optional)
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure only one published document per type at a time
+  constraint unique_published_per_type unique (type, is_published) deferrable initially deferred
+);
+alter table legal_documents enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_legal_documents_type on legal_documents(type);
+create index if not exists idx_legal_documents_published on legal_documents(type, is_published) where is_published = true;
+
+-- Function to handle version increment when creating new versions
+create or replace function handle_legal_document_versioning()
+returns trigger as $$
+begin
+  -- If creating a new document for an existing type, increment version
+  if tg_op = 'INSERT' then
+    select coalesce(max(version), 0) + 1 into new.version
+    from legal_documents
+    where type = new.type;
+    
+    -- If setting as published, unpublish all other documents of the same type
+    if new.is_published = true then
+      update legal_documents
+      set is_published = false, updated_at = timezone('utc'::text, now())
+      where type = new.type and id != new.id;
+    end if;
+  end if;
+  
+  -- If updating to published, unpublish all other documents of the same type
+  if tg_op = 'UPDATE' and new.is_published = true and old.is_published = false then
+    update legal_documents
+    set is_published = false, updated_at = timezone('utc'::text, now())
+    where type = new.type and id != new.id;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger for legal document versioning
+create trigger legal_document_versioning_trigger
+  before insert or update on legal_documents
+  for each row
+  execute function handle_legal_document_versioning();
+
+/**
+* RLS policies for legal documents
+*/
+
+-- Anyone can view published legal documents
+create policy "Anyone can view published legal documents"
+  on legal_documents for select
+  using (is_published = true);
+
+
+
