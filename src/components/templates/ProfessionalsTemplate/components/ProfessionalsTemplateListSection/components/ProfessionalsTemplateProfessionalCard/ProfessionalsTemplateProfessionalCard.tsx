@@ -137,7 +137,7 @@ export function ProfessionalsTemplateProfessionalCard({
         <Link href={`/professionals/${userId}`} className="w-full">
           <Button
             variant="outline"
-            className="w-full border-primary text-primary font-futura font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+            className="w-full font-futura font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
           >
             View Profile
           </Button>
