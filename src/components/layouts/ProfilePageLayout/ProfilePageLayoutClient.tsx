@@ -150,7 +150,7 @@ export function ProfilePageLayoutClient({
 
   const handlePreview = () => {
     // Navigate to the public profile view in the same tab
-    window.location.href = `/professional/${user.id}`;
+    window.location.href = `/professionals/${user.id}`;
   };
 
   const isSubscribed = optimisticUserData.subscriptionStatus === true;

@@ -159,7 +159,7 @@ export function BookingPageClient({
         <Card
           className="cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() =>
-            router.push(`/professional/${service.professional.id}`)
+            router.push(`/professionals/${service.professional.id}`)
           }
         >
           <CardContent className="p-6">

@@ -11,7 +11,7 @@ export function MobileNavLinks({ onItemClick }: MobileNavLinksProps) {
   const links = [
     { href: '/', label: 'Home' },
     { href: '/services', label: 'Services' },
-    { href: '/specialists', label: 'Specialists' },
+    { href: '/professionals', label: 'Professionals' },
     { href: '/about', label: 'About Us' },
     { href: '/contact', label: 'Contact' },
   ];

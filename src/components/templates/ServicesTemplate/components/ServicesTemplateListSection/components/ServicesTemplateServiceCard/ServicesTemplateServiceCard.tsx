@@ -33,7 +33,7 @@ export function ServicesTemplateServiceCard({
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
 
   // Build the professional profile URL
-  const professionalProfileUrl = `/professional/${professional.id}`;
+  const professionalProfileUrl = `/professionals/${professional.id}`;
 
   // Determine if the Book Now button should be shown
   const shouldShowBookButton =
