@@ -29,24 +29,22 @@ export async function ProfessionalsTemplate({
   );
 
   return (
-    <div className="w-full mx-auto">
-      <div className="py-8 space-y-8">
-        {/* Page Header */}
-        <ProfessionalsTemplateHeader searchTerm={searchTerm} />
+    <div className="w-full mx-auto space-y-8">
+      {/* Page Header */}
+      <ProfessionalsTemplateHeader searchTerm={searchTerm} />
 
-        {/* Main Content Area */}
-        <Suspense
-          fallback={
-            <div className="text-center py-10">Loading professionals...</div>
-          }
-        >
-          <ClientProfessionalsContainer
-            initialProfessionals={professionals}
-            initialPagination={pagination}
-            initialSearchTerm={searchTerm}
-          />
-        </Suspense>
-      </div>
+      {/* Main Content Area */}
+      <Suspense
+        fallback={
+          <div className="text-center py-10">Loading professionals...</div>
+        }
+      >
+        <ClientProfessionalsContainer
+          initialProfessionals={professionals}
+          initialPagination={pagination}
+          initialSearchTerm={searchTerm}
+        />
+      </Suspense>
     </div>
   );
 }
