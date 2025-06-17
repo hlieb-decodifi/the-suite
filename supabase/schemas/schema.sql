@@ -392,6 +392,10 @@ create policy "Anyone can view published professional profiles"
   on professional_profiles for select
   using (is_published = true);
 
+create policy "Professionals can create their own profile"
+  on professional_profiles for insert
+  with check (auth.uid() = user_id);
+
 -- RLS policies for client profiles
 create policy "Clients can view and update their own profile"
   on client_profiles for select
