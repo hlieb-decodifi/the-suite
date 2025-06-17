@@ -2,7 +2,14 @@
 
 import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
-import { Eye, EyeOff, LayoutDashboard, AlertTriangle, X } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  LayoutDashboard,
+  AlertTriangle,
+  X,
+  MessageCircle,
+} from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProfile } from '@/api/profiles/hooks';
 import { User } from '@supabase/supabase-js';
@@ -16,6 +23,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/utils';
+import { createOrGetConversation } from '@/server/domains/messages/actions';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/use-toast';
 
 // Type for ProfilePageHeader props
 export type ProfilePageHeaderProps = {
@@ -34,6 +44,9 @@ export type ProfilePageHeaderProps = {
     accountId?: string;
     connectStatus?: string;
   } | null;
+  allowMessages?: boolean;
+  isCurrentUserClient?: boolean;
+  professionalId?: string;
 };
 
 export function ProfilePageHeader({
@@ -48,8 +61,14 @@ export function ProfilePageHeader({
   user,
   isSubscribed = false,
   connectStatus = null,
+  allowMessages = false,
+  isCurrentUserClient = false,
+  professionalId,
 }: ProfilePageHeaderProps) {
   const [showBlockingDialog, setShowBlockingDialog] = useState(false);
+  const [isMessageLoading, setIsMessageLoading] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
   // Fetch profile data if we have a user ID
   const { data: profileData, isFetching: isProfileLoading } = useProfile(
@@ -95,6 +114,42 @@ export function ProfilePageHeader({
       onPreview();
     }
   };
+
+  const handleMessageClick = async () => {
+    if (!professionalId) return;
+
+    setIsMessageLoading(true);
+    try {
+      const result = await createOrGetConversation(professionalId);
+      if (result.success && result.conversation) {
+        // Redirect to dashboard messages with the conversation
+        router.push(
+          `/dashboard/messages?conversation=${result.conversation.id}`,
+        );
+      } else {
+        console.error('Failed to create conversation:', result.error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description:
+            result.error ||
+            'Failed to create conversation. Please try again later.',
+        });
+      }
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create conversation. Please try again later.',
+      });
+    } finally {
+      setIsMessageLoading(false);
+    }
+  };
+
+  // Show message button if professional allows messages and current user is a client
+  const showMessageButton =
+    isPublicView && allowMessages && isCurrentUserClient && professionalId;
 
   return (
     <>
@@ -162,17 +217,30 @@ export function ProfilePageHeader({
             )}
           </div>
         )}
-        {/* Close Preview Button for Public View */}
-        {isPublicView && onClosePreview && (
+        {/* Message Button and Close Preview for Public View */}
+        {isPublicView && (
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              className="bg-background flex items-center gap-1.5"
-              onClick={onClosePreview}
-            >
-              <X className="h-4 w-4" />
-              Close Preview
-            </Button>
+            {showMessageButton && (
+              <Button
+                variant="default"
+                className="flex items-center gap-1.5"
+                onClick={handleMessageClick}
+                disabled={isMessageLoading}
+              >
+                <MessageCircle className="h-4 w-4" />
+                {isMessageLoading ? 'Loading...' : 'Message'}
+              </Button>
+            )}
+            {onClosePreview && (
+              <Button
+                variant="outline"
+                className="bg-background flex items-center gap-1.5"
+                onClick={onClosePreview}
+              >
+                <X className="h-4 w-4" />
+                Close Preview
+              </Button>
+            )}
           </div>
         )}
       </div>

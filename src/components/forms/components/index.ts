@@ -17,3 +17,6 @@ export { AddressSearchField } from './AddressSearchField';
 
 export { FormError } from './FormError';
 export type { FormErrorProps } from './FormError';
+
+export { GoogleOAuthButton } from './GoogleOAuthButton';
+export type { GoogleOAuthButtonProps } from './GoogleOAuthButton';

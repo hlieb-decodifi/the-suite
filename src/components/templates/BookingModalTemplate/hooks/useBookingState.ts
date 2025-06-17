@@ -13,7 +13,8 @@ import { useAvailableDates } from './useAvailableDates';
 import { useAvailableTimeSlots } from './useAvailableTimeSlots';
 import { createBookingWithStripePayment } from '@/server/domains/stripe-payments/actions';
 import { format } from 'date-fns';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { getUserTimezone } from '@/utils/timezone';
 
 export type BookingModalProps = {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export type BookingModalProps = {
 };
 
 /**
- * Custom hook to manage booking states and data fetching
+ * Custom hook to manage booking states and data fetching with timezone awareness
  */
 export function useBookingState(props: BookingModalProps) {
   const { 
@@ -45,19 +46,52 @@ export function useBookingState(props: BookingModalProps) {
   const professional = service.professional;
   const professionalProfileId = professional.profile_id || '';
   
-  // Fetch available dates
+  // Get client's timezone
+  const clientTimezone = getUserTimezone();
+  
+  // Fetch professional's timezone using profile_id
+  const { 
+    data: professionalTimezone = 'UTC',
+    isLoading: isLoadingTimezone
+  } = useQuery({
+    queryKey: ['professionalTimezone', professionalProfileId],
+    queryFn: async () => {
+      // Fetch timezone directly from professional_profiles table
+      const supabase = await import('@/lib/supabase/client').then(m => m.createClient());
+      const { data, error } = await supabase
+        .from('professional_profiles')
+        .select('timezone')
+        .eq('id', professionalProfileId)
+        .single();
+      
+      if (error || !data) {
+        return 'UTC';
+      }
+      
+      return data.timezone || 'UTC';
+    },
+    enabled: Boolean(professionalProfileId) && isOpen,
+    staleTime: 1000 * 60 * 10, // 10 minutes
+  });
+  
+  // Fetch available dates with timezone context
   const { 
     data: availableDays = [],
     refetch: refetchAvailableDays,
     isPending: isLoadingCalendar
-  } = useAvailableDates(professionalProfileId, isOpen);
+  } = useAvailableDates(
+    professionalProfileId,
+    professionalTimezone,
+    clientTimezone,
+    isOpen && !isLoadingTimezone
+  );
 
   // Fetch available time slots when a date is selected
   const formattedDate = useMemo(() => 
     selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null
   , [selectedDate]);
 
-  // Use the memoized formatted date for the API call
+  // Use the memoized formatted date for the API call with timezone context
   const { 
     data: availableTimeSlots = [], 
     isLoading: isLoadingTimeSlots,
@@ -65,7 +99,9 @@ export function useBookingState(props: BookingModalProps) {
   } = useAvailableTimeSlots(
     professionalProfileId,
     formattedDate,
-    isOpen && Boolean(selectedDate)
+    professionalTimezone,
+    clientTimezone,
+    isOpen && Boolean(selectedDate) && !isLoadingTimezone
   );
 
   // Use React Query to fetch payment methods
@@ -145,6 +181,9 @@ export function useBookingState(props: BookingModalProps) {
       queryClient.invalidateQueries({ 
         queryKey: ['availableDates', professionalProfileId]
       });
+      queryClient.invalidateQueries({ 
+        queryKey: ['professionalTimezone', professionalProfileId]
+      });
       
       // Explicit refetch of data
       refetchAvailableDays();
@@ -194,6 +233,8 @@ export function useBookingState(props: BookingModalProps) {
     handleDateSelect,
     selectedDate,
     isLoadingTimeSlots,
-    isLoadingCalendar
+    isLoadingCalendar: isLoadingCalendar || isLoadingTimezone,
+    professionalTimezone,
+    clientTimezone
   };
 } 

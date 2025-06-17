@@ -36,17 +36,29 @@ export async function ProfessionalPageLayout({
     notFound();
   }
 
-  // Check if the current user is viewing their own profile
+  // Check if the current user is viewing their own profile and get user role
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const isOwnProfile = user?.id === profileId;
+
+  // Check if current user is a client (for showing message button)
+  let isCurrentUserClient = false;
+  if (user && !isOwnProfile) {
+    const { data: isClient } = await supabase.rpc('is_client', {
+      user_uuid: user.id,
+    });
+    isCurrentUserClient = !!isClient;
+  }
 
   return (
     <div className="w-full mx-auto">
       <ProfessionalPageLayoutClient
         profileId={profileId}
         isOwnProfile={isOwnProfile}
+        allowMessages={profile.allow_messages}
+        isCurrentUserClient={isCurrentUserClient}
+        professionalName={`${profile.users.first_name} ${profile.users.last_name}`}
       >
         {children}
       </ProfessionalPageLayoutClient>

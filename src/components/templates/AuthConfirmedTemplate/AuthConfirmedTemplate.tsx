@@ -10,17 +10,65 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { CheckCircledIcon } from '@radix-ui/react-icons';
+import { CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 export function AuthConfirmedTemplate() {
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const searchParams = useSearchParams();
+  
+  const verified = searchParams.get('verified') === 'true';
+  const error = searchParams.get('error');
 
   const handleLoginClick = () => {
     setIsSignInModalOpen(true);
   };
 
+  // Error states
+  if (!verified || error) {
+    let errorTitle = 'Authentication Failed';
+    let errorDescription = 'There was an issue with your authentication.';
+    
+    if (error === 'user_not_found') {
+      errorTitle = 'Account Not Found';
+      errorDescription = 'No account found with this email. Please sign up first or use the correct account.';
+    } else if (error === 'invalid_role') {
+      errorTitle = 'Invalid Role';
+      errorDescription = 'The selected role is invalid. Please try again.';
+    }
+
+    return (
+      <div className="container flex flex-col items-center justify-center px-4">
+        <Card className="w-full max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="h-12 w-12 bg-destructive/10 rounded-full flex items-center justify-center">
+                <CrossCircledIcon className="h-6 w-6 text-destructive" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl">{errorTitle}</CardTitle>
+            <CardDescription className="mt-2">
+              {errorDescription}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground">
+              Please try again or contact support if the problem persists.
+            </p>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-2">
+            <Button asChild className="w-full">
+              <Link href="/">Return to Home</Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // Success state
   return (
     <>
       <div className="container flex flex-col items-center justify-center px-4">

@@ -14,6 +14,7 @@ import { toast } from '@/components/ui/use-toast';
 import { updateWorkingHoursAction } from '@/server/domains/working_hours/actions';
 import { WorkingHoursEntry } from '@/types/working_hours';
 import { formatTime } from '@/utils';
+import { getUserTimezone } from '@/utils/timezone';
 
 // Helper function to safely format time strings that might be null
 function safeFormatTime(timeString: string | null): string {
@@ -25,41 +26,19 @@ function safeFormatTime(timeString: string | null): string {
   return localTime ? formatTime(localTime) : 'Invalid Time';
 }
 
-// Update component props type
-export type ContactSectionProps = {
+// Updated props to include timezone
+type ContactSectionProps = {
   user: User;
   workingHours: WorkingHoursEntry[] | null;
+  timezone?: string;
   isLoading: boolean;
   isEditable?: boolean;
-};
-
-// Helper to format form values back to display string
-const formatHoursForDisplay = (
-  hours: WorkingHoursEntry, // Use WorkingHoursEntry type
-): string => {
-  // Check for enabled and valid times upfront
-  if (!hours.enabled || !hours.startTime || !hours.endTime) {
-    return 'Closed';
-  }
-
-  // Basic AM/PM formatting using our utility with null safety
-  const formattedStartTime = safeFormatTime(hours.startTime);
-  const formattedEndTime = safeFormatTime(hours.endTime);
-
-  // Handle potential invalid time results from formatTime
-  if (
-    formattedStartTime === 'Invalid Time' ||
-    formattedEndTime === 'Invalid Time'
-  ) {
-    return 'Invalid Time Range'; // Or handle error appropriately
-  }
-
-  return `${formattedStartTime} - ${formattedEndTime}`;
 };
 
 export function ContactSection({
   user,
   workingHours, // Use prop
+  timezone = '',
   isLoading, // Use prop
   isEditable = true,
 }: ContactSectionProps) {
@@ -68,6 +47,9 @@ export function ContactSection({
   const [localWorkingHours, setLocalWorkingHours] = useState<
     WorkingHoursEntry[] | null
   >(workingHours);
+
+  // Determine effective timezone: use DB timezone if set, otherwise use browser timezone
+  const effectiveTimezone = timezone || getUserTimezone();
 
   // Effect to sync prop changes to local state
   useEffect(() => {
@@ -78,37 +60,13 @@ export function ContactSection({
     setIsModalOpen(true);
   };
 
-  const handleSave = async (formData: ContactHoursFormValues) => {
+  const handleSave = async (
+    formData: ContactHoursFormValues & { timezone: string },
+  ) => {
     setIsSubmitting(true);
 
-    // Convert local times to UTC before saving
+    // Working hours are now stored with timezone information
     const hoursToSave: WorkingHoursEntry[] = formData.hours.map((h) => {
-      // Add logging to compare local time vs UTC time
-      if (h.enabled && h.startTime && h.endTime) {
-        console.log(`[Working Hours] Day: ${h.day}`);
-        console.log(
-          `[Working Hours] Local start time: ${h.startTime}, end time: ${h.endTime}`,
-        );
-
-        // const utcStartTime = convertToUTC(h.startTime);
-        const utcStartTime = h.startTime;
-        // const utcEndTime = convertToUTC(h.endTime);
-        const utcEndTime = h.endTime;
-
-        console.log(
-          `[Working Hours] UTC start time: ${utcStartTime}, end time: ${utcEndTime}`,
-        );
-        console.log('------');
-
-        return {
-          day: h.day,
-          enabled: h.enabled,
-          startTime: utcStartTime,
-          endTime: utcEndTime,
-        };
-      }
-
-      // If disabled or missing times, just pass through the values
       return {
         day: h.day,
         enabled: h.enabled ?? false,
@@ -117,68 +75,79 @@ export function ContactSection({
       };
     });
 
-    const result = await updateWorkingHoursAction(user.id, hoursToSave);
+    const result = await updateWorkingHoursAction(
+      user.id,
+      hoursToSave,
+      formData.timezone,
+    );
     setIsSubmitting(false);
 
     if (result.success) {
-      setLocalWorkingHours(hoursToSave); // Update local state optimistically or after fetch?
-      // Consider if parent needs to refetch or be notified
+      setLocalWorkingHours(hoursToSave);
       setIsModalOpen(false);
       toast({ description: 'Working hours updated successfully.' });
     } else {
       toast({
-        title: 'Error saving working hours',
-        description: result.error || 'Could not save working hours.',
         variant: 'destructive',
+        title: 'Error saving working hours',
+        description: result.error || 'An unexpected error occurred',
       });
     }
   };
 
   return (
     <>
-      <Card className="border border-border">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <Typography variant="h3" className="font-bold text-foreground">
-            Working Hours
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <Typography variant="h3">Contact Hours</Typography>
+            {isEditable && (
+              <Button variant="outline" size="sm" onClick={handleEditClick}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          <Typography variant="small" className="text-muted-foreground">
+            Timezone: {effectiveTimezone}
+            {!timezone && (
+              <span className="text-xs opacity-75">
+                {' '}
+                (detected from browser)
+              </span>
+            )}
           </Typography>
-          {isEditable && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleEditClick}
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              disabled={isLoading || !localWorkingHours}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          )}
         </CardHeader>
-        <CardContent className="pt-2">
+        <CardContent>
           {isLoading ? (
             <div className="space-y-2">
-              {Array.from({ length: 7 }).map((_, i) => (
-                <Skeleton key={i} className="h-5 w-full" />
+              {Array.from({ length: 7 }).map((_, index) => (
+                <div key={index} className="flex justify-between">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
               ))}
             </div>
-          ) : localWorkingHours ? (
+          ) : localWorkingHours && localWorkingHours.length > 0 ? (
             <div className="space-y-2">
-              {localWorkingHours.map((dayHours) => (
+              {localWorkingHours.map((day) => (
                 <div
-                  key={dayHours.day}
-                  className="flex justify-between text-sm"
+                  key={day.day}
+                  className="flex items-center justify-between py-1"
                 >
-                  <Typography variant="small" className="text-muted-foreground">
-                    {dayHours.day}
+                  <Typography variant="small" className="font-medium">
+                    {day.day}
                   </Typography>
-                  <Typography variant="small" className="text-foreground">
-                    {formatHoursForDisplay(dayHours)}
+                  <Typography variant="small" className="text-muted-foreground">
+                    {day.enabled && day.startTime && day.endTime
+                      ? `${safeFormatTime(day.startTime)} - ${safeFormatTime(day.endTime)}`
+                      : 'Closed'}
                   </Typography>
                 </div>
               ))}
             </div>
           ) : (
             <Typography variant="small" className="text-muted-foreground">
-              Could not load working hours.
+              No working hours set
             </Typography>
           )}
         </CardContent>
@@ -189,6 +158,7 @@ export function ContactSection({
         onOpenChange={setIsModalOpen}
         onSubmitSuccess={handleSave}
         defaultValues={localWorkingHours}
+        currentTimezone={timezone} // Pass the actual DB timezone (might be empty)
         isSubmitting={isSubmitting}
       />
     </>

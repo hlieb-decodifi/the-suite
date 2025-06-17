@@ -2,10 +2,11 @@
 
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/utils/formatCurrency';
 
 export type AppointmentType = {
   id: string;
@@ -19,6 +20,19 @@ export type AppointmentType = {
     description?: string;
     duration?: number;
     price?: number;
+    // Extended fields for service totals and additional services
+    totalPrice?: number;
+    totalDuration?: number;
+    totalWithServiceFee?: number;
+    hasAdditionalServices?: boolean;
+    additionalServicesCount?: number;
+    allServices?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      price: number;
+      duration: number;
+    }>;
   };
   professionals?: {
     id: string;
@@ -109,6 +123,12 @@ export function AppointmentItem({
           <Typography className="font-medium truncate">
             {appointment.services?.name || 'Appointment'}
           </Typography>
+          {appointment.services?.hasAdditionalServices && (
+            <Badge variant="outline" className="text-xs">
+              <Plus className="h-3 w-3 mr-1" />
+              {appointment.services.additionalServicesCount} more
+            </Badge>
+          )}
           {getStatusBadge()}
         </div>
         <Typography className="text-sm text-muted-foreground">
@@ -121,9 +141,23 @@ export function AppointmentItem({
             {format(endDate, 'h:mm a')}
           </span>
         </div>
+        {/* Show pricing */}
+        {appointment.services && (
+          <div className="mt-2 text-sm">
+            {/* Show total including service fee for both professionals and clients */}
+            <Typography className="font-medium text-primary">
+              {formatCurrency(
+                appointment.services.totalWithServiceFee ||
+                  (appointment.services.totalPrice ||
+                    appointment.services.price ||
+                    0) + 1.0,
+              )}
+            </Typography>
+          </div>
+        )}
       </div>
       {showDetails && (
-        <Link href={`/dashboard/appointments/${appointment.id}`}>
+        <Link href={`/bookings/${appointment.id}`}>
           <Button variant="outline" size="sm">
             View Details
           </Button>

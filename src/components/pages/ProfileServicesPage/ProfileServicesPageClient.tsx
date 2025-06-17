@@ -5,8 +5,9 @@ import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Clock, Pencil, Trash2 } from 'lucide-react';
-import { ServiceUI } from '@/types/services';
+import { Plus, Clock, Pencil, Trash2, Copy, Calendar } from 'lucide-react';
+import Link from 'next/link';
+import { ServiceUI, ServiceLimitInfo } from '@/types/services';
 import { cn } from '@/utils/cn';
 import { ExpandableText } from '@/components/common/ExpandableText/ExpandableText';
 import { ServiceModal } from '@/components/modals/ServiceModal';
@@ -30,6 +31,7 @@ export type ProfileServicesPageClientProps = {
   };
   initialSearch: string;
   isEditable?: boolean;
+  serviceLimitInfo?: ServiceLimitInfo | null;
 };
 
 // ServiceCard component
@@ -37,18 +39,22 @@ function ServiceCard({
   service,
   onEdit,
   onDelete,
+  onDuplicate,
   isUpdating = false,
   isBeingEdited = false,
   isEditable = true,
   isDeletable = true,
+  isAtLimit = false,
 }: {
   service: ServiceUI;
   onEdit: (service: ServiceUI) => void;
   onDelete: () => void;
+  onDuplicate?: (service: ServiceUI) => void;
   isUpdating?: boolean;
   isBeingEdited?: boolean;
   isEditable?: boolean;
   isDeletable?: boolean;
+  isAtLimit?: boolean;
 }) {
   return (
     <Card
@@ -67,7 +73,7 @@ function ServiceCard({
       )}
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1">
             <Typography
               variant="large"
               className="font-semibold text-foreground"
@@ -89,31 +95,67 @@ function ServiceCard({
               </div>
             </div>
           </div>
-          <div className="flex space-x-1">
-            {isEditable && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-8 w-8',
-                  isBeingEdited ? 'text-primary' : 'text-muted-foreground',
-                )}
-                onClick={() => onEdit(service)}
-                disabled={isUpdating}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
+          <div className="flex items-center space-x-2 ml-4">
+            {/* Booking button for client view */}
+            {!isEditable && (
+              <Link href={`/booking/${service.id}`}>
+                <Button>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Book Now
+                </Button>
+              </Link>
             )}
-            {isDeletable && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={onDelete}
-                disabled={isUpdating}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+
+            {/* Edit controls for professional view */}
+            {isEditable && (
+              <div className="flex space-x-1">
+                {onDuplicate && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-8 w-8',
+                      isAtLimit
+                        ? 'text-muted-foreground/50 cursor-not-allowed'
+                        : 'text-muted-foreground',
+                    )}
+                    onClick={() => onDuplicate(service)}
+                    disabled={isUpdating || isAtLimit}
+                    title={
+                      isAtLimit
+                        ? 'Cannot duplicate - service limit reached'
+                        : 'Duplicate service'
+                    }
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-8 w-8',
+                    isBeingEdited ? 'text-primary' : 'text-muted-foreground',
+                  )}
+                  onClick={() => onEdit(service)}
+                  disabled={isUpdating}
+                  title="Edit service"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                {isDeletable && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={onDelete}
+                    disabled={isUpdating}
+                    title="Delete service"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -136,13 +178,21 @@ function InlineServiceForm({
   onSubmitSuccess,
   editingService,
   onCancel,
+  serviceLimitInfo,
 }: {
   onSubmitSuccess: (data: ServiceFormValues & { id?: string }) => void;
   editingService: ServiceUI | null;
   onCancel: () => void;
+  serviceLimitInfo?: ServiceLimitInfo | null;
 }) {
-  const isEditMode = !!editingService;
+  const isEditMode = !!editingService?.id; // Only true edit mode if service has an ID
+  const isDuplicateMode = !!editingService && !editingService.id; // Has service data but no ID
   const [submitCount, setSubmitCount] = useState(0);
+
+  // Get service limit info
+  const maxServices = serviceLimitInfo?.maxServices || 50;
+  const currentCount = serviceLimitInfo?.currentCount || 0;
+  const remaining = serviceLimitInfo?.remaining || maxServices - currentCount;
 
   const defaultValues = editingService
     ? {
@@ -167,19 +217,48 @@ function InlineServiceForm({
 
   const formKey = isEditMode
     ? `edit-${editingService.id}`
-    : `new-service-${submitCount}`;
+    : isDuplicateMode
+      ? `duplicate-${editingService.name}-${submitCount}`
+      : `new-service-${submitCount}`;
+
+  // Determine the form title
+  const getFormTitle = () => {
+    if (isEditMode) return 'Edit service';
+    if (isDuplicateMode) return 'Duplicate service';
+    return 'Add new service';
+  };
 
   return (
-    <Card className="border border-muted bg-background h-full">
+    <Card
+      className={cn(
+        'border bg-background h-full',
+        isEditMode || isDuplicateMode
+          ? 'border-primary ring-1 ring-primary/20 shadow-sm'
+          : 'border-muted',
+      )}
+    >
       <CardContent className="p-6">
-        <Typography variant="h3" className="font-semibold mb-6">
-          {isEditMode ? 'Edit service' : 'Add new service'}
-        </Typography>
+        <div className="mb-4">
+          <Typography variant="h3" className="font-semibold">
+            {getFormTitle()}
+          </Typography>
+        </div>
+
+        {/* Warning for new services when close to limit */}
+        {!isEditMode && remaining > 0 && remaining <= 3 && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+            <Typography variant="small" className="text-amber-800">
+              {remaining === 1
+                ? "This will be your last service. You'll reach the limit after saving."
+                : `Only ${remaining} services remaining before reaching your limit.`}
+            </Typography>
+          </div>
+        )}
 
         <div key={formKey}>
           <ServiceForm
             onSubmitSuccess={handleFormSubmitSuccess}
-            {...(isEditMode ? { onCancel } : {})}
+            {...(isEditMode || isDuplicateMode ? { onCancel } : {})}
             defaultValues={defaultValues}
           />
         </div>
@@ -192,6 +271,7 @@ export function ProfileServicesPageClient({
   user,
   initialServices,
   isEditable = true,
+  serviceLimitInfo,
 }: ProfileServicesPageClientProps) {
   // State
   const [services, setServices] = useState<ServiceUI[]>(initialServices);
@@ -209,8 +289,9 @@ export function ProfileServicesPageClient({
   const { toast } = useToast();
 
   // Calculate remaining slots
-  const MAX_SERVICES = 50;
-  const remainingSlots = MAX_SERVICES - services.length;
+  const maxServices = serviceLimitInfo?.maxServices || 50;
+  const currentCount = serviceLimitInfo?.currentCount || services.length;
+  const isAtLimit = serviceLimitInfo?.isAtLimit || currentCount >= maxServices;
 
   // On mobile, open modal when editingService changes
   useEffect(() => {
@@ -221,6 +302,20 @@ export function ProfileServicesPageClient({
 
   // Service handlers
   const handleAddServiceClick = () => {
+    // Check if at limit before allowing service creation
+    if (isAtLimit) {
+      toast({
+        title: 'Service limit reached',
+        description: `You have reached the maximum limit of ${maxServices} services. ${
+          maxServices === 50
+            ? 'Contact support at support@thesuite.com to increase your limit.'
+            : 'Please delete an existing service first.'
+        }`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setEditingService(null);
     if (isMobile) {
       setIsServiceModalOpen(true);
@@ -244,6 +339,43 @@ export function ProfileServicesPageClient({
     if (!isEditable) return;
     setServiceToDelete(service);
     setIsConfirmDeleteOpen(true);
+  };
+
+  const handleDuplicateService = (service: ServiceUI) => {
+    if (!isEditable) return;
+
+    // Check if at limit before allowing service duplication
+    if (isAtLimit) {
+      toast({
+        title: 'Service limit reached',
+        description: `You have reached the maximum limit of ${maxServices} services. ${
+          maxServices === 50
+            ? 'Contact support at support@thesuite.com to increase your limit.'
+            : 'Please delete an existing service first.'
+        }`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Create a new service object with copied data but without ID
+    const duplicatedService: ServiceUI = {
+      ...service,
+      id: '', // Clear ID so it creates a new service
+      name: `${service.name} (Copy)`, // Add "(Copy)" suffix to name
+    };
+
+    // Set as editing service to open in form
+    setEditingService(duplicatedService);
+
+    if (isMobile) {
+      setIsServiceModalOpen(true);
+    }
+
+    toast({
+      title: 'Service duplicated',
+      description: `"${service.name}" has been duplicated. Make any changes and save.`,
+    });
   };
 
   const handleConfirmDeleteService = async () => {
@@ -308,8 +440,8 @@ export function ProfileServicesPageClient({
             description: `"${result.service.name}" has been updated successfully.`,
           });
         } else {
-          // Add new service
-          setServices((prev) => [...prev, result.service!]);
+          // Add new service at the top of the list
+          setServices((prev) => [result.service!, ...prev]);
           toast({
             title: 'Service added',
             description: `"${result.service.name}" has been added successfully.`,
@@ -356,7 +488,7 @@ export function ProfileServicesPageClient({
           <Button
             onClick={handleAddServiceClick}
             className="flex items-center gap-1"
-            disabled={remainingSlots <= 0 || isSubmittingService}
+            disabled={isAtLimit || isSubmittingService}
           >
             <Plus className="h-4 w-4" />
             Add Service
@@ -364,12 +496,32 @@ export function ProfileServicesPageClient({
         )}
       </div>
 
-      {remainingSlots <= 0 && isEditable && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800">
-          <Typography className="text-sm">
-            You have reached the maximum limit of {MAX_SERVICES} services. To
-            add a new service, please delete an existing one first.
+      {isAtLimit && isEditable && (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+          <Typography
+            variant="h5"
+            className="font-semibold text-amber-800 mb-2"
+          >
+            You've reached your service limit
           </Typography>
+          <div className="space-y-1">
+            <Typography variant="muted" className="text-amber-700">
+              You currently have {maxServices} services, which is your current
+              limit.
+            </Typography>
+            <Typography variant="muted" className="text-amber-700">
+              <>
+                To add more services, please reach out to our support team at{' '}
+                <a
+                  href="mailto:support@thesuite.com"
+                  className="font-medium text-amber-800 underline hover:no-underline"
+                >
+                  support@thesuite.com
+                </a>{' '}
+                and we'll be happy to help increase your limit.
+              </>
+            </Typography>
+          </div>
         </div>
       )}
 
@@ -383,12 +535,14 @@ export function ProfileServicesPageClient({
                 service={service}
                 onEdit={handleEditService}
                 onDelete={() => handleDeleteServiceClick(service)}
+                onDuplicate={handleDuplicateService}
                 isUpdating={
                   isSubmittingService && editingService?.id === service.id
                 }
                 isBeingEdited={editingService?.id === service.id}
                 isEditable={isEditable}
                 isDeletable={isEditable}
+                isAtLimit={isAtLimit}
               />
             ))}
           </div>
@@ -427,12 +581,14 @@ export function ProfileServicesPageClient({
                     service={service}
                     onEdit={handleEditService}
                     onDelete={() => handleDeleteServiceClick(service)}
+                    onDuplicate={handleDuplicateService}
                     isUpdating={
                       isSubmittingService && editingService?.id === service.id
                     }
                     isBeingEdited={editingService?.id === service.id}
                     isEditable={isEditable}
                     isDeletable={isEditable}
+                    isAtLimit={isAtLimit}
                   />
                 ))}
               </>
@@ -462,6 +618,7 @@ export function ProfileServicesPageClient({
                 onSubmitSuccess={handleServiceFormSubmitSuccess}
                 editingService={editingService}
                 onCancel={handleCancelEdit}
+                serviceLimitInfo={serviceLimitInfo || null}
               />
             </div>
           )}

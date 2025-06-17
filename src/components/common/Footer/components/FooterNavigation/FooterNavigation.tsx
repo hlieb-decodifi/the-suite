@@ -32,20 +32,10 @@ export function FooterNavigation({ className }: FooterNavigationProps) {
           </li>
           <li>
             <Link
-              href="/specialists"
+              href="/professionals"
               className="text-foreground hover:text-primary"
             >
-              Specialists
-            </Link>
-          </li>
-          <li>
-            <Link href="/blog" className="text-foreground hover:text-primary">
-              Blog
-            </Link>
-          </li>
-          <li>
-            <Link href="/faq" className="text-foreground hover:text-primary">
-              FAQ
+              Professionals
             </Link>
           </li>
           <li>

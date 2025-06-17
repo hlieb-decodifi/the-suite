@@ -1,10 +1,11 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import {
+  FormFieldWrapper,
+  FormInput,
+  FormSwitch,
+} from '@/components/forms/common';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Form,
   FormControl,
@@ -14,14 +15,11 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import {
-  FormFieldWrapper,
-  FormInput,
-  FormSwitch,
-} from '@/components/forms/common';
-import { Typography } from '@/components/ui/typography';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 // Validation schema
 const depositSettingsSchema = z
@@ -78,14 +76,12 @@ export type DepositSettingsFormProps = {
   defaultValues?: Partial<DepositSettingsFormValues>;
   onSubmit: (data: DepositSettingsFormValues) => void | Promise<void>;
   isLoading?: boolean;
-  className?: string;
 };
 
 export function DepositSettingsForm({
   defaultValues,
   onSubmit,
   isLoading = false,
-  className = '',
 }: DepositSettingsFormProps) {
   const form = useForm<DepositSettingsFormValues>({
     resolver: zodResolver(depositSettingsSchema),
@@ -110,15 +106,6 @@ export function DepositSettingsForm({
   };
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>
-          <Typography variant="h4" className="text-foreground">
-            Deposit Settings
-          </Typography>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
@@ -273,7 +260,5 @@ export function DepositSettingsForm({
             </Button>
           </form>
         </Form>
-      </CardContent>
-    </Card>
   );
 }

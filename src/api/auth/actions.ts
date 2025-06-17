@@ -27,7 +27,6 @@ export async function signUpAction(data: SignUpFormValues) {
   try {
     // Ensure userType is set
     if (!data.userType) {
-      console.log('No userType provided, defaulting to client');
       data.userType = 'client';
     }
     
@@ -138,9 +137,28 @@ export async function changePasswordAction(currentPassword: string, newPassword:
   const supabase = await createClient();
   
   try {
+    // Get current user info
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user?.email) {
+      return {
+        success: false,
+        error: "No user found",
+      };
+    }
+
+    // Check if user is OAuth user (can't change password)
+    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    if (isOAuth) {
+      return {
+        success: false,
+        error: "Cannot change password for Google OAuth accounts",
+      };
+    }
+
     // First verify the current password is correct by attempting to sign in
     const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: '', // This will be filled from the session
+      email: user.email,
       password: currentPassword,
     });
 
@@ -191,6 +209,15 @@ export async function updateEmailAction(newEmail: string, password: string) {
         error: "No user email found",
       };
     }
+
+    // Check if user is OAuth user (can't change email)
+    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    if (isOAuth) {
+      return {
+        success: false,
+        error: "Cannot change email for Google OAuth accounts",
+      };
+    }
     
     const { error: verifyError } = await supabase.auth.signInWithPassword({
       email: user.email,
@@ -204,9 +231,11 @@ export async function updateEmailAction(newEmail: string, password: string) {
       };
     }
 
-    // Update the email
+    // Update the email with confirmation redirect
     const { error } = await supabase.auth.updateUser({
       email: newEmail,
+    }, {
+      emailRedirectTo: `${getURL()}auth/email-confirmed`,
     });
 
     if (error) {
@@ -217,6 +246,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
     }
 
     revalidatePath('/profile');
+    revalidatePath('/client-profile');
     return {
       success: true,
     };
@@ -225,6 +255,118 @@ export async function updateEmailAction(newEmail: string, password: string) {
     return {
       success: false,
       error: "Failed to update email. Please try again.",
+    };
+  }
+}
+
+/**
+ * Server action for Google OAuth sign in/sign up
+ */
+export async function signInWithGoogleAction(redirectTo: string = '/profile') {
+  const supabase = await createClient();
+  
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${getURL()}auth/callback?redirect_to=${redirectTo}`,
+      },
+    });
+
+    if (error) {
+      console.error('Google OAuth error:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+    
+    // Redirect to the OAuth provider
+    if (data.url) {
+      redirect(data.url);
+    }
+
+    return {
+      success: false,
+      error: 'Failed to initiate Google OAuth',
+    };
+  } catch (error) {
+    console.error('Google OAuth action error:', error);
+    return {
+      success: false,
+      error: "Failed to sign in with Google. Please try again.",
+    };
+  }
+}
+
+/**
+ * Form action wrapper for Google OAuth
+ */
+export async function googleOAuthFormAction(formData: FormData) {
+  const redirectTo = formData.get('redirectTo') as string || '/profile';
+  console.log('Redirect to:', redirectTo);
+  // await signInWithGoogleAction(redirectTo);
+  await signInWithGoogleAction(redirectTo);
+}
+
+/**
+ * Server action to get Google OAuth URL (without redirecting)
+ */
+export async function getGoogleOAuthUrlAction(
+  redirectTo: string = '/profile', 
+  mode: 'signin' | 'signup' = 'signin',
+  role?: 'client' | 'professional'
+) {
+  const supabase = await createClient();
+  
+  try {
+    // Build the callback URL with mode and role parameters
+    const callbackParams = new URLSearchParams();
+    callbackParams.set('redirect_to', redirectTo);
+    callbackParams.set('mode', mode);
+    if (mode === 'signup' && role) {
+      callbackParams.set('role', role);
+    }
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${getURL()}auth/callback?${callbackParams.toString()}`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+
+    if (error) {
+      console.error('Google OAuth error:', error);
+      return {
+        success: false,
+        error: error.message,
+        url: null,
+      };
+    }
+    
+    if (data.url) {
+      return {
+        success: true,
+        error: null,
+        url: data.url,
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Failed to generate OAuth URL',
+      url: null,
+    };
+  } catch (error) {
+    console.error('Google OAuth action error:', error);
+    return {
+      success: false,
+      error: "Failed to get Google OAuth URL",
+      url: null,
     };
   }
 }

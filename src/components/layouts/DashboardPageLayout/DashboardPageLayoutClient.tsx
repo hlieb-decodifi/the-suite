@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Typography } from '@/components/ui/typography';
 import { UserDashboardData } from './DashboardPageLayout';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { UserCircle } from 'lucide-react';
 import { TabNavigation, TabItem } from '@/components/common/TabNavigation';
 import { useState } from 'react';
@@ -55,6 +56,17 @@ export function DashboardPageLayoutClient({
       label: 'Messages',
       href: '/dashboard/messages',
       isActive: activeTab === 'messages',
+      badge: userData.unreadMessagesCount && userData.unreadMessagesCount > 0 ? (
+        <Badge 
+          className={`ml-1.5 h-5 px-1.5 text-xs font-medium border ${
+            activeTab === 'messages' 
+              ? 'bg-white text-primary border-white/20' 
+              : 'bg-primary text-white border-primary'
+          }`}
+        >
+          {userData.unreadMessagesCount > 9 ? '9+' : userData.unreadMessagesCount}
+        </Badge>
+      ) : undefined,
     },
     {
       key: 'refunds',
@@ -70,46 +82,50 @@ export function DashboardPageLayoutClient({
       : userData.firstName || userData.lastName || '';
 
   return (
-    <div className="w-full mx-auto space-y-6">
+    <div className="w-full mx-auto space-y-4 lg:space-y-6">
       {/* Page header with title and profile link */}
-      <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-3 lg:gap-4">
+        <div className="flex-1 min-w-0">
           <Typography
             variant="h2"
-            className="leading-5 border-none font-bold text-foreground"
+            className="leading-5 border-none font-bold text-foreground text-xl lg:text-2xl"
           >
             Dashboard
           </Typography>
-          <Typography className="text-muted-foreground">
+          <Typography className="text-muted-foreground text-sm lg:text-base truncate">
             Welcome back
             {displayName ? `, ${displayName}` : ''}
           </Typography>
         </div>
 
-        <div className="flex flex-col md:flex-row items-stretch gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch gap-2 lg:gap-3 w-full sm:w-auto">
           <Link
             href={userData.isProfessional ? '/profile' : '/client-profile'}
-            className="w-full cursor-pointer"
+            className="w-full sm:w-auto cursor-pointer"
           >
             <Button
               variant="outline"
-              className="w-full font-medium justify-start text-foreground border-border"
+              className="w-full font-medium justify-start text-foreground border-border text-sm lg:text-base"
             >
-              <UserCircle size={16} className="mr-2" />
+              <UserCircle size={14} className="mr-2 lg:w-4 lg:h-4" />
               Go to Profile
             </Button>
           </Link>
 
-          <DashboardTemplateDateRangePicker
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-            className="w-full md:w-auto"
-          />
+          {activeTab !== 'messages' && (
+            <DashboardTemplateDateRangePicker
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              className="w-full sm:w-auto"
+            />
+          )}
         </div>
       </div>
 
       {/* Dashboard navigation using TabNavigation component */}
-      <TabNavigation tabs={tabs} variant="link" className="mb-6" />
+      <div className="overflow-x-auto">
+        <TabNavigation tabs={tabs} variant="link" className="mb-4 lg:mb-6 min-w-max" />
+      </div>
 
       {/* Main content */}
       <div className="mt-4">{children}</div>

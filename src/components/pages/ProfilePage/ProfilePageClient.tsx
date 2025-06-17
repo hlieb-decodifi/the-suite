@@ -7,6 +7,7 @@ import type { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
 import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
+import { PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber';
 import { ContactSection } from './components/ContactSection/ContactSection';
 import { LocationSection } from './components/LocationSection/LocationSection';
 import { ReviewsSection } from './components/ReviewsSection/ReviewsSection';
@@ -41,11 +42,34 @@ import {
   PaymentMethodsForm,
   PaymentMethodsFormValues,
 } from '@/components/forms/PaymentMethodsForm';
+import { useProfile } from '@/api/profiles/hooks';
+
+const phoneUtil = PhoneNumberUtil.getInstance();
+
+const formatPhoneNumber = (phone: string): string => {
+  if (!phone || phone.trim() === '') {
+    return phone;
+  }
+
+  try {
+    const parsed = phoneUtil.parseAndKeepRawInput(phone);
+    if (phoneUtil.isValidNumber(parsed)) {
+      // Use INTERNATIONAL format for a clean, professional display
+      return phoneUtil.format(parsed, PhoneNumberFormat.INTERNATIONAL);
+    }
+    // If parsing fails or number is invalid, return the original phone number
+    return phone;
+  } catch {
+    // If parsing fails, return the original phone number
+    return phone;
+  }
+};
 
 export type ProfilePageClientProps = {
   user: User;
   profileData: ProfileData | null;
   workingHours: WorkingHoursEntry[];
+  timezone: string;
   paymentMethods: PaymentMethod[];
   portfolioPhotos: PortfolioPhotoUI[];
   isEditable?: boolean;
@@ -71,8 +95,6 @@ function InlineHeaderSection({
         if (result.success) {
           toast({ description: 'Profile information updated successfully.' });
           setIsModalOpen(false);
-          // Refresh the page to show updated data
-          window.location.reload();
         } else {
           toast({
             variant: 'destructive',
@@ -170,7 +192,7 @@ function InlineHeaderSection({
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Phone className="h-3.5 w-3.5 mr-1.5" />
                     <Link href={`tel:${headerFormData.phoneNumber}`}>
-                      {headerFormData.phoneNumber}
+                      {formatPhoneNumber(headerFormData.phoneNumber)}
                     </Link>
                   </div>
                 )}
@@ -385,6 +407,10 @@ function InlinePaymentMethodsSection({
     error: acceptedError,
   } = useProfessionalPaymentMethods(user.id);
 
+  // Fetch profile data to check if profile is published
+  const { data: profileData } = useProfile(user.id);
+  const isPublished = profileData?.isPublished ?? false;
+
   // Setup mutation for updating payment methods
   const updatePaymentMethods = useUpdateProfessionalPaymentMethods();
 
@@ -476,6 +502,7 @@ function InlinePaymentMethodsSection({
             onSubmitSuccess={handleSave}
             onCancel={handleCancel}
             isSubmitting={updatePaymentMethods.isPending}
+            isPublished={isPublished}
           />
         ) : (
           <div className="space-y-2">
@@ -501,14 +528,23 @@ export function ProfilePageClient({
   user,
   profileData,
   workingHours,
+  timezone,
   portfolioPhotos,
   isEditable = true,
 }: ProfilePageClientProps) {
   // Handle error state
   if (!profileData) {
     return (
-      <div className="p-4 border border-red-200 bg-red-50 rounded-md">
-        Error loading profile data. Please try again later.
+      <div className="p-4 border border-red-200 bg-red-50 rounded-md flex items-center gap-3">
+        <AlertCircle className="h-5 w-5 text-red-600" />
+        <div>
+          <Typography variant="h4" className="font-medium text-red-800">
+            Profile Unavailable
+          </Typography>
+          <Typography variant="p" className="text-red-600">
+            Error loading profile data. Please try again later.
+          </Typography>
+        </div>
       </div>
     );
   }
@@ -531,6 +567,7 @@ export function ProfilePageClient({
           <ContactSection
             user={user}
             workingHours={workingHours}
+            timezone={timezone}
             isLoading={false}
             isEditable={isEditable}
           />

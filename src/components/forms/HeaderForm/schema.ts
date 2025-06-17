@@ -1,8 +1,15 @@
 import { z } from 'zod';
+import { PhoneNumberUtil } from 'google-libphonenumber';
 
-// Basic E.164 format regex (adjust if more specific validation is needed)
-// Allows + followed by 10-15 digits
-const phoneRegex = /^\+\d{10,15}$/;
+const phoneUtil = PhoneNumberUtil.getInstance();
+
+const isPhoneValid = (phone: string) => {
+  try {
+    return phoneUtil.isValidNumber(phoneUtil.parseAndKeepRawInput(phone));
+  } catch {
+    return false;
+  }
+};
 
 // Zod preprocessor to add https:// if missing
 const urlPreprocessor = (arg: unknown) => {
@@ -28,9 +35,18 @@ export const headerSchema = z.object({
   description: z.string().max(500, 'Description cannot exceed 500 characters.'), // Example max length
   phoneNumber: z
     .string()
-    .regex(phoneRegex, 'Please enter a valid phone number (e.g., +1234567890).')
     .optional()
-    .or(z.literal('')), // Allow empty string which we'll treat as undefined
+    .refine((phone) => {
+      // Allow empty/undefined phone numbers
+      if (!phone || phone.trim() === '') {
+        return true;
+      }
+      
+      // Validate using google-libphonenumber
+      return isPhoneValid(phone);
+    }, {
+      message: 'Please enter a valid phone number for the selected country'
+    }),
   // Replace socialMedia array with specific optional fields
   instagramUrl: optionalUrlSchema,
   facebookUrl: optionalUrlSchema,

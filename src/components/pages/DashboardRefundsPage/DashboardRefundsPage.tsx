@@ -13,7 +13,7 @@ export async function DashboardRefundsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/signin');
+    redirect('/');
   }
 
   // Check if user is professional

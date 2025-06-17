@@ -7,6 +7,21 @@ export type WorkingHoursEntry = {
   endTime: string | null;
 };
 
+// New timezone-aware working hours structure for database storage
+export type TimezoneAwareWorkingHours = {
+  timezone: string;
+  hours: WorkingHoursEntry[];
+};
+
+// Professional profile type with timezone
+export type ProfessionalProfileWithTimezone = {
+  id: string;
+  user_id: string;
+  timezone: string;
+  working_hours: TimezoneAwareWorkingHours | null;
+  // ... other fields
+};
+
 // Default working hours for new professionals
 export const DEFAULT_WORKING_HOURS: WorkingHoursEntry[] = [
   { day: 'Monday', enabled: false, startTime: null, endTime: null },

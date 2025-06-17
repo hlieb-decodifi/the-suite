@@ -328,7 +328,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 // Handle subscription checkout (existing logic)
 async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id;
-  console.log('User ID from session:', userId);
   
   if (!userId) {
     console.error('Missing user ID in checkout session');
@@ -462,9 +461,6 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
 async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id;
   const bookingId = session.metadata?.booking_id;
-  
-  console.log('User ID from session:', userId);
-  console.log('Booking ID from metadata:', bookingId);
   
   if (!userId || !bookingId) {
     console.error('Missing user ID or booking ID in checkout session');

@@ -36,6 +36,8 @@ export type BookingFormDateTimePickerProps = {
   selectedExtraServices: ServiceListItem[];
   isLoading?: boolean;
   isCalendarLoading?: boolean;
+  professionalTimezone?: string | undefined;
+  clientTimezone?: string | undefined;
 };
 
 // Time slots rendering component
@@ -403,6 +405,28 @@ function DatePickerSection({
     onSelectDate(date);
   };
 
+  // Convert day names to day numbers for calendar logic
+  const dayNameToNumber = (dayName: string): number => {
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+    const index = days.findIndex((day) => day === dayName.toLowerCase());
+    return index !== -1 ? index : -1;
+  };
+
+  // Convert available day names to day numbers
+  const availableDayNumbers = useMemo(() => {
+    return availableDays
+      .map((dayName) => dayNameToNumber(dayName))
+      .filter((dayNum) => dayNum !== -1);
+  }, [availableDays]);
+
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
@@ -429,10 +453,10 @@ function DatePickerSection({
               if (date < new Date()) return true;
 
               // Check if day is in available days
-              if (availableDays.length > 0) {
-                // Get the day of week as a number where Monday is 0 and Sunday is 6
-                const dayOfWeek = (date.getDay() + 6) % 7;
-                return !availableDays.includes(dayOfWeek.toString());
+              if (availableDayNumbers.length > 0) {
+                // Get the day of week as a number where Sunday is 0 and Monday is 1
+                const dayOfWeek = date.getDay();
+                return !availableDayNumbers.includes(dayOfWeek);
               }
 
               // Default behavior if no availableDays are provided
@@ -557,6 +581,8 @@ export function BookingFormDateTimePicker({
   selectedExtraServices,
   isLoading = false,
   isCalendarLoading = false,
+  professionalTimezone,
+  clientTimezone,
 }: BookingFormDateTimePickerProps) {
   // Use synchronized date state
   const { localDate, handleLocalDateChange } = useSynchronizedDateState(
@@ -592,7 +618,23 @@ export function BookingFormDateTimePicker({
 
   return (
     <div className="space-y-1">
-      <Typography className="font-medium">Select Date & Time</Typography>
+      <div className="space-y-1">
+        <Typography className="font-medium">Select Date & Time</Typography>
+
+        {/* Timezone Information */}
+        {clientTimezone && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>
+              Times shown in your timezone ({clientTimezone})
+              {professionalTimezone &&
+                professionalTimezone !== clientTimezone && (
+                  <span> • Professional is in {professionalTimezone}</span>
+                )}
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-4 md:gap-6">
         {/* Calendar section */}

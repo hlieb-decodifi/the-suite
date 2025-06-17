@@ -15,7 +15,7 @@ export async function DashboardAppointmentsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/signin');
+    redirect('/');
   }
 
   // Check if user is professional

@@ -8,12 +8,18 @@ export type ProfessionalPageLayoutClientProps = {
   profileId: string;
   children: React.ReactNode;
   isOwnProfile?: boolean;
+  allowMessages?: boolean;
+  isCurrentUserClient?: boolean;
+  professionalName?: string;
 };
 
 export function ProfessionalPageLayoutClient({
   profileId,
   children,
   isOwnProfile = false,
+  allowMessages = false,
+  isCurrentUserClient = false,
+  professionalName = '',
 }: ProfessionalPageLayoutClientProps) {
   const pathname = usePathname();
 
@@ -25,12 +31,13 @@ export function ProfessionalPageLayoutClient({
   // Determine active tab from pathname
   const getActiveTabFromPath = (path: string): string => {
     if (
-      path === `/professional/${profileId}` ||
-      path === `/professional/${profileId}/`
+      path === `/professionals/${profileId}` ||
+      path === `/professionals/${profileId}/`
     )
       return 'profile';
-    if (path.includes(`/professional/${profileId}/services`)) return 'services';
-    if (path.includes(`/professional/${profileId}/portfolio`))
+    if (path.includes(`/professionals/${profileId}/services`))
+      return 'services';
+    if (path.includes(`/professionals/${profileId}/portfolio`))
       return 'portfolio';
     return 'profile';
   };
@@ -42,19 +49,19 @@ export function ProfessionalPageLayoutClient({
     {
       key: 'profile',
       label: 'profile',
-      href: `/professional/${profileId}`,
+      href: `/professionals/${profileId}`,
       isActive: activeTab === 'profile',
     },
     {
       key: 'services',
       label: 'services',
-      href: `/professional/${profileId}/services`,
+      href: `/professionals/${profileId}/services`,
       isActive: activeTab === 'services',
     },
     {
       key: 'portfolio',
       label: 'portfolio',
-      href: `/professional/${profileId}/portfolio`,
+      href: `/professionals/${profileId}/portfolio`,
       isActive: activeTab === 'portfolio',
     },
   ];
@@ -70,6 +77,10 @@ export function ProfessionalPageLayoutClient({
         isSubscribed={true} // Assume subscribed since profile is published
         connectStatus={{ isConnected: true }}
         isLoading={false}
+        title={professionalName}
+        allowMessages={allowMessages}
+        isCurrentUserClient={isCurrentUserClient}
+        professionalId={profileId}
       />
 
       <div className="w-full">

@@ -1,6 +1,9 @@
 -- Enable UUID generation
 create extension if not exists "uuid-ossp";
 
+-- Enable moddatetime extension
+create extension if not exists moddatetime schema extensions;
+
 /**
 * ROLES
 * Defines user roles in the system (client, professional, admin)
@@ -97,7 +100,8 @@ create table professional_profiles (
   profession text,
   appointment_requirements text,
   phone_number text,
-  working_hours jsonb, -- Store as JSON with days and hours
+  working_hours jsonb, -- Store as JSON with timezone and days/hours
+  timezone text, -- Professional's timezone
   location text,
   address_id uuid references addresses,
   facebook_url text,
@@ -118,6 +122,8 @@ create table professional_profiles (
     (requires_deposit = true AND deposit_type = 'fixed' AND deposit_value >= 0)
   ),
   balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
+  -- Messaging settings
+  allow_messages boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -180,13 +186,64 @@ on services(stripe_status);
 create index if not exists idx_services_stripe_sync_status 
 on services(stripe_sync_status);
 
--- Constraint to limit services to 10 per professional
+/**
+* SERVICE_LIMITS
+* Table to store customizable service limits per professional
+*/
+create table service_limits (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null unique,
+  max_services integer not null default 50,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table service_limits enable row level security;
+
+-- RLS policies for service_limits
+create policy "Professionals can view their own service limits"
+  on service_limits for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = service_limits.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Function to get service limit for a professional (with default of 50)
+create or replace function get_service_limit(prof_profile_id uuid)
+returns integer as $$
+declare
+  limit_value integer;
+begin
+  select max_services into limit_value
+  from service_limits
+  where professional_profile_id = prof_profile_id;
+  
+  -- Return default of 50 if no custom limit is set
+  return coalesce(limit_value, 50);
+end;
+$$ language plpgsql security definer;
+
+-- Updated constraint to use customizable service limits
 create or replace function check_service_limit()
 returns trigger as $$
+declare
+  current_count integer;
+  max_allowed integer;
 begin
-  if (select count(*) from services where professional_profile_id = new.professional_profile_id) >= 10 then
-    raise exception 'Maximum of 10 services allowed per professional';
+  -- Get current service count
+  select count(*) into current_count
+  from services
+  where professional_profile_id = new.professional_profile_id;
+  
+  -- Get the limit for this professional
+  max_allowed := get_service_limit(new.professional_profile_id);
+  
+  if current_count >= max_allowed then
+    raise exception 'Maximum of % services allowed for this professional. Contact support to increase your limit.', max_allowed;
   end if;
+  
   return new;
 end;
 $$ language plpgsql;
@@ -195,6 +252,27 @@ create trigger enforce_service_limit
   before insert on services
   for each row
   execute function check_service_limit();
+
+-- Function to update service limit (admin only - to be used by admin functions)
+create or replace function update_service_limit(prof_profile_id uuid, new_limit integer)
+returns boolean as $$
+begin
+  -- Validate input
+  if new_limit < 1 then
+    raise exception 'Service limit must be at least 1';
+  end if;
+  
+  -- Insert or update the service limit
+  insert into service_limits (professional_profile_id, max_services)
+  values (prof_profile_id, new_limit)
+  on conflict (professional_profile_id)
+  do update set 
+    max_services = new_limit,
+    updated_at = timezone('utc'::text, now());
+    
+  return true;
+end;
+$$ language plpgsql security definer;
 
 /**
 * PROFESSIONAL_SERVICES
@@ -323,6 +401,10 @@ create policy "Clients can update their own profile"
   on client_profiles for update
   using (auth.uid() = user_id);
 
+create policy "Clients can create their own profile"
+  on client_profiles for insert
+  with check (auth.uid() = user_id);
+
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
 returns trigger as $$
@@ -382,6 +464,8 @@ returns trigger as $$
 declare
   user_role_id uuid;
   role_name text;
+  first_name_val text;
+  last_name_val text;
 begin
   -- Get the role from metadata with better error handling
   role_name := new.raw_user_meta_data->>'role';
@@ -390,49 +474,103 @@ begin
   RAISE NOTICE 'Raw user meta data: %', new.raw_user_meta_data;
   RAISE NOTICE 'Role name extracted: %', role_name;
   
-  -- Validate the role with better error message
-  if role_name is null or (role_name != 'client' and role_name != 'professional') then
-    RAISE NOTICE 'Invalid role specified: %', role_name;
-    role_name := 'client'; -- Default to client if not specified properly
-  end if;
-  
-  -- Get the corresponding role ID with fully qualified schema
-  select id into user_role_id from public.roles where name = role_name;
-  
-  if user_role_id is null then
-    RAISE EXCEPTION 'Could not find role_id for role: %', role_name;
-  end if;
-  
-  -- Insert the user with the specified role
-  begin
-  insert into public.users (
-    id, 
-    first_name, 
-    last_name, 
-    role_id
-  )
-  values (
-    new.id, 
-    coalesce(new.raw_user_meta_data->>'first_name', ''),
-    coalesce(new.raw_user_meta_data->>'last_name', ''),
-    user_role_id
+  -- Extract first and last name from metadata (handles both custom signup and OAuth)
+  first_name_val := coalesce(
+    new.raw_user_meta_data->>'first_name',
+    new.raw_user_meta_data->>'given_name',
+    split_part(new.raw_user_meta_data->>'name', ' ', 1),
+    split_part(new.raw_user_meta_data->>'full_name', ' ', 1),
+    ''
   );
-  exception when others then
-    RAISE EXCEPTION 'Error creating user record: %', SQLERRM;
-  end;
   
-  -- Create the appropriate profile based on role
-  begin
-  if role_name = 'professional' then
-      insert into public.professional_profiles (user_id)
+  last_name_val := coalesce(
+    new.raw_user_meta_data->>'last_name',
+    new.raw_user_meta_data->>'family_name',
+    case when new.raw_user_meta_data->>'name' is not null then
+      trim(substr(new.raw_user_meta_data->>'name', length(split_part(new.raw_user_meta_data->>'name', ' ', 1)) + 2))
+    when new.raw_user_meta_data->>'full_name' is not null then
+      trim(substr(new.raw_user_meta_data->>'full_name', length(split_part(new.raw_user_meta_data->>'full_name', ' ', 1)) + 2))
+    else ''
+    end,
+    ''
+  );
+  
+  -- For OAuth users without role metadata, we'll handle them in the callback
+  -- For regular signups, validate the role
+  if role_name is not null then
+    -- Validate the role with better error message
+    if role_name != 'client' and role_name != 'professional' then
+      RAISE NOTICE 'Invalid role specified: %', role_name;
+      role_name := 'client'; -- Default to client if not specified properly
+    end if;
+    
+    -- Get the corresponding role ID with fully qualified schema
+    select id into user_role_id from public.roles where name = role_name;
+    
+    if user_role_id is null then
+      RAISE EXCEPTION 'Could not find role_id for role: %', role_name;
+    end if;
+    
+    -- Insert the user with the specified role
+    begin
+    insert into public.users (
+      id, 
+      first_name, 
+      last_name, 
+      role_id
+    )
+    values (
+      new.id, 
+      first_name_val,
+      last_name_val,
+      user_role_id
+    );
+    exception when others then
+      RAISE EXCEPTION 'Error creating user record: %', SQLERRM;
+    end;
+    
+    -- Create the appropriate profile based on role
+    begin
+    if role_name = 'professional' then
+        insert into public.professional_profiles (user_id)
+      values (new.id);
+    elsif role_name = 'client' then
+        insert into public.client_profiles (user_id)
+      values (new.id);
+    end if;
+    exception when others then
+      RAISE EXCEPTION 'Error creating profile record: %', SQLERRM;
+    end;
+  else
+    -- OAuth user without role metadata - create basic user record without role
+    -- Role will be assigned later in the callback
+    RAISE NOTICE 'OAuth user detected, creating basic user record without role';
+    
+    begin
+    insert into public.users (
+      id, 
+      first_name, 
+      last_name, 
+      role_id
+    )
+    values (
+      new.id, 
+      first_name_val,
+      last_name_val,
+      (select id from public.roles where name = 'client' limit 1) -- Temporary default role
+    );
+    exception when others then
+      RAISE EXCEPTION 'Error creating OAuth user record: %', SQLERRM;
+    end;
+    
+    -- Create default client profile (will be updated in callback if needed)
+    begin
+    insert into public.client_profiles (user_id)
     values (new.id);
-  elsif role_name = 'client' then
-      insert into public.client_profiles (user_id)
-    values (new.id);
+    exception when others then
+      RAISE EXCEPTION 'Error creating OAuth client profile: %', SQLERRM;
+    end;
   end if;
-  exception when others then
-    RAISE EXCEPTION 'Error creating profile record: %', SQLERRM;
-  end;
   
   return new;
 end;
@@ -488,7 +626,7 @@ create policy "Anyone can view profile photos of published professionals"
 
 /**
 * PORTFOLIO_PHOTOS
-* Up to 10 portfolio photos per professional
+* Up to 20 portfolio photos per professional
 */
 create table portfolio_photos (
   id uuid primary key default uuid_generate_v4(),
@@ -503,12 +641,12 @@ create table portfolio_photos (
 );
 alter table portfolio_photos enable row level security;
 
--- Add constraint to limit portfolio photos to 10 per user
+-- Add constraint to limit portfolio photos to 20 per user
 create or replace function check_portfolio_photo_limit()
 returns trigger as $$
 begin
-  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 10 then
-    raise exception 'Maximum of 10 portfolio photos allowed per professional';
+  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 20 then
+    raise exception 'Maximum of 20 portfolio photos allowed per professional';
   end if;
   return new;
 end;
@@ -870,6 +1008,9 @@ create trigger enforce_no_double_booking
 */
 
 -- Booking policies
+drop policy if exists "Clients can view their own bookings" on bookings;
+drop policy if exists "Professionals can view bookings for their profile" on bookings;
+
 create policy "Clients can view their own bookings"
   on bookings for select
   using (auth.uid() = client_id);
@@ -884,15 +1025,10 @@ create policy "Professionals can view bookings for their profile"
     )
   );
 
-create policy "Clients can create their own bookings"
-  on bookings for insert
-  with check (auth.uid() = client_id);
-
-create policy "Clients can update their own bookings"
-  on bookings for update
-  using (auth.uid() = client_id);
-
 -- Appointment policies
+drop policy if exists "Clients can view their appointments" on appointments;
+drop policy if exists "Professionals can view appointments for their profile" on appointments;
+
 create policy "Clients can view their appointments"
   on appointments for select
   using (
@@ -903,21 +1039,34 @@ create policy "Clients can view their appointments"
     )
   );
 
+-- Simplified professional appointment policy - remove the join
 create policy "Professionals can view appointments for their profile"
   on appointments for select
   using (
     exists (
-      select 1 from bookings
-      join professional_profiles on bookings.professional_profile_id = professional_profiles.id
-      where bookings.id = appointments.booking_id
-      and professional_profiles.user_id = auth.uid()
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = appointments.booking_id
+      and pp.user_id = auth.uid()
     )
   );
 
--- Add policy to allow clients to create appointments for their bookings
-create policy "Clients can create appointments for their bookings"
-  on appointments for insert
-  with check (
+-- Add missing policy to allow professionals to update appointment status
+create policy "Professionals can update appointments for their profile"
+  on appointments for update
+  using (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = appointments.booking_id
+      and pp.user_id = auth.uid()
+    )
+  );
+
+-- Add missing policy to allow clients to update their appointments (for cancellation)
+create policy "Clients can update their appointments"
+  on appointments for update
+  using (
     exists (
       select 1 from bookings
       where bookings.id = appointments.booking_id
@@ -1196,4 +1345,293 @@ create trigger payment_method_stripe_sync_trigger
   after insert or update or delete on professional_payment_methods
   for each row
   execute function handle_payment_method_stripe_changes();
+
+/**
+* MESSAGING SYSTEM
+* Tables for real-time messaging between professionals and clients
+*/
+
+/**
+* CONVERSATIONS
+* Tracks conversations between two users
+*/
+create table conversations (
+  id uuid primary key default uuid_generate_v4(),
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure unique conversation between client and professional
+  constraint unique_conversation unique (client_id, professional_id),
+  -- Ensure client is actually a client and professional is actually a professional
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id))
+);
+alter table conversations enable row level security;
+
+/**
+* MESSAGES
+* Individual messages within conversations
+*/
+create table messages (
+  id uuid primary key default uuid_generate_v4(),
+  conversation_id uuid references conversations not null,
+  sender_id uuid references users not null,
+  content text not null,
+  is_read boolean default false not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table messages enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_conversations_client_id on conversations(client_id);
+create index if not exists idx_conversations_professional_id on conversations(professional_id);
+create index if not exists idx_messages_conversation_id on messages(conversation_id);
+create index if not exists idx_messages_created_at on messages(created_at);
+create index if not exists idx_messages_sender_id on messages(sender_id);
+
+-- Function to update conversation updated_at when a new message is added
+create or replace function update_conversation_timestamp()
+returns trigger as $$
+begin
+  update conversations
+  set updated_at = timezone('utc'::text, now())
+  where id = new.conversation_id;
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger to update conversation timestamp on new message
+create trigger update_conversation_on_new_message
+  after insert on messages
+  for each row
+  execute function update_conversation_timestamp();
+
+/**
+* RLS policies for messaging tables
+*/
+
+-- Conversation policies
+create policy "Users can view their own conversations"
+  on conversations for select
+  using (auth.uid() = client_id or auth.uid() = professional_id);
+
+create policy "Clients can create conversations with professionals who allow messages"
+  on conversations for insert
+  with check (
+    auth.uid() = client_id
+    and is_client(auth.uid())
+    and is_professional(professional_id)
+    and exists (
+      select 1 from professional_profiles
+      where user_id = professional_id
+      and allow_messages = true
+    )
+  );
+
+-- Message policies
+create policy "Users can view messages in their conversations"
+  on messages for select
+  using (
+    exists (
+      select 1 from conversations
+      where conversations.id = messages.conversation_id
+      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    )
+  );
+
+create policy "Users can send messages in their conversations"
+  on messages for insert
+  with check (
+    auth.uid() = sender_id
+    and exists (
+      select 1 from conversations
+      where conversations.id = messages.conversation_id
+      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    )
+  );
+
+create policy "Users can update their own messages"
+  on messages for update
+  using (
+    auth.uid() = sender_id
+    or exists (
+      select 1 from conversations
+      where conversations.id = messages.conversation_id
+      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    )
+  );
+
+-- Additional policies for cross-user visibility in messaging contexts
+-- Allow users to view basic data of other users they have conversations with
+create policy "Users can view other users in their conversations"
+  on users for select
+  using (
+    exists (
+      select 1 from conversations
+      where (conversations.client_id = auth.uid() and conversations.professional_id = users.id)
+         or (conversations.professional_id = auth.uid() and conversations.client_id = users.id)
+    )
+  );
+
+-- Allow users to view profile photos of other users they have conversations with
+create policy "Users can view profile photos of other users in their conversations"
+  on profile_photos for select
+  using (
+    exists (
+      select 1 from conversations
+      where (conversations.client_id = auth.uid() and conversations.professional_id = profile_photos.user_id)
+         or (conversations.professional_id = auth.uid() and conversations.client_id = profile_photos.user_id)
+    )
+  );
+
+/**
+* Update realtime publication to include messaging tables
+*/
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions,
+  conversations,
+  messages;
+
+-- Message attachments table
+create table if not exists public.message_attachments (
+  id uuid default gen_random_uuid() primary key,
+  message_id uuid references public.messages(id) on delete cascade not null,
+  url text not null,
+  type text not null check (type = 'image'),
+  file_name text not null,
+  file_size integer not null check (file_size > 0),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add RLS policies for message attachments
+alter table public.message_attachments enable row level security;
+
+create policy "Users can view attachments in their conversations"
+  on public.message_attachments for select
+  using (
+    exists (
+      select 1 from public.messages m
+      join public.conversations c on c.id = m.conversation_id
+      where m.id = message_attachments.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
+    )
+  );
+
+create policy "Users can insert attachments in their conversations"
+  on public.message_attachments for insert
+  with check (
+    exists (
+      select 1 from public.messages m
+      join public.conversations c on c.id = m.conversation_id
+      where m.id = message_attachments.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
+    )
+  );
+
+-- Add trigger for updated_at
+create trigger handle_updated_at before update on public.message_attachments
+  for each row execute procedure moddatetime (updated_at);
+
+/**
+* LEGAL DOCUMENTS
+* Tables for storing Terms & Conditions, Privacy Policy, and other legal documents
+*/
+
+/**
+* LEGAL_DOCUMENTS
+* Stores legal documents with versioning support
+*/
+create table legal_documents (
+  id uuid primary key default uuid_generate_v4(),
+  type text not null check (type in ('terms_and_conditions', 'privacy_policy')),
+  title text not null,
+  content text not null,
+  version integer not null default 1,
+  is_published boolean default false not null,
+  effective_date timestamp with time zone,
+  created_by uuid references users, -- For admin tracking (optional)
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure only one published document per type at a time
+  constraint unique_published_per_type unique (type, is_published) deferrable initially deferred
+);
+alter table legal_documents enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_legal_documents_type on legal_documents(type);
+create index if not exists idx_legal_documents_published on legal_documents(type, is_published) where is_published = true;
+
+-- Function to handle version increment when creating new versions
+create or replace function handle_legal_document_versioning()
+returns trigger as $$
+begin
+  -- If creating a new document for an existing type, increment version
+  if tg_op = 'INSERT' then
+    select coalesce(max(version), 0) + 1 into new.version
+    from legal_documents
+    where type = new.type;
+    
+    -- If setting as published, unpublish all other documents of the same type
+    if new.is_published = true then
+      update legal_documents
+      set is_published = false, updated_at = timezone('utc'::text, now())
+      where type = new.type and id != new.id;
+    end if;
+  end if;
+  
+  -- If updating to published, unpublish all other documents of the same type
+  if tg_op = 'UPDATE' and new.is_published = true and old.is_published = false then
+    update legal_documents
+    set is_published = false, updated_at = timezone('utc'::text, now())
+    where type = new.type and id != new.id;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger for legal document versioning
+create trigger legal_document_versioning_trigger
+  before insert or update on legal_documents
+  for each row
+  execute function handle_legal_document_versioning();
+
+/**
+* RLS policies for legal documents
+*/
+
+-- Anyone can view published legal documents
+create policy "Anyone can view published legal documents"
+  on legal_documents for select
+  using (is_published = true);
+
+-- Add missing booking policies
+create policy "Clients can create their own bookings"
+  on bookings for insert
+  with check (auth.uid() = client_id);
+
+create policy "Clients can update their own bookings"
+  on bookings for update
+  using (auth.uid() = client_id);
+
+-- Add missing appointment creation policy
+create policy "Clients can create appointments for their bookings"
+  on appointments for insert
+  with check (
+    exists (
+      select 1 from bookings
+      where bookings.id = appointments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
+
 

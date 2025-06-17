@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays, Clock, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
@@ -28,6 +30,19 @@ type AppointmentType = {
     description?: string;
     duration?: number;
     price?: number;
+    // Extended fields for service totals and additional services
+    totalPrice?: number;
+    totalDuration?: number;
+    totalWithServiceFee?: number;
+    hasAdditionalServices?: boolean;
+    additionalServicesCount?: number;
+    allServices?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      price: number;
+      duration: number;
+    }>;
   } | null;
   professionals?: {
     id: string;
@@ -214,42 +229,44 @@ function AppointmentTableCard({
   isProfessionalView: boolean;
 }) {
   return (
-    <div className="p-4 border rounded-lg mb-2 bg-card">
-      <div className="flex justify-between items-start">
-        <div>
-          <Typography className="font-medium">
-            {appointment.serviceName}
-          </Typography>
-          <div className="text-muted-foreground text-sm flex items-center mt-1">
-            <CalendarDays className="mr-1 h-3 w-3" />
-            {format(appointment.date, 'MMM dd, yyyy')}
-            <span className="mx-1">•</span>
-            <Clock className="mr-1 h-3 w-3" />
-            {appointment.time}
+    <Link href={`/bookings/${appointment.id}`}>
+      <div className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
+        <div className="flex justify-between items-start">
+          <div>
+            <Typography className="font-medium">
+              {appointment.serviceName}
+            </Typography>
+            <div className="text-muted-foreground text-sm flex items-center mt-1">
+              <CalendarDays className="mr-1 h-3 w-3" />
+              {format(appointment.date, 'MMM dd, yyyy')}
+              <span className="mx-1">•</span>
+              <Clock className="mr-1 h-3 w-3" />
+              {appointment.time}
+            </div>
+          </div>
+          <AppointmentStatusBadge status={appointment.status} />
+        </div>
+
+        <div className="mt-3 pt-3 border-t flex justify-between items-center">
+          <div>
+            <Typography variant="small" className="text-muted-foreground">
+              {isProfessionalView ? 'Client' : 'Professional'}
+            </Typography>
+            <Typography className="font-medium">
+              {isProfessionalView
+                ? appointment.clientName || 'Client'
+                : appointment.professionalName || 'Professional'}
+            </Typography>
+          </div>
+          <div className="flex items-center">
+            <Typography className="font-bold mr-2">
+              {formatCurrency(appointment.amount)}
+            </Typography>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </div>
-        <AppointmentStatusBadge status={appointment.status} />
       </div>
-
-      <div className="mt-3 pt-3 border-t flex justify-between items-center">
-        <div>
-          <Typography variant="small" className="text-muted-foreground">
-            {isProfessionalView ? 'Client' : 'Professional'}
-          </Typography>
-          <Typography className="font-medium">
-            {isProfessionalView
-              ? appointment.clientName || 'Client'
-              : appointment.professionalName || 'Professional'}
-          </Typography>
-        </div>
-        <div className="flex items-center">
-          <Typography className="font-bold mr-2">
-            {formatCurrency(appointment.amount)}
-          </Typography>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </div>
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -263,6 +280,8 @@ function DashboardTemplateAppointmentsTable({
   isLoading?: boolean;
   isProfessionalView?: boolean;
 }) {
+  const router = useRouter();
+
   if (isLoading) return <AppointmentTableLoading />;
   if (appointments.length === 0) return <AppointmentTableEmpty />;
 
@@ -284,7 +303,11 @@ function DashboardTemplateAppointmentsTable({
           </TableHeader>
           <TableBody>
             {appointments.map((appointment) => (
-              <TableRow key={appointment.id}>
+              <TableRow
+                key={appointment.id}
+                className="hover:bg-muted/50 cursor-pointer"
+                onClick={() => router.push(`/bookings/${appointment.id}`)}
+              >
                 <TableCell>
                   <div className="flex flex-col">
                     <div className="flex items-center">
@@ -355,8 +378,10 @@ export function DashboardAppointmentsPageClient({
     (appointment) => {
       const startTime = new Date(appointment.start_time);
 
-      // Get service name
-      const serviceName = appointment.services?.name || 'Service';
+      // Get service name with additional services indicator
+      const serviceName = appointment.services?.hasAdditionalServices
+        ? `${appointment.services.name} + ${appointment.services.additionalServicesCount} more`
+        : appointment.services?.name || 'Service';
 
       // Get client name
       const clientName = appointment.clients?.users
@@ -368,8 +393,11 @@ export function DashboardAppointmentsPageClient({
         ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
         : 'Professional';
 
-      // Get amount (placeholder since price isn't available)
-      const amount = appointment.services?.price || 75.0;
+      // Get amount including service fee for both professionals and clients
+      const amount =
+        appointment.services?.totalWithServiceFee ||
+        (appointment.services?.totalPrice || appointment.services?.price || 0) +
+          1.0;
 
       // Map status to expected format
       let formattedStatus: Appointment['status'] = 'upcoming';

@@ -39,6 +39,8 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
     handleSuccess,
     selectedDate,
     handleDateSelect,
+    professionalTimezone,
+    clientTimezone,
   } = useBookingState(props);
 
   // Ensure we always have an array of payment methods
@@ -74,6 +76,8 @@ export function BookingModalTemplate(props: BookingModalTemplateProps) {
       onSelectDate={handleDateSelect}
       onSubmitStateChange={handleSubmitStateChange}
       isCalendarLoading={isLoadingCalendar}
+      professionalTimezone={professionalTimezone}
+      clientTimezone={clientTimezone}
     />
   );
 }

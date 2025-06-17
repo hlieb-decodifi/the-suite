@@ -284,6 +284,45 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          professional_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          professional_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          professional_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           created_at: string
@@ -308,6 +347,139 @@ export type Database = {
             foreignKeyName: "customers_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_documents: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          effective_date: string | null
+          id: string
+          is_published: boolean
+          title: string
+          type: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string | null
+          id?: string
+          is_published?: boolean
+          title: string
+          type: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string | null
+          id?: string
+          is_published?: boolean
+          title?: string
+          type?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          id: string
+          message_id: string
+          type: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          id?: string
+          message_id: string
+          type: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          id?: string
+          message_id?: string
+          type?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          is_read: boolean
+          sender_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          sender_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          sender_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -414,6 +586,7 @@ export type Database = {
       professional_profiles: {
         Row: {
           address_id: string | null
+          allow_messages: boolean
           appointment_requirements: string | null
           balance_payment_method: string | null
           created_at: string
@@ -433,12 +606,14 @@ export type Database = {
           stripe_connect_status: string
           stripe_connect_updated_at: string | null
           tiktok_url: string | null
+          timezone: string | null
           updated_at: string
           user_id: string
           working_hours: Json | null
         }
         Insert: {
           address_id?: string | null
+          allow_messages?: boolean
           appointment_requirements?: string | null
           balance_payment_method?: string | null
           created_at?: string
@@ -458,12 +633,14 @@ export type Database = {
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
+          timezone?: string | null
           updated_at?: string
           user_id: string
           working_hours?: Json | null
         }
         Update: {
           address_id?: string | null
+          allow_messages?: boolean
           appointment_requirements?: string | null
           balance_payment_method?: string | null
           created_at?: string
@@ -483,6 +660,7 @@ export type Database = {
           stripe_connect_status?: string
           stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
+          timezone?: string | null
           updated_at?: string
           user_id?: string
           working_hours?: Json | null
@@ -613,6 +791,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      service_limits: {
+        Row: {
+          created_at: string
+          id: string
+          max_services: number
+          professional_profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          max_services?: number
+          professional_profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          max_services?: number
+          professional_profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_limits_professional_profile_id_fkey"
+            columns: ["professional_profile_id"]
+            isOneToOne: true
+            referencedRelation: "professional_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       services: {
         Row: {
@@ -749,12 +959,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_service_limit: {
+        Args: { prof_profile_id: string }
+        Returns: number
+      }
       is_client: {
         Args: { user_uuid: string }
         Returns: boolean
       }
       is_professional: {
         Args: { user_uuid: string }
+        Returns: boolean
+      }
+      update_service_limit: {
+        Args: { prof_profile_id: string; new_limit: number }
         Returns: boolean
       }
     }

@@ -6,6 +6,7 @@ import { getServicesForUser, upsertService as dbUpsertService, deleteService as 
 import type { Service } from './db';
 import type { ServiceUI } from '@/types/services';
 import { formatDuration } from '@/utils/formatDuration';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * Convert duration in form hours and minutes to total minutes for DB
@@ -136,6 +137,72 @@ export async function deleteService({
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to delete service',
+    };
+  }
+}
+
+/**
+ * Get service limit information for a professional
+ */
+export async function getServiceLimitInfo({ userId }: { userId: string }) {
+  const supabase = await createClient();
+
+  try {
+    // Get professional profile
+    const { data: professionalProfile, error: profileError } = await supabase
+      .from('professional_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError || !professionalProfile) {
+      return {
+        success: false,
+        error: 'Professional profile not found',
+      };
+    }
+
+    // Get current service count
+    const { count: currentCount, error: countError } = await supabase
+      .from('services')
+      .select('*', { count: 'exact', head: true })
+      .eq('professional_profile_id', professionalProfile.id);
+
+    if (countError) {
+      return {
+        success: false,
+        error: 'Failed to get service count',
+      };
+    }
+
+    // Get service limit from service_limits table (defaults to 50 if not set)
+    const { data: limitData } = await supabase
+      .from('service_limits')
+      .select('max_services')
+      .eq('professional_profile_id', professionalProfile.id)
+      .single();
+
+    // If no custom limit is set or query failed, use default of 50
+    const maxServices = limitData?.max_services || 50;
+    
+    const currentCountNum = currentCount || 0;
+    const remaining = Math.max(0, maxServices - currentCountNum);
+    const isAtLimit = currentCountNum >= maxServices;
+
+    return {
+      success: true,
+      data: {
+        currentCount: currentCountNum,
+        maxServices,
+        remaining,
+        isAtLimit,
+      },
+    };
+  } catch (error) {
+    console.error('Error getting service limit info:', error);
+    return {
+      success: false,
+      error: 'Failed to get service limit information',
     };
   }
 } 

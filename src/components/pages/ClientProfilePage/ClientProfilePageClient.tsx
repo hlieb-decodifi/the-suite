@@ -1,37 +1,51 @@
 'use client';
 
-import { User } from '@supabase/supabase-js';
-import { useState, useTransition, useEffect, useMemo } from 'react';
-import type { ClientProfile, Address } from '@/api/profiles/types';
-import { Separator } from '@/components/ui/separator';
-import { Typography } from '@/components/ui/typography';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import type { Address, ClientProfile } from '@/api/profiles/types';
 import { AvatarUpload } from '@/components/common/AvatarUpload';
 import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
-import { toast } from '@/components/ui/use-toast';
+import { ChangeEmailForm, ChangePasswordForm } from '@/components/forms';
 import {
-  Edit2,
-  UserRound,
-  MapPinned,
-  LayoutDashboard,
-  Calendar,
-} from 'lucide-react';
-import Link from 'next/link';
-import {
+  DetailsDisplay,
   DetailsForm,
   DetailsFormValues,
-  DetailsDisplay,
 } from '@/components/forms/DetailsForm';
 import {
+  LocationDisplay,
   LocationForm,
   LocationFormValues,
-  LocationDisplay,
 } from '@/components/forms/LocationForm';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Typography } from '@/components/ui/typography';
+import { toast } from '@/components/ui/use-toast';
 import {
-  updateUserDetailsAction,
+  canChangeEmail,
+  canChangePassword,
+  getOAuthProvider,
+} from '@/utils/auth';
+import { User } from '@supabase/supabase-js';
+import {
+  Calendar,
+  Edit2,
+  LayoutDashboard,
+  Lock,
+  Mail,
+  MapPinned,
+  UserRound,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import {
   updateClientLocationAction,
+  updateUserDetailsAction,
 } from './ClientProfilePage';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export type ClientProfilePageClientProps = {
   user: User;
@@ -41,46 +55,147 @@ export type ClientProfilePageClientProps = {
 
 // Inline AccountSection component
 function InlineAccountSection({ user }: { user: User }) {
+  const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+
   const fullName = `${user.user_metadata?.first_name || ''} ${
     user.user_metadata?.last_name || ''
   }`.trim();
   const email = user.email || '';
 
+  const canUserChangeEmail = canChangeEmail(user);
+  const canUserChangePassword = canChangePassword(user);
+  const oauthProvider = getOAuthProvider(user);
+
+  const handleEmailChangeSuccess = () => {
+    setIsChangeEmailOpen(false);
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    setIsChangePasswordOpen(false);
+  };
+
   return (
-    <Card className="border-border overflow-hidden">
-      <div className="bg-gradient-to-r from-primary to-primary/80 h-16" />
-      <CardHeader className="-mt-8 flex flex-col items-center pb-2">
-        <AvatarUpload
-          userId={user.id}
-          fallbackName={fullName || email}
-          avatarContainerClassName="border-4 border-white shadow-md"
-          buttonClassName="absolute bottom-0 right-0"
-          size="xl"
-        />
-        <Typography variant="h3" className="font-bold mt-4 text-foreground">
-          {fullName || 'User'}
-        </Typography>
-        <Typography variant="small" className="text-muted-foreground">
-          {email}
-        </Typography>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <Separator className="my-4" />
-        <div className="space-y-3">
-          <Link href="/dashboard" className="w-full cursor-pointer">
-            <Button
-              variant="outline"
-              className="w-full font-medium justify-start text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
-            >
-              <LayoutDashboard size={16} className="mr-2 text-primary" />
-              Go to Dashboard
-            </Button>
-          </Link>
-          <Separator className="my-3" />
-          <SignOutButton className="w-full bg-background border border-border text-muted-foreground hover:bg-muted hover:text-foreground" />
-        </div>
-      </CardContent>
-    </Card>
+    <>
+      <Card className="border-border overflow-hidden">
+        <div className="bg-gradient-to-r from-primary to-primary/80 h-16" />
+        <CardHeader className="-mt-8 flex flex-col items-center pb-2">
+          <AvatarUpload
+            userId={user.id}
+            fallbackName={fullName || email}
+            avatarContainerClassName="border-4 border-white shadow-md"
+            buttonClassName="absolute bottom-0 right-0"
+            size="xl"
+          />
+          <Typography variant="h3" className="font-bold mt-4 text-foreground">
+            {fullName || 'User'}
+          </Typography>
+          <Typography variant="small" className="text-muted-foreground">
+            {email}
+          </Typography>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <Separator className="my-4" />
+          <div className="space-y-2">
+            <Link href="/dashboard" className="w-full cursor-pointer">
+              <Button
+                variant="outline"
+                className="w-full font-medium justify-start text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+              >
+                <LayoutDashboard size={16} className="mr-2 text-primary" />
+                Go to Dashboard
+              </Button>
+            </Link>
+
+            {/* Account Security Section */}
+            <div className="space-y-2">
+              <Separator className="mt-3" />
+              <div className="flex items-center gap-2">
+                <Typography className="font-semibold text-[#313131]">
+                  Account Security
+                </Typography>
+              </div>
+
+              {/* OAuth Information */}
+              {oauthProvider && (
+                <div className="p-3 bg-muted rounded-md">
+                  <Typography variant="small" className="text-muted-foreground">
+                    Signed in with{' '}
+                    {oauthProvider === 'google' ? 'Google' : oauthProvider}.
+                    Email and password changes are managed by your{' '}
+                    {oauthProvider === 'google' ? 'Google' : oauthProvider}{' '}
+                    account.
+                  </Typography>
+                </div>
+              )}
+
+              {/* Email Change Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                onClick={() => setIsChangeEmailOpen(true)}
+                disabled={!canUserChangeEmail}
+              >
+                <Mail size={14} className="mr-2 text-primary" />
+                Change Email
+              </Button>
+
+              {/* Password Change Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                onClick={() => setIsChangePasswordOpen(true)}
+                disabled={!canUserChangePassword}
+              >
+                <Lock size={14} className="mr-2 text-primary" />
+                Change Password
+              </Button>
+            </div>
+
+            <Separator className="my-3" />
+            <SignOutButton className="w-full bg-background border border-border text-muted-foreground hover:bg-muted hover:text-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Change Email Dialog */}
+      <Dialog open={isChangeEmailOpen} onOpenChange={setIsChangeEmailOpen}>
+        <DialogContent
+          className="w-full max-w-md mx-auto"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-futura font-bold text-center">
+              Change Email
+            </DialogTitle>
+          </DialogHeader>
+          <ChangeEmailForm
+            currentEmail={email}
+            onSubmit={handleEmailChangeSuccess}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog
+        open={isChangePasswordOpen}
+        onOpenChange={setIsChangePasswordOpen}
+      >
+        <DialogContent
+          className="w-full max-w-md mx-auto"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-futura font-bold text-center">
+              Change Password
+            </DialogTitle>
+          </DialogHeader>
+          <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -122,11 +237,6 @@ function InlineDetailsSection({
         if (result.success) {
           setFormData(data);
           setIsEditing(false);
-          toast({
-            description: 'Personal details updated successfully.',
-          });
-          // Refresh the page to show updated data
-          window.location.reload();
         } else {
           toast({
             variant: 'destructive',
@@ -152,14 +262,16 @@ function InlineDetailsSection({
       <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
         <div className="flex items-center">
           <UserRound size={18} className="text-[#DEA85B] mr-2" />
-          <CardTitle className="text-[#313131]">Personal Details</CardTitle>
+          <CardTitle className="text-[#313131] text-lg">
+            Personal Details
+          </CardTitle>
         </div>
         {!isEditing && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsEditing(true)}
-            className="text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
+            className="text-sm text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
             disabled={isPending}
           >
             <Edit2 size={16} className="mr-2" />
@@ -260,8 +372,6 @@ function InlineLocationSection({
           toast({
             description: 'Location updated successfully.',
           });
-          // Refresh the page to show updated data
-          window.location.reload();
         } else {
           toast({
             variant: 'destructive',
@@ -287,14 +397,14 @@ function InlineLocationSection({
       <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
         <div className="flex items-center">
           <MapPinned size={18} className="text-[#DEA85B] mr-2" />
-          <CardTitle className="text-[#313131]">Location</CardTitle>
+          <CardTitle className="text-[#313131] text-lg">Location</CardTitle>
         </div>
         {!isEditing && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsEditing(true)}
-            className="text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
+            className="text-sm text-[#5D6C6F] hover:text-[#DEA85B] hover:bg-[#F5F5F5]"
             disabled={isPending}
           >
             <Edit2 size={16} className="mr-2" />

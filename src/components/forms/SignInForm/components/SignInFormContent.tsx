@@ -1,6 +1,6 @@
 'use client';
 
-import { FormInput, PasswordInput } from '@/components/forms/components';
+import { FormInput, PasswordInput, GoogleOAuthButton } from '@/components/forms/components';
 import { Button } from '@/components/ui/button';
 import { UseFormReturn } from 'react-hook-form';
 import { SignInFormValues } from '../schema';
@@ -11,6 +11,7 @@ type SignInFormContentProps = {
   onSubmit: (data: SignInFormValues) => void;
   onSignUpClick: () => void;
   onForgotPasswordClick?: () => void;
+  redirectTo?: string;
 };
 
 export function SignInFormContent({
@@ -19,6 +20,7 @@ export function SignInFormContent({
   onSubmit,
   onSignUpClick,
   onForgotPasswordClick,
+  redirectTo = '/profile',
 }: SignInFormContentProps) {
   const {
     register,
@@ -28,6 +30,24 @@ export function SignInFormContent({
   return (
     <div className="w-full">
       <form onSubmit={form.handleSubmit(onSubmit)}>
+        {/* Google OAuth Button */}
+        <div className="mb-4">
+          <GoogleOAuthButton
+            mode="signin"
+            redirectTo={redirectTo}
+          />
+        </div>
+
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-4 text-gray-500">or</span>
+          </div>
+        </div>
+
         <FormInput
           id="email"
           label="Email"

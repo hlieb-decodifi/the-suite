@@ -23,12 +23,20 @@ export async function ClientProfilePage() {
     redirect('/');
   }
 
-  // Fetch all data on the server
+  // Fetch all data on the server including user details from database
   const clientData = await getClientProfileData(user.id);
 
   return (
     <ClientProfilePageClient
-      user={user}
+      user={{
+        ...user,
+        // Override with database values for Google OAuth users
+        user_metadata: {
+          ...user.user_metadata,
+          first_name: clientData.firstName || user.user_metadata?.first_name || '',
+          last_name: clientData.lastName || user.user_metadata?.last_name || '',
+        }
+      }}
       profile={clientData.profile}
       address={clientData.address}
     />
@@ -39,6 +47,17 @@ export async function ClientProfilePage() {
 export async function getClientProfileData(userId: string) {
   try {
     const supabase = await createClient();
+
+    // Fetch user's first and last name from the users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', userId)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching user data:', userError);
+    }
 
     // Fetch client profile
     const { data: profile, error: profileError } = await supabase
@@ -68,12 +87,16 @@ export async function getClientProfileData(userId: string) {
     }
 
     return {
+      firstName: userData?.first_name || '',
+      lastName: userData?.last_name || '',
       profile: profile || null,
       address,
     };
   } catch (error) {
     console.error('Error fetching client profile data:', error);
     return {
+      firstName: '',
+      lastName: '',
       profile: null as ClientProfile | null,
       address: null as Address | null,
     };
@@ -123,8 +146,9 @@ export async function updateUserDetailsAction(
         user_id: userId,
         phone_number: details.phone,
         updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId);
+      }, {
+        onConflict: 'user_id'
+      });
 
     if (profileError) {
       console.error('Error updating client profile:', profileError);
@@ -200,8 +224,9 @@ export async function updateClientLocationAction(
           address_id: addressId,
           location: `${addressData.city}, ${addressData.state}`,
           updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+        }, {
+          onConflict: 'user_id'
+        });
 
       if (profileError) {
         console.error('Error updating client profile:', profileError);
