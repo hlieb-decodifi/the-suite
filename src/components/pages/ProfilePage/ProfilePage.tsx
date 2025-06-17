@@ -52,9 +52,16 @@ export async function ProfilePage({
     const { data: isProfessional } = await supabase.rpc('is_professional', {
       user_uuid: currentUser.id,
     });
+    const { data: isClient } = await supabase.rpc('is_client', {
+      user_uuid: currentUser.id,
+    });
+
+    if (isClient) {
+      redirect('/client-profile', RedirectType.replace);
+    }
 
     if (!isProfessional) {
-      redirect('/client-profile', RedirectType.replace);
+      redirect('/', RedirectType.replace);
     }
 
     targetUserId = currentUser.id;

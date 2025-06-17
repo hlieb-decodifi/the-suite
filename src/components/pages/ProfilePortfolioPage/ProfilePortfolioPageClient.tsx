@@ -65,7 +65,9 @@ function PortfolioItem({
   photo: PortfolioPhotoUI;
   isEditable?: boolean;
   isSelected?: boolean;
-  onSelectionChange?: ((photoId: string, selected: boolean) => void) | undefined;
+  onSelectionChange?:
+    | ((photoId: string, selected: boolean) => void)
+    | undefined;
   onDelete?: ((photoId: string) => void) | undefined;
 }) {
   return (
@@ -82,7 +84,7 @@ function PortfolioItem({
           {onSelectionChange && (
             <Checkbox
               checked={isSelected}
-              onCheckedChange={(checked) => 
+              onCheckedChange={(checked) =>
                 onSelectionChange(photo.id, checked as boolean)
               }
               aria-label={`Select ${photo.description || 'portfolio image'}`}
@@ -121,7 +123,9 @@ function PortfolioGrid({
   photos: PortfolioPhotoUI[];
   isEditable?: boolean;
   selectedPhotos?: Set<string>;
-  onSelectionChange?: ((photoId: string, selected: boolean) => void) | undefined;
+  onSelectionChange?:
+    | ((photoId: string, selected: boolean) => void)
+    | undefined;
   onDeleteSingle?: ((photoId: string) => void) | undefined;
 }) {
   return (
@@ -153,7 +157,12 @@ function PortfolioUploader({
   onUploadSuccess: (photo: PortfolioPhotoUI) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadProgress, setUploadProgress] = useState<Record<string, { progress: number; status: 'uploading' | 'success' | 'error' }>>({});
+  const [uploadProgress, setUploadProgress] = useState<
+    Record<
+      string,
+      { progress: number; status: 'uploading' | 'success' | 'error' }
+    >
+  >({});
   const { toast } = useToast();
 
   const isMaxPhotosReached = currentPhotosCount >= maxPhotos;
@@ -165,7 +174,7 @@ function PortfolioUploader({
 
     const fileArray = Array.from(files);
     const remainingSlots = maxPhotos - currentPhotosCount;
-    
+
     if (fileArray.length > remainingSlots) {
       toast({
         variant: 'destructive',
@@ -177,30 +186,36 @@ function PortfolioUploader({
     }
 
     // Initialize progress tracking for all files
-    const initialProgress: Record<string, { progress: number; status: 'uploading' | 'success' | 'error' }> = {};
+    const initialProgress: Record<
+      string,
+      { progress: number; status: 'uploading' | 'success' | 'error' }
+    > = {};
     fileArray.forEach((file, index) => {
-      initialProgress[`${file.name}_${index}`] = { progress: 0, status: 'uploading' };
+      initialProgress[`${file.name}_${index}`] = {
+        progress: 0,
+        status: 'uploading',
+      };
     });
     setUploadProgress(initialProgress);
 
     // Process uploads in parallel
     const uploadPromises = fileArray.map(async (file, index) => {
       const fileKey = `${file.name}_${index}`;
-      
+
       try {
         // Update progress to show compression phase
-        setUploadProgress(prev => ({
+        setUploadProgress((prev) => ({
           ...prev,
-          [fileKey]: { progress: 25, status: 'uploading' }
+          [fileKey]: { progress: 25, status: 'uploading' },
         }));
 
         // Compress the image with 2MB limit
         const compressedFile = await compressImage(file, { maxSizeMB: 2 });
 
         // Update progress to show upload phase
-        setUploadProgress(prev => ({
+        setUploadProgress((prev) => ({
           ...prev,
-          [fileKey]: { progress: 50, status: 'uploading' }
+          [fileKey]: { progress: 50, status: 'uploading' },
         }));
 
         // Create form data
@@ -215,20 +230,20 @@ function PortfolioUploader({
 
         if (result.success && result.photo) {
           // Update progress to success
-          setUploadProgress(prev => ({
+          setUploadProgress((prev) => ({
             ...prev,
-            [fileKey]: { progress: 100, status: 'success' }
+            [fileKey]: { progress: 100, status: 'success' },
           }));
-          
+
           onUploadSuccess(result.photo);
           return { success: true, photo: result.photo, fileName: file.name };
         } else {
           // Update progress to error
-          setUploadProgress(prev => ({
+          setUploadProgress((prev) => ({
             ...prev,
-            [fileKey]: { progress: 0, status: 'error' }
+            [fileKey]: { progress: 0, status: 'error' },
           }));
-          
+
           return { success: false, error: result.error, fileName: file.name };
         }
       } catch {
@@ -249,10 +264,12 @@ function PortfolioUploader({
     // Wait for all uploads to complete
     try {
       const results = await Promise.all(uploadPromises);
-      
+
       // Count successes and failures
-      const successes = results.filter(r => r && r.success);
-      const failures = results.filter(r => r && !r.success);
+      const successes = results.filter((r) => r && r.success);
+      const failures = results.filter((r) => r && !r.success);
+
+      console.log(failures);
 
       // Show summary toast
       if (successes.length > 0 && failures.length === 0) {
@@ -277,7 +294,6 @@ function PortfolioUploader({
       setTimeout(() => {
         setUploadProgress({});
       }, 1500);
-
     } catch {
       toast({
         variant: 'destructive',
@@ -290,9 +306,15 @@ function PortfolioUploader({
 
   const triggerFileSelect = () => fileInputRef.current?.click();
 
-  const activeUploads = Object.values(uploadProgress).filter(p => p.status === 'uploading').length;
-  const completedUploads = Object.values(uploadProgress).filter(p => p.status === 'success').length;
-  const failedUploads = Object.values(uploadProgress).filter(p => p.status === 'error').length;
+  const activeUploads = Object.values(uploadProgress).filter(
+    (p) => p.status === 'uploading',
+  ).length;
+  const completedUploads = Object.values(uploadProgress).filter(
+    (p) => p.status === 'success',
+  ).length;
+  const failedUploads = Object.values(uploadProgress).filter(
+    (p) => p.status === 'error',
+  ).length;
 
   return (
     <div className="flex flex-col items-end space-y-3">
@@ -323,16 +345,16 @@ function PortfolioUploader({
       {isUploading && (
         <div className="text-sm text-muted-foreground space-y-1">
           <div className="flex items-center gap-2">
-            <span>Uploading {activeUploads} photo{activeUploads === 1 ? '' : 's'}...</span>
+            <span>
+              Uploading {activeUploads} photo{activeUploads === 1 ? '' : 's'}...
+            </span>
             {completedUploads > 0 && (
               <span className="text-green-600">
                 {completedUploads} completed
               </span>
             )}
             {failedUploads > 0 && (
-              <span className="text-red-600">
-                {failedUploads} failed
-              </span>
+              <span className="text-red-600">{failedUploads} failed</span>
             )}
           </div>
         </div>
@@ -366,9 +388,9 @@ export function ProfilePortfolioPageClient({
 
   const handleSelectionChange = (photoId: string, selected: boolean) => {
     if (selected) {
-      setSelectedPhotos(prev => new Set(prev).add(photoId));
+      setSelectedPhotos((prev) => new Set(prev).add(photoId));
     } else {
-      setSelectedPhotos(prev => {
+      setSelectedPhotos((prev) => {
         const newSelectedPhotos = new Set(prev);
         newSelectedPhotos.delete(photoId);
         return newSelectedPhotos;
@@ -390,7 +412,9 @@ export function ProfilePortfolioPageClient({
   const confirmDelete = async () => {
     if (isDeletingPhotos) return;
 
-    const photosToDelete = photoToDelete ? [photoToDelete] : Array.from(selectedPhotos);
+    const photosToDelete = photoToDelete
+      ? [photoToDelete]
+      : Array.from(selectedPhotos);
     if (photosToDelete.length === 0) return;
 
     setIsDeletingPhotos(true);
@@ -398,20 +422,22 @@ export function ProfilePortfolioPageClient({
 
     try {
       // Delete photos in parallel
-      const deletePromises = photosToDelete.map(photoId =>
+      const deletePromises = photosToDelete.map((photoId) =>
         deletePortfolioPhotoAction({
           id: photoId,
           userId: user.id,
-        })
+        }),
       );
 
       const results = await Promise.all(deletePromises);
-      const successCount = results.filter(result => result.success).length;
-      const failureCount = results.filter(result => !result.success).length;
+      const successCount = results.filter((result) => result.success).length;
+      const failureCount = results.filter((result) => !result.success).length;
 
       if (successCount > 0) {
         // Remove successfully deleted photos from state
-        setPhotos(prev => prev.filter(photo => !photosToDelete.includes(photo.id)));
+        setPhotos((prev) =>
+          prev.filter((photo) => !photosToDelete.includes(photo.id)),
+        );
         setSelectedPhotos(new Set());
 
         toast({
@@ -495,10 +521,12 @@ export function ProfilePortfolioPageClient({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Portfolio Photo{deleteCount === 1 ? '' : 's'}</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete Portfolio Photo{deleteCount === 1 ? '' : 's'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {deleteCount} photo{deleteCount === 1 ? '' : 's'}? 
-              This action cannot be undone.
+              Are you sure you want to delete {deleteCount} photo
+              {deleteCount === 1 ? '' : 's'}? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -508,7 +536,9 @@ export function ProfilePortfolioPageClient({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeletingPhotos}
             >
-              {isDeletingPhotos ? 'Deleting...' : `Delete Photo${deleteCount === 1 ? '' : 's'}`}
+              {isDeletingPhotos
+                ? 'Deleting...'
+                : `Delete Photo${deleteCount === 1 ? '' : 's'}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
