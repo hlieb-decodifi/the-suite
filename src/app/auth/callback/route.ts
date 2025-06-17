@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { uploadOAuthProfilePhoto } from '@/server/domains/photos/oauth-photo-upload';
 
 /**
  * Auth callback route handler
@@ -39,6 +40,15 @@ export async function GET(request: Request) {
         
         // For signup mode, handle role assignment and profile creation
         if (mode === 'signup' && role) {
+          // Auto-upload profile photo from Google OAuth for any new user
+          const avatarUrl = data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture;
+          if (avatarUrl) {
+            try {
+              await uploadOAuthProfilePhoto(data.user.id, avatarUrl, 'google');
+            } catch (error) {
+              console.error('Error uploading OAuth profile photo:', error);
+            }
+          }
           // Get the role ID for the selected role
           const { data: roleData } = await supabase
             .from('roles')
@@ -95,6 +105,8 @@ export async function GET(request: Request) {
               if (profError && !profError.message.includes('duplicate')) {
                 console.error('Error creating professional profile:', profError);
               }
+              
+              
             }
             
             // If switching from professional to client  
@@ -119,6 +131,7 @@ export async function GET(request: Request) {
                 if (profError && !profError.message.includes('duplicate')) {
                   console.error('Error creating professional profile:', profError);
                 }
+
               }
               // Client profile should already exist from trigger
             }
