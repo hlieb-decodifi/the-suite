@@ -1155,7 +1155,7 @@ insert into storage.buckets (id, name, public)
 
 -- Create portfolio-photos bucket (not public)
 insert into storage.buckets (id, name, public)
-  values ('portfolio-photos', 'Portfolio Photos', false);
+  values ('portfolio-photos', 'Portfolio Photos', true);
 
 -- Policies for profile-photos bucket
 create policy "Allow authenticated uploads to profile-photos"
@@ -1202,6 +1202,13 @@ create policy "Allow authenticated users to modify their own portfolio photos"
 
 create policy "Allow authenticated users to delete their own portfolio photos"
   on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'portfolio-photos' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow users to view their own portfolio photos"
+  on storage.objects for select to authenticated
   using (
     bucket_id = 'portfolio-photos' and
     (storage.foldername(name))[1] = auth.uid()::text
