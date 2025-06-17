@@ -42,12 +42,22 @@ export async function uploadOAuthProfilePhoto(
     }
 
     // Download the image from the OAuth provider
-    const response = await fetch(photoUrl);
+    console.log('Fetching photo from:', photoUrl);
+    const response = await fetch(photoUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Supabase/1.0)',
+      },
+    });
+    
     if (!response.ok) {
-      return { success: false, error: 'Failed to fetch photo from OAuth provider' };
+      console.error('Failed to fetch photo:', response.status, response.statusText);
+      return { success: false, error: `Failed to fetch photo from OAuth provider: ${response.status}` };
     }
 
+    console.log('Photo fetched successfully, content-type:', response.headers.get('content-type'));
     const arrayBuffer = await response.arrayBuffer();
+    console.log('Photo size:', arrayBuffer.byteLength, 'bytes');
+    
     const file = new File([arrayBuffer], `${providerName}_profile_photo.jpg`, {
       type: 'image/jpeg',
     });
@@ -58,7 +68,8 @@ export async function uploadOAuthProfilePhoto(
     const filePath = `${userId}/${fileName}`;
 
     // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
+    console.log('Uploading to storage bucket:', PROFILE_PHOTOS_BUCKET, 'path:', filePath);
+    const { error: uploadError, data: uploadData } = await supabase.storage
       .from(PROFILE_PHOTOS_BUCKET)
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -69,6 +80,8 @@ export async function uploadOAuthProfilePhoto(
       console.error('Error uploading OAuth profile photo:', uploadError);
       return { success: false, error: uploadError.message };
     }
+    
+    console.log('Upload successful:', uploadData);
 
     // Get public URL
     const { data: urlData } = supabase.storage
@@ -82,13 +95,15 @@ export async function uploadOAuthProfilePhoto(
     }
 
     // Save to database
-    const { error: dbError } = await supabase
+    console.log('Saving to database:', { userId, url: urlData.publicUrl, filename: fileName });
+    const { error: dbError, data: insertData } = await supabase
       .from('profile_photos')
       .insert({
         user_id: userId,
         url: urlData.publicUrl,
         filename: fileName,
-      });
+      })
+      .select();
 
     if (dbError) {
       console.error('Error saving OAuth profile photo to database:', dbError);
@@ -96,6 +111,8 @@ export async function uploadOAuthProfilePhoto(
       await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([filePath]);
       return { success: false, error: dbError.message };
     }
+    
+    console.log('Database insert successful:', insertData);
 
     return { 
       success: true, 
