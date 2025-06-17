@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+import { redirect, RedirectType } from 'next/navigation';
 import { ClientProfilePageClient } from './ClientProfilePageClient';
 import type {
   ClientProfile,
@@ -23,6 +23,21 @@ export async function ClientProfilePage() {
     redirect('/');
   }
 
+  const { data: isClient } = await supabase.rpc('is_client', {
+    user_uuid: user.id,
+  });
+  const { data: isProfessional } = await supabase.rpc('is_professional', {
+    user_uuid: user.id,
+  });
+
+  if (isProfessional) {
+    redirect('/profile', RedirectType.replace);
+  }
+
+  if (!isClient) {
+    redirect('/', RedirectType.replace);
+  }
+
   // Fetch all data on the server including user details from database
   const clientData = await getClientProfileData(user.id);
 
@@ -33,9 +48,10 @@ export async function ClientProfilePage() {
         // Override with database values for Google OAuth users
         user_metadata: {
           ...user.user_metadata,
-          first_name: clientData.firstName || user.user_metadata?.first_name || '',
+          first_name:
+            clientData.firstName || user.user_metadata?.first_name || '',
           last_name: clientData.lastName || user.user_metadata?.last_name || '',
-        }
+        },
       }}
       profile={clientData.profile}
       address={clientData.address}
@@ -142,13 +158,16 @@ export async function updateUserDetailsAction(
     // Update or create client profile with phone number
     const { error: profileError } = await supabase
       .from('client_profiles')
-      .upsert({
-        user_id: userId,
-        phone_number: details.phone,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id'
-      });
+      .upsert(
+        {
+          user_id: userId,
+          phone_number: details.phone,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'user_id',
+        },
+      );
 
     if (profileError) {
       console.error('Error updating client profile:', profileError);
@@ -219,14 +238,17 @@ export async function updateClientLocationAction(
       // Update the client profile with the new address ID
       const { error: profileError } = await supabase
         .from('client_profiles')
-        .upsert({
-          user_id: userId,
-          address_id: addressId,
-          location: `${addressData.city}, ${addressData.state}`,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id'
-        });
+        .upsert(
+          {
+            user_id: userId,
+            address_id: addressId,
+            location: `${addressData.city}, ${addressData.state}`,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: 'user_id',
+          },
+        );
 
       if (profileError) {
         console.error('Error updating client profile:', profileError);
