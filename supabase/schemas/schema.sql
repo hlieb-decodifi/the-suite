@@ -54,7 +54,7 @@ begin
   
   return is_professional;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 create or replace function is_client(user_uuid uuid)
 returns boolean as $$
@@ -70,7 +70,7 @@ begin
   
   return is_client;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 -- RLS policies for users will be defined after all tables are created
 
@@ -223,7 +223,7 @@ begin
   -- Return default of 50 if no custom limit is set
   return coalesce(limit_value, 50);
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 -- Updated constraint to use customizable service limits
 create or replace function check_service_limit()
@@ -246,7 +246,7 @@ begin
   
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 create trigger enforce_service_limit
   before insert on services
@@ -272,7 +272,7 @@ begin
     
   return true;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 /**
 * PROFESSIONAL_SERVICES
@@ -427,7 +427,7 @@ begin
   
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 create trigger on_user_role_change
   after update of role_id on users
@@ -452,7 +452,7 @@ begin
   
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 create trigger on_user_role_change_to_client
   after update of role_id on users
@@ -578,7 +578,7 @@ begin
   
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
@@ -654,7 +654,7 @@ begin
   end if;
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 create trigger enforce_portfolio_photo_limit
   before insert on portfolio_photos
@@ -855,7 +855,7 @@ begin
   
   return CASE WHEN TG_OP = 'DELETE' THEN old ELSE new END;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 -- Create triggers for the update_professional_subscription_status function
 create trigger after_professional_subscription_insert
@@ -997,7 +997,7 @@ begin
   end if;
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 /**
 * Trigger to enforce no double booking
@@ -1278,7 +1278,7 @@ begin
   new.updated_at = timezone('utc'::text, now());
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 -- Trigger to mark services for sync when they are created or updated
 create trigger service_stripe_sync_trigger
@@ -1303,7 +1303,7 @@ begin
   
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 -- Trigger for professional profile changes
 create trigger professional_profile_stripe_sync_trigger
@@ -1342,7 +1342,7 @@ begin
   
   return coalesce(new, old);
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 -- Trigger for payment method changes
 create trigger payment_method_stripe_sync_trigger
@@ -1404,7 +1404,7 @@ begin
   where id = new.conversation_id;
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 -- Trigger to update conversation timestamp on new message
 create trigger update_conversation_on_new_message
@@ -1600,7 +1600,7 @@ begin
   
   return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 -- Trigger for legal document versioning
 create trigger legal_document_versioning_trigger
