@@ -83,14 +83,20 @@ export type Database = {
       booking_payments: {
         Row: {
           amount: number
+          authorization_expires_at: string | null
           balance_amount: number
           balance_payment_method: string | null
           booking_id: string
+          capture_method: string | null
+          capture_scheduled_for: string | null
+          captured_at: string | null
           created_at: string
           deposit_amount: number
           id: string
           payment_method_id: string
           payment_type: string
+          pre_auth_placed_at: string | null
+          pre_auth_scheduled_for: string | null
           requires_balance_payment: boolean
           service_fee: number
           status: string
@@ -101,14 +107,20 @@ export type Database = {
         }
         Insert: {
           amount: number
+          authorization_expires_at?: string | null
           balance_amount?: number
           balance_payment_method?: string | null
           booking_id: string
+          capture_method?: string | null
+          capture_scheduled_for?: string | null
+          captured_at?: string | null
           created_at?: string
           deposit_amount?: number
           id?: string
           payment_method_id: string
           payment_type?: string
+          pre_auth_placed_at?: string | null
+          pre_auth_scheduled_for?: string | null
           requires_balance_payment?: boolean
           service_fee: number
           status: string
@@ -119,14 +131,20 @@ export type Database = {
         }
         Update: {
           amount?: number
+          authorization_expires_at?: string | null
           balance_amount?: number
           balance_payment_method?: string | null
           booking_id?: string
+          capture_method?: string | null
+          capture_scheduled_for?: string | null
+          captured_at?: string | null
           created_at?: string
           deposit_amount?: number
           id?: string
           payment_method_id?: string
           payment_type?: string
+          pre_auth_placed_at?: string | null
+          pre_auth_scheduled_for?: string | null
           requires_balance_payment?: boolean
           service_fee?: number
           status?: string
@@ -959,6 +977,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_payment_schedule: {
+        Args: { appointment_date: string; appointment_time: string }
+        Returns: {
+          pre_auth_date: string
+          capture_date: string
+          should_pre_auth_now: boolean
+        }[]
+      }
       get_service_limit: {
         Args: { prof_profile_id: string }
         Returns: number

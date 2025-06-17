@@ -964,7 +964,14 @@ create table booking_payments (
   requires_balance_payment boolean default false not null,
   balance_payment_method text check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Add fields to booking_payments table for uncaptured payment support
+  capture_method text default 'automatic' check (capture_method in ('automatic', 'manual')),
+  authorization_expires_at timestamp with time zone,
+  pre_auth_scheduled_for timestamp with time zone,
+  capture_scheduled_for timestamp with time zone,
+  captured_at timestamp with time zone,
+  pre_auth_placed_at timestamp with time zone
 );
 alter table booking_payments enable row level security;
 
@@ -972,6 +979,20 @@ alter table booking_payments enable row level security;
 create index if not exists idx_booking_payments_stripe_checkout_session_id 
 on booking_payments(stripe_checkout_session_id) 
 where stripe_checkout_session_id is not null;
+
+-- Add index for efficient querying of scheduled pre-auths and captures
+create index if not exists idx_booking_payments_pre_auth_scheduled 
+on booking_payments(pre_auth_scheduled_for) 
+where pre_auth_scheduled_for is not null and status = 'pending';
+
+create index if not exists idx_booking_payments_capture_scheduled 
+on booking_payments(capture_scheduled_for) 
+where capture_scheduled_for is not null and status in ('pending', 'authorized');
+
+-- Add new status for authorized but not captured payments
+alter table booking_payments drop constraint if exists booking_payments_status_check;
+alter table booking_payments add constraint booking_payments_status_check 
+check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled'));
 
 /**
 * Function to check professional availability
@@ -1643,6 +1664,35 @@ create policy "Clients can create appointments for their bookings"
       and bookings.client_id = auth.uid()
     )
   );
+
+-- Function to calculate pre-auth and capture times based on appointment date
+create or replace function calculate_payment_schedule(appointment_date date, appointment_time time)
+returns table(
+  pre_auth_date timestamp with time zone,
+  capture_date timestamp with time zone,
+  should_pre_auth_now boolean
+) as $$
+declare
+  appointment_datetime timestamp with time zone;
+  six_days_before timestamp with time zone;
+  twelve_hours_after timestamp with time zone;
+begin
+  -- Combine date and time into full timestamp
+  appointment_datetime := (appointment_date || ' ' || appointment_time)::timestamp with time zone;
+  
+  -- Calculate 6 days before appointment (for pre-auth)
+  six_days_before := appointment_datetime - interval '6 days';
+  
+  -- Calculate 12 hours after appointment (for capture)
+  twelve_hours_after := appointment_datetime + interval '12 hours';
+  
+  -- Determine if we should place pre-auth now (if appointment is within 6 days)
+  return query select 
+    six_days_before as pre_auth_date,
+    twelve_hours_after as capture_date,
+    (now() >= six_days_before) as should_pre_auth_now;
+end;
+$$ language plpgsql;
 
 
 
