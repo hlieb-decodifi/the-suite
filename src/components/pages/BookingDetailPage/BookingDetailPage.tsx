@@ -70,13 +70,14 @@ export type DetailedAppointmentType = {
         description?: string;
       };
     }>;
-    booking_payments: Array<{
+    booking_payments: {
       id: string;
       amount: number;
+      tip_amount: number;
       status: string;
       payment_method_id: string;
       created_at: string;
-    }>;
+    } | null;
   };
 };
 
@@ -236,6 +237,7 @@ export async function getAppointmentById(
           booking_payments(
             id,
             amount,
+            tip_amount,
             status,
             payment_method_id,
             created_at

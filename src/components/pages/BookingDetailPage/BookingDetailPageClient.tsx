@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatCurrency } from '@/utils/formatCurrency';
+import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
 import { PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber';
 import {
@@ -26,6 +27,7 @@ import Link from 'next/link';
 type BookingPayment = {
   id: string;
   amount: number;
+  tip_amount: number;
   status: string;
   payment_method_id: string;
   created_at: string;
@@ -98,7 +100,7 @@ type DetailedAppointment = {
       };
     } | null;
     booking_services: BookingService[];
-    booking_payments: BookingPayment[];
+    booking_payments: BookingPayment | null;
   };
 };
 
@@ -330,7 +332,8 @@ export function BookingDetailPageClient({
             </CardHeader>
             <CardContent className="space-y-6">
               {(() => {
-                const services = appointment.bookings.booking_services;
+                const services = appointment.bookings.booking_services || [];
+                const payment = appointment.bookings.booking_payments;
                 const mainService = services[0]; // First service is typically the main one
                 const additionalServices = services.slice(1);
                 const totalDuration = services.reduce(
@@ -341,8 +344,14 @@ export function BookingDetailPageClient({
                   (sum, service) => sum + service.price,
                   0,
                 );
-                const serviceFee = 1.0; // Fixed service fee
-                const total = subtotal + serviceFee;
+                // Get actual payment data including tips
+                const totalAmount = payment?.amount || 0;
+                const totalTips = payment?.tip_amount || 0;
+                const serviceFee = Math.max(
+                  0,
+                  totalAmount - subtotal - totalTips,
+                ); // Calculate service fee from actual data
+                const total = totalAmount + totalTips;
 
                 return (
                   <>
@@ -367,7 +376,7 @@ export function BookingDetailPageClient({
                               Duration:
                             </Typography>
                             <Typography className="font-medium">
-                              {mainService.duration} minutes
+                              {formatDuration(mainService.duration)}
                             </Typography>
                           </div>
                           <div className="flex items-center justify-end gap-2">
@@ -415,7 +424,7 @@ export function BookingDetailPageClient({
                                       variant="small"
                                       className="text-muted-foreground"
                                     >
-                                      {bookingService.duration} minutes
+                                      {formatDuration(bookingService.duration)}
                                     </Typography>
                                   </div>
                                 </div>
@@ -441,7 +450,7 @@ export function BookingDetailPageClient({
                           </Typography>
                         </div>
                         <Typography className="font-medium">
-                          {totalDuration} minutes
+                          {formatDuration(totalDuration)}
                         </Typography>
                       </div>
 
@@ -469,10 +478,23 @@ export function BookingDetailPageClient({
                             {formatCurrency(serviceFee)}
                           </Typography>
                         </div>
+                        {totalTips > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Tips:
+                            </Typography>
+                            <Typography variant="small" className="font-medium">
+                              {formatCurrency(totalTips)}
+                            </Typography>
+                          </div>
+                        )}
                         <Separator />
                         <div className="flex justify-between items-center">
                           <Typography className="font-semibold">
-                            Total:
+                            Total{totalTips > 0 ? ' (including tips)' : ''}:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
                             {formatCurrency(total)}
@@ -763,47 +785,65 @@ export function BookingDetailPageClient({
           )}
 
           {/* Payment Information */}
-          {appointment.bookings.booking_payments &&
-            appointment.bookings.booking_payments.length > 0 && (
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <CreditCardIcon className="h-5 w-5 text-muted-foreground" />
-                    Payment Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {appointment.bookings.booking_payments.map(
-                    (payment: BookingPayment) => (
-                      <div key={payment.id} className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <Typography className="font-medium text-primary">
-                            {formatCurrency(payment.amount)}
-                          </Typography>
-                          <Badge
-                            variant={
-                              payment.status === 'completed'
-                                ? 'default'
-                                : 'secondary'
-                            }
-                          >
-                            {payment.status}
-                          </Badge>
-                        </div>
-                        <Typography variant="muted">
-                          Method ID: {payment.payment_method_id}
-                        </Typography>
-                        <Typography variant="muted">
-                          Paid:{' '}
-                          {format(new Date(payment.created_at), 'MMM d, yyyy')}
-                        </Typography>
-                        <Separator />
-                      </div>
-                    ),
+          {appointment.bookings.booking_payments && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <CreditCardIcon className="h-5 w-5 text-muted-foreground" />
+                  Payment Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Typography className="font-medium text-primary">
+                      {formatCurrency(
+                        appointment.bookings.booking_payments.amount,
+                      )}
+                    </Typography>
+                    <Badge
+                      variant={
+                        appointment.bookings.booking_payments.status ===
+                        'completed'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                    >
+                      {appointment.bookings.booking_payments.status}
+                    </Badge>
+                  </div>
+                  {appointment.bookings.booking_payments.tip_amount > 0 && (
+                    <div className="flex justify-between items-center">
+                      <Typography
+                        variant="small"
+                        className="text-muted-foreground"
+                      >
+                        Tip:
+                      </Typography>
+                      <Typography variant="small" className="font-medium">
+                        {formatCurrency(
+                          appointment.bookings.booking_payments.tip_amount,
+                        )}
+                      </Typography>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
+                  <Typography variant="muted">
+                    Method ID:{' '}
+                    {appointment.bookings.booking_payments.payment_method_id}
+                  </Typography>
+                  <Typography variant="muted">
+                    Paid:{' '}
+                    {format(
+                      new Date(
+                        appointment.bookings.booking_payments.created_at,
+                      ),
+                      'MMM d, yyyy',
+                    )}
+                  </Typography>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Booking Details */}
           <Card className="shadow-sm">
