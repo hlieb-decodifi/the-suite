@@ -95,14 +95,16 @@ export function ProfessionalsTemplateProfessionalCard({
         </div>
 
         {/* Description */}
-        {description && (
-          <Typography
-            variant="p"
-            className="text-muted-foreground text-sm mb-4 line-clamp-2"
-          >
-            {description}
-          </Typography>
-        )}
+        <div className="mb-4 min-h-[2.5rem]">
+          {description && (
+            <Typography
+              variant="p"
+              className="text-muted-foreground text-sm line-clamp-2"
+            >
+              {description}
+            </Typography>
+          )}
+        </div>
 
         {/* Stats Row */}
         <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
