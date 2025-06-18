@@ -63,11 +63,10 @@ export async function submitContactInquiry(
       };
     }
     
-    // TODO: Send email notification to admins
-    // This would be implemented with your email service (Resend, SendGrid, etc.)
+    // Send email notification to admins
     await sendAdminNotificationEmail(inquiry.id, validatedData);
     
-    // TODO: Send confirmation email to user
+    // Send confirmation email to user
     await sendUserConfirmationEmail(validatedData.email, validatedData.name, inquiry.id);
     
     return {
@@ -209,40 +208,47 @@ export async function updateContactInquiryStatus(
 }
 
 /**
- * Send email notification to admins (placeholder)
- * TODO: Implement with your email service
+ * Send email notification to admins
  */
 async function sendAdminNotificationEmail(inquiryId: string, formData: ContactFormData) {
-  // This would be implemented with your email service
-  // Example with Resend:
-  /*
-  const { Resend } = await import('resend');
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  
-  await resend.emails.send({
-    from: 'noreply@yourdomain.com',
-    to: ['admin@yourdomain.com'],
-    subject: `New Contact Inquiry: ${formData.subject}`,
-    html: `
-      <h2>New Contact Inquiry</h2>
-      <p><strong>From:</strong> ${formData.name} (${formData.email})</p>
-      <p><strong>Subject:</strong> ${formData.subject}</p>
-      <p><strong>Urgency:</strong> ${formData.urgency}</p>
-      <p><strong>Message:</strong></p>
-      <p>${formData.message}</p>
-      <p><strong>Inquiry ID:</strong> ${inquiryId}</p>
-    `,
-  });
-  */
-  
-  console.log('Admin notification email would be sent for inquiry:', inquiryId, 'with subject:', formData.subject);
+  try {
+    const { sendEmail, createAdminNotificationEmail } = await import('@/lib/email');
+    
+    const emailTemplate = createAdminNotificationEmail(inquiryId, formData);
+    const result = await sendEmail(emailTemplate);
+    
+    if (!result.success) {
+      console.error('Failed to send admin notification email:', result.error);
+    } else {
+      console.log('Admin notification email sent successfully:', result.messageId);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error sending admin notification email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 /**
- * Send confirmation email to user (placeholder)
- * TODO: Implement with your email service
+ * Send confirmation email to user
  */
 async function sendUserConfirmationEmail(email: string, name: string, inquiryId: string) {
-  // This would be implemented with your email service
-  console.log('Confirmation email would be sent to:', email, 'for inquiry:', inquiryId);
+  try {
+    const { sendEmail, createUserConfirmationEmail } = await import('@/lib/email');
+    
+    const emailTemplate = createUserConfirmationEmail(email, name, inquiryId);
+    const result = await sendEmail(emailTemplate);
+    
+    if (!result.success) {
+      console.error('Failed to send user confirmation email:', result.error);
+    } else {
+      console.log('User confirmation email sent successfully:', result.messageId);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error sending user confirmation email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 } 
