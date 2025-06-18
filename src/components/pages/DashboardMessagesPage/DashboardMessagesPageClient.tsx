@@ -1,39 +1,34 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
-import NextImage from 'next/image';
 import heic2any from 'heic2any';
+import NextImage from 'next/image';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
-import { Typography } from '@/components/ui/typography';
-import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
-  DialogContent,
-  DialogTrigger,
-  DialogTitle,
   DialogClose,
+  DialogContent,
   DialogDescription,
+  DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { Typography } from '@/components/ui/typography';
 import { useToast } from '@/components/ui/use-toast';
-import {
-  MessageCircleIcon,
-  SendIcon,
-  PlusIcon,
-  ImageIcon,
-  XIcon,
-} from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { ConversationWithUser, ChatMessage } from '@/types/messages';
 import {
-  sendMessage,
+  createOrGetConversationEnhanced,
   getMessages,
   markMessagesAsRead,
-  createOrGetConversation,
+  sendMessage,
 } from '@/server/domains/messages/actions';
+import { ChatMessage, ConversationWithUser } from '@/types/messages';
 import { cn } from '@/utils';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { ImageIcon, MessageCircleIcon, SendIcon, XIcon } from 'lucide-react';
 
 type DashboardMessagesPageClientProps = {
   isProfessional: boolean;
@@ -543,7 +538,7 @@ export function DashboardMessagesPageClient({
 
   const handleStartConversation = async (professionalId: string) => {
     setIsLoading(true);
-    const result = await createOrGetConversation(professionalId);
+    const result = await createOrGetConversationEnhanced(professionalId);
 
     if (result.success && result.conversation) {
       const professional = availableProfessionals.find(
@@ -611,6 +606,11 @@ export function DashboardMessagesPageClient({
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
+
+  // Check if professional is published (available for messaging)
+  const isProfessionalPublished = (professionalId: string) => {
+    return availableProfessionals.some((prof) => prof.id === professionalId);
   };
 
   // Get display text for last message
@@ -689,16 +689,6 @@ export function DashboardMessagesPageClient({
         <Typography variant="h3" className="font-semibold text-xl lg:text-2xl">
           Messages
         </Typography>
-        {!isProfessional && availableProfessionals.length > 0 && (
-          <Button
-            onClick={() => setShowNewConversation(!showNewConversation)}
-            variant="outline"
-            className="font-medium justify-start text-foreground border-border w-full sm:w-auto"
-          >
-            <PlusIcon className="h-4 w-4 mr-2" />
-            New Message
-          </Button>
-        )}
       </div>
 
       {showNewConversation && (
@@ -911,32 +901,76 @@ export function DashboardMessagesPageClient({
                     </svg>
                   </Button>
 
-                  <Avatar className="h-10 w-10 lg:h-12 lg:w-12">
-                    <AvatarImage
-                      src={selectedConversation.other_user.profile_photo_url}
-                    />
-                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20 text-primary font-semibold">
-                      {getInitials(
-                        selectedConversation.other_user.first_name,
-                        selectedConversation.other_user.last_name,
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <Typography
-                      variant="h4"
-                      className="font-semibold text-base lg:text-xl truncate"
+                  {/* Professional Avatar and Info - Clickable if client and professional is published */}
+                  {!isProfessional &&
+                  isProfessionalPublished(
+                    selectedConversation.other_user.id,
+                  ) ? (
+                    <Link
+                      href={`/professionals/${selectedConversation.other_user.id}`}
+                      className="flex items-center gap-3 lg:gap-4 hover:opacity-80 transition-opacity"
                     >
-                      {selectedConversation.other_user.first_name}{' '}
-                      {selectedConversation.other_user.last_name}
-                    </Typography>
-                    <Typography
-                      variant="small"
-                      className="text-muted-foreground text-xs lg:text-sm"
-                    >
-                      {isProfessional ? 'Client' : 'Professional'}
-                    </Typography>
-                  </div>
+                      <Avatar className="h-10 w-10 lg:h-12 lg:w-12">
+                        <AvatarImage
+                          src={
+                            selectedConversation.other_user.profile_photo_url
+                          }
+                        />
+                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20 text-primary font-semibold">
+                          {getInitials(
+                            selectedConversation.other_user.first_name,
+                            selectedConversation.other_user.last_name,
+                          )}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <Typography
+                          variant="h4"
+                          className="font-semibold text-base lg:text-xl truncate hover:text-primary transition-colors"
+                        >
+                          {selectedConversation.other_user.first_name}{' '}
+                          {selectedConversation.other_user.last_name}
+                        </Typography>
+                        <Typography
+                          variant="small"
+                          className="text-muted-foreground text-xs lg:text-sm"
+                        >
+                          Professional
+                        </Typography>
+                      </div>
+                    </Link>
+                  ) : (
+                    <>
+                      <Avatar className="h-10 w-10 lg:h-12 lg:w-12">
+                        <AvatarImage
+                          src={
+                            selectedConversation.other_user.profile_photo_url
+                          }
+                        />
+                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20 text-primary font-semibold">
+                          {getInitials(
+                            selectedConversation.other_user.first_name,
+                            selectedConversation.other_user.last_name,
+                          )}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <Typography
+                          variant="h4"
+                          className="font-semibold text-base lg:text-xl truncate"
+                        >
+                          {selectedConversation.other_user.first_name}{' '}
+                          {selectedConversation.other_user.last_name}
+                        </Typography>
+                        <Typography
+                          variant="small"
+                          className="text-muted-foreground text-xs lg:text-sm"
+                        >
+                          {isProfessional ? 'Client' : 'Professional'}
+                        </Typography>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col flex-grow h-[400px] lg:h-[500px]">

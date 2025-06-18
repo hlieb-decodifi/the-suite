@@ -6,12 +6,16 @@ import { ProfileSettingsPageClient } from './ProfileSettingsPageClient';
 import type { User } from '@supabase/supabase-js';
 import type { DepositSettingsFormValues } from '@/components/forms';
 
-// Types for deposit settings
+// Types for settings
 export type DepositSettings = {
   requires_deposit: boolean;
   deposit_type: string | null;
   deposit_value: number | null;
   balance_payment_method: string | null;
+};
+
+export type MessagingSettings = {
+  allow_messages: boolean;
 };
 
 export type ProfileSettingsPageProps = {
@@ -73,13 +77,15 @@ export async function ProfileSettingsPage({
     redirect('/');
   }
 
-  // Fetch deposit settings
+  // Fetch settings
   const depositSettings = await getDepositSettings(targetUserId);
+  const messagingSettings = await getMessagingSettings(targetUserId);
 
   return (
     <ProfileSettingsPageClient
       user={user as User}
       depositSettings={depositSettings}
+      messagingSettings={messagingSettings}
       isEditable={isEditable}
     />
   );
@@ -113,6 +119,33 @@ export async function getDepositSettings(
     };
   } catch (error) {
     console.error('Error fetching deposit settings:', error);
+    return null;
+  }
+}
+
+// Server function to get messaging settings
+export async function getMessagingSettings(
+  userId: string,
+): Promise<MessagingSettings | null> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('professional_profiles')
+      .select('allow_messages')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching messaging settings:', error);
+      return null;
+    }
+
+    return {
+      allow_messages: data.allow_messages || false,
+    };
+  } catch (error) {
+    console.error('Error fetching messaging settings:', error);
     return null;
   }
 }
@@ -202,6 +235,61 @@ export async function updateDepositSettingsAction({
     };
   } catch (error) {
     console.error('Error updating deposit settings:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}
+
+// Server action to update messaging settings
+export async function updateMessagingSettingsAction({
+  userId,
+  allowMessages,
+}: {
+  userId: string;
+  allowMessages: boolean;
+}) {
+  try {
+    const supabase = await createClient();
+
+    // Verify user owns this profile
+    const { data: profile, error: profileError } = await supabase
+      .from('professional_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError || !profile) {
+      return {
+        success: false,
+        error: 'Professional profile not found',
+      };
+    }
+
+    // Update messaging settings
+    const { error: updateError } = await supabase
+      .from('professional_profiles')
+      .update({
+        allow_messages: allowMessages,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Error updating messaging settings:', updateError);
+      return {
+        success: false,
+        error: 'Failed to update messaging settings',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Messaging settings updated successfully',
+    };
+  } catch (error) {
+    console.error('Error updating messaging settings:', error);
     return {
       success: false,
       error: 'An unexpected error occurred',

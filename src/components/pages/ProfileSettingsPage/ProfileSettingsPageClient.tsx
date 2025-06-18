@@ -4,9 +4,12 @@ import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Typography } from '@/components/ui/typography';
 import { DepositSettingsForm } from '@/components/forms';
-import { updateDepositSettingsAction } from './ProfileSettingsPage';
+import {
+  updateDepositSettingsAction,
+  updateMessagingSettingsAction,
+} from './ProfileSettingsPage';
 import type { User } from '@supabase/supabase-js';
-import type { DepositSettings } from './ProfileSettingsPage';
+import type { DepositSettings, MessagingSettings } from './ProfileSettingsPage';
 import type { DepositSettingsFormValues } from '@/components/forms';
 import { ChangeEmailForm } from '@/components/forms/ChangeEmailForm';
 import { ChangePasswordForm } from '@/components/forms/ChangePasswordForm';
@@ -24,20 +27,26 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Lock, DollarSign } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Mail, Lock, DollarSign, MessageCircle } from 'lucide-react';
 
 export type ProfileSettingsPageClientProps = {
   user: User;
   depositSettings: DepositSettings | null;
+  messagingSettings: MessagingSettings | null;
   isEditable?: boolean;
 };
 
 export function ProfileSettingsPageClient({
   user,
   depositSettings,
+  messagingSettings,
   isEditable = true,
 }: ProfileSettingsPageClientProps) {
   const [isUpdatingDepositSettings, setIsUpdatingDepositSettings] =
+    useState(false);
+  const [isUpdatingMessagingSettings, setIsUpdatingMessagingSettings] =
     useState(false);
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -92,7 +101,41 @@ export function ProfileSettingsPageClient({
     setIsChangePasswordOpen(false);
   };
 
-  if (!depositSettings) {
+  const handleMessagingToggle = async (allowMessages: boolean) => {
+    if (!isEditable) return;
+
+    setIsUpdatingMessagingSettings(true);
+    try {
+      const result = await updateMessagingSettingsAction({
+        userId: user.id,
+        allowMessages,
+      });
+
+      if (result.success) {
+        toast({
+          title: 'Success',
+          description: 'Messaging settings updated successfully',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to update messaging settings',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error updating messaging settings:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingMessagingSettings(false);
+    }
+  };
+
+  if (!depositSettings || !messagingSettings) {
     return (
       <div className="mx-auto w-full">
         <div className="max-w-2xl mx-auto">
@@ -199,6 +242,56 @@ export function ProfileSettingsPageClient({
                 </div>
               </CardContent>
             </Card>
+
+            {/* Messaging Settings Section */}
+            {isEditable && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageCircle className="size-5" />
+                    <Typography
+                      variant="h4"
+                      className="text-foreground leading-tight"
+                    >
+                      Messaging Settings
+                    </Typography>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label
+                        htmlFor="allow-messages"
+                        className="text-base font-medium"
+                      >
+                        Allow Messages
+                      </Label>
+                      <Typography
+                        variant="small"
+                        className="text-muted-foreground"
+                      >
+                        Let new clients contact you through messages
+                      </Typography>
+                    </div>
+                    <Switch
+                      id="allow-messages"
+                      checked={messagingSettings.allow_messages}
+                      onCheckedChange={handleMessagingToggle}
+                      disabled={isUpdatingMessagingSettings}
+                    />
+                  </div>
+                  <div className="p-3 bg-muted/30 rounded-md">
+                    <Typography
+                      variant="small"
+                      className="text-muted-foreground"
+                    >
+                      Note: Clients who have existing appointments with you can
+                      always message you, regardless of this setting.
+                    </Typography>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Separator />
 

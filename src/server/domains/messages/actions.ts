@@ -354,10 +354,13 @@ export async function markMessagesAsRead(conversationId: string): Promise<{
 }
 
 /**
- * Create or get conversation between client and professional
+ * Create or get conversation between users (enhanced version)
+ * Supports the new RLS policy that allows conversation creation based on:
+ * 1. Users with shared appointments (either can start)
+ * 2. Users without shared appointments (only client can start if professional allows messages)
  */
-export async function createOrGetConversation(
-  professionalId: string
+export async function createOrGetConversationEnhanced(
+  targetUserId: string
 ): Promise<{
   success: boolean;
   conversation?: Conversation;
@@ -372,16 +375,93 @@ export async function createOrGetConversation(
       return { success: false, error: 'Not authenticated' };
     }
 
-    // Verify current user is a client
-    const { data: isClient } = await supabase.rpc('is_client', {
+    // Check user roles
+    const { data: isCurrentUserClient } = await supabase.rpc('is_client', {
       user_uuid: user.id,
     });
+    const { data: isCurrentUserProfessional } = await supabase.rpc('is_professional', {
+      user_uuid: user.id,
+    });
+    const { data: isTargetClient } = await supabase.rpc('is_client', {
+      user_uuid: targetUserId,
+    });
+    const { data: isTargetProfessional } = await supabase.rpc('is_professional', {
+      user_uuid: targetUserId,
+    });
 
-    if (!isClient) {
-      return { success: false, error: 'Only clients can start conversations' };
+    // Determine conversation participant roles
+    let clientId: string;
+    let professionalId: string;
+
+    if (isCurrentUserClient && isTargetProfessional) {
+      clientId = user.id;
+      professionalId = targetUserId;
+    } else if (isCurrentUserProfessional && isTargetClient) {
+      clientId = targetUserId;
+      professionalId = user.id;
+    } else {
+      return { success: false, error: 'Conversations can only be created between clients and professionals' };
     }
 
-    // Verify professional allows messages
+    // Check if conversation already exists
+    const { data: existingConversation } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('professional_id', professionalId)
+      .single();
+
+    if (existingConversation) {
+      return { success: true, conversation: existingConversation };
+    }
+
+    // Check if users have shared appointments
+    // First get the professional profile ID
+    const { data: professionalProfile } = await supabase
+      .from('professional_profiles')
+      .select('id')
+      .eq('user_id', professionalId)
+      .single();
+
+    if (!professionalProfile) {
+      return { success: false, error: 'Professional profile not found' };
+    }
+
+    const { data: sharedAppointments } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('professional_profile_id', professionalProfile.id)
+      .limit(1);
+
+    const hasSharedAppointments = sharedAppointments && sharedAppointments.length > 0;
+
+    // If they have shared appointments, either user can create conversation
+    if (hasSharedAppointments) {
+      // Try to create the conversation - RLS will handle the validation
+      const { data: newConversation, error: createError } = await supabase
+        .from('conversations')
+        .insert({
+          client_id: clientId,
+          professional_id: professionalId,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating conversation:', createError);
+        return { success: false, error: 'Failed to create conversation' };
+      }
+
+      return { success: true, conversation: newConversation };
+    }
+
+    // If no shared appointments, check if current user is client and professional allows messages
+    if (!isCurrentUserClient) {
+      return { success: false, error: 'Only clients can start conversations with professionals they haven\'t worked with' };
+    }
+
+    // Check if professional allows messages
     const { data: professional, error: professionalError } = await supabase
       .from('professional_profiles')
       .select('allow_messages')
@@ -393,26 +473,14 @@ export async function createOrGetConversation(
     }
 
     if (!professional.allow_messages) {
-      return { success: false, error: 'This professional does not accept messages' };
+      return { success: false, error: 'This professional does not accept messages from new clients' };
     }
 
-    // Try to get existing conversation
-    const { data: existingConversation } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('client_id', user.id)
-      .eq('professional_id', professionalId)
-      .single();
-
-    if (existingConversation) {
-      return { success: true, conversation: existingConversation };
-    }
-
-    // Create new conversation if it doesn't exist
+    // Try to create the conversation
     const { data: newConversation, error: createError } = await supabase
       .from('conversations')
       .insert({
-        client_id: user.id,
+        client_id: clientId,
         professional_id: professionalId,
       })
       .select()
@@ -426,7 +494,7 @@ export async function createOrGetConversation(
     revalidatePath('/dashboard/messages');
     return { success: true, conversation: newConversation };
   } catch (error) {
-    console.error('Error in createOrGetConversation:', error);
+    console.error('Error in createOrGetConversationEnhanced:', error);
     return { success: false, error: 'An unexpected error occurred' };
   }
 }

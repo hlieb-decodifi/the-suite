@@ -23,7 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/utils';
-import { createOrGetConversation } from '@/server/domains/messages/actions';
+import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -46,6 +46,7 @@ export type ProfilePageHeaderProps = {
   } | null;
   allowMessages?: boolean;
   isCurrentUserClient?: boolean;
+  hasSharedAppointments?: boolean;
   professionalId?: string;
 };
 
@@ -63,6 +64,7 @@ export function ProfilePageHeader({
   connectStatus = null,
   allowMessages = false,
   isCurrentUserClient = false,
+  hasSharedAppointments = false,
   professionalId,
 }: ProfilePageHeaderProps) {
   const [showBlockingDialog, setShowBlockingDialog] = useState(false);
@@ -120,7 +122,7 @@ export function ProfilePageHeader({
 
     setIsMessageLoading(true);
     try {
-      const result = await createOrGetConversation(professionalId);
+      const result = await createOrGetConversationEnhanced(professionalId);
       if (result.success && result.conversation) {
         // Redirect to dashboard messages with the conversation
         router.push(
@@ -147,9 +149,14 @@ export function ProfilePageHeader({
     }
   };
 
-  // Show message button if professional allows messages and current user is a client
+  // Show message button in two cases:
+  // 1. If users have shared appointments (regardless of allow_messages setting)
+  // 2. If no shared appointments but professional allows messages and current user is client
   const showMessageButton =
-    isPublicView && allowMessages && isCurrentUserClient && professionalId;
+    isPublicView &&
+    isCurrentUserClient &&
+    professionalId &&
+    (hasSharedAppointments || allowMessages);
 
   return (
     <>

@@ -1449,16 +1449,42 @@ create policy "Users can view their own conversations"
   on conversations for select
   using (auth.uid() = client_id or auth.uid() = professional_id);
 
-create policy "Clients can create conversations with professionals who allow messages"
+create policy "Users can create conversations based on appointment history or message settings"
   on conversations for insert
   with check (
-    auth.uid() = client_id
-    and is_client(auth.uid())
-    and is_professional(professional_id)
-    and exists (
-      select 1 from professional_profiles
-      where user_id = professional_id
-      and allow_messages = true
+    -- Ensure proper user roles
+    is_client(client_id) and is_professional(professional_id)
+    and (
+      -- Case 1: If users have shared appointments, either can start conversation
+      (
+        (auth.uid() = client_id or auth.uid() = professional_id)
+        and exists (
+          select 1 from bookings b
+          where b.client_id = conversations.client_id
+          and b.professional_profile_id in (
+            select id from professional_profiles 
+            where user_id = conversations.professional_id
+          )
+        )
+      )
+      or
+      -- Case 2: If no shared appointments, only client can start and professional must allow messages
+      (
+        auth.uid() = client_id
+        and not exists (
+          select 1 from bookings b
+          where b.client_id = conversations.client_id
+          and b.professional_profile_id in (
+            select id from professional_profiles 
+            where user_id = conversations.professional_id
+          )
+        )
+        and exists (
+          select 1 from professional_profiles
+          where user_id = professional_id
+          and allow_messages = true
+        )
+      )
     )
   );
 
