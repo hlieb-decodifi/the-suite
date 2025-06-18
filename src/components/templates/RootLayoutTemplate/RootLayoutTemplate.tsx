@@ -20,22 +20,28 @@ export async function RootLayoutTemplate({
   } = await supabase.auth.getUser();
 
   let userInfo: UserInfo | null = null;
+  let isProfessional = false;
 
   if (user) {
+    // Check if user is a professional
+    const { data: professionalCheck } = await supabase.rpc('is_professional', {
+      user_uuid: user.id,
+    });
+    isProfessional = !!professionalCheck;
     // Fetch avatar URL on the server
     const avatarUrl = await fetchProfilePhotoUrlServer(user.id);
 
     // Fetch user's first and last name from the database
     let firstName = '';
     let lastName = '';
-    
+
     try {
       const { data: userData } = await supabase
         .from('users')
         .select('first_name, last_name')
         .eq('id', user.id)
         .single();
-      
+
       if (userData) {
         firstName = userData.first_name || '';
         lastName = userData.last_name || '';
@@ -57,7 +63,11 @@ export async function RootLayoutTemplate({
   return (
     <AuthSyncWrapper user={user} userInfo={userInfo}>
       <div className="flex flex-col min-h-screen">
-        <Header isAuthenticated={!!user} userInfo={userInfo} />
+        <Header
+          isAuthenticated={!!user}
+          userInfo={userInfo}
+          isProfessional={isProfessional}
+        />
         <main className="flex flex-grow container mx-auto py-8">
           {children}
         </main>

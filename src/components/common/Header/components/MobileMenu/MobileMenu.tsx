@@ -40,6 +40,7 @@ export type MobileMenuProps = {
         avatarUrl?: string | null;
       }
     | undefined;
+  isProfessional?: boolean;
   onSignUpClick?: () => void;
   onSignInClick?: () => void;
   onSearch?: (term: string) => void;
@@ -48,6 +49,7 @@ export type MobileMenuProps = {
 export function MobileMenu({
   isAuthenticated = false,
   userInfo,
+  isProfessional = false,
   onSignUpClick,
   onSignInClick,
   onSearch,
@@ -115,6 +117,7 @@ export function MobileMenu({
             <MobileAuthSection
               isAuthenticated={isAuthenticated}
               userInfo={userInfo}
+              isProfessional={isProfessional}
               onSignUpClick={handleSignUpClick}
               onSignInClick={handleSignInClick}
             />

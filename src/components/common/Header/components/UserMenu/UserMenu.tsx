@@ -17,9 +17,10 @@ export type UserMenuProps = {
     email: string;
     avatarUrl?: string | null;
   };
+  isProfessional?: boolean;
 };
 
-export function UserMenu({ userInfo }: UserMenuProps) {
+export function UserMenu({ userInfo, isProfessional }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -38,12 +39,18 @@ export function UserMenu({ userInfo }: UserMenuProps) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/profile" className="w-full cursor-pointer">
+          <Link
+            href={isProfessional ? '/profile' : '/client-profile'}
+            className="w-full cursor-pointer"
+          >
             Profile
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/bookings" className="w-full cursor-pointer">
+          <Link
+            href="/dashboard/appointments"
+            className="w-full cursor-pointer"
+          >
             My Bookings
           </Link>
         </DropdownMenuItem>

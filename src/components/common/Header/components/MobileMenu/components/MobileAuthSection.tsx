@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
 import { UserProfileSummary } from '@/components/common/Header/components/UserProfileSummary/UserProfileSummary';
@@ -13,6 +14,7 @@ export type MobileAuthSectionProps = {
         avatarUrl?: string | null;
       }
     | undefined;
+  isProfessional?: boolean;
   onSignUpClick?: () => void;
   onSignInClick?: () => void;
 };
@@ -20,6 +22,7 @@ export type MobileAuthSectionProps = {
 export function MobileAuthSection({
   isAuthenticated = false,
   userInfo,
+  isProfessional = false,
   onSignUpClick,
   onSignInClick,
 }: MobileAuthSectionProps) {
@@ -31,6 +34,29 @@ export function MobileAuthSection({
             userInfo={userInfo}
             className="bg-muted rounded-md p-3"
           />
+
+          {/* Navigation Links */}
+          <div className="flex text-sm flex-col gap-4 mt-2">
+            <Link
+              className="hover:text-primary w-full justify-start text-left "
+              href="/dashboard"
+            >
+              Dashboard
+            </Link>
+            <Link
+              className="hover:text-primary w-full justify-start text-left "
+              href={isProfessional ? '/profile' : '/client-profile'}
+            >
+              Profile
+            </Link>
+            <Link
+              className="hover:text-primary w-full justify-start text-left "
+              href="/dashboard/appointments"
+            >
+              My Bookings
+            </Link>
+          </div>
+
           <div className="mt-4 border-t pt-4">
             <SignOutButton className="w-full" />
           </div>

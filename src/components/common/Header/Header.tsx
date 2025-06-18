@@ -20,9 +20,15 @@ export type HeaderProps = {
   className?: string;
   isAuthenticated: boolean;
   userInfo: UserInfo | null;
+  isProfessional?: boolean;
 };
 
-export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
+export function Header({
+  className,
+  isAuthenticated,
+  userInfo,
+  isProfessional = false,
+}: HeaderProps) {
   const {
     isSignUpModalOpen,
     isSignInModalOpen,
@@ -34,7 +40,7 @@ export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
 
   const content =
     isAuthenticated && userInfo ? (
-      <UserMenu userInfo={userInfo} />
+      <UserMenu isProfessional={isProfessional} userInfo={userInfo} />
     ) : (
       <AuthButtons
         onSignUpClick={authHandlers.handleSignUpClick}
@@ -74,6 +80,7 @@ export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
         <MobileMenu
           isAuthenticated={isAuthenticated}
           userInfo={mobileUserInfo}
+          isProfessional={isProfessional}
           onSignUpClick={authHandlers.handleSignUpClick}
           onSignInClick={authHandlers.handleSignInClick}
           onSearch={handleSearch}
