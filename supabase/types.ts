@@ -302,6 +302,66 @@ export type Database = {
           },
         ]
       }
+      contact_inquiries: {
+        Row: {
+          admin_notes: string | null
+          assigned_to: string | null
+          attachments: Json | null
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          page_url: string | null
+          phone: string | null
+          resolved_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+          urgency: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          assigned_to?: string | null
+          attachments?: Json | null
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          page_url?: string | null
+          phone?: string | null
+          resolved_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+          urgency?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          assigned_to?: string | null
+          attachments?: Json | null
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          page_url?: string | null
+          phone?: string | null
+          resolved_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+          urgency?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           client_id: string

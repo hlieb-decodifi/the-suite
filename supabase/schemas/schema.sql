@@ -1694,5 +1694,81 @@ begin
 end;
 $$ language plpgsql;
 
+/**
+* CONTACT INQUIRIES
+* Table for storing contact form submissions from clients to suite admins
+*/
+create table contact_inquiries (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  email text not null,
+  phone text,
+  subject text not null,
+  message text not null,
+  urgency text not null default 'medium' check (urgency in ('low', 'medium', 'high')),
+  status text not null default 'new' check (status in ('new', 'in_progress', 'resolved', 'closed')),
+  user_id uuid references auth.users(id),
+  page_url text,
+  user_agent text,
+  attachments jsonb default '[]'::jsonb,
+  admin_notes text,
+  assigned_to uuid references auth.users(id),
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table contact_inquiries enable row level security;
+
+-- Create indexes for faster queries
+create index if not exists idx_contact_inquiries_status on contact_inquiries(status);
+create index if not exists idx_contact_inquiries_created_at on contact_inquiries(created_at);
+create index if not exists idx_contact_inquiries_user_id on contact_inquiries(user_id);
+create index if not exists idx_contact_inquiries_assigned_to on contact_inquiries(assigned_to);
+
+-- RLS Policies for contact_inquiries
+-- Users can view their own inquiries
+create policy "Users can view their own inquiries" on contact_inquiries
+  for select using (user_id = auth.uid());
+
+-- Anyone (including unauthenticated users) can create inquiries
+create policy "Anyone can create inquiries" on contact_inquiries
+  for insert with check (true);
+
+-- Admins can view all inquiries (assuming admins have a specific role)
+create policy "Admins can view all inquiries" on contact_inquiries
+  for select using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Admins can update inquiries
+create policy "Admins can update inquiries" on contact_inquiries
+  for update using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Create trigger for updated_at
+create or replace function update_contact_inquiries_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_contact_inquiries_updated_at
+  before update on contact_inquiries
+  for each row
+  execute function update_contact_inquiries_updated_at();
+
 
 
