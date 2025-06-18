@@ -124,6 +124,10 @@ create table professional_profiles (
   balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
   -- Messaging settings
   allow_messages boolean default true not null,
+  -- Cancellation policy settings
+  cancellation_policy_enabled boolean default true not null,
+  cancellation_24h_charge_percentage decimal(5,2) default 50.00 not null,
+  cancellation_48h_charge_percentage decimal(5,2) default 25.00 not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -136,6 +140,17 @@ where stripe_account_id is not null;
 
 create index if not exists idx_professional_profiles_stripe_connect_status 
 on professional_profiles(stripe_connect_status);
+
+-- Add constraints for cancellation policy fields
+alter table professional_profiles add constraint chk_cancellation_24h_percentage 
+  check (cancellation_24h_charge_percentage >= 0 and cancellation_24h_charge_percentage <= 100);
+
+alter table professional_profiles add constraint chk_cancellation_48h_percentage 
+  check (cancellation_48h_charge_percentage >= 0 and cancellation_48h_charge_percentage <= 100);
+
+-- Ensure 24h charge is >= 48h charge (stricter policy for less notice)
+alter table professional_profiles add constraint chk_cancellation_policy_logic 
+  check (cancellation_24h_charge_percentage >= cancellation_48h_charge_percentage);
 
 /**
 * CLIENT_PROFILES

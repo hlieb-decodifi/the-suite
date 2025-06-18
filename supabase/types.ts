@@ -667,6 +667,9 @@ export type Database = {
           allow_messages: boolean
           appointment_requirements: string | null
           balance_payment_method: string | null
+          cancellation_24h_charge_percentage: number
+          cancellation_48h_charge_percentage: number
+          cancellation_policy_enabled: boolean
           created_at: string
           deposit_type: string | null
           deposit_value: number | null
@@ -694,6 +697,9 @@ export type Database = {
           allow_messages?: boolean
           appointment_requirements?: string | null
           balance_payment_method?: string | null
+          cancellation_24h_charge_percentage?: number
+          cancellation_48h_charge_percentage?: number
+          cancellation_policy_enabled?: boolean
           created_at?: string
           deposit_type?: string | null
           deposit_value?: number | null
@@ -721,6 +727,9 @@ export type Database = {
           allow_messages?: boolean
           appointment_requirements?: string | null
           balance_payment_method?: string | null
+          cancellation_24h_charge_percentage?: number
+          cancellation_48h_charge_percentage?: number
+          cancellation_policy_enabled?: boolean
           created_at?: string
           deposit_type?: string | null
           deposit_value?: number | null

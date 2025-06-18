@@ -8,3 +8,4 @@ export * from './ChangeEmailForm';
 export * from './ChangePasswordForm';
 export * from './UpdateEmailForm/UpdateEmailForm';
 export * from './DepositSettingsForm';
+export * from './CancellationPolicyForm';

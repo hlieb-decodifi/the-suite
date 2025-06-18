@@ -3,14 +3,25 @@
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Typography } from '@/components/ui/typography';
-import { DepositSettingsForm } from '@/components/forms';
+import {
+  DepositSettingsForm,
+  CancellationPolicyForm,
+} from '@/components/forms';
 import {
   updateDepositSettingsAction,
   updateMessagingSettingsAction,
+  updateCancellationPolicySettingsAction,
 } from './ProfileSettingsPage';
 import type { User } from '@supabase/supabase-js';
-import type { DepositSettings, MessagingSettings } from './ProfileSettingsPage';
-import type { DepositSettingsFormValues } from '@/components/forms';
+import type {
+  DepositSettings,
+  MessagingSettings,
+  CancellationPolicySettings,
+} from './ProfileSettingsPage';
+import type {
+  DepositSettingsFormValues,
+  CancellationPolicyFormValues,
+} from '@/components/forms';
 import { ChangeEmailForm } from '@/components/forms/ChangeEmailForm';
 import { ChangePasswordForm } from '@/components/forms/ChangePasswordForm';
 import {
@@ -29,12 +40,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Mail, Lock, DollarSign, MessageCircle } from 'lucide-react';
+import { Mail, Lock, DollarSign, MessageCircle, Calendar } from 'lucide-react';
 
 export type ProfileSettingsPageClientProps = {
   user: User;
   depositSettings: DepositSettings | null;
   messagingSettings: MessagingSettings | null;
+  cancellationPolicySettings: CancellationPolicySettings | null;
   isEditable?: boolean;
 };
 
@@ -42,11 +54,14 @@ export function ProfileSettingsPageClient({
   user,
   depositSettings,
   messagingSettings,
+  cancellationPolicySettings,
   isEditable = true,
 }: ProfileSettingsPageClientProps) {
   const [isUpdatingDepositSettings, setIsUpdatingDepositSettings] =
     useState(false);
   const [isUpdatingMessagingSettings, setIsUpdatingMessagingSettings] =
+    useState(false);
+  const [isUpdatingCancellationPolicy, setIsUpdatingCancellationPolicy] =
     useState(false);
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -135,7 +150,43 @@ export function ProfileSettingsPageClient({
     }
   };
 
-  if (!depositSettings || !messagingSettings) {
+  const handleCancellationPolicySubmit = async (
+    data: CancellationPolicyFormValues,
+  ) => {
+    if (!isEditable) return;
+
+    setIsUpdatingCancellationPolicy(true);
+    try {
+      const result = await updateCancellationPolicySettingsAction({
+        userId: user.id,
+        data,
+      });
+
+      if (result.success) {
+        toast({
+          title: 'Success',
+          description: 'Cancellation policy updated successfully',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to update cancellation policy',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error updating cancellation policy:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingCancellationPolicy(false);
+    }
+  };
+
+  if (!depositSettings || !messagingSettings || !cancellationPolicySettings) {
     return (
       <div className="mx-auto w-full">
         <div className="max-w-2xl mx-auto">
@@ -259,7 +310,7 @@ export function ProfileSettingsPageClient({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
+                    <div className="flex flex-col gap-1">
                       <Label
                         htmlFor="allow-messages"
                         className="text-base font-medium"
@@ -289,6 +340,38 @@ export function ProfileSettingsPageClient({
                       always message you, regardless of this setting.
                     </Typography>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Cancellation Policy Settings Section */}
+            {isEditable && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="size-5" />
+                    <Typography
+                      variant="h4"
+                      className="text-foreground leading-tight"
+                    >
+                      Cancellation Policy
+                    </Typography>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CancellationPolicyForm
+                    defaultValues={{
+                      cancellation_policy_enabled:
+                        cancellationPolicySettings.cancellation_policy_enabled,
+                      cancellation_24h_charge_percentage:
+                        cancellationPolicySettings.cancellation_24h_charge_percentage,
+                      cancellation_48h_charge_percentage:
+                        cancellationPolicySettings.cancellation_48h_charge_percentage,
+                    }}
+                    onSubmit={handleCancellationPolicySubmit}
+                    isLoading={isUpdatingCancellationPolicy}
+                    disabled={!isEditable}
+                  />
                 </CardContent>
               </Card>
             )}

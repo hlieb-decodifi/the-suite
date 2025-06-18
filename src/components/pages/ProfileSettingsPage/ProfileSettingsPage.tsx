@@ -4,7 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ProfileSettingsPageClient } from './ProfileSettingsPageClient';
 import type { User } from '@supabase/supabase-js';
-import type { DepositSettingsFormValues } from '@/components/forms';
+import type {
+  DepositSettingsFormValues,
+  CancellationPolicyFormValues,
+} from '@/components/forms';
 
 // Types for settings
 export type DepositSettings = {
@@ -16,6 +19,12 @@ export type DepositSettings = {
 
 export type MessagingSettings = {
   allow_messages: boolean;
+};
+
+export type CancellationPolicySettings = {
+  cancellation_policy_enabled: boolean;
+  cancellation_24h_charge_percentage: number;
+  cancellation_48h_charge_percentage: number;
 };
 
 export type ProfileSettingsPageProps = {
@@ -80,12 +89,15 @@ export async function ProfileSettingsPage({
   // Fetch settings
   const depositSettings = await getDepositSettings(targetUserId);
   const messagingSettings = await getMessagingSettings(targetUserId);
+  const cancellationPolicySettings =
+    await getCancellationPolicySettings(targetUserId);
 
   return (
     <ProfileSettingsPageClient
       user={user as User}
       depositSettings={depositSettings}
       messagingSettings={messagingSettings}
+      cancellationPolicySettings={cancellationPolicySettings}
       isEditable={isEditable}
     />
   );
@@ -146,6 +158,39 @@ export async function getMessagingSettings(
     };
   } catch (error) {
     console.error('Error fetching messaging settings:', error);
+    return null;
+  }
+}
+
+// Server function to get cancellation policy settings
+export async function getCancellationPolicySettings(
+  userId: string,
+): Promise<CancellationPolicySettings | null> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('professional_profiles')
+      .select(
+        'cancellation_policy_enabled, cancellation_24h_charge_percentage, cancellation_48h_charge_percentage',
+      )
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching cancellation policy settings:', error);
+      return null;
+    }
+
+    return {
+      cancellation_policy_enabled: data.cancellation_policy_enabled || false,
+      cancellation_24h_charge_percentage:
+        data.cancellation_24h_charge_percentage || 50,
+      cancellation_48h_charge_percentage:
+        data.cancellation_48h_charge_percentage || 25,
+    };
+  } catch (error) {
+    console.error('Error fetching cancellation policy settings:', error);
     return null;
   }
 }
@@ -235,6 +280,92 @@ export async function updateDepositSettingsAction({
     };
   } catch (error) {
     console.error('Error updating deposit settings:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}
+
+// Server action to update cancellation policy settings
+export async function updateCancellationPolicySettingsAction({
+  userId,
+  data,
+}: {
+  userId: string;
+  data: CancellationPolicyFormValues;
+}) {
+  try {
+    const supabase = await createClient();
+
+    // Verify user owns this profile
+    const { data: profile, error: profileError } = await supabase
+      .from('professional_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError || !profile) {
+      return {
+        success: false,
+        error: 'Professional profile not found',
+      };
+    }
+
+    // Validate percentages
+    if (
+      data.cancellation_24h_charge_percentage < 0 ||
+      data.cancellation_24h_charge_percentage > 100 ||
+      data.cancellation_48h_charge_percentage < 0 ||
+      data.cancellation_48h_charge_percentage > 100
+    ) {
+      return {
+        success: false,
+        error: 'Charge percentages must be between 0 and 100',
+      };
+    }
+
+    if (
+      data.cancellation_24h_charge_percentage <
+      data.cancellation_48h_charge_percentage
+    ) {
+      return {
+        success: false,
+        error:
+          '24-hour cancellation charge must be greater than or equal to 48-hour charge',
+      };
+    }
+
+    // Update cancellation policy settings
+    const { error: updateError } = await supabase
+      .from('professional_profiles')
+      .update({
+        cancellation_policy_enabled: data.cancellation_policy_enabled,
+        cancellation_24h_charge_percentage:
+          data.cancellation_24h_charge_percentage,
+        cancellation_48h_charge_percentage:
+          data.cancellation_48h_charge_percentage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error(
+        'Error updating cancellation policy settings:',
+        updateError,
+      );
+      return {
+        success: false,
+        error: 'Failed to update cancellation policy settings',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Cancellation policy settings updated successfully',
+    };
+  } catch (error) {
+    console.error('Error updating cancellation policy settings:', error);
     return {
       success: false,
       error: 'An unexpected error occurred',
