@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createPublicClient } from '@supabase/supabase-js';
 import type { Tables } from '@/../supabase/types';
 
 export type LegalDocument = {
@@ -20,6 +21,7 @@ type LegalDocumentRow = Tables<'legal_documents'>;
 
 /**
  * Server Action: Fetch a published legal document by type
+ * Uses public client to avoid cookies during static generation
  */
 export async function getLegalDocumentAction(
   type: 'terms_and_conditions' | 'privacy_policy'
@@ -29,7 +31,15 @@ export async function getLegalDocumentAction(
   error?: string;
 }> {
   try {
-    const supabase = await createClient();
+    // Use public client for static generation - no authentication needed for legal documents
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables');
+    }
+
+    const supabase = createPublicClient(supabaseUrl, supabaseAnonKey);
 
     const { data, error } = await supabase
       .from('legal_documents')
