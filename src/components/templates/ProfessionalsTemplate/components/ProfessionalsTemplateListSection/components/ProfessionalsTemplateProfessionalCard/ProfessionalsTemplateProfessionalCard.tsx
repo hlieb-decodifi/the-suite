@@ -109,8 +109,8 @@ export function ProfessionalsTemplateProfessionalCard({
         {/* Stats Row */}
         <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
           <div className="flex items-center space-x-4">
-            {/* Show rating only if professional has more than 5 reviews */}
-            {reviewCount > 5 && (
+            {/* Show rating only if professional has reviews to display */}
+            {reviewCount > 0 && (
               <div className="flex items-center">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
                 <span className="font-medium">{rating}</span>

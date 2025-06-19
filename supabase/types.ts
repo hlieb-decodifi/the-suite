@@ -39,6 +39,36 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_configs: {
+        Row: {
+          created_at: string
+          data_type: string
+          description: string
+          id: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          data_type: string
+          description: string
+          id?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          data_type?: string
+          description?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           booking_id: string
@@ -858,6 +888,61 @@ export type Database = {
           },
         ]
       }
+      reviews: {
+        Row: {
+          appointment_id: string
+          client_id: string
+          created_at: string
+          id: string
+          message: string
+          professional_id: string
+          score: number
+          updated_at: string
+        }
+        Insert: {
+          appointment_id: string
+          client_id: string
+          created_at?: string
+          id?: string
+          message: string
+          professional_id: string
+          score: number
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          message?: string
+          professional_id?: string
+          score?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           created_at: string
@@ -1054,6 +1139,26 @@ export type Database = {
           should_pre_auth_now: boolean
         }[]
       }
+      can_create_review: {
+        Args: { p_appointment_id: string; p_client_id: string }
+        Returns: boolean
+      }
+      get_admin_config: {
+        Args: { config_key: string; default_value?: string }
+        Returns: string
+      }
+      get_professional_rating_stats: {
+        Args: { p_professional_id: string }
+        Returns: {
+          average_rating: number
+          total_reviews: number
+          five_star: number
+          four_star: number
+          three_star: number
+          two_star: number
+          one_star: number
+        }[]
+      }
       get_service_limit: {
         Args: { prof_profile_id: string }
         Returns: number
@@ -1064,6 +1169,10 @@ export type Database = {
       }
       is_professional: {
         Args: { user_uuid: string }
+        Returns: boolean
+      }
+      set_admin_config: {
+        Args: { config_key: string; config_value: string }
         Returns: boolean
       }
       update_service_limit: {

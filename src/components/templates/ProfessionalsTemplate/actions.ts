@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { ProfessionalListItem, PaginationInfo } from './types';
+import { getProfessionalRatingStats, shouldShowPublicReviews } from '@/api/reviews/api';
 
 // Supabase project URL from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,7 +33,7 @@ function getPublicImageUrl(path: string | undefined): string | undefined {
 /**
  * Maps raw professional data to the ProfessionalListItem type
  */
-function mapProfessionalData(professional: unknown): ProfessionalListItem {
+async function mapProfessionalData(professional: unknown): Promise<ProfessionalListItem> {
   // Safely type cast the professional object
   const professionalData = professional as {
     id: string;
@@ -62,6 +63,21 @@ function mapProfessionalData(professional: unknown): ProfessionalListItem {
   // Calculate service count
   const serviceCount = professionalData?.services?.length || 0;
   
+  // Get real review data
+  let rating = 0;
+  let reviewCount = 0;
+  try {
+    const ratingStats = await getProfessionalRatingStats(user?.id || '');
+    const shouldShow = await shouldShowPublicReviews(user?.id || '');
+    
+    if (shouldShow && ratingStats) {
+      rating = ratingStats.averageRating;
+      reviewCount = ratingStats.totalReviews;
+    }
+  } catch (error) {
+    console.error('Error fetching review stats for professional:', user?.id, error);
+  }
+  
   // Return mapped professional data
   return {
     id: professionalData.id,
@@ -71,8 +87,8 @@ function mapProfessionalData(professional: unknown): ProfessionalListItem {
     profession: professionalData.profession || undefined,
     description: professionalData.description || undefined,
     location: professionalData.location || undefined,
-    rating: 4.5, // Mock data, would come from reviews table
-    reviewCount: 0, // Mock data, would come from reviews count
+    rating,
+    reviewCount,
     serviceCount,
     isSubscribed: professionalData.is_subscribed,
     joinedDate: professionalData.created_at,
@@ -180,7 +196,7 @@ export async function getProfessionals(
         pageSize,
       };
 
-      const mappedProfessionals = paginatedResults.map(mapProfessionalData);
+      const mappedProfessionals = await Promise.all(paginatedResults.map(mapProfessionalData));
 
       return {
         professionals: mappedProfessionals,
@@ -241,7 +257,7 @@ export async function getProfessionals(
         pageSize,
       };
 
-      const mappedProfessionals = (professionals || []).map(mapProfessionalData);
+      const mappedProfessionals = await Promise.all((professionals || []).map(mapProfessionalData));
 
       return {
         professionals: mappedProfessionals,

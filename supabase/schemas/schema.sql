@@ -225,18 +225,23 @@ create policy "Professionals can view their own service limits"
     )
   );
 
--- Function to get service limit for a professional (with default of 50)
+-- Function to get service limit for a professional (updated to use admin config)
 create or replace function get_service_limit(prof_profile_id uuid)
 returns integer as $$
 declare
   limit_value integer;
+  default_limit integer;
 begin
+  -- Get custom limit if set
   select max_services into limit_value
   from service_limits
   where professional_profile_id = prof_profile_id;
   
-  -- Return default of 50 if no custom limit is set
-  return coalesce(limit_value, 50);
+  -- Get default limit from admin configuration
+  select get_admin_config('max_services_default', '50')::integer into default_limit;
+  
+  -- Return custom limit if set, otherwise return admin-configured default
+  return coalesce(limit_value, default_limit);
 end;
 $$ language plpgsql security definer;
 
@@ -663,9 +668,14 @@ alter table portfolio_photos enable row level security;
 -- Add constraint to limit portfolio photos to 20 per user
 create or replace function check_portfolio_photo_limit()
 returns trigger as $$
+declare
+  max_photos integer;
 begin
-  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 20 then
-    raise exception 'Maximum of 20 portfolio photos allowed per professional';
+  -- Get the maximum portfolio photos from configuration
+  select get_admin_config('max_portfolio_photos', '20')::integer into max_photos;
+  
+  if (select count(*) from portfolio_photos where user_id = new.user_id) >= max_photos then
+    raise exception 'Maximum of % portfolio photos allowed per professional', max_photos;
   end if;
   return new;
 end;
@@ -1810,6 +1820,272 @@ create trigger update_contact_inquiries_updated_at
   before update on contact_inquiries
   for each row
   execute function update_contact_inquiries_updated_at();
+
+/**
+* ADMIN CONFIGURATION SYSTEM
+* Table for storing configurable application settings
+*/
+
+/**
+* ADMIN_CONFIGS
+* Stores application configuration that can be managed from admin panel
+*/
+create table admin_configs (
+  id uuid primary key default uuid_generate_v4(),
+  key text not null unique,
+  value text not null,
+  description text not null,
+  data_type text not null check (data_type in ('integer', 'decimal', 'boolean', 'text')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table admin_configs enable row level security;
+
+-- Create index for faster lookups
+create index if not exists idx_admin_configs_key on admin_configs(key);
+
+-- Function to get admin configuration value with default fallback
+create or replace function get_admin_config(config_key text, default_value text default null)
+returns text as $$
+declare
+  config_value text;
+begin
+  select value into config_value
+  from admin_configs
+  where key = config_key;
+  
+  return coalesce(config_value, default_value);
+end;
+$$ language plpgsql security definer;
+
+-- Function to set admin configuration value
+create or replace function set_admin_config(config_key text, config_value text)
+returns boolean as $$
+begin
+  insert into admin_configs (key, value, description, data_type)
+  values (config_key, config_value, 'Auto-created configuration', 'text')
+  on conflict (key)
+  do update set 
+    value = config_value,
+    updated_at = timezone('utc'::text, now());
+    
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Insert default configuration values
+insert into admin_configs (key, value, description, data_type) values
+  ('min_reviews_to_display', '5', 'Minimum number of reviews before displaying professional reviews publicly', 'integer'),
+  ('service_fee_dollars', '1.0', 'Service fee charged on transactions', 'decimal'),
+  ('max_portfolio_photos', '20', 'Maximum number of portfolio photos per professional', 'integer'),
+  ('max_services_default', '50', 'Default maximum number of services per professional', 'integer'),
+  ('review_edit_window_days', '7', 'Number of days clients can edit their reviews after creation', 'integer');
+
+/**
+* RLS policies for admin configurations
+*/
+
+-- Anyone can read admin configurations (needed for app functionality)
+create policy "Anyone can read admin configurations"
+  on admin_configs for select
+  using (true);
+
+-- Only admins can modify configurations
+create policy "Admins can manage configurations"
+  on admin_configs for all
+  using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Add trigger for updated_at on admin_configs
+create or replace function update_admin_configs_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_admin_configs_updated_at
+  before update on admin_configs
+  for each row
+  execute function update_admin_configs_updated_at();
+
+/**
+* REVIEWS SYSTEM
+* Tables for client reviews of professional appointments
+*/
+
+/**
+* REVIEWS
+* Client reviews for completed appointments
+*/
+create table reviews (
+  id uuid primary key default uuid_generate_v4(),
+  appointment_id uuid references appointments not null unique, -- One review per appointment
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  score integer not null check (score >= 1 and score <= 5),
+  message text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure client is actually a client and professional is actually a professional
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id))
+);
+alter table reviews enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_reviews_appointment_id on reviews(appointment_id);
+create index if not exists idx_reviews_client_id on reviews(client_id);
+create index if not exists idx_reviews_professional_id on reviews(professional_id);
+create index if not exists idx_reviews_score on reviews(score);
+create index if not exists idx_reviews_created_at on reviews(created_at);
+
+-- Function to validate review creation conditions
+create or replace function can_create_review(p_appointment_id uuid, p_client_id uuid)
+returns boolean as $$
+declare
+  appointment_status text;
+  appointment_client_id uuid;
+  appointment_professional_id uuid;
+  existing_review_count integer;
+begin
+  -- Get appointment details
+  select a.status, b.client_id, pp.user_id into appointment_status, appointment_client_id, appointment_professional_id
+  from appointments a
+  join bookings b on a.booking_id = b.id
+  join professional_profiles pp on b.professional_profile_id = pp.id
+  where a.id = p_appointment_id;
+  
+  -- Check if appointment exists
+  if appointment_status is null then
+    return false;
+  end if;
+  
+  -- Check if appointment is completed
+  if appointment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if requesting user is the client for this appointment
+  if appointment_client_id != p_client_id then
+    return false;
+  end if;
+  
+  -- Check if review already exists for this appointment
+  select count(*) into existing_review_count
+  from reviews
+  where appointment_id = p_appointment_id;
+  
+  if existing_review_count > 0 then
+    return false;
+  end if;
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Function to get professional's average rating and review count
+create or replace function get_professional_rating_stats(p_professional_id uuid)
+returns table(
+  average_rating decimal(3,2),
+  total_reviews integer,
+  five_star integer,
+  four_star integer,
+  three_star integer,
+  two_star integer,
+  one_star integer
+) as $$
+begin
+  return query
+  select 
+    round(avg(r.score), 2) as average_rating,
+    count(r.id)::integer as total_reviews,
+    count(case when r.score = 5 then 1 end)::integer as five_star,
+    count(case when r.score = 4 then 1 end)::integer as four_star,
+    count(case when r.score = 3 then 1 end)::integer as three_star,
+    count(case when r.score = 2 then 1 end)::integer as two_star,
+    count(case when r.score = 1 then 1 end)::integer as one_star
+  from reviews r
+  where r.professional_id = p_professional_id;
+end;
+$$ language plpgsql security definer;
+
+/**
+* RLS policies for reviews
+*/
+
+-- Clients can view their own reviews
+create policy "Clients can view their own reviews"
+  on reviews for select
+  using (auth.uid() = client_id);
+
+-- Professionals can view reviews about them
+create policy "Professionals can view their own reviews"
+  on reviews for select
+  using (auth.uid() = professional_id);
+
+-- Anyone can view reviews for published professionals
+-- Note: Minimum review threshold is enforced at the application level to avoid RLS recursion
+create policy "Anyone can view reviews for published professionals"
+  on reviews for select
+  using (
+    exists (
+      select 1 from professional_profiles pp
+      where pp.user_id = reviews.professional_id
+      and pp.is_published = true
+    )
+  );
+
+-- Clients can create reviews for their completed appointments
+create policy "Clients can create reviews for completed appointments"
+  on reviews for insert
+  with check (
+    auth.uid() = client_id
+    and can_create_review(appointment_id, client_id)
+  );
+
+-- Clients can update their own reviews (within reasonable time limits)
+create policy "Clients can update their own reviews"
+  on reviews for update
+  using (
+    auth.uid() = client_id
+    and created_at > (now() - make_interval(days => get_admin_config('review_edit_window_days', '7')::integer))
+  );
+
+-- Add trigger for updated_at on reviews
+create or replace function update_reviews_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_reviews_updated_at
+  before update on reviews
+  for each row
+  execute function update_reviews_updated_at();
+
+/**
+* Update realtime publication to include reviews
+*/
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions,
+  conversations,
+  messages,
+  reviews;
 
 
 

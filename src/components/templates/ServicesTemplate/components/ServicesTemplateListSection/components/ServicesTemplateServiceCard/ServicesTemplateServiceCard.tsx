@@ -142,7 +142,7 @@ export function ServicesTemplateServiceCard({
                     </Avatar>
                     {professional.reviewCount > 0 && (
                       <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full w-6 h-6 flex items-center justify-center ring-2 ring-background font-medium">
-                        {professional.rating}
+                        {professional.rating.toFixed(1)}
                       </div>
                     )}
                   </Link>
@@ -165,7 +165,7 @@ export function ServicesTemplateServiceCard({
                         </Typography>
                       </div>
 
-                      {professional.reviewCount > 5 && (
+                      {professional.reviewCount > 0 && (
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <Typography variant="small" className="text-xs">
                             {professional.reviewCount}{' '}
@@ -217,7 +217,7 @@ export function ServicesTemplateServiceCard({
                   </Avatar>
                   {professional.reviewCount > 0 && (
                     <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full w-6 h-6 flex items-center justify-center ring-2 ring-background font-medium">
-                      {professional.rating}
+                      {professional.rating.toFixed(1)}
                     </div>
                   )}
                 </Link>

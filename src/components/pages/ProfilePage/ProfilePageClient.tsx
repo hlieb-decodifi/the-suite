@@ -72,6 +72,8 @@ export type ProfilePageClientProps = {
   timezone: string;
   paymentMethods: PaymentMethod[];
   portfolioPhotos: PortfolioPhotoUI[];
+  reviews: import('@/api/reviews/api').ReviewData[];
+  reviewStats: import('@/api/reviews/api').ProfessionalRatingStats | null;
   isEditable?: boolean;
   unreadMessagesCount?: number;
 };
@@ -531,6 +533,8 @@ export function ProfilePageClient({
   workingHours,
   timezone,
   portfolioPhotos,
+  reviews,
+  reviewStats,
   isEditable = true,
 }: ProfilePageClientProps) {
   // Handle error state
@@ -578,7 +582,11 @@ export function ProfilePageClient({
           {/* )} */}
         </div>
       </div>
-      <ReviewsSection user={user} isEditable={isEditable} />
+      <ReviewsSection
+        reviews={reviews}
+        reviewStats={reviewStats}
+        isEditable={isEditable}
+      />
     </div>
   );
 }

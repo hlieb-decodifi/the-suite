@@ -12,6 +12,12 @@ import {
 } from '@/server/domains/profiles/db';
 import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
 import { getPortfolioPhotos } from '@/server/domains/portfolio-photos/actions';
+import {
+  getProfessionalReviews,
+  getProfessionalRatingStats,
+  type ReviewData,
+  type ProfessionalRatingStats,
+} from '@/api/reviews/api';
 import { onSubscriptionChangeAction } from '@/server/domains/stripe-services';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { HeaderFormValues } from '@/types/profiles';
@@ -102,6 +108,8 @@ export async function ProfilePage({
         timezone={profileData.timezone}
         paymentMethods={profileData.paymentMethods}
         portfolioPhotos={profileData.portfolioPhotos}
+        reviews={profileData.reviews}
+        reviewStats={profileData.reviewStats}
         isEditable={isEditable}
         unreadMessagesCount={profileData.unreadMessagesCount}
       />
@@ -195,6 +203,16 @@ export async function getProfileData(
       }
     }
 
+    // Fetch reviews and rating stats
+    let reviews: ReviewData[] = [];
+    let reviewStats: ProfessionalRatingStats | null = null;
+    try {
+      reviews = await getProfessionalReviews(userId, isEditable);
+      reviewStats = await getProfessionalRatingStats(userId);
+    } catch (reviewError) {
+      console.error('Error fetching reviews:', reviewError);
+    }
+
     // Fetch unread messages count for editable profiles
     let unreadMessagesCount = 0;
     if (isEditable) {
@@ -214,6 +232,8 @@ export async function getProfileData(
       timezone,
       paymentMethods,
       portfolioPhotos,
+      reviews,
+      reviewStats,
       unreadMessagesCount,
     };
   } catch (error) {
@@ -233,6 +253,8 @@ export async function getProfileData(
       timezone: '',
       paymentMethods: [] as PaymentMethod[],
       portfolioPhotos: [] as PortfolioPhotoUI[],
+      reviews: [] as ReviewData[],
+      reviewStats: null,
       unreadMessagesCount: 0,
     };
   }

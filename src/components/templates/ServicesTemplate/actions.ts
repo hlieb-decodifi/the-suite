@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { ServiceListItem, Professional, PaginationInfo } from './types';
+import { getProfessionalRatingStats, shouldShowPublicReviews } from '@/api/reviews/api';
 
 // Supabase project URL from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,7 +33,7 @@ function getPublicImageUrl(path: string | undefined): string | undefined {
 /**
  * Maps raw service data to the ServiceListItem type
  */
-function mapServiceData(service: unknown): ServiceListItem {
+async function mapServiceData(service: unknown): Promise<ServiceListItem> {
   // Safely type cast the service object
   const serviceData = service as {
     id: string;
@@ -62,14 +63,29 @@ function mapServiceData(service: unknown): ServiceListItem {
   // Generate proper public URL for the avatar
   const profilePhoto = getPublicImageUrl(rawPhotoUrl);
   
+  // Get real review data for professional
+  let rating = 0;
+  let reviewCount = 0;
+  try {
+    const ratingStats = await getProfessionalRatingStats(user?.id || '');
+    const shouldShow = await shouldShowPublicReviews(user?.id || '');
+    
+    if (shouldShow && ratingStats) {
+      rating = ratingStats.averageRating;
+      reviewCount = ratingStats.totalReviews;
+    }
+  } catch (error) {
+    console.error('Error fetching review stats for professional:', user?.id, error);
+  }
+  
   // Create professional object
   const professional: Professional = {
     id: user?.id || 'unknown',
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
     avatar: profilePhoto,
     address: professionalProfile?.location || 'Location not specified',
-    rating: 4.5, // Mock data, would come from reviews table
-    reviewCount: 0, // Mock data, would come from reviews count
+    rating,
+    reviewCount,
     profile_id: professionalProfile?.id, // Include the professional profile ID
   };
 
@@ -222,7 +238,7 @@ export async function getServices(
   }
   
   // Transform the data to match our ServiceListItem type
-  const mappedServices = servicesData.map(mapServiceData);
+  const mappedServices = await Promise.all(servicesData.map(mapServiceData));
   
   return {
     services: mappedServices,
