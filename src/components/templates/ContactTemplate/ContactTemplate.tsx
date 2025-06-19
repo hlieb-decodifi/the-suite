@@ -16,7 +16,7 @@ export function ContactTemplate({ userData }: ContactTemplateProps) {
     <div className="min-h-screen w-full bg-background">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-8">
           <Typography
             variant="p"
             className="mb-4 font-caslon text-3xl italic text-primary"
