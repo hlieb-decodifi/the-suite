@@ -75,6 +75,17 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
   // Fetch validation data (working hours and payment methods)
   const validationData = await getValidationData(user.id);
 
+  // Fetch unread messages count
+  let unreadMessagesCount = 0;
+  try {
+    const { getUnreadMessagesCount } = await import(
+      '@/components/layouts/DashboardPageLayout/DashboardPageLayout'
+    );
+    unreadMessagesCount = await getUnreadMessagesCount(user.id);
+  } catch (messageError) {
+    console.error('Error fetching unread messages count:', messageError);
+  }
+
   return (
     <div className="w-full mx-auto">
       <ProfilePageLayoutClient
@@ -82,6 +93,7 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
         userData={userData}
         connectStatus={connectStatus}
         validationData={validationData}
+        unreadMessagesCount={unreadMessagesCount}
       >
         {children}
       </ProfilePageLayoutClient>

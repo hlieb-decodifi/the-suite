@@ -26,6 +26,7 @@ import { cn } from '@/utils';
 import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
+import { MessageBadge } from '@/components/ui/message-badge';
 
 // Type for ProfilePageHeader props
 export type ProfilePageHeaderProps = {
@@ -48,6 +49,7 @@ export type ProfilePageHeaderProps = {
   isCurrentUserClient?: boolean;
   hasSharedAppointments?: boolean;
   professionalId?: string;
+  unreadMessagesCount?: number;
 };
 
 export function ProfilePageHeader({
@@ -66,6 +68,7 @@ export function ProfilePageHeader({
   isCurrentUserClient = false,
   hasSharedAppointments = false,
   professionalId,
+  unreadMessagesCount = 0,
 }: ProfilePageHeaderProps) {
   const [showBlockingDialog, setShowBlockingDialog] = useState(false);
   const [isMessageLoading, setIsMessageLoading] = useState(false);
@@ -180,9 +183,16 @@ export function ProfilePageHeader({
           <div className="flex flex-col md:flex-row items-stretch gap-3 w-full md:w-auto">
             {!isPreviewMode && (
               <Link href="/dashboard">
-                <Button variant="outline" className="w-full md:w-auto">
+                <Button variant="outline" className="w-full md:w-auto relative">
                   <LayoutDashboard size={16} className="mr-2" />
                   Go to Dashboard
+                  {unreadMessagesCount > 0 && (
+                    <MessageBadge
+                      count={unreadMessagesCount}
+                      size="sm"
+                      className="ml-2"
+                    />
+                  )}
                 </Button>
               </Link>
             )}

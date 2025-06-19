@@ -36,6 +36,7 @@ type ProfilePageLayoutClientProps = {
   userData: UserData;
   connectStatus: ConnectStatus;
   validationData: ProfileValidationData;
+  unreadMessagesCount?: number;
 };
 
 // Validation functions
@@ -77,6 +78,7 @@ export function ProfilePageLayoutClient({
   connectStatus,
   validationData,
   children,
+  unreadMessagesCount = 0,
 }: ProfilePageLayoutClientProps) {
   const [isPending, startTransition] = useTransition();
   const [showValidationDialog, setShowValidationDialog] = useState(false);
@@ -217,6 +219,7 @@ export function ProfilePageLayoutClient({
           isSubscribed={isSubscribed}
           connectStatus={connectStatus}
           isLoading={isPending}
+          unreadMessagesCount={unreadMessagesCount}
         />
 
         <div className="w-full">

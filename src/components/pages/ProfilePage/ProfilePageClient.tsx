@@ -73,6 +73,7 @@ export type ProfilePageClientProps = {
   paymentMethods: PaymentMethod[];
   portfolioPhotos: PortfolioPhotoUI[];
   isEditable?: boolean;
+  unreadMessagesCount?: number;
 };
 
 // Inline HeaderSection component

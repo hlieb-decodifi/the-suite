@@ -46,15 +46,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { MessageBadge } from '@/components/ui/message-badge';
 
 export type ClientProfilePageClientProps = {
   user: User;
   profile: ClientProfile | null;
   address: Address | null;
+  unreadMessagesCount?: number;
 };
 
 // Inline AccountSection component
-function InlineAccountSection({ user }: { user: User }) {
+function InlineAccountSection({
+  user,
+  unreadMessagesCount = 0,
+}: {
+  user: User;
+  unreadMessagesCount?: number;
+}) {
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
@@ -100,10 +108,17 @@ function InlineAccountSection({ user }: { user: User }) {
             <Link href="/dashboard" className="w-full cursor-pointer">
               <Button
                 variant="outline"
-                className="w-full font-medium justify-start text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                className="w-full font-medium justify-start text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary relative"
               >
                 <LayoutDashboard size={16} className="mr-2 text-primary" />
                 Go to Dashboard
+                {unreadMessagesCount > 0 && (
+                  <MessageBadge
+                    count={unreadMessagesCount}
+                    size="sm"
+                    className="ml-auto"
+                  />
+                )}
               </Button>
             </Link>
 
@@ -468,6 +483,7 @@ export function ClientProfilePageClient({
   user,
   profile,
   address,
+  unreadMessagesCount = 0,
 }: ClientProfilePageClientProps) {
   const hasAddress = Boolean(
     address?.city || address?.state || address?.country,
@@ -490,7 +506,10 @@ export function ClientProfilePageClient({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-1 space-y-6">
-          <InlineAccountSection user={user} />
+          <InlineAccountSection
+            user={user}
+            unreadMessagesCount={unreadMessagesCount}
+          />
           <div className="hidden md:block p-6 bg-[#F5F5F5] rounded-lg border border-[#ECECEC]">
             <Typography variant="h4" className="font-bold text-[#313131] mb-4">
               Manage Your Account

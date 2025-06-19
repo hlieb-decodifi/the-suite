@@ -6,12 +6,12 @@ import { usePathname } from 'next/navigation';
 import { Typography } from '@/components/ui/typography';
 import { UserDashboardData } from './DashboardPageLayout';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { UserCircle } from 'lucide-react';
 import { TabNavigation, TabItem } from '@/components/common/TabNavigation';
 import { useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import { DashboardTemplateDateRangePicker } from '@/components/templates/DashboardTemplate/components/DashboardTemplateDateRangePicker/DashboardTemplateDateRangePicker';
+import { MessageBadge } from '@/components/ui/message-badge';
 
 type DashboardPageLayoutClientProps = {
   user: User;
@@ -56,17 +56,15 @@ export function DashboardPageLayoutClient({
       label: 'Messages',
       href: '/dashboard/messages',
       isActive: activeTab === 'messages',
-      badge: userData.unreadMessagesCount && userData.unreadMessagesCount > 0 ? (
-        <Badge 
-          className={`ml-1.5 h-5 px-1.5 text-xs font-medium border ${
-            activeTab === 'messages' 
-              ? 'bg-white text-primary border-white/20' 
-              : 'bg-primary text-white border-primary'
-          }`}
-        >
-          {userData.unreadMessagesCount > 9 ? '9+' : userData.unreadMessagesCount}
-        </Badge>
-      ) : undefined,
+      badge:
+        userData.unreadMessagesCount && userData.unreadMessagesCount > 0 ? (
+          <MessageBadge
+            count={userData.unreadMessagesCount}
+            size="sm"
+            variant={activeTab === 'messages' ? 'active' : 'default'}
+            className="ml-1.5 hover:bg-white hover:text-primary"
+          />
+        ) : undefined,
     },
     {
       key: 'refunds',
@@ -124,7 +122,11 @@ export function DashboardPageLayoutClient({
 
       {/* Dashboard navigation using TabNavigation component */}
       <div className="overflow-x-auto">
-        <TabNavigation tabs={tabs} variant="link" className="mb-4 lg:mb-6 min-w-max" />
+        <TabNavigation
+          tabs={tabs}
+          variant="link"
+          className="mb-4 lg:mb-6 min-w-max"
+        />
       </div>
 
       {/* Main content */}

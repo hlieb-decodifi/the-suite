@@ -5,10 +5,14 @@ import { Header, type UserInfo } from '@/components/common/Header';
 import { Footer } from '@/components/common/Footer';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthSyncWrapper } from './components/AuthSyncWrapper';
+import { getUnreadMessagesCount } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
 
 export type RootLayoutTemplateProps = {
   children: ReactNode;
 };
+
+// Enable revalidation every 5 minutes for message counts
+export const revalidate = 300;
 
 export async function RootLayoutTemplate({
   children,
@@ -21,6 +25,7 @@ export async function RootLayoutTemplate({
 
   let userInfo: UserInfo | null = null;
   let isProfessional = false;
+  let unreadMessagesCount = 0;
 
   if (user) {
     // Check if user is a professional
@@ -28,8 +33,12 @@ export async function RootLayoutTemplate({
       user_uuid: user.id,
     });
     isProfessional = !!professionalCheck;
+
     // Fetch avatar URL on the server
     const avatarUrl = await fetchProfilePhotoUrlServer(user.id);
+
+    // Fetch unread messages count
+    unreadMessagesCount = await getUnreadMessagesCount(user.id);
 
     // Fetch user's first and last name from the database
     let firstName = '';
@@ -67,6 +76,7 @@ export async function RootLayoutTemplate({
           isAuthenticated={!!user}
           userInfo={userInfo}
           isProfessional={isProfessional}
+          unreadMessagesCount={unreadMessagesCount}
         />
         <main className="flex flex-grow container mx-auto py-8">
           {children}

@@ -103,6 +103,7 @@ export async function ProfilePage({
         paymentMethods={profileData.paymentMethods}
         portfolioPhotos={profileData.portfolioPhotos}
         isEditable={isEditable}
+        unreadMessagesCount={profileData.unreadMessagesCount}
       />
     );
   } catch (error) {
@@ -194,12 +195,26 @@ export async function getProfileData(
       }
     }
 
+    // Fetch unread messages count for editable profiles
+    let unreadMessagesCount = 0;
+    if (isEditable) {
+      try {
+        const { getUnreadMessagesCount } = await import(
+          '@/components/layouts/DashboardPageLayout/DashboardPageLayout'
+        );
+        unreadMessagesCount = await getUnreadMessagesCount(userId);
+      } catch (messageError) {
+        console.error('Error fetching unread messages count:', messageError);
+      }
+    }
+
     return {
       profile,
       workingHours,
       timezone,
       paymentMethods,
       portfolioPhotos,
+      unreadMessagesCount,
     };
   } catch (error) {
     // Re-throw specific errors for handling in the calling component
@@ -218,6 +233,7 @@ export async function getProfileData(
       timezone: '',
       paymentMethods: [] as PaymentMethod[],
       portfolioPhotos: [] as PortfolioPhotoUI[],
+      unreadMessagesCount: 0,
     };
   }
 }

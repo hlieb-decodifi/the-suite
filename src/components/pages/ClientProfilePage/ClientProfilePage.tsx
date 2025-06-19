@@ -55,6 +55,7 @@ export async function ClientProfilePage() {
       }}
       profile={clientData.profile}
       address={clientData.address}
+      unreadMessagesCount={clientData.unreadMessagesCount}
     />
   );
 }
@@ -102,11 +103,23 @@ export async function getClientProfileData(userId: string) {
       }
     }
 
+    // Fetch unread messages count
+    let unreadMessagesCount = 0;
+    try {
+      const { getUnreadMessagesCount } = await import(
+        '@/components/layouts/DashboardPageLayout/DashboardPageLayout'
+      );
+      unreadMessagesCount = await getUnreadMessagesCount(userId);
+    } catch (messageError) {
+      console.error('Error fetching unread messages count:', messageError);
+    }
+
     return {
       firstName: userData?.first_name || '',
       lastName: userData?.last_name || '',
       profile: profile || null,
       address,
+      unreadMessagesCount,
     };
   } catch (error) {
     console.error('Error fetching client profile data:', error);
@@ -115,6 +128,7 @@ export async function getClientProfileData(userId: string) {
       lastName: '',
       profile: null as ClientProfile | null,
       address: null as Address | null,
+      unreadMessagesCount: 0,
     };
   }
 }
