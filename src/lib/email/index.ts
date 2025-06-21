@@ -2,6 +2,7 @@
 export { 
   createAdminNotificationEmail, 
   createUserConfirmationEmail,
+  createBalanceNotificationEmail,
   type EmailTemplate 
 } from './templates';
 

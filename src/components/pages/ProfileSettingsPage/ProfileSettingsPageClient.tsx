@@ -400,10 +400,6 @@ export function ProfileSettingsPageClient({
                         | 'fixed'
                         | undefined,
                       deposit_value: depositSettings.deposit_value || 0,
-                      balance_payment_method:
-                        (depositSettings.balance_payment_method as
-                          | 'card'
-                          | 'cash') || 'card',
                     }}
                     onSubmit={handleDepositSettingsSubmit}
                     isLoading={isUpdatingDepositSettings}

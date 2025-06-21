@@ -6,7 +6,7 @@ import type { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import type { PaymentProcessingResult } from './types';
 
 /**
- * Create a booking with Stripe payment processing
+ * Create a booking with enhanced Stripe payment processing
  */
 export async function createBookingWithStripePayment(
   formData: BookingFormValues,
@@ -33,29 +33,6 @@ export async function createBookingWithStripePayment(
       .select('name, is_online')
       .eq('id', formData.paymentMethodId)
       .single();
-
-    // If payment method is not Credit Card, use the existing booking flow
-    if (!paymentMethod?.is_online || paymentMethod.name !== 'Credit Card') {
-      try {
-        const bookingResult = await createBooking(formData, professionalProfileId);
-        return {
-          success: true,
-          bookingId: bookingResult.bookingId,
-          requiresPayment: false,
-          paymentType: 'full'
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to create booking',
-          requiresPayment: false,
-          paymentType: 'full'
-        };
-      }
-    }
-
-    // For Credit Card payments, we need to create the booking first and then handle Stripe payment
-    // But we need to avoid the duplicate payment record issue
     
     // First, create the booking using the existing flow
     const bookingResult = await createBooking(formData, professionalProfileId);
@@ -69,19 +46,139 @@ export async function createBookingWithStripePayment(
       };
     }
 
-    // Now we need to check if this professional requires Stripe payment processing
-    // Get professional profile to check deposit settings and Stripe status
-    const { getProfessionalProfileForPayment, calculatePaymentAmounts } = await import('./db');
-    const { createStripeCheckoutSession } = await import('./stripe-operations');
-    const { updateBookingPaymentWithSession } = await import('./db');
+    // If payment method is cash, handle service fee collection
+    if (paymentMethod && !paymentMethod.is_online) {
+      return await handleCashPaymentFlow(
+        bookingResult.bookingId,
+        user.id,
+        user.email || '',
+        formData,
+        bookingResult.totalPrice
+      );
+    }
+
+    // For Credit Card payments, handle enhanced Stripe flow
+    if (paymentMethod?.is_online && paymentMethod.name === 'Credit Card') {
+      return await handleCardPaymentFlow(
+        bookingResult.bookingId,
+        professionalProfileId,
+        user.id,
+        user.email || '',
+        formData,
+        bookingResult.totalPrice
+      );
+    }
+
+    // Default: no payment processing needed
+    return {
+      success: true,
+      bookingId: bookingResult.bookingId,
+      requiresPayment: false,
+      paymentType: 'full'
+    };
+
+  } catch (error) {
+    console.error('Error in createBookingWithStripePayment:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process booking',
+      requiresPayment: false,
+      paymentType: 'full'
+    };
+  }
+}
+
+/**
+ * Handle cash payment flow - collect service fee only
+ */
+async function handleCashPaymentFlow(
+  bookingId: string,
+  clientId: string,
+  clientEmail: string,
+  formData: BookingFormValues,
+  totalPrice: number
+): Promise<PaymentProcessingResult> {
+  try {
+    const { createEnhancedCheckoutSession } = await import('./stripe-operations');
+    
+    // Create checkout session for service fee only
+    const checkoutParams = {
+      bookingId,
+      clientId,
+      professionalStripeAccountId: 'acct_platform', // Use platform account for service fees
+      amount: 0, // No main payment amount
+      paymentType: 'full' as const,
+      requiresBalancePayment: false,
+      customerEmail: clientEmail,
+      isServiceFeeOnly: true,
+      metadata: {
+        booking_id: bookingId,
+        payment_method: 'cash',
+        total_amount: (totalPrice * 100).toString(),
+        service_fee_only: 'true',
+        tip_amount: ((formData.tipAmount || 0) * 100).toString()
+      }
+    };
+
+    const checkoutResult = await createEnhancedCheckoutSession(checkoutParams);
+
+    if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
+      console.error('Failed to create service fee checkout session:', checkoutResult.error);
+      return {
+        success: true, // Still successful booking, just no service fee collection
+        bookingId,
+        requiresPayment: false,
+        paymentType: 'full'
+      };
+    }
+
+    return {
+      success: true,
+      bookingId,
+      checkoutUrl: checkoutResult.checkoutUrl,
+      requiresPayment: true,
+      paymentType: 'full'
+    };
+
+  } catch (error) {
+    console.error('Error handling cash payment flow:', error);
+    return {
+      success: true, // Still return successful booking
+      bookingId,
+      requiresPayment: false,
+      paymentType: 'full'
+    };
+  }
+}
+
+/**
+ * Handle card payment flow with uncaptured payments and scheduling
+ */
+async function handleCardPaymentFlow(
+  bookingId: string,
+  professionalProfileId: string,
+  clientId: string,
+  clientEmail: string,
+  formData: BookingFormValues,
+  totalPrice: number
+): Promise<PaymentProcessingResult> {
+  try {
+    const { 
+      getProfessionalProfileForPayment, 
+      calculatePaymentAmounts,
+      updateBookingPaymentWithScheduling 
+    } = await import('./db');
+    const { 
+      schedulePaymentAuthorization, 
+      createEnhancedCheckoutSession 
+    } = await import('./stripe-operations');
     
     const professionalProfile = await getProfessionalProfileForPayment(professionalProfileId);
     
     if (!professionalProfile) {
-      // If we can't get professional profile, just return the booking as successful
       return {
         success: true,
-        bookingId: bookingResult.bookingId,
+        bookingId,
         requiresPayment: false,
         paymentType: 'full'
       };
@@ -89,121 +186,138 @@ export async function createBookingWithStripePayment(
 
     // Check if professional has Stripe Connect account
     if (!professionalProfile.stripe_account_id || professionalProfile.stripe_connect_status !== 'complete') {
-      // No Stripe Connect, just return the booking as successful
       return {
         success: true,
-        bookingId: bookingResult.bookingId,
+        bookingId,
         requiresPayment: false,
         paymentType: 'full'
       };
     }
 
-    // Calculate payment amounts based on deposit settings
-    const totalAmountInCents = Math.round(bookingResult.totalPrice * 100);
+    // Calculate payment amounts with enhanced validation
+    const totalAmountInCents = Math.round(totalPrice * 100);
     const paymentCalculation = calculatePaymentAmounts(totalAmountInCents, professionalProfile);
 
-    // Determine if we need Stripe checkout
-    let needsStripeCheckout = false;
-    let paymentType: 'full' | 'deposit' | 'setup_only' = 'full';
+    // Get appointment details for scheduling
+    const supabase = await createClient();
+    const { data: appointment } = await supabase
+      .from('appointments')
+      .select('date, start_time')
+      .eq('booking_id', bookingId)
+      .single();
 
-    if (!paymentCalculation.requiresDeposit) {
-      // No deposit required - check if we need to setup payment method for future balance payment
-      if (paymentCalculation.requiresBalancePayment && paymentCalculation.balancePaymentMethod === 'card') {
-        needsStripeCheckout = true;
-        paymentType = 'setup_only';
-      }
-    } else {
-      // Deposit required
-      needsStripeCheckout = true;
-      paymentType = paymentCalculation.isFullPayment ? 'full' : 'deposit';
+    if (!appointment) {
+      throw new Error('Failed to get appointment details for payment scheduling');
     }
 
-    if (!needsStripeCheckout) {
-      // No Stripe checkout needed, just return the booking as successful
-      return {
-        success: true,
-        bookingId: bookingResult.bookingId,
-        requiresPayment: false,
-        paymentType: 'full'
-      };
-    }
-
-    // Update the existing payment record with Stripe information
-    // We need to update the payment record that was created by createBooking
-    // Since we can't easily modify the existing payment record structure,
-    // we'll work with what we have and update the session ID later
-    
-    // Update the existing payment record with Stripe information
-    const { updateBookingPaymentForStripe } = await import('./db');
-    
-    const updateResult = await updateBookingPaymentForStripe(
-      bookingResult.bookingId,
-      paymentCalculation
+    // Calculate payment schedule
+    const scheduleResult = await schedulePaymentAuthorization(
+      bookingId,
+      new Date(appointment.date),
+      appointment.start_time
     );
 
-    if (!updateResult.success) {
-      console.error('Failed to update payment record for Stripe:', updateResult.error);
-      // Still return success since the booking was created
+    if (!scheduleResult.success) {
+      throw new Error(scheduleResult.error || 'Failed to calculate payment schedule');
+    }
+
+    // Determine payment type and checkout configuration
+    let paymentType: 'full' | 'deposit' | 'setup_only' = 'full';
+    let needsCheckout = false;
+    let useUncapturedPayment = false;
+
+    if (!paymentCalculation.requiresDeposit) {
+      // No deposit required - schedule for later capture
+      needsCheckout = true;
+      useUncapturedPayment = true;
+      paymentType = 'full';
+    } else {
+      // Deposit required
+      needsCheckout = true;
+      paymentType = paymentCalculation.isFullPayment ? 'full' : 'deposit';
+      useUncapturedPayment = !paymentCalculation.isFullPayment; // Only uncaptured if balance remaining
+    }
+
+    if (!needsCheckout) {
+      // Update payment scheduling information
+      await updateBookingPaymentWithScheduling(
+        bookingId,
+        scheduleResult.preAuthDate!,
+        scheduleResult.captureDate!,
+        scheduleResult.shouldPreAuthNow!
+      );
+
       return {
         success: true,
-        bookingId: bookingResult.bookingId,
+        bookingId,
         requiresPayment: false,
         paymentType: 'full'
       };
     }
     
-    // Create Stripe checkout session
+    // Create enhanced checkout session
     const checkoutParams = {
-      bookingId: bookingResult.bookingId,
-      clientId: user.id,
+      bookingId,
+      clientId,
       professionalStripeAccountId: professionalProfile.stripe_account_id,
       amount: totalAmountInCents,
       depositAmount: paymentCalculation.depositAmount,
       balanceAmount: paymentCalculation.balanceAmount,
       paymentType,
       requiresBalancePayment: paymentCalculation.requiresBalancePayment,
-      balancePaymentMethod: paymentCalculation.balancePaymentMethod,
-      ...(user.email && { customerEmail: user.email }),
+      customerEmail: clientEmail,
+      useUncapturedPayment,
       metadata: {
-        booking_id: bookingResult.bookingId,
+        booking_id: bookingId,
         professional_profile_id: professionalProfile.id,
         total_amount: totalAmountInCents.toString(),
         service_fee: '100', // $1.00 service fee in cents
-        tip_amount: ((formData.tipAmount || 0) * 100).toString()
+        tip_amount: ((formData.tipAmount || 0) * 100).toString(),
+        pre_auth_scheduled: scheduleResult.preAuthDate!.toISOString(),
+        capture_scheduled: scheduleResult.captureDate!.toISOString(),
+        should_pre_auth_now: scheduleResult.shouldPreAuthNow!.toString()
       }
     };
 
-    const checkoutResult = await createStripeCheckoutSession(checkoutParams);
+    const checkoutResult = await createEnhancedCheckoutSession(checkoutParams);
 
     if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
-      console.error('Failed to create Stripe checkout session:', checkoutResult.error);
-      // Still return success since the booking was created
+      console.error('Failed to create enhanced checkout session:', checkoutResult.error);
       return {
         success: true,
-        bookingId: bookingResult.bookingId,
+        bookingId,
         requiresPayment: false,
         paymentType: 'full'
       };
     }
 
+    // Update payment record with scheduling information
+    await updateBookingPaymentWithScheduling(
+      bookingId,
+      scheduleResult.preAuthDate!,
+      scheduleResult.captureDate!,
+      scheduleResult.shouldPreAuthNow!
+    );
+
     // Update payment record with session ID
+    const { updateBookingPaymentWithSession } = await import('./db');
     if (checkoutResult.sessionId) {
-      await updateBookingPaymentWithSession(bookingResult.bookingId, checkoutResult.sessionId);
+      await updateBookingPaymentWithSession(bookingId, checkoutResult.sessionId);
     }
 
     return {
       success: true,
-      bookingId: bookingResult.bookingId,
+      bookingId,
       checkoutUrl: checkoutResult.checkoutUrl,
       requiresPayment: true,
       paymentType
     };
 
   } catch (error) {
-    console.error('Error creating booking with Stripe payment:', error);
+    console.error('Error handling card payment flow:', error);
     return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      success: true, // Still return successful booking
+      bookingId,
       requiresPayment: false,
       paymentType: 'full'
     };
@@ -224,7 +338,7 @@ export async function getPaymentCalculation(
     balanceAmount: number;
     requiresDeposit: boolean;
     requiresBalancePayment: boolean;
-    balancePaymentMethod: 'card' | 'cash';
+
     isFullPayment: boolean;
   };
   error?: string;
@@ -251,7 +365,7 @@ export async function getPaymentCalculation(
         balanceAmount: calculation.balanceAmount / 100,
         requiresDeposit: calculation.requiresDeposit,
         requiresBalancePayment: calculation.requiresBalancePayment,
-        balancePaymentMethod: calculation.balancePaymentMethod,
+
         isFullPayment: calculation.isFullPayment
       }
     };
@@ -305,8 +419,8 @@ export async function cancelBookingForFailedCheckout(
       };
     }
 
-    // Only cancel if the booking is still pending (not already completed)
-    if (booking.status !== 'pending') {
+    // Only cancel if the booking is still pending payment or pending (not already completed)
+    if (booking.status !== 'pending' && booking.status !== 'pending_payment') {
       return {
         success: false,
         error: 'Booking cannot be cancelled'
@@ -406,6 +520,7 @@ export async function verifyBookingPayment(
   success: boolean;
   paymentStatus?: 'pending' | 'completed' | 'failed';
   sessionStatus?: string;
+  isUncaptured?: boolean;
   error?: string;
 }> {
   try {
@@ -451,6 +566,7 @@ export async function verifyBookingPayment(
     // Check payment status
     let paymentStatus: 'pending' | 'completed' | 'failed' = 'pending';
     let paymentIntentId: string | undefined;
+    let isUncaptured = false;
 
     if (session.mode === 'payment') {
       if (session.payment_status === 'paid') {
@@ -460,6 +576,28 @@ export async function verifyBookingPayment(
         }
       } else if (session.payment_status === 'unpaid') {
         paymentStatus = 'failed';
+      } else if (session.payment_status === 'no_payment_required') {
+        // Handle case where no payment is required (e.g., free services)
+        paymentStatus = 'completed';
+      }
+      
+      // For uncaptured payments, check the payment intent status
+      if (session.payment_intent && typeof session.payment_intent === 'object') {
+        paymentIntentId = session.payment_intent.id;
+        const paymentIntent = session.payment_intent;
+        
+        // Uncaptured payments will have status 'requires_capture' which should be treated as successful
+        if (paymentIntent.status === 'requires_capture') {
+          paymentStatus = 'completed';
+          isUncaptured = true;
+        } else if (paymentIntent.status === 'succeeded') {
+          paymentStatus = 'completed';
+        } else if (paymentIntent.status === 'canceled') {
+          paymentStatus = 'failed';
+        } else if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_confirmation') {
+          // These statuses indicate the payment is still in progress but not failed
+          paymentStatus = 'pending';
+        }
       }
     } else if (session.mode === 'setup') {
       // For setup mode, we consider it successful if setup_intent succeeded
@@ -499,7 +637,8 @@ export async function verifyBookingPayment(
     return {
       success: true,
       paymentStatus,
-      sessionStatus: session.payment_status || session.status
+      sessionStatus: session.payment_status || session.status,
+      isUncaptured
     };
 
   } catch (error) {

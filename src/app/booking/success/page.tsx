@@ -3,7 +3,7 @@ import { BookingSuccessContent } from './BookingSuccessContent';
 
 export default function BookingSuccessPage() {
   return (
-    <div className="w-full bg-background">
+    <div className="w-full flex justify-center items-center bg-background">
       <Suspense
         fallback={
           <div className="flex items-center justify-center min-h-[400px]">

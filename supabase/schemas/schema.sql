@@ -121,7 +121,7 @@ create table professional_profiles (
     (requires_deposit = true AND deposit_type = 'percentage' AND deposit_value >= 0 AND deposit_value <= 100) OR
     (requires_deposit = true AND deposit_type = 'fixed' AND deposit_value >= 0)
   ),
-  balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
+
   -- Messaging settings
   allow_messages boolean default true not null,
   -- Cancellation policy settings
@@ -931,12 +931,16 @@ create table bookings (
   id uuid primary key default uuid_generate_v4(),
   client_id uuid references users not null,
   professional_profile_id uuid references professional_profiles not null,
-  status text not null check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
+  status text not null,
   notes text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table bookings enable row level security;
+
+-- Add named constraint for booking status  
+alter table bookings add constraint bookings_status_check 
+  check ((status = ANY (ARRAY['pending_payment'::text, 'pending'::text, 'confirmed'::text, 'completed'::text, 'cancelled'::text])));
 
 /**
 * APPOINTMENTS
@@ -979,7 +983,7 @@ create table booking_payments (
   amount decimal(10, 2) not null,
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
-  status text not null check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance')),
+  status text not null check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
   stripe_payment_intent_id text, -- For Stripe integration
   -- Stripe checkout session fields
   stripe_checkout_session_id text,
@@ -987,7 +991,6 @@ create table booking_payments (
   balance_amount decimal(10, 2) default 0 not null,
   payment_type text default 'full' not null check (payment_type in ('full', 'deposit', 'balance')),
   requires_balance_payment boolean default false not null,
-  balance_payment_method text check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
   -- Add fields to booking_payments table for uncaptured payment support
@@ -996,7 +999,8 @@ create table booking_payments (
   pre_auth_scheduled_for timestamp with time zone,
   capture_scheduled_for timestamp with time zone,
   captured_at timestamp with time zone,
-  pre_auth_placed_at timestamp with time zone
+  pre_auth_placed_at timestamp with time zone,
+  balance_notification_sent_at timestamp with time zone
 );
 alter table booking_payments enable row level security;
 
@@ -1014,11 +1018,6 @@ create index if not exists idx_booking_payments_capture_scheduled
 on booking_payments(capture_scheduled_for) 
 where capture_scheduled_for is not null and status in ('pending', 'authorized');
 
--- Add new status for authorized but not captured payments
-alter table booking_payments drop constraint if exists booking_payments_status_check;
-alter table booking_payments add constraint booking_payments_status_check 
-check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled'));
-
 /**
 * Function to check professional availability
 * Prevents double booking
@@ -1034,6 +1033,7 @@ begin
     )
     and a.date = new.date
     and a.status != 'cancelled'
+    and b.status not in ('pending_payment', 'cancelled') -- Exclude pending payments and cancelled bookings
     and a.booking_id != new.booking_id
     and (
       (new.start_time < a.end_time and new.end_time > a.start_time) -- time slots overlap

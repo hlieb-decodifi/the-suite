@@ -113,3 +113,48 @@ export function createUserConfirmationEmail(
     textContent
   };
 } 
+
+export function createBalanceNotificationEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    bookingId: string;
+    professionalName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    totalAmount: number;
+    depositPaid?: number;
+    balanceAmount: number;
+    currentTip?: number;
+    totalDue: number;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    professionalName: data.professionalName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    totalAmount: data.totalAmount.toFixed(2),
+    depositPaid: data.depositPaid?.toFixed(2),
+    balanceAmount: data.balanceAmount.toFixed(2),
+    currentTip: data.currentTip?.toFixed(2),
+    totalDue: data.totalDue.toFixed(2),
+    balancePaymentUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.bookingId}/balance`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!,
+    bookingId: data.bookingId
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('balance-notification', 'hbs');
+  const textTemplate = loadTemplate('balance-notification', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: `Your appointment balance is ready - ${data.professionalName}`,
+    htmlContent,
+    textContent
+  };
+} 

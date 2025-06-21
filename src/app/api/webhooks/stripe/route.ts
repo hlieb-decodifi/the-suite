@@ -120,6 +120,37 @@ export async function POST(req: Request) {
         await handlePersonUpdated(event.data.object as Stripe.Person);
         break;
         
+      // Payment Intent events for our uncaptured payment flow
+      case 'payment_intent.requires_action':
+        await handlePaymentIntentRequiresAction(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      case 'payment_intent.payment_failed':
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      case 'payment_intent.canceled':
+        await handlePaymentIntentCanceled(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      case 'payment_intent.succeeded':
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      // Setup Intent events for saving payment methods
+      case 'setup_intent.succeeded':
+        await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent);
+        break;
+        
+      case 'setup_intent.setup_failed':
+        await handleSetupIntentFailed(event.data.object as Stripe.SetupIntent);
+        break;
+        
+      // Session events
+      case 'checkout.session.expired':
+        await handleCheckoutSessionExpired(event.data.object as Stripe.Checkout.Session);
+        break;
+        
       // Events we don't need to handle (created by our own API calls)
       case 'price.created':
       case 'product.created':
@@ -914,5 +945,230 @@ async function handlePersonUpdated(person: Stripe.Person) {
     console.log(`Person update processed for user: ${userId}`);
   } catch (error) {
     console.error('Error handling person update:', error);
+  }
+}
+
+// Handle payment intent requiring action (3D Secure)
+async function handlePaymentIntentRequiresAction(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} requires action`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Update payment status to indicate authentication required
+    await supabase
+      .from('booking_payments')
+      .update({
+        status: 'pending',
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId)
+      .eq('stripe_payment_intent_id', paymentIntent.id);
+      
+    console.log(`Updated payment status for booking ${bookingId} - requires action`);
+  } catch (error) {
+    console.error(`Error updating payment for requires action: ${bookingId}`, error);
+  }
+}
+
+// Handle failed payment intent
+async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} failed`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete the pending_payment booking since payment failed
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+      .eq('status', 'pending_payment');
+      
+    if (deleteError) {
+      console.error(`Failed to delete failed booking ${bookingId}:`, deleteError);
+      
+      // Fallback: update payment status to failed
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId)
+        .eq('stripe_payment_intent_id', paymentIntent.id);
+    } else {
+      console.log(`Successfully deleted failed booking ${bookingId} and freed up the time slot`);
+    }
+    
+    // TODO: Send failure notification to client
+  } catch (error) {
+    console.error(`Error handling failed payment intent: ${bookingId}`, error);
+  }
+}
+
+// Handle canceled payment intent
+async function handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} canceled`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete the pending_payment booking since payment was cancelled
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+      .eq('status', 'pending_payment');
+      
+    if (deleteError) {
+      console.error(`Failed to delete cancelled booking ${bookingId}:`, deleteError);
+      
+      // Fallback: update booking status to cancelled and payment to failed  
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId)
+        .eq('stripe_payment_intent_id', paymentIntent.id);
+        
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+    } else {
+      console.log(`Successfully deleted cancelled booking ${bookingId} and freed up the time slot`);
+    }
+  } catch (error) {
+    console.error(`Error handling cancelled payment intent: ${bookingId}`, error);
+  }
+}
+
+// Handle successful payment intent
+async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} succeeded`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Update payment status to completed
+    await supabase
+      .from('booking_payments')
+      .update({
+        status: 'completed',
+        captured_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId)
+      .eq('stripe_payment_intent_id', paymentIntent.id);
+      
+    console.log(`Updated payment status for booking ${bookingId} - completed`);
+  } catch (error) {
+    console.error(`Error updating payment for success: ${bookingId}`, error);
+  }
+}
+
+// Handle successful setup intent (saved payment method)
+async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
+  console.log(`Setup intent ${setupIntent.id} succeeded`);
+  
+  const bookingId = setupIntent.metadata?.booking_id;
+  const customerId = setupIntent.customer as string;
+  
+  if (!customerId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Get user ID from customer
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('user_id')
+      .eq('stripe_customer_id', customerId)
+      .single();
+      
+    if (customer) {
+      const logMessage = bookingId 
+        ? `Setup intent succeeded for user ${customer.user_id}, booking ${bookingId} - payment method saved`
+        : `Setup intent succeeded for user ${customer.user_id}, payment method saved`;
+      console.log(logMessage);
+      // Payment method is automatically saved by Stripe
+    }
+  } catch (error) {
+    console.error(`Error processing setup intent success:`, error);
+  }
+}
+
+// Handle failed setup intent
+async function handleSetupIntentFailed(setupIntent: Stripe.SetupIntent) {
+  console.log(`Setup intent ${setupIntent.id} failed`);
+  
+  const bookingId = setupIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  void bookingId; // Suppress unused variable warning
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Log the failure - don't fail the booking for setup intent failures
+    console.log(`Setup intent failed for booking ${bookingId} - payment method not saved`);
+    void supabase; // Suppress unused variable warning
+  } catch (error) {
+    console.error(`Error processing setup intent failure:`, error);
+  }
+}
+
+// Handle expired checkout session
+async function handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
+  console.log(`Checkout session ${session.id} expired`);
+  
+  const bookingId = session.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete the pending_payment booking since checkout expired
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+      .eq('status', 'pending_payment');
+      
+    if (deleteError) {
+      console.error(`Failed to delete expired booking ${bookingId}:`, deleteError);
+      
+      // Fallback: update payment status to failed
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId)
+        .eq('stripe_checkout_session_id', session.id);
+    } else {
+      console.log(`Successfully deleted expired booking ${bookingId} and freed up the time slot`);
+    }
+  } catch (error) {
+    console.error(`Error handling expired checkout session: ${bookingId}`, error);
   }
 } 

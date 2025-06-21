@@ -508,11 +508,11 @@ function InlinePaymentMethodsSection({
             isPublished={isPublished}
           />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-0.5">
             {acceptedMethods.length > 0 ? (
               acceptedMethods.map((method) => (
-                <div key={method.id} className="flex items-center gap-2">
-                  <Typography variant="small">{method.name}</Typography>
+                <div key={method.id} className="flex items-center">
+                  <Typography>{method.name}</Typography>
                 </div>
               ))
             ) : (

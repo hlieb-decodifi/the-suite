@@ -38,7 +38,6 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
         requires_deposit,
         deposit_type,
         deposit_value,
-        balance_payment_method,
         stripe_account_id,
         stripe_connect_status
       `)
@@ -56,7 +55,6 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
       requires_deposit: data.requires_deposit ?? false,
       deposit_type: (data.deposit_type as 'percentage' | 'fixed') ?? 'percentage',
       deposit_value: data.deposit_value,
-      balance_payment_method: (data.balance_payment_method as 'card' | 'cash') ?? 'card',
       stripe_account_id: data.stripe_account_id,
       stripe_connect_status: data.stripe_connect_status as 'not_connected' | 'pending' | 'complete'
     };
@@ -67,22 +65,26 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
 }
 
 /**
- * Calculate payment amounts based on professional's deposit settings
+ * Enhanced payment calculation with deposit validation
  */
 export function calculatePaymentAmounts(
   totalAmount: number,
   professionalProfile: ProfessionalProfileForPayment
 ): PaymentCalculation {
-  const { requires_deposit, deposit_type, deposit_value, balance_payment_method } = professionalProfile;
+  const {
+    requires_deposit,
+    deposit_type,
+    deposit_value
+  } = professionalProfile;
 
   if (!requires_deposit || !deposit_value) {
+    // No deposit required - full payment
     return {
       totalAmount,
       depositAmount: 0,
       balanceAmount: totalAmount,
       requiresDeposit: false,
       requiresBalancePayment: true,
-      balancePaymentMethod: balance_payment_method,
       isFullPayment: true
     };
   }
@@ -90,12 +92,13 @@ export function calculatePaymentAmounts(
   let depositAmount: number;
   
   if (deposit_type === 'percentage') {
-    depositAmount = Math.round((totalAmount * deposit_value) / 100);
+    depositAmount = Math.round(totalAmount * (deposit_value / 100));
   } else {
+    // Fixed amount deposit
     depositAmount = Math.round(deposit_value * 100); // Convert to cents
   }
 
-  // If deposit is greater than or equal to total, charge full amount as deposit
+  // VALIDATION: If deposit >= total amount, charge full amount as deposit
   if (depositAmount >= totalAmount) {
     return {
       totalAmount,
@@ -103,7 +106,6 @@ export function calculatePaymentAmounts(
       balanceAmount: 0,
       requiresDeposit: true,
       requiresBalancePayment: false,
-      balancePaymentMethod: balance_payment_method,
       isFullPayment: true
     };
   }
@@ -116,7 +118,6 @@ export function calculatePaymentAmounts(
     balanceAmount,
     requiresDeposit: true,
     requiresBalancePayment: balanceAmount > 0,
-    balancePaymentMethod: balance_payment_method,
     isFullPayment: false
   };
 }
@@ -145,7 +146,6 @@ export async function createBookingPaymentRecord(
       service_fee: serviceFee,
       payment_type: paymentCalculation.isFullPayment ? 'full' : 'deposit' as const,
       requires_balance_payment: paymentCalculation.requiresBalancePayment,
-      balance_payment_method: paymentCalculation.balancePaymentMethod,
       status: stripeCheckoutSessionId ? 'pending' : 'completed',
       stripe_checkout_session_id: stripeCheckoutSessionId || null
     };
@@ -283,7 +283,6 @@ export async function updateBookingPaymentForStripe(
       balance_amount: paymentCalculation.balanceAmount / 100,
       payment_type: paymentCalculation.isFullPayment ? 'full' : 'deposit' as const,
       requires_balance_payment: paymentCalculation.requiresBalancePayment,
-      balance_payment_method: paymentCalculation.balancePaymentMethod,
       status: stripeCheckoutSessionId ? 'pending' : 'completed',
       stripe_checkout_session_id: stripeCheckoutSessionId || null,
       updated_at: new Date().toISOString()
@@ -551,6 +550,353 @@ export async function updateStripeCustomerEmail(
 
   } catch (error) {
     console.error('Error updating Stripe customer email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Update booking payment with payment scheduling information
+ */
+export async function updateBookingPaymentWithScheduling(
+  bookingId: string,
+  preAuthDate: Date,
+  captureDate: Date,
+  shouldPreAuthNow: boolean,
+  paymentIntentId?: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const updateData: Record<string, string | number | null> = {
+      pre_auth_scheduled_for: preAuthDate.toISOString(),
+      capture_scheduled_for: captureDate.toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (shouldPreAuthNow && paymentIntentId) {
+      updateData.stripe_payment_intent_id = paymentIntentId;
+      updateData.pre_auth_placed_at = new Date().toISOString();
+      updateData.status = 'authorized';
+    }
+
+    const { error } = await supabase
+      .from('booking_payments')
+      .update(updateData)
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating booking payment with scheduling:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateBookingPaymentWithScheduling:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Get payments that need pre-authorization
+ */
+export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
+  id: string;
+  booking_id: string;
+  amount: number;
+  customer_id: string;
+  professional_stripe_account_id: string;
+  pre_auth_scheduled_for: string;
+}[]> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { data, error } = await supabase
+      .from('booking_payments')
+      .select(`
+        id,
+        booking_id,
+        amount,
+        pre_auth_scheduled_for,
+        bookings!inner(
+          client_id,
+          professional_profile_id,
+          professional_profiles!inner(
+            stripe_account_id
+          )
+        ),
+        customers!inner(
+          stripe_customer_id
+        )
+      `)
+      .lte('pre_auth_scheduled_for', new Date().toISOString())
+      .eq('status', 'pending')
+      .is('pre_auth_placed_at', null)
+      .not('pre_auth_scheduled_for', 'is', null)
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching payments pending pre-auth:', error);
+      return [];
+    }
+
+    return (data || []).map(payment => ({
+      id: payment.id,
+      booking_id: payment.booking_id,
+      amount: Math.round(payment.amount * 100), // Convert to cents
+      customer_id: (payment.customers as unknown as { stripe_customer_id: string }).stripe_customer_id,
+      professional_stripe_account_id: (payment.bookings as unknown as { professional_profiles: { stripe_account_id: string } }).professional_profiles.stripe_account_id,
+      pre_auth_scheduled_for: payment.pre_auth_scheduled_for!
+    }));
+  } catch (error) {
+    console.error('Error in getPaymentsPendingPreAuth:', error);
+    return [];
+  }
+}
+
+/**
+ * Get payments that need to be captured
+ */
+export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
+  id: string;
+  booking_id: string;
+  stripe_payment_intent_id: string;
+  amount: number;
+  tip_amount: number;
+  capture_scheduled_for: string;
+}[]> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { data, error } = await supabase
+      .from('booking_payments')
+      .select(`
+        id,
+        booking_id,
+        stripe_payment_intent_id,
+        amount,
+        tip_amount,
+        capture_scheduled_for
+      `)
+      .lte('capture_scheduled_for', new Date().toISOString())
+      .in('status', ['authorized', 'pre_auth_scheduled'])
+      .not('stripe_payment_intent_id', 'is', null)
+      .is('captured_at', null)
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching payments pending capture:', error);
+      return [];
+    }
+
+    return (data || []).map(payment => ({
+      id: payment.id,
+      booking_id: payment.booking_id,
+      stripe_payment_intent_id: payment.stripe_payment_intent_id!,
+      amount: Math.round(payment.amount * 100), // Convert to cents
+      tip_amount: Math.round((payment.tip_amount || 0) * 100), // Convert to cents
+      capture_scheduled_for: payment.capture_scheduled_for!
+    }));
+  } catch (error) {
+    console.error('Error in getPaymentsPendingCapture:', error);
+    return [];
+  }
+}
+
+/**
+ * Mark payment as pre-authorized
+ */
+export async function markPaymentPreAuthorized(
+  paymentId: string,
+  paymentIntentId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        stripe_payment_intent_id: paymentIntentId,
+        pre_auth_placed_at: new Date().toISOString(),
+        status: 'authorized',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', paymentId);
+
+    if (error) {
+      console.error('Error marking payment as pre-authorized:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in markPaymentPreAuthorized:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Mark payment as captured
+ */
+export async function markPaymentCaptured(
+  paymentId: string,
+  capturedAmount: number
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        captured_at: new Date().toISOString(),
+        status: 'completed',
+        amount: capturedAmount / 100, // Convert back to dollars
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', paymentId);
+
+    if (error) {
+      console.error('Error marking payment as captured:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in markPaymentCaptured:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Get appointments needing balance notifications
+ */
+export async function getAppointmentsNeedingBalanceNotification(limit: number = 50): Promise<{
+  booking_id: string;
+  client_email: string;
+  client_name: string;
+  professional_name: string;
+  appointment_date: string;
+  appointment_time: string;
+  total_amount: number;
+  deposit_amount: number | undefined;
+  balance_amount: number;
+  tip_amount: number;
+}[]> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000)).toISOString();
+    
+    const { data, error } = await supabase
+      .from('appointments')
+      .select(`
+        booking_id,
+        date,
+        end_time,
+        bookings!inner(
+          client_id,
+          professional_profile_id,
+          users!bookings_client_id_fkey(email, first_name, last_name),
+          professional_profiles!inner(
+            users!professional_profiles_user_id_fkey(first_name, last_name)
+          )
+        ),
+        booking_payments!inner(
+          amount,
+          deposit_amount,
+          balance_amount,
+          tip_amount,
+          requires_balance_payment,
+          status
+        )
+      `)
+      .eq('status', 'completed')
+      .lte('end_time', twoHoursAgo.split('T')[1]) // Compare time only
+      .eq('bookings.booking_payments.status', 'authorized')
+      .eq('bookings.booking_payments.requires_balance_payment', true)
+      .is('bookings.booking_payments.balance_notification_sent_at', null)
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching appointments needing balance notification:', error);
+      return [];
+    }
+
+    return (data || []).map(appointment => {
+      const booking = appointment.bookings as unknown as {
+        users: { email: string; first_name: string; last_name: string };
+        professional_profiles: {
+          users: { first_name: string; last_name: string };
+        };
+      };
+      const payments = appointment.booking_payments as unknown as Array<{
+        amount: number;
+        deposit_amount?: number;
+        balance_amount: number;
+        tip_amount?: number;
+      }>;
+      
+      if (!payments || payments.length === 0) {
+        throw new Error('No payment found for appointment');
+      }
+      
+      const payment = payments[0];
+      
+      return {
+        booking_id: appointment.booking_id,
+        client_email: booking.users.email,
+        client_name: `${booking.users.first_name} ${booking.users.last_name}`,
+        professional_name: `${booking.professional_profiles.users.first_name} ${booking.professional_profiles.users.last_name}`,
+        appointment_date: appointment.date,
+        appointment_time: appointment.end_time,
+        total_amount: payment!.amount,
+        deposit_amount: payment!.deposit_amount,
+        balance_amount: payment!.balance_amount,
+        tip_amount: payment!.tip_amount || 0
+      };
+    });
+  } catch (error) {
+    console.error('Error in getAppointmentsNeedingBalanceNotification:', error);
+    return [];
+  }
+}
+
+/**
+ * Mark balance notification as sent
+ */
+export async function markBalanceNotificationSent(
+  bookingId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        balance_notification_sent_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error marking balance notification as sent:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in markBalanceNotificationSent:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 

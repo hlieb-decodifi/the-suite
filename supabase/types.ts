@@ -115,7 +115,7 @@ export type Database = {
           amount: number
           authorization_expires_at: string | null
           balance_amount: number
-          balance_payment_method: string | null
+          balance_notification_sent_at: string | null
           booking_id: string
           capture_method: string | null
           capture_scheduled_for: string | null
@@ -139,7 +139,7 @@ export type Database = {
           amount: number
           authorization_expires_at?: string | null
           balance_amount?: number
-          balance_payment_method?: string | null
+          balance_notification_sent_at?: string | null
           booking_id: string
           capture_method?: string | null
           capture_scheduled_for?: string | null
@@ -163,7 +163,7 @@ export type Database = {
           amount?: number
           authorization_expires_at?: string | null
           balance_amount?: number
-          balance_payment_method?: string | null
+          balance_notification_sent_at?: string | null
           booking_id?: string
           capture_method?: string | null
           capture_scheduled_for?: string | null
@@ -696,7 +696,6 @@ export type Database = {
           address_id: string | null
           allow_messages: boolean
           appointment_requirements: string | null
-          balance_payment_method: string | null
           cancellation_24h_charge_percentage: number
           cancellation_48h_charge_percentage: number
           cancellation_policy_enabled: boolean
@@ -726,7 +725,6 @@ export type Database = {
           address_id?: string | null
           allow_messages?: boolean
           appointment_requirements?: string | null
-          balance_payment_method?: string | null
           cancellation_24h_charge_percentage?: number
           cancellation_48h_charge_percentage?: number
           cancellation_policy_enabled?: boolean
@@ -756,7 +754,6 @@ export type Database = {
           address_id?: string | null
           allow_messages?: boolean
           appointment_requirements?: string | null
-          balance_payment_method?: string | null
           cancellation_24h_charge_percentage?: number
           cancellation_48h_charge_percentage?: number
           cancellation_policy_enabled?: boolean
