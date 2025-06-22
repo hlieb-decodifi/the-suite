@@ -7,6 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
@@ -22,6 +28,7 @@ import {
   Phone,
   MessageCircleIcon,
   ExternalLinkIcon,
+  InfoIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -35,7 +42,18 @@ type BookingPayment = {
   tip_amount: number;
   status: string;
   payment_method_id: string;
+  stripe_payment_method_id: string | null;
+  stripe_payment_intent_id: string | null;
+  pre_auth_scheduled_for: string | null;
+  capture_scheduled_for: string | null;
+  pre_auth_placed_at: string | null;
+  captured_at: string | null;
   created_at: string;
+  payment_methods: {
+    id: string;
+    name: string;
+    is_online: boolean;
+  } | null;
 };
 
 type BookingService = {
@@ -196,26 +214,69 @@ export function BookingDetailPageClient({
       case 'upcoming':
       case 'confirmed':
         return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            Confirmed
+          <Badge
+            variant="outline"
+            className="bg-primary/10 text-primary border-primary/20"
+          >
+            Upcoming
           </Badge>
         );
       case 'pending':
         return (
-          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+          <Badge
+            variant="outline"
+            className="bg-amber-500/10 text-amber-800 border-amber-200"
+          >
             Pending
           </Badge>
         );
       case 'cancelled':
         return (
-          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+          <Badge
+            variant="outline"
+            className="bg-destructive/10 text-destructive border-destructive/20"
+          >
             Cancelled
           </Badge>
         );
       case 'completed':
         return (
-          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+          <Badge
+            variant="outline"
+            className="bg-green-500/10 text-green-500 border-green-500/20"
+          >
             Completed
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+            Payment Pending
+          </Badge>
+        );
+      case 'authorized':
+        return (
+          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+            Pre-Authorized
+          </Badge>
+        );
+      case 'completed':
+        return (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            Payment Completed
+          </Badge>
+        );
+      case 'failed':
+        return (
+          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+            Payment Failed
           </Badge>
         );
       default:
@@ -897,24 +958,19 @@ export function BookingDetailPageClient({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
+                {/* Payment Amount and Status */}
+                <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <Typography className="font-medium text-primary">
+                    <Typography className="font-medium text-primary text-lg">
                       {formatCurrency(
                         appointment.bookings.booking_payments.amount,
                       )}
                     </Typography>
-                    <Badge
-                      variant={
-                        appointment.bookings.booking_payments.status ===
-                        'completed'
-                          ? 'default'
-                          : 'secondary'
-                      }
-                    >
-                      {appointment.bookings.booking_payments.status}
-                    </Badge>
+                    {getPaymentStatusBadge(
+                      appointment.bookings.booking_payments.status,
+                    )}
                   </div>
+
                   {appointment.bookings.booking_payments.tip_amount > 0 && (
                     <div className="flex justify-between items-center">
                       <Typography
@@ -930,17 +986,190 @@ export function BookingDetailPageClient({
                       </Typography>
                     </div>
                   )}
+                </div>
+
+                <Separator />
+
+                {/* Payment Method */}
+                <div>
+                  <TooltipProvider>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Typography className="font-medium text-foreground">
+                        Payment Method
+                      </Typography>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>The payment method used for this booking</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                   <Typography variant="muted">
-                    Method ID:{' '}
-                    {appointment.bookings.booking_payments.payment_method_id}
+                    {appointment.bookings.booking_payments.payment_methods
+                      ?.name || 'Unknown Method'}
+                    {appointment.bookings.booking_payments.payment_methods
+                      ?.is_online && ' (Online)'}
+                  </Typography>
+                </div>
+
+                {/* Pre-Authorization Details */}
+                {(appointment.bookings.booking_payments
+                  .pre_auth_scheduled_for ||
+                  appointment.bookings.booking_payments.pre_auth_placed_at) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <TooltipProvider>
+                        <div className="flex items-center gap-2">
+                          <Typography className="font-medium text-foreground">
+                            Pre-Authorization
+                          </Typography>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                For bookings more than 6 days away, payment is
+                                pre-authorized 6 days before the appointment
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
+
+                      {appointment.bookings.booking_payments
+                        .pre_auth_scheduled_for && (
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Scheduled for:
+                          </Typography>
+                          <Typography variant="small" className="font-medium">
+                            {format(
+                              new Date(
+                                appointment.bookings.booking_payments.pre_auth_scheduled_for,
+                              ),
+                              'MMM d, yyyy h:mm a',
+                            )}
+                          </Typography>
+                        </div>
+                      )}
+
+                      {appointment.bookings.booking_payments
+                        .pre_auth_placed_at && (
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Pre-authorized on:
+                          </Typography>
+                          <Typography
+                            variant="small"
+                            className="font-medium text-green-600"
+                          >
+                            {format(
+                              new Date(
+                                appointment.bookings.booking_payments.pre_auth_placed_at,
+                              ),
+                              'MMM d, yyyy h:mm a',
+                            )}
+                          </Typography>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Payment Capture Details */}
+                {(appointment.bookings.booking_payments.capture_scheduled_for ||
+                  appointment.bookings.booking_payments.captured_at) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <TooltipProvider>
+                        <div className="flex items-center gap-2">
+                          <Typography className="font-medium text-foreground">
+                            Payment Capture
+                          </Typography>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                Payment is automatically captured 12 hours after
+                                the appointment ends
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
+
+                      {appointment.bookings.booking_payments
+                        .capture_scheduled_for &&
+                        !appointment.bookings.booking_payments.captured_at && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Scheduled for:
+                            </Typography>
+                            <Typography variant="small" className="font-medium">
+                              {format(
+                                new Date(
+                                  appointment.bookings.booking_payments.capture_scheduled_for,
+                                ),
+                                'MMM d, yyyy h:mm a',
+                              )}
+                            </Typography>
+                          </div>
+                        )}
+
+                      {appointment.bookings.booking_payments.captured_at && (
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Captured on:
+                          </Typography>
+                          <Typography
+                            variant="small"
+                            className="font-medium text-green-600"
+                          >
+                            {format(
+                              new Date(
+                                appointment.bookings.booking_payments.captured_at,
+                              ),
+                              'MMM d, yyyy h:mm a',
+                            )}
+                          </Typography>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Payment Timeline */}
+                <Separator />
+                <div>
+                  <Typography className="font-medium text-foreground mb-1">
+                    Payment Created
                   </Typography>
                   <Typography variant="muted">
-                    Paid:{' '}
                     {format(
                       new Date(
                         appointment.bookings.booking_payments.created_at,
                       ),
-                      'MMM d, yyyy',
+                      'MMM d, yyyy h:mm a',
                     )}
                   </Typography>
                 </div>
@@ -952,11 +1181,35 @@ export function BookingDetailPageClient({
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
-                <ClockIcon className="h-5 w-5 text-muted-foreground" />
-                Booking Timeline
+                <FileTextIcon className="h-5 w-5 text-muted-foreground" />
+                Booking Details
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div>
+                <Typography className="font-medium text-foreground mb-1">
+                  Booking ID
+                </Typography>
+                <div className="flex items-center gap-2">
+                  <Typography variant="muted" className="font-mono text-sm">
+                    {appointment.booking_id}
+                  </Typography>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopyBookingId}
+                    className="h-6 w-6 p-0"
+                  >
+                    <CopyIcon className="h-3 w-3" />
+                  </Button>
+                </div>
+                {copySuccess && (
+                  <Typography variant="small" className="text-green-600 mt-1">
+                    Copied to clipboard!
+                  </Typography>
+                )}
+              </div>
+              <Separator />
               <div>
                 <Typography className="font-medium text-foreground">
                   Booked On

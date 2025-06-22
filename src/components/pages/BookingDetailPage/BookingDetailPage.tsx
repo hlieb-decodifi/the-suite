@@ -76,7 +76,18 @@ export type DetailedAppointmentType = {
       tip_amount: number;
       status: string;
       payment_method_id: string;
+      stripe_payment_method_id: string | null;
+      stripe_payment_intent_id: string | null;
+      pre_auth_scheduled_for: string | null;
+      capture_scheduled_for: string | null;
+      pre_auth_placed_at: string | null;
+      captured_at: string | null;
       created_at: string;
+      payment_methods: {
+        id: string;
+        name: string;
+        is_online: boolean;
+      } | null;
     } | null;
   };
 };
@@ -240,7 +251,18 @@ export async function getAppointmentById(
             tip_amount,
             status,
             payment_method_id,
-            created_at
+            stripe_payment_method_id,
+            stripe_payment_intent_id,
+            pre_auth_scheduled_for,
+            capture_scheduled_for,
+            pre_auth_placed_at,
+            captured_at,
+            created_at,
+            payment_methods:payment_method_id(
+              id,
+              name,
+              is_online
+            )
           )
         )
       `,
