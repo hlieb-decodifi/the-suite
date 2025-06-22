@@ -653,103 +653,104 @@ export function BookingDetailPageClient({
                   Client Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left column: Avatar and basic info */}
-                  <div className="lg:col-span-1">
-                    <div className="flex lg:flex-col items-start lg:items-center gap-4 lg:gap-3">
-                      <Avatar className="h-12 w-12 lg:h-16 lg:w-16">
-                        <AvatarImage src="" />
-                        <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                          {getInitials(
-                            appointment.bookings.clients.first_name,
-                            appointment.bookings.clients.last_name,
-                          )}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="lg:text-center">
-                        <Typography className="font-medium text-foreground">
-                          {getFullName(
-                            appointment.bookings.clients.first_name,
-                            appointment.bookings.clients.last_name,
-                          )}
-                        </Typography>
-                      </div>
-                    </div>
-
-                    {/* Action buttons - for professionals viewing client */}
-                    <div className="flex flex-col gap-2 mt-4 lg:mt-6">
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          handleMessageClick(appointment.bookings.clients!.id)
-                        }
-                        disabled={isMessageLoading}
-                        className="flex items-center gap-2 w-full"
-                      >
-                        <MessageCircleIcon className="h-4 w-4" />
-                        {isMessageLoading ? 'Starting...' : 'Message Client'}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Right column: Details */}
-                  <div className="lg:col-span-2 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <CardContent className="space-y-6">
+                {/* Client Profile Header */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
+                      {getInitials(
+                        appointment.bookings.clients.first_name,
+                        appointment.bookings.clients.last_name,
+                      )}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <Typography className="font-semibold text-foreground text-lg sm:text-xl mb-1">
+                      {getFullName(
+                        appointment.bookings.clients.first_name,
+                        appointment.bookings.clients.last_name,
+                      )}
+                    </Typography>
+                    <div className="space-y-1">
+                      <Typography variant="muted" className="text-sm">
+                        Client
+                      </Typography>
                       {appointment.bookings.clients.client_profiles
                         ?.phone_number && (
-                        <div>
-                          <Typography className="font-medium text-foreground mb-1">
-                            Phone
-                          </Typography>
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Phone className="h-3.5 w-3.5 mr-1.5" />
-                            <a
-                              href={`tel:${appointment.bookings.clients.client_profiles.phone_number}`}
-                              className="hover:text-foreground transition-colors"
-                            >
-                              {formatPhoneNumber(
-                                appointment.bookings.clients.client_profiles
-                                  .phone_number,
-                              )}
-                            </a>
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <a
+                            href={`tel:${appointment.bookings.clients.client_profiles.phone_number}`}
+                            className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                          >
+                            {formatPhoneNumber(
+                              appointment.bookings.clients.client_profiles
+                                .phone_number,
+                            )}
+                          </a>
                         </div>
                       )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        handleMessageClick(appointment.bookings.clients!.id)
+                      }
+                      disabled={isMessageLoading}
+                      className="flex items-center gap-2 sm:min-w-[140px]"
+                    >
+                      <MessageCircleIcon className="h-4 w-4" />
+                      {isMessageLoading ? 'Starting...' : 'Message Client'}
+                    </Button>
+                  </div>
+                </div>
 
-                      {appointment.bookings.clients.client_profiles
-                        ?.location && (
-                        <div>
-                          <Typography className="font-medium text-foreground mb-1">
-                            Location
+                {/* Additional Information - only show if there's location or address */}
+                {(appointment.bookings.clients.client_profiles?.location ||
+                  formatAddress(
+                    appointment.bookings.clients.client_profiles?.addresses,
+                  )) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {appointment.bookings.clients.client_profiles
+                          ?.location && (
+                          <div className="space-y-2">
+                            <Typography className="text-sm font-medium text-muted-foreground">
+                              Location
+                            </Typography>
+                            <Typography variant="muted" className="font-medium">
+                              {
+                                appointment.bookings.clients.client_profiles
+                                  .location
+                              }
+                            </Typography>
+                          </div>
+                        )}
+                      </div>
+
+                      {formatAddress(
+                        appointment.bookings.clients.client_profiles?.addresses,
+                      ) && (
+                        <div className="space-y-2">
+                          <Typography className="text-sm font-medium text-muted-foreground">
+                            Address
                           </Typography>
-                          <Typography variant="muted">
-                            {
+                          <Typography variant="muted" className="font-medium">
+                            {formatAddress(
                               appointment.bookings.clients.client_profiles
-                                .location
-                            }
+                                ?.addresses,
+                            )}
                           </Typography>
                         </div>
                       )}
                     </div>
-
-                    {formatAddress(
-                      appointment.bookings.clients.client_profiles?.addresses,
-                    ) && (
-                      <div>
-                        <Typography className="font-medium text-foreground mb-1">
-                          Address
-                        </Typography>
-                        <Typography variant="muted">
-                          {formatAddress(
-                            appointment.bookings.clients.client_profiles
-                              ?.addresses,
-                          )}
-                        </Typography>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -763,128 +764,129 @@ export function BookingDetailPageClient({
                   Professional Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left column: Avatar and basic info */}
-                  <div className="lg:col-span-1">
-                    <div className="flex lg:flex-col items-start lg:items-center gap-4 lg:gap-3">
-                      <Avatar className="h-12 w-12 lg:h-16 lg:w-16">
-                        <AvatarImage src="" />
-                        <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                          {getInitials(
-                            appointment.bookings.professionals.users.first_name,
-                            appointment.bookings.professionals.users.last_name,
-                          )}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="lg:text-center">
-                        <Typography className="font-medium text-foreground">
-                          {getFullName(
-                            appointment.bookings.professionals.users.first_name,
-                            appointment.bookings.professionals.users.last_name,
-                          )}
-                        </Typography>
-                        <Typography variant="muted" className="text-sm">
-                          {getProfessionalTitle(
-                            appointment.bookings.professionals,
-                          )}
-                        </Typography>
-                      </div>
-                    </div>
-
-                    {/* Action buttons - for clients viewing professional */}
-                    <div className="flex flex-col gap-2 mt-4 lg:mt-6">
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          handleMessageClick(
-                            appointment.bookings.professionals!.user_id,
-                          )
-                        }
-                        disabled={isMessageLoading}
-                        className="flex items-center gap-2 w-full"
-                      >
-                        <MessageCircleIcon className="h-4 w-4" />
-                        {isMessageLoading
-                          ? 'Starting...'
-                          : 'Message Professional'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        asChild
-                        className="flex items-center gap-2 w-full"
-                      >
-                        <Link
-                          href={`/professionals/${appointment.bookings.professionals!.user_id}`}
-                        >
-                          <ExternalLinkIcon className="h-4 w-4" />
-                          View Profile
-                        </Link>
-                      </Button>
+              <CardContent className="space-y-6">
+                {/* Professional Profile Header */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
+                      {getInitials(
+                        appointment.bookings.professionals.users.first_name,
+                        appointment.bookings.professionals.users.last_name,
+                      )}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <Typography className="font-semibold text-foreground text-lg sm:text-xl mb-1">
+                      {getFullName(
+                        appointment.bookings.professionals.users.first_name,
+                        appointment.bookings.professionals.users.last_name,
+                      )}
+                    </Typography>
+                    <div className="space-y-1">
+                      <Typography variant="muted" className="text-sm">
+                        {getProfessionalTitle(
+                          appointment.bookings.professionals,
+                        )}
+                      </Typography>
+                      {appointment.bookings.professionals.phone_number && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <a
+                            href={`tel:${appointment.bookings.professionals.phone_number}`}
+                            className="text-muted-foreground hover:text-primary transition-colors font-medium"
+                          >
+                            {formatPhoneNumber(
+                              appointment.bookings.professionals.phone_number,
+                            )}
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Right column: Details */}
-                  <div className="lg:col-span-2 space-y-4">
-                    {appointment.bookings.professionals.description && (
-                      <div>
-                        <Typography className="font-medium text-foreground mb-1">
-                          About
-                        </Typography>
-                        <Typography variant="muted">
-                          {appointment.bookings.professionals.description}
-                        </Typography>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {appointment.bookings.professionals.phone_number && (
-                        <div>
-                          <Typography className="font-medium text-foreground mb-1">
-                            Phone
-                          </Typography>
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Phone className="h-3.5 w-3.5 mr-1.5" />
-                            <a
-                              href={`tel:${appointment.bookings.professionals.phone_number}`}
-                              className="hover:text-foreground transition-colors"
-                            >
-                              {formatPhoneNumber(
-                                appointment.bookings.professionals.phone_number,
-                              )}
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {appointment.bookings.professionals.location && (
-                        <div>
-                          <Typography className="font-medium text-foreground mb-1">
-                            Location
-                          </Typography>
-                          <Typography variant="muted">
-                            {appointment.bookings.professionals.location}
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-
-                    {formatAddress(
-                      appointment.bookings.professionals.addresses,
-                    ) && (
-                      <div>
-                        <Typography className="font-medium text-foreground mb-1">
-                          Address
-                        </Typography>
-                        <Typography variant="muted">
-                          {formatAddress(
-                            appointment.bookings.professionals.addresses,
-                          )}
-                        </Typography>
-                      </div>
-                    )}
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        handleMessageClick(
+                          appointment.bookings.professionals!.user_id,
+                        )
+                      }
+                      disabled={isMessageLoading}
+                      className="flex items-center gap-2 sm:min-w-[140px]"
+                    >
+                      <MessageCircleIcon className="h-4 w-4" />
+                      {isMessageLoading
+                        ? 'Starting...'
+                        : 'Message Professional'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      asChild
+                      className="flex items-center gap-2 sm:min-w-[120px]"
+                    >
+                      <Link
+                        href={`/professionals/${appointment.bookings.professionals!.user_id}`}
+                      >
+                        <ExternalLinkIcon className="h-4 w-4" />
+                        View Profile
+                      </Link>
+                    </Button>
                   </div>
                 </div>
+
+                {appointment.bookings.professionals.description && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <Typography className="font-medium text-foreground">
+                        About
+                      </Typography>
+                      <Typography variant="muted" className="font-medium">
+                        {appointment.bookings.professionals.description}
+                      </Typography>
+                    </div>
+                  </>
+                )}
+
+                {/* Additional Information - only show if there's location or address */}
+                {(appointment.bookings.professionals.location ||
+                  formatAddress(
+                    appointment.bookings.professionals.addresses,
+                  )) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {appointment.bookings.professionals.location && (
+                          <div className="space-y-2">
+                            <Typography className="text-sm font-medium text-muted-foreground">
+                              Location
+                            </Typography>
+                            <Typography variant="muted" className="font-medium">
+                              {appointment.bookings.professionals.location}
+                            </Typography>
+                          </div>
+                        )}
+                      </div>
+
+                      {formatAddress(
+                        appointment.bookings.professionals.addresses,
+                      ) && (
+                        <div className="space-y-2">
+                          <Typography className="text-sm font-medium text-muted-foreground">
+                            Address
+                          </Typography>
+                          <Typography variant="muted" className="font-medium">
+                            {formatAddress(
+                              appointment.bookings.professionals.addresses,
+                            )}
+                          </Typography>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
