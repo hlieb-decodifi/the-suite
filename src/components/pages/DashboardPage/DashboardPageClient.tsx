@@ -213,7 +213,7 @@ export function DashboardPageClient({
         >
           <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
             {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.map((appointment) => {
+              upcomingAppointments.slice(0, 3).map((appointment) => {
                 // Get service name from the appointment
                 const serviceName = appointment.services?.name || 'Service';
 
