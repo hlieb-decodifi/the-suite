@@ -393,28 +393,32 @@ export function BookingDetailPageClient({
             <Typography>Back to Appointments</Typography>
           </Link>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <Typography
-              variant="h1"
-              className="mb-2 font-futura text-4xl md:text-5xl font-bold text-foreground"
-            >
-              Booking Details
-            </Typography>
-            <div className="flex items-center gap-2">
-              <Typography>Booking ID: {appointment.id}</Typography>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopyBookingId}
-                className="h-6 px-2 text-muted-foreground hover:text-foreground"
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="flex flex-col gap-2">
+              <Typography
+                variant="h1"
+                className="font-futura text-4xl md:text-5xl font-bold text-foreground"
               >
-                <CopyIcon className="h-3 w-3" />
-                {copySuccess ? 'Copied!' : ''}
-              </Button>
+                Booking Details
+              </Typography>
+              <div className="flex items-center gap-2">
+                <Typography>Booking ID: {appointment.id}</Typography>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyBookingId}
+                  className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                >
+                  <CopyIcon className="h-3 w-3" />
+                  {copySuccess ? 'Copied!' : ''}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center mt-2 sm:mt-0">
+              <div className="scale-110">{getStatusBadge(currentStatus)}</div>
             </div>
           </div>
-          {getStatusBadge(currentStatus)}
         </div>
       </div>
 
