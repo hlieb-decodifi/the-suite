@@ -429,6 +429,8 @@ create policy "Clients can create their own profile"
   on client_profiles for insert
   with check (auth.uid() = user_id);
 
+
+
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
 returns trigger as $$
@@ -1181,6 +1183,29 @@ create policy "Clients can create booking payments for their bookings"
     )
   );
 
+-- Additional policies for professionals to view client data when they have shared appointments
+create policy "Professionals can view client profiles for shared appointments"
+  on client_profiles for select
+  using (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.client_id = client_profiles.user_id
+      and pp.user_id = auth.uid()
+    )
+  );
+
+create policy "Professionals can view user data for clients with shared appointments"
+  on users for select
+  using (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.client_id = users.id
+      and pp.user_id = auth.uid()
+    )
+  );
+
 /**
 * Update realtime subscriptions to include booking tables
 */
@@ -1304,6 +1329,8 @@ create policy "Users can update their own basic data"
     auth.uid() = id AND
     role_id IS NOT NULL
   );
+
+
 
 -- RLS policies for profile photos
 drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;

@@ -70,9 +70,9 @@ export async function createBookingWithStripePayment(
     }
 
     // Default: no payment processing needed
-    return {
-      success: true,
-      bookingId: bookingResult.bookingId,
+      return {
+        success: true,
+        bookingId: bookingResult.bookingId,
       requiresPayment: false,
       paymentType: 'full'
     };
@@ -210,11 +210,11 @@ async function handleCardPaymentFlow(
       console.log(`Appointment is ${daysUntilAppointment} days away - using setup intent flow`);
       
       // Update existing booking payment record with enhanced payment data
-      const { updateBookingPaymentForStripe } = await import('./db');
+    const { updateBookingPaymentForStripe } = await import('./db');
       const paymentRecordResult = await updateBookingPaymentForStripe(
         bookingId,
-        paymentCalculation
-      );
+      paymentCalculation
+    );
 
       if (!paymentRecordResult.success) {
         return {
@@ -233,14 +233,14 @@ async function handleCardPaymentFlow(
       );
 
       if (!scheduleResult.success) {
-        return {
+      return {
           success: false,
           error: scheduleResult.error || 'Failed to schedule payment',
-          requiresPayment: false,
-          paymentType: 'full'
-        };
-      }
-
+        requiresPayment: false,
+        paymentType: 'full'
+      };
+    }
+    
       // Update payment record with scheduling information
       await updateBookingPaymentWithScheduling(
         bookingId,
@@ -258,13 +258,13 @@ async function handleCardPaymentFlow(
       const checkoutResult = await createEnhancedCheckoutSession({
         bookingId,
         clientId: userId,
-        professionalStripeAccountId: professionalProfile.stripe_account_id,
+      professionalStripeAccountId: professionalProfile.stripe_account_id,
         amount: paymentCalculation.totalAmount,
-        depositAmount: paymentCalculation.depositAmount,
-        balanceAmount: paymentCalculation.balanceAmount,
+      depositAmount: paymentCalculation.depositAmount,
+      balanceAmount: paymentCalculation.balanceAmount,
         paymentType: 'setup_only', // This creates a setup intent
-        requiresBalancePayment: paymentCalculation.requiresBalancePayment,
-        metadata: {
+      requiresBalancePayment: paymentCalculation.requiresBalancePayment,
+      metadata: {
           booking_id: bookingId,
           professional_profile_id: professionalProfileId,
           payment_flow: 'setup_for_future_auth'
@@ -272,7 +272,7 @@ async function handleCardPaymentFlow(
         customerEmail: userEmail
       });
 
-      if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
+    if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
         return {
           success: false,
           error: checkoutResult.error || 'Failed to create payment setup session',
@@ -323,10 +323,10 @@ async function handleCardPaymentFlow(
         return {
           success: false,
           error: scheduleResult.error || 'Failed to schedule payment',
-          requiresPayment: false,
-          paymentType: 'full'
-        };
-      }
+        requiresPayment: false,
+        paymentType: 'full'
+      };
+    }
 
       // Create checkout session with uncaptured payment
       const checkoutResult = await createEnhancedCheckoutSession({
@@ -366,13 +366,13 @@ async function handleCardPaymentFlow(
         undefined // Payment intent will be set by webhook
       );
 
-      return {
-        success: true,
+    return {
+      success: true,
         bookingId,
-        checkoutUrl: checkoutResult.checkoutUrl,
-        requiresPayment: true,
+      checkoutUrl: checkoutResult.checkoutUrl,
+      requiresPayment: true,
         paymentType: paymentCalculation.isFullPayment ? 'full' : 'deposit'
-      };
+    };
     }
 
   } catch (error) {
@@ -688,15 +688,15 @@ export async function verifyBookingPayment(
 
     // Update booking payment status if needed (but not for setup intents)
     if (!isSetupIntent) {
-      const { updateBookingPaymentStatus } = await import('./db');
-      const updateResult = await updateBookingPaymentStatus(
-        bookingId,
-        paymentStatus,
-        paymentIntentId
-      );
+    const { updateBookingPaymentStatus } = await import('./db');
+    const updateResult = await updateBookingPaymentStatus(
+      bookingId,
+      paymentStatus,
+      paymentIntentId
+    );
 
-      if (!updateResult.success) {
-        console.error('Failed to update booking payment status:', updateResult.error);
+    if (!updateResult.success) {
+      console.error('Failed to update booking payment status:', updateResult.error);
       }
     }
 

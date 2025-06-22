@@ -137,6 +137,17 @@ export async function POST(req: Request) {
         await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
         break;
         
+      // Handle manual payment captures from Stripe dashboard
+      case 'charge.succeeded':
+        await handleChargeSucceeded(event.data.object as Stripe.Charge);
+        break;
+        
+      // Handle refunds created through Stripe dashboard
+      case 'charge.dispute.created':
+      case 'charge.refunded':
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
+        
       // Setup Intent events for saving payment methods
       case 'setup_intent.succeeded':
         await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent);
@@ -1149,7 +1160,10 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   console.log(`Payment intent ${paymentIntent.id} succeeded`);
   
   const bookingId = paymentIntent.metadata?.booking_id;
-  if (!bookingId) return;
+  if (!bookingId) {
+    console.log(`No booking_id in payment intent metadata, checking database for payment intent ${paymentIntent.id}`);
+    return await handlePaymentCaptureByPaymentIntentId(paymentIntent.id);
+  }
   
   try {
     const supabase = createAdminClient();
@@ -1168,6 +1182,127 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     console.log(`Updated payment status for booking ${bookingId} - completed`);
   } catch (error) {
     console.error(`Error updating payment for success: ${bookingId}`, error);
+  }
+}
+
+// Handle charge succeeded (for manual captures via Stripe dashboard)
+async function handleChargeSucceeded(charge: Stripe.Charge) {
+  console.log(`Charge ${charge.id} succeeded`);
+  
+  // If charge is associated with a payment intent, use the payment intent ID
+  if (charge.payment_intent) {
+    const paymentIntentId = typeof charge.payment_intent === 'string' 
+      ? charge.payment_intent 
+      : charge.payment_intent.id;
+    
+    console.log(`Charge ${charge.id} is associated with payment intent ${paymentIntentId}`);
+    return await handlePaymentCaptureByPaymentIntentId(paymentIntentId);
+  }
+  
+  console.log(`Charge ${charge.id} has no associated payment intent, skipping`);
+}
+
+// Helper function to handle payment captures by payment intent ID (for manual captures)
+async function handlePaymentCaptureByPaymentIntentId(paymentIntentId: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    // Find the booking payment by stripe payment intent ID
+    const { data: payment, error: findError } = await supabase
+      .from('booking_payments')
+      .select('id, booking_id, status, captured_at')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .single();
+    
+    if (findError || !payment) {
+      console.log(`No booking payment found for payment intent ${paymentIntentId}`);
+      return;
+    }
+    
+    // Only update if payment hasn't been captured already
+    if (payment.status === 'completed' && payment.captured_at) {
+      console.log(`Payment for booking ${payment.booking_id} already captured, skipping`);
+      return;
+    }
+    
+    // Update payment status to completed
+    const { error: updateError } = await supabase
+      .from('booking_payments')
+      .update({
+        status: 'completed',
+        captured_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', payment.id);
+    
+    if (updateError) {
+      console.error(`Error updating payment status for ${payment.booking_id}:`, updateError);
+      return;
+    }
+    
+    console.log(`✅ Successfully updated payment status for booking ${payment.booking_id} - manually captured via Stripe dashboard`);
+  } catch (error) {
+    console.error(`Error handling manual capture for payment intent ${paymentIntentId}:`, error);
+  }
+}
+
+// Handle charge refunded (manual refunds via Stripe dashboard)
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  console.log(`Charge ${charge.id} refunded`);
+  
+  // If charge is associated with a payment intent, use the payment intent ID
+  if (charge.payment_intent) {
+    const paymentIntentId = typeof charge.payment_intent === 'string' 
+      ? charge.payment_intent 
+      : charge.payment_intent.id;
+    
+    console.log(`Charge ${charge.id} refunded - associated with payment intent ${paymentIntentId}`);
+    
+    try {
+      const supabase = createAdminClient();
+      
+      // Find the booking payment by stripe payment intent ID
+      const { data: payment, error: findError } = await supabase
+        .from('booking_payments')
+        .select('id, booking_id, status')
+        .eq('stripe_payment_intent_id', paymentIntentId)
+        .single();
+      
+      if (findError || !payment) {
+        console.log(`No booking payment found for refunded payment intent ${paymentIntentId}`);
+        return;
+      }
+      
+      // Update payment status to refunded
+      const { error: updateError } = await supabase
+        .from('booking_payments')
+        .update({
+          status: 'refunded',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id);
+      
+      if (updateError) {
+        console.error(`Error updating payment status to refunded for ${payment.booking_id}:`, updateError);
+        return;
+      }
+      
+      // Also update booking status to cancelled if not already
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.booking_id)
+        .neq('status', 'cancelled'); // Only update if not already cancelled
+      
+      console.log(`✅ Successfully updated payment and booking status for booking ${payment.booking_id} - refunded via Stripe dashboard`);
+    } catch (error) {
+      console.error(`Error handling refund for payment intent ${paymentIntentId}:`, error);
+    }
+  } else {
+    console.log(`Charge ${charge.id} has no associated payment intent, skipping refund processing`);
   }
 }
 
