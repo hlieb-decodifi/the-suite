@@ -1,0 +1,67 @@
+BOOKING CONFIRMED!
+
+Your appointment with {{professionalName}} has been successfully booked
+
+APPOINTMENT DETAILS
+===================
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
+Professional: {{professionalName}}
+Booking ID: {{bookingId}}
+
+{{#if professionalPhone}}
+Professional Phone: {{professionalPhone}}
+{{/if}}
+
+{{#if professionalAddress}}
+Location: {{professionalAddress}}
+{{/if}}
+
+{{#if notes}}
+Your Notes: {{notes}}
+{{/if}}
+
+SERVICES BOOKED
+===============
+{{#each services}}
+- {{name}} ({{duration}} minutes) - ${{price}}
+{{/each}}
+
+PAYMENT SUMMARY
+===============
+Subtotal: ${{subtotal}}
+Suite Service Fee: ${{serviceFee}}
+{{#if tipAmount}}
+Tip: ${{tipAmount}}
+{{/if}}
+Total Paid: ${{totalPaid}}
+
+PAYMENT STATUS
+==============
+{{#if isUncaptured}}
+💳 Payment Authorized
+Your payment method has been authorized for ${{totalPaid}}. The final payment will be automatically processed closer to your appointment date.
+
+PAYMENT SCHEDULE: Your payment method is securely authorized. We'll automatically charge your card closer to your appointment date. You can modify or cancel your booking anytime before then.
+{{else}}
+✓ Payment Completed
+Your payment of ${{totalPaid}} has been successfully processed.
+{{/if}}
+
+MANAGE YOUR APPOINTMENT
+=======================
+View appointment details: {{appointmentDetailsUrl}}
+Back to home: {{websiteUrl}}
+
+Questions about your booking? Contact us at {{supportEmail}}
+
+WHAT'S NEXT?
+============
+✓ Confirmation Sent - Your professional has been notified about your booking
+📧 Email Confirmation - Keep this email for your records and appointment details
+📱 Stay Connected - You'll receive updates about your appointment via email
+
+---
+This email was sent by The Suite
+{{websiteUrl}}
+© 2025 The Suite. All rights reserved. 

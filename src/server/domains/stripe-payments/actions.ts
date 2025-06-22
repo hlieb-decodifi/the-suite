@@ -398,32 +398,28 @@ export async function cancelBookingForFailedCheckout(
       };
     }
 
-    // Verify that this booking belongs to the current user
+    // Verify the booking belongs to the current user and get appointment ID
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('client_id, status')
+      .select(`
+        client_id,
+        status
+      `)
       .eq('id', bookingId)
       .single();
 
-    if (bookingError || !booking) {
+    if (bookingError || !booking || booking.client_id !== user.id) {
       return {
         success: false,
-        error: 'Booking not found'
-      };
-    }
-
-    if (booking.client_id !== user.id) {
-      return {
-        success: false,
-        error: 'Unauthorized'
+        error: 'Booking not found or unauthorized'
       };
     }
 
     // Only cancel if the booking is still pending payment or pending (not already completed)
-    if (booking.status !== 'pending' && booking.status !== 'pending_payment') {
+    if (booking.status === 'completed') {
       return {
         success: false,
-        error: 'Booking cannot be cancelled'
+        error: 'Cannot cancel a completed booking'
       };
     }
 
@@ -521,6 +517,7 @@ export async function verifyBookingPayment(
   paymentStatus?: 'pending' | 'completed' | 'failed';
   sessionStatus?: string;
   isUncaptured?: boolean;
+  appointmentId?: string;
   error?: string;
 }> {
   try {
@@ -536,10 +533,13 @@ export async function verifyBookingPayment(
       };
     }
 
-    // Verify the booking belongs to the current user
+    // Verify the booking belongs to the current user and get appointment ID
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('client_id')
+      .select(`
+        client_id,
+        status
+      `)
       .eq('id', bookingId)
       .single();
 
@@ -549,6 +549,13 @@ export async function verifyBookingPayment(
         error: 'Booking not found or unauthorized'
       };
     }
+
+    // Get appointment ID for this booking
+    const { data: appointment } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .single();
 
     // Get Stripe session details
     const { getCheckoutSession } = await import('./stripe-operations');
@@ -632,13 +639,17 @@ export async function verifyBookingPayment(
         .from('bookings')
         .update({ status: 'confirmed' })
         .eq('id', bookingId);
+
+      // Note: Booking confirmation emails are sent via webhook handler for reliability
+      // This prevents duplicate emails and ensures emails are sent even if user doesn't visit success page
     }
 
     return {
       success: true,
       paymentStatus,
-      sessionStatus: session.payment_status || session.status,
-      isUncaptured
+      sessionStatus: session.status || 'unknown',
+      isUncaptured,
+      ...(appointment?.id && { appointmentId: appointment.id as string })
     };
 
   } catch (error) {

@@ -3,6 +3,8 @@ export {
   createAdminNotificationEmail, 
   createUserConfirmationEmail,
   createBalanceNotificationEmail,
+  createBookingConfirmationProfessionalEmail,
+  createBookingConfirmationClientEmail,
   type EmailTemplate 
 } from './templates';
 

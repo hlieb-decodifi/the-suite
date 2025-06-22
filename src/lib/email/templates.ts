@@ -29,18 +29,61 @@ function loadTemplate(templateName: string, type: 'hbs' | 'txt'): string {
 function compileTemplate(templateContent: string, data: TemplateData): string {
   let result = templateContent;
   
+  // Handle {{#each}} loops
+  const eachMatches = result.match(/{{#each\s+(\w+)}}([\s\S]*?){{\/each}}/g);
+  if (eachMatches) {
+    eachMatches.forEach(match => {
+      const eachMatch = match.match(/{{#each\s+(\w+)}}([\s\S]*?){{\/each}}/);
+      if (eachMatch && eachMatch[1] && eachMatch[2]) {
+        const arrayName = eachMatch[1];
+        const loopTemplate = eachMatch[2];
+        const arrayData = data[arrayName];
+        
+        if (Array.isArray(arrayData)) {
+          const compiledItems = arrayData.map(item => {
+            let itemTemplate = loopTemplate;
+            // Replace variables in the loop template
+            if (typeof item === 'object' && item !== null) {
+              for (const [key, value] of Object.entries(item)) {
+                const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+                itemTemplate = itemTemplate.replace(regex, String(value || ''));
+              }
+            }
+            return itemTemplate;
+          }).join('');
+          
+          result = result.replace(match, compiledItems);
+        } else {
+          result = result.replace(match, '');
+        }
+      }
+    });
+  }
+  
+  // Handle {{#if}} conditionals
+  const ifMatches = result.match(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g);
+  if (ifMatches) {
+    ifMatches.forEach(match => {
+      const ifMatch = match.match(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/);
+      if (ifMatch && ifMatch[1] && ifMatch[2]) {
+        const conditionName = ifMatch[1];
+        const conditionalContent = ifMatch[2];
+        const conditionValue = data[conditionName];
+        
+        // Show content if condition is truthy and not empty
+        const shouldShow = conditionValue && 
+          (typeof conditionValue !== 'string' || conditionValue.trim() !== '') &&
+          (typeof conditionValue !== 'number' || conditionValue !== 0);
+          
+        result = result.replace(match, shouldShow ? conditionalContent : '');
+      }
+    });
+  }
+  
   // Replace simple variables {{variable}}
   for (const [key, value] of Object.entries(data)) {
     const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
     result = result.replace(regex, String(value || ''));
-  }
-  
-  // Handle conditional blocks {{#if variable}}...{{/if}}
-  // For phone number conditional
-  const phoneMatch = result.match(/{{#if\s+phone}}([\s\S]*?){{\/if}}/);
-  if (phoneMatch && phoneMatch[1]) {
-    const phoneContent = data.phone ? phoneMatch[1] : '';
-    result = result.replace(/{{#if\s+phone}}[\s\S]*?{{\/if}}/, phoneContent);
   }
   
   return result;
@@ -154,6 +197,127 @@ export function createBalanceNotificationEmail(
   return {
     to: [{ email: clientEmail, name: clientName }],
     subject: `Your appointment balance is ready - ${data.professionalName}`,
+    htmlContent,
+    textContent
+  };
+}
+
+export function createBookingConfirmationProfessionalEmail(
+  professionalEmail: string,
+  professionalName: string,
+  data: {
+    bookingId: string;
+    appointmentId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    clientName: string;
+    clientPhone?: string;
+    clientAddress?: string;
+    notes?: string;
+    services: Array<{
+      name: string;
+      duration: number;
+      price: number;
+    }>;
+    subtotal: number;
+    tipAmount?: number;
+    professionalTotal: number;
+    isUncaptured: boolean;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    clientName: data.clientName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    bookingId: data.bookingId,
+    clientPhone: data.clientPhone,
+    clientAddress: data.clientAddress,
+    notes: data.notes,
+    services: data.services.map(service => ({
+      ...service,
+      price: service.price.toFixed(2)
+    })),
+    subtotal: data.subtotal.toFixed(2),
+    tipAmount: data.tipAmount?.toFixed(2),
+    professionalTotal: data.professionalTotal.toFixed(2),
+    isUncaptured: data.isUncaptured,
+    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.appointmentId}`,
+    dashboardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('booking-confirmation-professional', 'hbs');
+  const textTemplate = loadTemplate('booking-confirmation-professional', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: professionalEmail, name: professionalName }],
+    subject: `New booking from ${data.clientName} - ${data.appointmentDate}`,
+    htmlContent,
+    textContent
+  };
+}
+
+export function createBookingConfirmationClientEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    bookingId: string;
+    appointmentId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    professionalName: string;
+    professionalPhone?: string;
+    professionalAddress?: string;
+    notes?: string;
+    services: Array<{
+      name: string;
+      duration: number;
+      price: number;
+    }>;
+    subtotal: number;
+    serviceFee: number;
+    tipAmount?: number;
+    totalPaid: number;
+    isUncaptured: boolean;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    professionalName: data.professionalName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    bookingId: data.bookingId,
+    professionalPhone: data.professionalPhone,
+    professionalAddress: data.professionalAddress,
+    notes: data.notes,
+    services: data.services.map(service => ({
+      ...service,
+      price: service.price.toFixed(2)
+    })),
+    subtotal: data.subtotal.toFixed(2),
+    serviceFee: data.serviceFee.toFixed(2),
+    tipAmount: data.tipAmount?.toFixed(2),
+    totalPaid: data.totalPaid.toFixed(2),
+    isUncaptured: data.isUncaptured,
+    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.appointmentId}`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('booking-confirmation-client', 'hbs');
+  const textTemplate = loadTemplate('booking-confirmation-client', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: `Booking confirmed with ${data.professionalName} - ${data.appointmentDate}`,
     htmlContent,
     textContent
   };

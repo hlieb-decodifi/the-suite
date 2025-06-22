@@ -23,6 +23,7 @@ export function BookingSuccessContent() {
 
   const [status, setStatus] = useState<PaymentStatus>('processing');
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isUncaptured, setIsUncaptured] = useState(false);
   const hasShownToast = useRef(false);
@@ -51,8 +52,10 @@ export function BookingSuccessContent() {
         }
 
         if (result.paymentStatus === 'completed') {
+          console.log('result', result);
           setStatus('success');
           setIsUncaptured(result.isUncaptured || false);
+          setAppointmentId(result.appointmentId || null);
           if (!hasShownToast.current) {
             hasShownToast.current = true;
             toast({
@@ -87,6 +90,14 @@ export function BookingSuccessContent() {
   const handleContinue = () => {
     // Redirect to dashboard or bookings page
     router.push('/dashboard');
+  };
+
+  const handleViewBooking = () => {
+    if (appointmentId) {
+      router.push(`/bookings/${appointmentId}`);
+    } else {
+      router.push('/dashboard');
+    }
   };
 
   const handleRetry = () => {
@@ -167,15 +178,21 @@ export function BookingSuccessContent() {
               details.
             </p>
             <div className="flex gap-2">
+              {appointmentId ? (
+                <Button onClick={handleViewBooking} className="flex-1">
+                  View Booking Details
+                </Button>
+              ) : (
+                <Button onClick={handleContinue} className="flex-1">
+                  View Dashboard
+                </Button>
+              )}
               <Button
                 onClick={() => router.push('/')}
                 variant="outline"
                 className="flex-1"
               >
                 Back to Home
-              </Button>
-              <Button onClick={handleContinue} className="flex-1">
-                View Dashboard
               </Button>
             </div>
           </div>

@@ -1,0 +1,60 @@
+NEW BOOKING RECEIVED!
+
+{{clientName}} has booked an appointment with you
+
+APPOINTMENT DETAILS
+===================
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
+Client: {{clientName}}
+Booking ID: {{bookingId}}
+
+{{#if clientPhone}}
+Client Phone: {{clientPhone}}
+{{/if}}
+
+{{#if clientAddress}}
+Client Address: {{clientAddress}}
+{{/if}}
+
+{{#if notes}}
+Notes: {{notes}}
+{{/if}}
+
+SERVICES BOOKED
+===============
+{{#each services}}
+- {{name}} ({{duration}} minutes) - ${{price}}
+{{/each}}
+
+PAYMENT SUMMARY
+===============
+Subtotal: ${{subtotal}}
+{{#if tipAmount}}
+Tip: ${{tipAmount}}
+{{/if}}
+Your Total (Gross): ${{professionalTotal}}
+
+PAYMENT PROCESSING: This is your gross amount. Stripe processing fees (typically 1.5-2.5%) will be deducted from your payout. Learn more: https://stripe.com/en-pl/pricing
+
+PAYMENT STATUS
+==============
+{{#if isUncaptured}}
+✓ Payment Authorized
+The client's payment method has been authorized. Payment will be automatically processed closer to the appointment date.
+{{else}}
+✓ Payment Completed
+The client's payment has been processed successfully.
+{{/if}}
+
+MANAGE YOUR APPOINTMENT
+=======================
+View appointment details: {{appointmentDetailsUrl}}
+Go to dashboard: {{dashboardUrl}}
+
+Need help? Contact us at {{supportEmail}}
+
+---
+This email was sent by The Suite
+{{websiteUrl}}
+© 2025 The Suite. All rights reserved. 

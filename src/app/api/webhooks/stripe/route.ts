@@ -4,8 +4,8 @@ import { updatePlanPriceInDb, updateStripeConnectStatus } from '@/server/domains
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
 
-// Configure this API route to use Edge Runtime
-export const runtime = 'edge';
+// Configure this API route to use Node.js Runtime for email functionality
+export const runtime = 'nodejs';
 
 // Simple GET endpoint for testing
 export async function GET() {
@@ -511,14 +511,56 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
     let paymentStatus = 'pending';
     let paymentIntentId: string | undefined;
     
+    console.log('🔍 Session payment_status:', session.payment_status);
+    console.log('🔍 Session payment_intent:', session.payment_intent);
+    console.log('🔍 Session payment_intent type:', typeof session.payment_intent);
+    
     if (session.mode === 'payment') {
       if (session.payment_status === 'paid') {
         paymentStatus = 'completed';
-        if (session.payment_intent && typeof session.payment_intent === 'object') {
-          paymentIntentId = session.payment_intent.id;
+        if (session.payment_intent) {
+          paymentIntentId = typeof session.payment_intent === 'string' 
+            ? session.payment_intent 
+            : session.payment_intent.id;
         }
       } else if (session.payment_status === 'unpaid') {
-        paymentStatus = 'failed';
+        // Check if this is an uncaptured payment that's actually authorized
+        if (session.payment_intent) {
+          paymentIntentId = typeof session.payment_intent === 'string' 
+            ? session.payment_intent 
+            : session.payment_intent.id;
+          
+          console.log('🔍 Payment intent ID:', paymentIntentId);
+          
+          // For uncaptured payments, we need to fetch the payment intent to check its status
+          try {
+            console.log('🔍 Fetching payment intent details...');
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            console.log('🔍 Payment intent status:', paymentIntent.status);
+            
+            // For uncaptured payments, 'requires_capture' means authorized and successful
+            if (paymentIntent.status === 'requires_capture') {
+              paymentStatus = 'completed'; // Treat as successful
+              console.log('✅ Uncaptured payment authorized successfully');
+            } else if (paymentIntent.status === 'succeeded') {
+              paymentStatus = 'completed';
+              console.log('✅ Payment succeeded');
+            } else {
+              paymentStatus = 'failed';
+              console.log('❌ Payment intent failed with status:', paymentIntent.status);
+            }
+          } catch (error) {
+            console.error('❌ Error fetching payment intent:', error);
+            paymentStatus = 'failed';
+          }
+        } else {
+          paymentStatus = 'failed';
+          console.log('❌ No payment intent found');
+        }
+      } else if (session.payment_status === 'no_payment_required') {
+        // Handle case where no payment is required (e.g., free services)
+        paymentStatus = 'completed';
+        console.log('✅ No payment required');
       }
     } else if (session.mode === 'setup') {
       // For setup mode, we consider it successful if setup_intent succeeded
@@ -561,6 +603,50 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         console.error('Failed to update booking status:', bookingUpdateError);
       } else {
         console.log('Successfully confirmed booking');
+        
+        // Send booking confirmation emails
+        try {
+          console.log('🔍 Looking for appointment ID for booking:', bookingId);
+          // Get appointment ID for this booking
+          const { data: appointment } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('booking_id', bookingId)
+            .single();
+          
+          console.log('📋 Appointment found:', appointment);
+          
+          if (appointment?.id) {
+            console.log('📧 Importing email notification function...');
+            const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+            
+            // Check if payment is uncaptured by looking at payment intent status
+            const isUncaptured = session.payment_intent && 
+              typeof session.payment_intent === 'object' && 
+              session.payment_intent.status === 'requires_capture';
+            
+            console.log('🔍 Payment status - isUncaptured:', isUncaptured);
+            console.log('📬 Calling sendBookingConfirmationEmails with:', {
+              bookingId,
+              appointmentId: appointment.id,
+              isUncaptured: isUncaptured || false
+            });
+            
+            const emailResult = await sendBookingConfirmationEmails(bookingId, appointment.id, isUncaptured || false);
+            console.log('📨 Email sending result:', emailResult);
+            
+            if (emailResult.success) {
+              console.log('✅ Booking confirmation emails sent successfully');
+            } else {
+              console.error('❌ Failed to send booking confirmation emails:', emailResult.error);
+            }
+          } else {
+            console.error('❌ No appointment found for booking:', bookingId);
+          }
+        } catch (emailError) {
+          console.error('💥 Exception while sending booking confirmation emails:', emailError);
+          // Don't fail the webhook if email sending fails
+        }
       }
     }
     
