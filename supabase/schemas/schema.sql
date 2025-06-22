@@ -983,8 +983,9 @@ create table booking_payments (
   amount decimal(10, 2) not null,
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
-  status text not null check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
+  status text not null check (status in ('incomplete', 'pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
   stripe_payment_intent_id text, -- For Stripe integration
+  stripe_payment_method_id text, -- For stored payment methods from setup intents
   -- Stripe checkout session fields
   stripe_checkout_session_id text,
   deposit_amount decimal(10, 2) default 0 not null,
@@ -1012,7 +1013,7 @@ where stripe_checkout_session_id is not null;
 -- Add index for efficient querying of scheduled pre-auths and captures
 create index if not exists idx_booking_payments_pre_auth_scheduled 
 on booking_payments(pre_auth_scheduled_for) 
-where pre_auth_scheduled_for is not null and status = 'pending';
+where pre_auth_scheduled_for is not null and status in ('incomplete', 'pending');
 
 create index if not exists idx_booking_payments_capture_scheduled 
 on booking_payments(capture_scheduled_for) 

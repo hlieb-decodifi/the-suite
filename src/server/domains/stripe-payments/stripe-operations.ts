@@ -534,6 +534,13 @@ export async function createEnhancedCheckoutSession(
         metadata: sessionConfig.metadata || {},
         on_behalf_of: professionalStripeAccountId
       };
+      
+      // Add custom text to explain the setup intent process and show the amount
+      sessionConfig.custom_text = {
+        submit: {
+          message: `Save your payment method for your upcoming appointment. Total service cost: $${(amount / 100).toFixed(2)}. Payment will be authorized 6 days before your appointment and charged after service completion. No payment will be taken today.`
+        }
+      };
     } else {
       const chargeAmount = paymentType === 'deposit' ? (depositAmount ?? 0) : amount;
       

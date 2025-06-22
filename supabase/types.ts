@@ -132,6 +132,7 @@ export type Database = {
           status: string
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
+          stripe_payment_method_id: string | null
           tip_amount: number
           updated_at: string
         }
@@ -156,6 +157,7 @@ export type Database = {
           status: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
           tip_amount?: number
           updated_at?: string
         }
@@ -180,6 +182,7 @@ export type Database = {
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
           tip_amount?: number
           updated_at?: string
         }

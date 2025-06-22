@@ -563,10 +563,10 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         console.log('✅ No payment required');
       }
     } else if (session.mode === 'setup') {
-      // For setup mode, we consider it successful if setup_intent succeeded
+      // For setup mode, payment method is saved but no payment taken yet
       if (session.setup_intent && typeof session.setup_intent === 'object') {
         if (session.setup_intent.status === 'succeeded') {
-          paymentStatus = 'completed';
+          paymentStatus = 'pending'; // Payment method saved, payment will be processed later
         }
       }
     }
@@ -1177,8 +1177,12 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
   
   const bookingId = setupIntent.metadata?.booking_id;
   const customerId = setupIntent.customer as string;
+  const paymentMethodId = setupIntent.payment_method as string;
   
-  if (!customerId) return;
+  if (!customerId || !bookingId || !paymentMethodId) {
+    console.error('Missing required data from setup intent:', { customerId, bookingId, paymentMethodId });
+    return;
+  }
   
   try {
     const supabase = createAdminClient();
@@ -1191,11 +1195,47 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
       .single();
       
     if (customer) {
-      const logMessage = bookingId 
-        ? `Setup intent succeeded for user ${customer.user_id}, booking ${bookingId} - payment method saved`
-        : `Setup intent succeeded for user ${customer.user_id}, payment method saved`;
-      console.log(logMessage);
-      // Payment method is automatically saved by Stripe
+      console.log(`Setup intent succeeded for user ${customer.user_id}, booking ${bookingId} - payment method ${paymentMethodId} saved`);
+      
+      // Update booking status to confirmed since payment method is now saved
+      await supabase
+        .from('bookings')
+        .update({ 
+          status: 'confirmed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+
+      // Update payment status to pending and save the payment method ID for cron job
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'pending',
+          stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId);
+
+      // Send booking confirmation emails
+      try {
+        // Get appointment ID for the booking
+        const { data: appointment } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('booking_id', bookingId)
+          .single();
+
+        if (appointment) {
+          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+          await sendBookingConfirmationEmails(bookingId, appointment.id, false); // false = not uncaptured, this is setup intent
+          console.log(`✅ Booking confirmation emails sent for booking ${bookingId}`);
+        } else {
+          console.error(`❌ No appointment found for booking ${bookingId}`);
+        }
+      } catch (emailError) {
+        console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
+        // Don't fail the webhook for email errors
+      }
     }
   } catch (error) {
     console.error(`Error processing setup intent success:`, error);

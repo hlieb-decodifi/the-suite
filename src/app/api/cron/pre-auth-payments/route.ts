@@ -51,7 +51,8 @@ export async function GET() {
             booking_id: payment.booking_id,
             cron_job: 'pre_auth_payments',
             scheduled_for: payment.pre_auth_scheduled_for
-          }
+          },
+          payment.stripe_payment_method_id || undefined // Pass payment method ID from setup intent
         );
 
         if (!result.success) {

@@ -612,6 +612,7 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
   customer_id: string;
   professional_stripe_account_id: string;
   pre_auth_scheduled_for: string;
+  stripe_payment_method_id: string | null;
 }[]> {
   const supabase = createSupabaseAdminClient();
   
@@ -623,15 +624,18 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
         booking_id,
         amount,
         pre_auth_scheduled_for,
+        stripe_payment_method_id,
         bookings!inner(
           client_id,
           professional_profile_id,
           professional_profiles!inner(
             stripe_account_id
+          ),
+          users!bookings_client_id_fkey(
+            customers!inner(
+              stripe_customer_id
+            )
           )
-        ),
-        customers!inner(
-          stripe_customer_id
         )
       `)
       .lte('pre_auth_scheduled_for', new Date().toISOString())
@@ -649,9 +653,14 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
       id: payment.id,
       booking_id: payment.booking_id,
       amount: Math.round(payment.amount * 100), // Convert to cents
-      customer_id: (payment.customers as unknown as { stripe_customer_id: string }).stripe_customer_id,
-      professional_stripe_account_id: (payment.bookings as unknown as { professional_profiles: { stripe_account_id: string } }).professional_profiles.stripe_account_id,
-      pre_auth_scheduled_for: payment.pre_auth_scheduled_for!
+      customer_id: (payment.bookings as unknown as { 
+        users: { customers: { stripe_customer_id: string } } 
+      }).users.customers.stripe_customer_id,
+      professional_stripe_account_id: (payment.bookings as unknown as { 
+        professional_profiles: { stripe_account_id: string } 
+      }).professional_profiles.stripe_account_id,
+      pre_auth_scheduled_for: payment.pre_auth_scheduled_for!,
+      stripe_payment_method_id: payment.stripe_payment_method_id
     }));
   } catch (error) {
     console.error('Error in getPaymentsPendingPreAuth:', error);
