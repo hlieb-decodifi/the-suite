@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +19,7 @@ import { useToast } from '@/components/ui/use-toast';
 type BookingCancellationModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   bookingId: string;
   appointmentDate: string;
   professionalName: string;
@@ -28,6 +28,7 @@ type BookingCancellationModalProps = {
 export function BookingCancellationModal({
   isOpen,
   onClose,
+  onSuccess,
   bookingId,
   appointmentDate,
   professionalName,
@@ -35,7 +36,6 @@ export function BookingCancellationModal({
   const [cancellationReason, setCancellationReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
 
   const handleCancel = async () => {
     if (!cancellationReason.trim()) {
@@ -62,7 +62,8 @@ export function BookingCancellationModal({
             'Your booking has been successfully cancelled. Email notifications have been sent.',
         });
         onClose();
-        router.refresh(); // Refresh to show updated status
+        onSuccess?.();
+        // Page will automatically update due to revalidatePath in the server action
       } else {
         toast({
           variant: 'destructive',
@@ -131,7 +132,7 @@ export function BookingCancellationModal({
           </div>
 
           {/* Warning Alert */}
-          <Alert variant="destructive">
+          <Alert variant="warning">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               This action cannot be undone. Your booking will be cancelled and

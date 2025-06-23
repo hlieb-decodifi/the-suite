@@ -268,37 +268,6 @@ export function BookingDetailPageClient({
     }
   };
 
-  const getPaymentStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
-            Payment Pending
-          </Badge>
-        );
-      case 'authorized':
-        return (
-          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-            Pre-Authorized
-          </Badge>
-        );
-      case 'completed':
-        return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            Payment Completed
-          </Badge>
-        );
-      case 'failed':
-        return (
-          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
-            Payment Failed
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
   const handleStatusUpdate = async (newStatus: string) => {
     setIsUpdating(true);
     try {
@@ -467,6 +436,19 @@ export function BookingDetailPageClient({
         professional?.users?.last_name,
       );
     }
+  };
+
+  const handleCancellationSuccess = () => {
+    // Update local state to reflect cancellation
+    setCurrentStatus('cancelled');
+    setAppointmentData(prev => ({
+      ...prev,
+      status: 'cancelled',
+      bookings: {
+        ...prev.bookings,
+        status: 'cancelled'
+      }
+    }));
   };
 
   return (
@@ -951,7 +933,7 @@ export function BookingDetailPageClient({
                   </div>
                 </div>
 
-                {appointment.bookings.professionals.description && (
+                appointment.bookings.professionals.description && (
                   <>
                     <Separator />
                     <div className="space-y-2">
@@ -1170,9 +1152,6 @@ export function BookingDetailPageClient({
                         appointmentData.bookings.booking_payments?.amount || 0,
                       )}
                     </Typography>
-                    {getPaymentStatusBadge(
-                      appointment.bookings.booking_payments.status,
-                    )}
                   </div>
 
                   {appointment.bookings.booking_payments.tip_amount > 0 && (
@@ -1473,6 +1452,7 @@ export function BookingDetailPageClient({
       <BookingCancellationModal
         isOpen={isCancellationModalOpen}
         onClose={() => setIsCancellationModalOpen(false)}
+        onSuccess={handleCancellationSuccess}
         bookingId={appointment.booking_id}
         appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
         professionalName={getOtherPartyName()}

@@ -1,8 +1,31 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { Database } from '@/../supabase/types';
+import { stripe } from '@/lib/stripe/server';
+import { revalidatePath } from 'next/cache';
 import { sendEmail } from '@/lib/email';
-import { createBookingCancellationClientEmail, createBookingCancellationProfessionalEmail } from '@/lib/email/templates';
+import {
+  createBookingCancellationClientEmail,
+  createBookingCancellationProfessionalEmail,
+} from '@/lib/email/templates';
+
+// Create admin client for operations that need elevated permissions
+function createSupabaseAdminClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseServiceKey) {
+    throw new Error('Missing Supabase service role key');
+  }
+
+  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
+}
 
 /**
  * Cancel a booking
@@ -11,7 +34,7 @@ export async function cancelBookingAction(
   bookingId: string,
   cancellationReason: string
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createServerClient();
+  const supabase = await createClient();
 
   try {
     // Get current user
@@ -20,8 +43,8 @@ export async function cancelBookingAction(
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Get booking details
-    const { data: booking, error: bookingError } = await supabase
+    // Get booking with all related data
+    const { data: booking, error } = await supabase
       .from('bookings')
       .select(`
         *,
@@ -30,10 +53,10 @@ export async function cancelBookingAction(
           cancellation_policy_enabled,
           users!inner(id, first_name, last_name)
         ),
-        clients:users!client_id(id, first_name, last_name, client_profiles(phone_number)),
+        clients:users!client_id(id, first_name, last_name, client_profiles(*)),
         booking_services(
+          id,
           price,
-          duration,
           services(name)
         ),
         booking_payments(
@@ -41,17 +64,13 @@ export async function cancelBookingAction(
           amount,
           tip_amount,
           status,
-          stripe_payment_intent_id,
-          stripe_checkout_session_id,
-          pre_auth_scheduled_for,
-          capture_scheduled_for,
-          payment_methods(name, is_online)
+          stripe_payment_intent_id
         )
       `)
       .eq('id', bookingId)
       .single();
 
-    if (bookingError || !booking) {
+    if (error || !booking) {
       return { success: false, error: 'Booking not found' };
     }
 
@@ -66,15 +85,15 @@ export async function cancelBookingAction(
     const isClient = user.id === clientUser.id;
 
     if (!isProfessional && !isClient) {
-      return { success: false, error: 'Unauthorized to cancel this booking' };
+      return { success: false, error: 'Unauthorized' };
     }
 
     // Check if already cancelled
     if (booking.status === 'cancelled' || appointment.status === 'cancelled') {
-      return { success: false, error: 'Booking is already cancelled' };
+      return { success: false, error: 'Booking already cancelled' };
     }
 
-    // Update booking and appointment status
+    // Update booking status
     const { error: updateBookingError } = await supabase
       .from('bookings')
       .update({ 
@@ -101,6 +120,24 @@ export async function cancelBookingAction(
 
     // Update payment status and clear scheduled jobs if payment exists
     if (payment) {
+      // Cancel uncaptured payment intent in Stripe if it exists
+      if (payment.stripe_payment_intent_id) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+          
+          // Only cancel if payment intent is in a cancelable state
+          if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'requires_confirmation') {
+            await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+            console.log(`Cancelled Stripe payment intent: ${payment.stripe_payment_intent_id}`);
+          } else {
+            console.log(`Payment intent ${payment.stripe_payment_intent_id} is in status ${paymentIntent.status}, cannot cancel`);
+          }
+        } catch (stripeError) {
+          console.error('Failed to cancel Stripe payment intent:', stripeError);
+          // Don't fail the entire cancellation for Stripe errors
+        }
+      }
+
       const { error: updatePaymentError } = await supabase
         .from('booking_payments')
         .update({
@@ -119,6 +156,9 @@ export async function cancelBookingAction(
     // Send email notifications
     await sendCancellationEmails(booking, cancellationReason);
 
+    // Revalidate the booking detail page to ensure fresh data
+    revalidatePath(`/bookings/${appointment.id}`);
+
     return { success: true };
 
   } catch (error) {
@@ -136,7 +176,7 @@ export async function cancelBookingAction(
 export async function canCancelBookingAction(
   bookingId: string
 ): Promise<{ canCancel: boolean; reason?: string }> {
-  const supabase = await createServerClient();
+  const supabase = await createClient();
 
   try {
     // Get current user
@@ -207,7 +247,7 @@ export async function canCancelBookingAction(
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function sendCancellationEmails(booking: any, cancellationReason: string) {
-  const supabase = await createServerClient();
+  const adminSupabase = createSupabaseAdminClient();
 
   try {
     const appointment = booking.appointments;
@@ -218,9 +258,9 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
     const bookingServices = booking.booking_services || [];
     const payment = booking.booking_payments;
 
-    // Get user emails
-    const { data: clientAuth } = await supabase.auth.admin.getUserById(clientUser.id);
-    const { data: professionalAuth } = await supabase.auth.admin.getUserById(professionalUser.id);
+    // Get user emails using admin client
+    const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
+    const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(professionalUser.id);
 
     if (!clientAuth.user?.email || !professionalAuth.user?.email) {
       console.error('Failed to get user emails for cancellation notifications');
@@ -251,6 +291,7 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
     // Prepare refund info if payment exists
     const refundInfo = payment ? {
       originalAmount: payment.amount + (payment.tip_amount || 0),
+      refundAmount: payment.amount + (payment.tip_amount || 0), // Full refund for cancellations
       status: 'Processing'
     } : undefined;
 

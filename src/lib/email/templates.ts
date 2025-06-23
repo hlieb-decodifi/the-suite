@@ -40,7 +40,7 @@ function compileTemplate(templateContent: string, data: TemplateData): string {
         const arrayData = data[arrayName];
         
         if (Array.isArray(arrayData)) {
-          const compiledItems = arrayData.map(item => {
+          const compiledItems = arrayData.map((item, index) => {
             let itemTemplate = loopTemplate;
             // Replace variables in the loop template
             if (typeof item === 'object' && item !== null) {
@@ -49,6 +49,18 @@ function compileTemplate(templateContent: string, data: TemplateData): string {
                 itemTemplate = itemTemplate.replace(regex, String(value || ''));
               }
             }
+            
+            // Handle {{#unless @last}} helper
+            const isLast = index === arrayData.length - 1;
+            const unlessLastRegex = /{{#unless\s+@last}}(.*?){{\/unless}}/g;
+            itemTemplate = itemTemplate.replace(unlessLastRegex, (match, content) => {
+              return isLast ? '' : content;
+            });
+            
+            // Handle {{@last}} variable directly
+            const lastVarRegex = /{{@last}}/g;
+            itemTemplate = itemTemplate.replace(lastVarRegex, isLast.toString());
+            
             return itemTemplate;
           }).join('');
           
@@ -60,28 +72,119 @@ function compileTemplate(templateContent: string, data: TemplateData): string {
     });
   }
   
-  // Handle {{#if}} conditionals
-  const ifMatches = result.match(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g);
-  if (ifMatches) {
-    ifMatches.forEach(match => {
-      const ifMatch = match.match(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/);
-      if (ifMatch && ifMatch[1] && ifMatch[2]) {
-        const conditionName = ifMatch[1];
-        const conditionalContent = ifMatch[2];
-        const conditionValue = data[conditionName];
+  // Handle {{#if}} conditionals - support nested paths and nested conditionals
+  const processConditionals = (text: string): string => {
+    let processedText = text;
+    
+    // Find and process conditionals from innermost to outermost
+    while (true) {
+      // Find the first {{#if}} that has a matching {{/if}} without nested {{#if}} inside
+      const matches: Array<{
+        fullMatch: string;
+        condition: string;
+        content: string;
+        start: number;
+      }> = [];
+      let currentPos = 0;
+      
+      while (currentPos < processedText.length) {
+        const ifStart = processedText.indexOf('{{#if ', currentPos);
+        if (ifStart === -1) break;
+        
+        // Extract the condition name
+        const conditionMatch = processedText.substring(ifStart).match(/^{{#if\s+(\w+(?:\.\w+)*)}}/);
+        if (!conditionMatch) {
+          currentPos = ifStart + 1;
+          continue;
+        }
+        
+        const conditionName = conditionMatch[1];
+        if (!conditionName) {
+          currentPos = ifStart + 1;
+          continue;
+        }
+        const conditionEnd = ifStart + conditionMatch[0].length;
+        
+        // Find the matching {{/if}}
+        let depth = 1;
+        let searchPos = conditionEnd;
+        let contentEnd = -1;
+        
+        while (searchPos < processedText.length && depth > 0) {
+          const nextIf = processedText.indexOf('{{#if ', searchPos);
+          const nextEndIf = processedText.indexOf('{{/if}}', searchPos);
+          
+          if (nextEndIf === -1) break; // No matching {{/if}} found
+          
+          if (nextIf !== -1 && nextIf < nextEndIf) {
+            // Found nested {{#if}}
+            depth++;
+            searchPos = nextIf + 6;
+          } else {
+            // Found {{/if}}
+            depth--;
+            if (depth === 0) {
+              contentEnd = nextEndIf;
+            }
+            searchPos = nextEndIf + 7;
+          }
+        }
+        
+        if (contentEnd !== -1) {
+          matches.push({
+            fullMatch: processedText.substring(ifStart, contentEnd + 7),
+            condition: conditionName,
+            content: processedText.substring(conditionEnd, contentEnd),
+            start: ifStart
+          });
+        }
+        
+        currentPos = ifStart + 1;
+      }
+      
+      if (matches.length === 0) break; // No more conditionals to process
+      
+      // Process matches from right to left to avoid position shifts
+      matches.sort((a, b) => b.start - a.start);
+      
+      for (const match of matches) {
+        // Handle nested object paths like "refundInfo.refundAmount"
+        let conditionValue: unknown = data;
+        const pathParts = match.condition.split('.');
+        for (const part of pathParts) {
+          if (conditionValue && typeof conditionValue === 'object') {
+            conditionValue = (conditionValue as Record<string, unknown>)[part];
+          } else {
+            conditionValue = undefined;
+            break;
+          }
+        }
         
         // Show content if condition is truthy and not empty
         const shouldShow = conditionValue && 
           (typeof conditionValue !== 'string' || conditionValue.trim() !== '') &&
           (typeof conditionValue !== 'number' || conditionValue !== 0);
-          
-        result = result.replace(match, shouldShow ? conditionalContent : '');
+        
+        const replacement = shouldShow ? match.content : '';
+        processedText = processedText.substring(0, match.start) + replacement + processedText.substring(match.start + match.fullMatch.length);
       }
-    });
-  }
+    }
+    
+    return processedText;
+  };
   
-  // Replace simple variables {{variable}}
+  result = processConditionals(result);
+  
+  // Replace simple variables {{variable}} and nested {{object.property}}
   for (const [key, value] of Object.entries(data)) {
+    if (typeof value === 'object' && value !== null) {
+      // Handle nested objects
+      for (const [nestedKey, nestedValue] of Object.entries(value)) {
+        const nestedRegex = new RegExp(`{{\\s*${key}\\.${nestedKey}\\s*}}`, 'g');
+        result = result.replace(nestedRegex, String(nestedValue || ''));
+      }
+    }
+    
     const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
     result = result.replace(regex, String(value || ''));
   }
