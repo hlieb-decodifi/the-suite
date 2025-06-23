@@ -140,7 +140,7 @@ create table professional_profiles (
   -- Address display settings
   hide_full_address boolean default false not null, -- Flag to hide full address on public profile
   -- Cancellation policy settings
-  cancellation_policy_enabled boolean default true not null,
+  cancellation_policy_enabled boolean default false not null,
   cancellation_24h_charge_percentage decimal(5,2) default 50.00 not null,
   cancellation_48h_charge_percentage decimal(5,2) default 25.00 not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

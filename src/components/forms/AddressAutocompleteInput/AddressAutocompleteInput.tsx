@@ -105,23 +105,6 @@ export function AddressAutocompleteInput({
         ) || []
     : [];
 
-  // Debug logging
-  console.log('AddressAutocomplete Debug:', {
-    input,
-    shouldEnableAutocomplete,
-    isSelecting,
-    hasValue: !!value,
-    inputMatchesValue: value ? input === value.formatted_address : false,
-    valueFormattedAddress: value?.formatted_address,
-    autocompleteIsLoading: autocomplete.isLoading,
-    autocompleteIsFetching: autocomplete.isFetching,
-    autocompleteError: autocomplete.error?.message,
-    rawSuggestionsCount: autocomplete.suggestions?.length || 0,
-    filteredPredictionsCount: predictions.length,
-    isOpen,
-    dropdownShouldShow: isOpen && predictions.length > 0,
-  });
-
   // Log when dropdown should be visible
   if (isOpen && predictions.length > 0) {
     console.log(

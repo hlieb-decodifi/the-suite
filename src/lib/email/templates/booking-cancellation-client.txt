@@ -1,0 +1,39 @@
+BOOKING CANCELLED
+
+Dear {{clientName}},
+
+We're sorry to inform you that your appointment with {{professionalName}} has been cancelled.
+
+CANCELLED APPOINTMENT DETAILS
+Professional: {{professionalName}}
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
+Booking ID: {{bookingId}}
+{{#if services}}
+Services: {{#each services}}{{name}}{{#unless @last}}, {{/unless}}{{/each}}
+{{/if}}
+
+{{#if cancellationReason}}
+CANCELLATION REASON
+"{{cancellationReason}}"
+{{/if}}
+
+{{#if refundInfo}}
+REFUND INFORMATION
+Original Amount: ${{refundInfo.originalAmount}}
+{{#if refundInfo.refundAmount}}
+Refund Amount: ${{refundInfo.refundAmount}}
+{{/if}}
+Refund Status: {{refundInfo.status}}
+{{/if}}
+
+VIEW BOOKING DETAILS
+{{appointmentDetailsUrl}}
+
+If you have any questions about this cancellation, please don't hesitate to contact us or reach out to the professional directly.
+
+---
+This email was sent by The Suite
+{{websiteUrl}}
+
+Need assistance? Contact us at {{supportEmail}} 

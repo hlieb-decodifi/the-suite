@@ -112,13 +112,19 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Failed to fetch client data' };
     }
 
-    // Get professional data with profile
+    // Get professional data with profile and address
     const { data: professionalData, error: professionalError } = await adminSupabase
       .from('professional_profiles')
       .select(`
         user_id,
         phone_number,
         location,
+        addresses (
+          street_address,
+          city,
+          state,
+          country
+        ),
         users (
           first_name,
           last_name
@@ -158,7 +164,34 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Missing required booking data' };
     }
 
-    console.log('📍 Address data: Not connected yet, treating as optional');
+    // Helper function to format address
+    const formatAddress = (addresses: {
+      street_address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      country?: string | null;
+    }[] | {
+      street_address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      country?: string | null;
+    } | null | undefined): string | null => {
+      if (!addresses) return null;
+      
+      const addr = Array.isArray(addresses) ? addresses[0] : addresses;
+      if (!addr) return null;
+      
+      const parts = [];
+      if (addr.street_address) parts.push(addr.street_address);
+      if (addr.city) parts.push(addr.city);
+      if (addr.state) parts.push(addr.state);
+      if (addr.country) parts.push(addr.country);
+      
+      return parts.length > 0 ? parts.join(', ') : null;
+    };
+
+    // Format professional address
+    const professionalAddress = formatAddress(professionalData.addresses);
 
     // Format appointment date and time
     const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
@@ -241,7 +274,7 @@ export async function sendBookingConfirmationEmails(
         totalPaid,
         isUncaptured,
         ...(professionalData.phone_number && { professionalPhone: professionalData.phone_number }),
-        ...(professionalData.location && { professionalAddress: professionalData.location }),
+        ...(professionalAddress && { professionalAddress }),
         ...(bookingData.notes && { notes: bookingData.notes })
       };
 

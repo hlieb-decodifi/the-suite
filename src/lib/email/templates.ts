@@ -615,4 +615,126 @@ export function createRefundCompletionProfessionalEmail(
     htmlContent,
     textContent
   };
+}
+
+/**
+ * Booking cancellation notification to client
+ */
+export function createBookingCancellationClientEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    bookingId: string;
+    appointmentId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    professionalName: string;
+    cancellationReason?: string;
+    services: Array<{
+      name: string;
+      price: number;
+    }>;
+    refundInfo?: {
+      originalAmount: number;
+      refundAmount?: number;
+      status: string;
+    };
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    clientName,
+    professionalName: data.professionalName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    bookingId: data.bookingId,
+    cancellationReason: data.cancellationReason,
+    services: data.services.map(service => ({
+      ...service,
+      price: service.price.toFixed(2)
+    })),
+    refundInfo: data.refundInfo ? {
+      originalAmount: data.refundInfo.originalAmount.toFixed(2),
+      refundAmount: data.refundInfo.refundAmount?.toFixed(2),
+      status: data.refundInfo.status
+    } : undefined,
+    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.appointmentId}`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('booking-cancellation-client', 'hbs');
+  const textTemplate = loadTemplate('booking-cancellation-client', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: `Booking Cancelled - ${data.appointmentDate}`,
+    htmlContent,
+    textContent
+  };
+}
+
+/**
+ * Booking cancellation notification to professional
+ */
+export function createBookingCancellationProfessionalEmail(
+  professionalEmail: string,
+  professionalName: string,
+  data: {
+    bookingId: string;
+    appointmentId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    clientName: string;
+    clientPhone?: string;
+    cancellationReason?: string;
+    services: Array<{
+      name: string;
+      price: number;
+    }>;
+    refundInfo?: {
+      originalAmount: number;
+      refundAmount?: number;
+      status: string;
+    };
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    professionalName,
+    clientName: data.clientName,
+    clientPhone: data.clientPhone,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    bookingId: data.bookingId,
+    cancellationReason: data.cancellationReason,
+    services: data.services.map(service => ({
+      ...service,
+      price: service.price.toFixed(2)
+    })),
+    refundInfo: data.refundInfo ? {
+      originalAmount: data.refundInfo.originalAmount.toFixed(2),
+      refundAmount: data.refundInfo.refundAmount?.toFixed(2),
+      status: data.refundInfo.status
+    } : undefined,
+    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.appointmentId}`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('booking-cancellation-professional', 'hbs');
+  const textTemplate = loadTemplate('booking-cancellation-professional', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: professionalEmail, name: professionalName }],
+    subject: `Booking Cancelled - ${data.appointmentDate}`,
+    htmlContent,
+    textContent
+  };
 } 

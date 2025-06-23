@@ -40,6 +40,7 @@ import { createOrGetConversationEnhanced } from '@/server/domains/messages/actio
 import { LeafletMap } from '@/components/common/LeafletMap';
 import { AddAdditionalServicesModal } from '@/components/modals';
 import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
+import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -176,6 +177,7 @@ export function BookingDetailPageClient({
   const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
   const [appointmentData, setAppointmentData] = useState(appointment);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -338,22 +340,16 @@ export function BookingDetailPageClient({
     if (isProfessional) {
       switch (currentStatus) {
         case 'pending':
-          return [
-            { value: 'confirmed', label: 'Confirm Appointment' },
-            { value: 'cancelled', label: 'Cancel Appointment' },
-          ];
+          return [{ value: 'confirmed', label: 'Confirm Appointment' }];
         case 'confirmed':
         case 'upcoming':
-          return [
-            { value: 'completed', label: 'Mark as Completed' },
-            { value: 'cancelled', label: 'Cancel Appointment' },
-          ];
+          return [{ value: 'completed', label: 'Mark as Completed' }];
         default:
           return [];
       }
     } else {
-      // Clients can only cancel
-      return [{ value: 'cancelled', label: 'Cancel Appointment' }];
+      // Clients have no status update options (cancellation is handled separately)
+      return [];
     }
   };
 
@@ -448,6 +444,29 @@ export function BookingDetailPageClient({
 
     // Refresh the page to show updated services
     router.refresh();
+  };
+
+  // Check if booking can be cancelled
+  const canCancelBooking = () => {
+    // Cannot cancel if already cancelled or completed
+    if (['cancelled', 'completed'].includes(currentStatus)) return false;
+
+    // Both professionals and clients can cancel if status allows
+    return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
+  };
+
+  // Get professional or client name for cancellation modal
+  const getOtherPartyName = () => {
+    if (isProfessional) {
+      const client = appointment.bookings.clients;
+      return getFullName(client?.first_name, client?.last_name);
+    } else {
+      const professional = appointment.bookings.professionals;
+      return getFullName(
+        professional?.users?.first_name,
+        professional?.users?.last_name,
+      );
+    }
   };
 
   return (
@@ -1107,6 +1126,17 @@ export function BookingDetailPageClient({
                     </Button>
                   )}
 
+                {/* Cancel Booking Button */}
+                {canCancelBooking() && (
+                  <Button
+                    onClick={() => setIsCancellationModalOpen(true)}
+                    variant="destructiveOutline"
+                    className="w-full"
+                  >
+                    Cancel Booking
+                  </Button>
+                )}
+
                 {/* Refund Request Button */}
                 {canRequestRefund() && (
                   <Button
@@ -1438,6 +1468,15 @@ export function BookingDetailPageClient({
           onSuccess={handleRefundSuccess}
         />
       )}
+
+      {/* Booking Cancellation Modal */}
+      <BookingCancellationModal
+        isOpen={isCancellationModalOpen}
+        onClose={() => setIsCancellationModalOpen(false)}
+        bookingId={appointment.booking_id}
+        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        professionalName={getOtherPartyName()}
+      />
     </div>
   );
 }

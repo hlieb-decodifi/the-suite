@@ -1,0 +1,249 @@
+<html>
+  <head>
+    <meta http-equiv='Content-Type' content='text/html; charset=UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Booking Cancelled - {{appointmentDate}}</title>
+    <style>
+      /* Email-safe CSS based on the project's design system */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        background-color: #fafafa;
+        color: #171717;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+      }
+      .header {
+        background-color: #171717;
+        color: #ffffff;
+        padding: 32px 24px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .content {
+        padding: 32px 24px;
+      }
+      .alert-box {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+      .alert-title {
+        color: #dc2626;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        font-size: 16px;
+      }
+      .alert-text {
+        color: #7f1d1d;
+        margin: 0;
+        font-size: 14px;
+      }
+      .info-section {
+        background-color: #f9fafb;
+        border-radius: 6px;
+        padding: 20px;
+        margin: 24px 0;
+      }
+      .info-section h3 {
+        margin: 0 0 16px 0;
+        color: #171717;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .info-row:last-child {
+        border-bottom: none;
+      }
+      .info-label {
+        color: #6b7280;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .info-value {
+        color: #171717;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: right;
+      }
+      .reason-section {
+        background-color: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 6px;
+        padding: 16px;
+        margin: 24px 0;
+      }
+      .reason-label {
+        color: #0369a1;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        font-size: 14px;
+      }
+      .reason-text {
+        color: #1e3a8a;
+        margin: 0;
+        font-size: 14px;
+        font-style: italic;
+      }
+      .footer {
+        background-color: #f9fafb;
+        padding: 24px;
+        text-align: center;
+        border-top: 1px solid #e5e7eb;
+      }
+      .footer p {
+        margin: 0;
+        color: #6b7280;
+        font-size: 12px;
+      }
+      .footer a {
+        color: #171717;
+        text-decoration: none;
+      }
+      .btn {
+        display: inline-block;
+        padding: 12px 24px;
+        background-color: #171717;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+        margin: 16px 0;
+      }
+      .text-center {
+        text-align: center;
+      }
+      @media (max-width: 600px) {
+        .container {
+          margin: 0;
+          border-radius: 0;
+        }
+        .content {
+          padding: 24px 16px;
+        }
+        .header {
+          padding: 24px 16px;
+        }
+        .info-row {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .info-value {
+          text-align: left;
+          margin-top: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <div class='header'>
+        <h1>Booking Cancelled</h1>
+      </div>
+
+      <div class='content'>
+        <div class='alert-box'>
+          <div class='alert-title'>Your appointment has been cancelled</div>
+          <div class='alert-text'>We're sorry to inform you that your
+            appointment with
+            {{professionalName}}
+            has been cancelled.</div>
+        </div>
+
+        <div class='info-section'>
+          <h3>Cancelled Appointment Details</h3>
+          <div class='info-row'>
+            <div class='info-label'>Professional:</div>
+            <div class='info-value'>{{professionalName}}</div>
+          </div>
+          <div class='info-row'>
+            <div class='info-label'>Date:</div>
+            <div class='info-value'>{{appointmentDate}}</div>
+          </div>
+          <div class='info-row'>
+            <div class='info-label'>Time:</div>
+            <div class='info-value'>{{appointmentTime}}</div>
+          </div>
+          <div class='info-row'>
+            <div class='info-label'>Booking ID:</div>
+            <div class='info-value'>{{bookingId}}</div>
+          </div>
+          {{#if services}}
+            <div class='info-row'>
+              <div class='info-label'>Services:</div>
+              <div class='info-value'>
+                {{#each services}}
+                  {{name}}{{#unless @last}}, {{/unless}}
+                {{/each}}
+              </div>
+            </div>
+          {{/if}}
+        </div>
+
+        {{#if cancellationReason}}
+          <div class='reason-section'>
+            <div class='reason-label'>Cancellation Reason:</div>
+            <div class='reason-text'>"{{cancellationReason}}"</div>
+          </div>
+        {{/if}}
+
+        {{#if refundInfo}}
+          <div class='info-section'>
+            <h3>Refund Information</h3>
+            <div class='info-row'>
+              <div class='info-label'>Original Amount:</div>
+              <div class='info-value'>${{refundInfo.originalAmount}}</div>
+            </div>
+            {{#if refundInfo.refundAmount}}
+              <div class='info-row'>
+                <div class='info-label'>Refund Amount:</div>
+                <div class='info-value'>${{refundInfo.refundAmount}}</div>
+              </div>
+            {{/if}}
+            <div class='info-row'>
+              <div class='info-label'>Refund Status:</div>
+              <div class='info-value'>{{refundInfo.status}}</div>
+            </div>
+          </div>
+        {{/if}}
+
+        <div class='text-center'>
+          <a href='{{appointmentDetailsUrl}}' class='btn'>View Booking Details</a>
+        </div>
+
+        <p>If you have any questions about this cancellation, please don't
+          hesitate to contact us or reach out to the professional directly.</p>
+      </div>
+
+      <div class='footer'>
+        <p>
+          This email was sent by
+          <a href='{{websiteUrl}}'>The Suite</a><br />
+          If you need assistance, please contact us at
+          <a href='mailto:{{supportEmail}}'>{{supportEmail}}</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
