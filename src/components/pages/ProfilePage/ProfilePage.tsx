@@ -22,7 +22,6 @@ import { onSubscriptionChangeAction } from '@/server/domains/stripe-services';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { HeaderFormValues } from '@/types/profiles';
 import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
-import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
 import { revalidatePath } from 'next/cache';
 import { redirect, RedirectType } from 'next/navigation';
@@ -104,6 +103,8 @@ export async function ProfilePage({
       <ProfilePageClient
         user={user as User}
         profileData={profileData.profile}
+        address={profileData.address}
+        professionalProfile={profileData.professionalProfile}
         workingHours={profileData.workingHours}
         timezone={profileData.timezone}
         paymentMethods={profileData.paymentMethods}
@@ -158,6 +159,33 @@ export async function getProfileData(
       throw new Error(profileResult.error);
     }
 
+    // Fetch address data if profile has address_id
+    let address = null;
+    let professionalProfile = null;
+    if (profile) {
+      const supabase = await createClient();
+
+      // Get professional profile with hide_full_address setting
+      const { data: profProfile } = await supabase
+        .from('professional_profiles')
+        .select('address_id, hide_full_address')
+        .eq('user_id', userId)
+        .single();
+
+      professionalProfile = profProfile;
+
+      // Fetch address if available
+      if (profProfile?.address_id) {
+        const { data: addressData } = await supabase
+          .from('addresses')
+          .select('*')
+          .eq('id', profProfile.address_id)
+          .single();
+
+        address = addressData;
+      }
+    }
+
     // Fetch working hours with timezone (silently handle RLS errors)
     const workingHoursResult = await getWorkingHoursAction(userId);
     const workingHours = workingHoursResult.success
@@ -203,31 +231,38 @@ export async function getProfileData(
       }
     }
 
-    // Fetch reviews and rating stats
+    // Fetch reviews and rating stats (silently handle errors)
     let reviews: ReviewData[] = [];
     let reviewStats: ProfessionalRatingStats | null = null;
     try {
       reviews = await getProfessionalReviews(userId, isEditable);
       reviewStats = await getProfessionalRatingStats(userId);
     } catch (reviewError) {
+      // Silently handle review errors
       console.error('Error fetching reviews:', reviewError);
     }
 
-    // Fetch unread messages count for editable profiles
+    // Get unread messages count for the user (only for editable profiles)
     let unreadMessagesCount = 0;
     if (isEditable) {
       try {
-        const { getUnreadMessagesCount } = await import(
-          '@/components/layouts/DashboardPageLayout/DashboardPageLayout'
-        );
-        unreadMessagesCount = await getUnreadMessagesCount(userId);
+        const supabase = await createClient();
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('recipient_id', userId)
+          .eq('is_read', false);
+        unreadMessagesCount = count || 0;
       } catch (messageError) {
+        // Silently handle message count errors
         console.error('Error fetching unread messages count:', messageError);
       }
     }
 
     return {
       profile,
+      address,
+      professionalProfile,
       workingHours,
       timezone,
       paymentMethods,
@@ -237,26 +272,8 @@ export async function getProfileData(
       unreadMessagesCount,
     };
   } catch (error) {
-    // Re-throw specific errors for handling in the calling component
-    if (error instanceof Error && error.message === 'PROFILE_NOT_ACCESSIBLE') {
-      throw error;
-    }
-
-    // Log non-RLS errors
-    if (error instanceof Error && !isRLSError(error.message)) {
-      console.error('Error fetching profile data:', error);
-    }
-
-    return {
-      profile: null,
-      workingHours: [] as WorkingHoursEntry[],
-      timezone: '',
-      paymentMethods: [] as PaymentMethod[],
-      portfolioPhotos: [] as PortfolioPhotoUI[],
-      reviews: [] as ReviewData[],
-      reviewStats: null,
-      unreadMessagesCount: 0,
-    };
+    console.error('Error in getProfileData:', error);
+    throw error;
   }
 }
 

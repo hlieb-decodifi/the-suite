@@ -11,28 +11,40 @@ export type Database = {
     Tables: {
       addresses: {
         Row: {
+          apartment: string | null
           city: string | null
           country: string | null
           created_at: string
+          google_place_id: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           state: string | null
           street_address: string | null
           updated_at: string
         }
         Insert: {
+          apartment?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
+          google_place_id?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           state?: string | null
           street_address?: string | null
           updated_at?: string
         }
         Update: {
+          apartment?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
+          google_place_id?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           state?: string | null
           street_address?: string | null
           updated_at?: string
@@ -707,6 +719,7 @@ export type Database = {
           deposit_value: number | null
           description: string | null
           facebook_url: string | null
+          hide_full_address: boolean
           id: string
           instagram_url: string | null
           is_published: boolean | null
@@ -736,6 +749,7 @@ export type Database = {
           deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
+          hide_full_address?: boolean
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
@@ -765,6 +779,7 @@ export type Database = {
           deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
+          hide_full_address?: boolean
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
@@ -1162,6 +1177,19 @@ export type Database = {
       get_service_limit: {
         Args: { prof_profile_id: string }
         Returns: number
+      }
+      insert_address_and_return_id: {
+        Args: {
+          p_country?: string
+          p_state?: string
+          p_city?: string
+          p_street_address?: string
+          p_apartment?: string
+          p_latitude?: number
+          p_longitude?: number
+          p_google_place_id?: string
+        }
+        Returns: string
       }
       is_client: {
         Args: { user_uuid: string }

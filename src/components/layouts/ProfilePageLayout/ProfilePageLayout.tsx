@@ -32,6 +32,7 @@ export type UserData = {
 export type ProfileValidationData = {
   workingHours: WorkingHoursEntry[];
   paymentMethods: PaymentMethod[];
+  hasAddress: boolean;
 };
 
 export type ProfilePageLayoutProps = {
@@ -243,15 +244,27 @@ export async function getValidationData(
       ? paymentMethodsResult.methods || []
       : [];
 
+    // Check if professional has an address
+    const supabase = await createClient();
+    const { data: profProfile } = await supabase
+      .from('professional_profiles')
+      .select('address_id')
+      .eq('user_id', userId)
+      .single();
+
+    const hasAddress = !!profProfile?.address_id;
+
     return {
       workingHours,
       paymentMethods,
+      hasAddress,
     };
   } catch (error) {
     console.error('Error fetching validation data:', error);
     return {
       workingHours: [],
       paymentMethods: [],
+      hasAddress: false,
     };
   }
 }

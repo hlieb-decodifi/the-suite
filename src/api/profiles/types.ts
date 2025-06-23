@@ -41,6 +41,10 @@ export type AddressFormData = {
   state: string;
   city: string;
   streetAddress: string;
+  apartment?: string;
+  latitude?: number;
+  longitude?: number;
+  googlePlaceId?: string;
 };
 
 export type DetailFormData = {

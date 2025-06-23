@@ -29,6 +29,7 @@ export function useLocationForm({
     streetAddress: `${user.user_metadata?.address?.houseNumber || ''} ${
       user.user_metadata?.address?.street || ''
     }`.trim(),
+    googlePlaceId: '', // Required field for validation, will be set when user selects from Google Places
   };
 
   const form = useForm<LocationFormValues>({

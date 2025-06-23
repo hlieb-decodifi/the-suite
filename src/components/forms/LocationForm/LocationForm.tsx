@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js';
 import { LocationFormContent } from './components/LocationFormContent';
 import { LocationFormValues } from './schema';
 import { useLocationForm } from './useLocationForm';
+import { forwardRef } from 'react';
 
 export type LocationFormProps = {
   user: User;
@@ -11,35 +12,44 @@ export type LocationFormProps = {
   onCancel: () => void;
   className?: string;
   initialData?: LocationFormValues;
+  hideButtons?: boolean;
 };
 
-export function LocationForm({
-  user,
-  onSubmit,
-  onCancel,
-  className = '',
-  initialData,
-}: LocationFormProps) {
-  const {
-    form,
-    isPending,
-    saveSuccess,
-    onSubmit: handleSubmit,
-  } = useLocationForm({
-    onSubmit,
-    user,
-    initialData,
-  });
+export const LocationForm = forwardRef<HTMLFormElement, LocationFormProps>(
+  function LocationForm(
+    {
+      user,
+      onSubmit,
+      onCancel,
+      className = '',
+      initialData,
+      hideButtons = false,
+    },
+    ref,
+  ) {
+    const {
+      form,
+      isPending,
+      saveSuccess,
+      onSubmit: handleSubmit,
+    } = useLocationForm({
+      onSubmit,
+      user,
+      initialData,
+    });
 
-  return (
-    <div className={className}>
-      <LocationFormContent
-        form={form}
-        isPending={isPending}
-        saveSuccess={saveSuccess}
-        onSubmit={handleSubmit}
-        onCancel={onCancel}
-      />
-    </div>
-  );
-}
+    return (
+      <div className={className}>
+        <LocationFormContent
+          ref={ref}
+          form={form}
+          isPending={isPending}
+          saveSuccess={saveSuccess}
+          onSubmit={handleSubmit}
+          onCancel={onCancel}
+          hideButtons={hideButtons}
+        />
+      </div>
+    );
+  },
+);

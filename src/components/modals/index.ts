@@ -6,5 +6,7 @@ export * from './ChangePasswordModal/ChangePasswordModal';
 export * from './UpdateEmailModal/UpdateEmailModal';
 export * from './ConfirmDeleteModal';
 export * from './ServiceModal';
-export * from './HeaderModal';
+export { HeaderModal } from './HeaderModal';
 export * from './BookingModal';
+export { ContactHoursModal } from './ContactHoursModal';
+export { LocationModal } from './LocationModal';

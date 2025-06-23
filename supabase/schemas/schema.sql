@@ -84,10 +84,23 @@ create table addresses (
   state text,
   city text,
   street_address text,
+  apartment text, -- Apartment/unit number
+  latitude decimal(10, 8), -- Store latitude with high precision
+  longitude decimal(11, 8), -- Store longitude with high precision  
+  google_place_id text, -- Google Places API place ID for reference
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table addresses enable row level security;
+
+-- Create indexes for geographic queries and place lookups
+create index if not exists idx_addresses_coordinates 
+on addresses(latitude, longitude) 
+where latitude is not null and longitude is not null;
+
+create index if not exists idx_addresses_google_place_id 
+on addresses(google_place_id) 
+where google_place_id is not null;
 
 /**
 * PROFESSIONAL_PROFILES
@@ -124,6 +137,8 @@ create table professional_profiles (
 
   -- Messaging settings
   allow_messages boolean default true not null,
+  -- Address display settings
+  hide_full_address boolean default false not null, -- Flag to hide full address on public profile
   -- Cancellation policy settings
   cancellation_policy_enabled boolean default true not null,
   cancellation_24h_charge_percentage decimal(5,2) default 50.00 not null,
@@ -392,6 +407,17 @@ create policy "Users can delete addresses linked to their profile"
       select 1 from professional_profiles
       where professional_profiles.address_id = addresses.id
       and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Allow public viewing of addresses for published professionals
+create policy "Anyone can view addresses of published professionals"
+  on addresses for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.address_id = addresses.id
+      and professional_profiles.is_published = true
     )
   );
 
@@ -2114,6 +2140,51 @@ create publication supabase_realtime for table
   conversations,
   messages,
   reviews;
+
+-- Add a function to safely insert address and return the ID (bypasses RLS)
+create or replace function insert_address_and_return_id(
+  p_country text default null,
+  p_state text default null,
+  p_city text default null,
+  p_street_address text default null,
+  p_apartment text default null,
+  p_latitude decimal(10,8) default null,
+  p_longitude decimal(11,8) default null,
+  p_google_place_id text default null
+) 
+returns uuid
+language plpgsql
+security definer -- bypasses RLS
+as $$
+declare
+  new_id uuid;
+begin
+  insert into addresses (
+    country, 
+    state, 
+    city, 
+    street_address,
+    apartment,
+    latitude,
+    longitude,
+    google_place_id
+  ) values (
+    p_country, 
+    p_state, 
+    p_city, 
+    p_street_address,
+    p_apartment,
+    p_latitude,
+    p_longitude,
+    p_google_place_id
+  ) returning id into new_id;
+  
+  return new_id;
+end;
+$$;
+
+-- Grant execute permission to authenticated users
+grant execute on function insert_address_and_return_id to authenticated;
 
 
 
