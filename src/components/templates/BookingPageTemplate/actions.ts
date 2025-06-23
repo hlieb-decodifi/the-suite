@@ -100,6 +100,8 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
       rating: 4.5, // Mock data, would come from reviews table
       reviewCount: 0, // Mock data, would come from reviews count
       profile_id: professionalProfile?.id,
+      hide_full_address: false, // Default value for legacy data
+      address_data: null, // No address data in this context
     };
 
     // Return mapped service data

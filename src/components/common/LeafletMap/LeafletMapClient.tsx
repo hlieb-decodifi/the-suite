@@ -9,15 +9,15 @@ const createCustomIcon = () => {
     iconUrl:
       'data:image/svg+xml;base64,' +
       btoa(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
+      <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24">
         <!-- Animated pulse ring -->
-        <circle cx="12" cy="10" r="8" fill="none" stroke="#1E40AF" stroke-width="2" opacity="0.7">
-          <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite"/>
-          <animate attributeName="opacity" values="0.7;0;0.7" dur="2s" repeatCount="indefinite"/>
+        <circle cx="12" cy="10" r="9" fill="none" stroke="#1E40AF" stroke-width="2.5" opacity="0.8">
+          <animate attributeName="r" values="9;14;9" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite"/>
         </circle>
         
         <!-- Shadow -->
-        <ellipse cx="12" cy="22" rx="6" ry="2" fill="rgba(0,0,0,0.4)"/>
+        <ellipse cx="12" cy="23" rx="7" ry="2.5" fill="rgba(0,0,0,0.5)"/>
         
         <!-- White outline for contrast -->
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" 
@@ -25,18 +25,18 @@ const createCustomIcon = () => {
         
         <!-- Main marker -->
         <path d="M20 10c0 6.5-8 12-8 12s-8-5.5-8-12a8 8 0 0 1 16 0z" 
-              fill="#1E40AF" stroke="white" stroke-width="3"/>
+              fill="#1E40AF" stroke="white" stroke-width="4"/>
         
         <!-- Inner circle -->
-        <circle cx="12" cy="10" r="3.5" fill="white" stroke="#1E40AF" stroke-width="2"/>
+        <circle cx="12" cy="10" r="4" fill="white" stroke="#1E40AF" stroke-width="2.5"/>
         
         <!-- Center dot -->
-        <circle cx="12" cy="10" r="2" fill="#1E40AF"/>
+        <circle cx="12" cy="10" r="2.5" fill="#1E40AF"/>
       </svg>
     `),
-    iconSize: [48, 48],
-    iconAnchor: [24, 48],
-    popupAnchor: [0, -48],
+    iconSize: [56, 56],
+    iconAnchor: [28, 56],
+    popupAnchor: [0, -56],
   });
 };
 

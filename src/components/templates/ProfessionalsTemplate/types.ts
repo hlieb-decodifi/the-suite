@@ -12,6 +12,17 @@ export type ProfessionalListItem = {
   serviceCount: number;
   isSubscribed: boolean;
   joinedDate: string;
+  hide_full_address: boolean;
+  address: {
+    id: string;
+    country: string;
+    state: string;
+    city: string;
+    street_address: string;
+    apartment: string;
+    latitude: number;
+    longitude: number;
+  } | null;
 };
 
 // Pagination type

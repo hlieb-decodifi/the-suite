@@ -30,6 +30,7 @@ type AddressAutocompleteInputProps = {
   countries?: string[];
   language?: string;
   region?: string;
+  showIcon?: boolean;
 };
 
 export function AddressAutocompleteInput({
@@ -47,6 +48,7 @@ export function AddressAutocompleteInput({
   countries,
   language = 'en',
   region,
+  showIcon = true,
 }: AddressAutocompleteInputProps) {
   const [input, setInput] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -271,6 +273,7 @@ export function AddressAutocompleteInput({
           disabled={disabled}
           className={cn(
             'pr-20', // Space for icons
+            !showIcon && 'pr-10',
             hasError && 'border-red-500',
             inputClassName,
           )}
@@ -294,7 +297,7 @@ export function AddressAutocompleteInput({
               <X className="h-4 w-4" />
             </Button>
           )}
-          <MapPin className="h-4 w-4 text-muted-foreground" />
+          {showIcon && <MapPin className="h-4 w-4 text-muted-foreground" />}
         </div>
       </div>
 

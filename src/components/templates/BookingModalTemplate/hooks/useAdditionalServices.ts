@@ -94,6 +94,8 @@ async function fetchAdditionalServices(
           rating: 0,
           reviewCount: 0,
           profile_id: professionalProfile?.id,
+          hide_full_address: false,
+          address_data: null,
         }
       };
     });

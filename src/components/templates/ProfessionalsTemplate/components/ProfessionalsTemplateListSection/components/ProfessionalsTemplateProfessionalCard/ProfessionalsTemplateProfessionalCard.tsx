@@ -28,6 +28,8 @@ export function ProfessionalsTemplateProfessionalCard({
     isSubscribed,
     joinedDate,
     user_id: userId,
+    hide_full_address,
+    address,
   } = professional;
 
   // Format join date
@@ -43,6 +45,17 @@ export function ProfessionalsTemplateProfessionalCard({
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  // Format address for display based on privacy settings
+  const displayLocation = address
+    ? hide_full_address
+      ? `${address.city}, ${address.state}, ${address.country}`
+          .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+          .trim()
+      : `${address.street_address}${address.apartment ? `, ${address.apartment}` : ''}, ${address.city}, ${address.state}, ${address.country}`
+          .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+          .trim()
+    : location; // Fallback to legacy location field if no address
 
   return (
     <Card className="flex flex-col justify-between group relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 border-border">
@@ -83,11 +96,11 @@ export function ProfessionalsTemplateProfessionalCard({
               </Typography>
             )}
 
-            {location && (
-              <div className="flex items-center text-muted-foreground">
-                <MapPin className="h-3 w-3 mr-1" />
-                <Typography variant="small" className="text-sm truncate">
-                  {location}
+            {displayLocation && (
+              <div className="flex items-start gap-1 text-muted-foreground mb-2">
+                <MapPin className="size-3 mt-1 flex-shrink-0" />
+                <Typography variant="small" className="text-sm leading-relaxed">
+                  {displayLocation}
                 </Typography>
               </div>
             )}

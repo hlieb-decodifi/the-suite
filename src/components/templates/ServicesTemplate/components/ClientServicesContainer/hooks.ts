@@ -76,13 +76,14 @@ export function useServicesState(
   initialServices: ServiceListItem[],
   initialPagination: PaginationInfo,
   initialSearchTerm: string,
+  initialLocation: string = '',
 ) {
   const [services, setServices] = useState<ServiceListItem[]>(initialServices);
   const [pagination, setPagination] = useState<PaginationInfo>(initialPagination);
   const [isLoading] = useState(false);
   const [filters, setFilters] = useState<ServicesFilters>({
     searchTerm: initialSearchTerm,
-    location: '',
+    location: initialLocation,
   });
 
   // Get filtered services
@@ -133,10 +134,15 @@ export function useURLSync(
       ? parseInt(searchParams.get('page') as string, 10)
       : 1;
     const searchParam = searchParams.get('search') || '';
+    const locationParam = searchParams.get('location') || '';
 
-    // Update filters if search param changes
-    if (searchParam !== filters.searchTerm) {
-      setFilters({ ...filters, searchTerm: searchParam });
+    // Update filters if search param or location param changes
+    if (searchParam !== filters.searchTerm || locationParam !== filters.location) {
+      setFilters({ 
+        ...filters, 
+        searchTerm: searchParam,
+        location: locationParam 
+      });
     }
 
     // Update pagination if page changes

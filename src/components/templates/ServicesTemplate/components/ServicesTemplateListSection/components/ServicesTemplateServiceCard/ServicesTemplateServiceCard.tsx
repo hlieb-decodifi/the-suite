@@ -155,11 +155,11 @@ export function ServicesTemplateServiceCard({
                     </Link>
 
                     <div className="flex flex-col gap-1 mt-0.5">
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <MapPin className="h-3 w-3 flex-shrink-0" />
+                      <div className="flex items-start gap-1 text-muted-foreground">
+                        <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
                         <Typography
                           variant="small"
-                          className="text-xs truncate max-w-[180px]"
+                          className="text-xs leading-relaxed"
                         >
                           {professional.address}
                         </Typography>
@@ -230,9 +230,12 @@ export function ServicesTemplateServiceCard({
                   </Link>
 
                   <div className="flex flex-col gap-1 mt-0.5">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <MapPin className="h-3 w-3 flex-shrink-0" />
-                      <Typography variant="small" className="text-xs truncate">
+                    <div className="flex items-start gap-1 text-muted-foreground">
+                      <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                      <Typography
+                        variant="small"
+                        className="text-xs leading-relaxed"
+                      >
                         {professional.address}
                       </Typography>
                     </div>

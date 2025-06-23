@@ -5,26 +5,64 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Typography } from '@/components/ui/typography';
 import { useSearch } from '@/stores/searchStore';
-import { MapPin, Search } from 'lucide-react';
-import { useState } from 'react';
+import { Search, MapPin } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { ServicesFilters } from '../../types';
 import { ServicesTemplateFiltersSectionProps } from './types';
+import { AddressAutocompleteInput } from '@/components/forms/AddressAutocompleteInput';
+import type { AddressData, Place } from '@/api/places/types';
 
 // Custom hook to manage filter state and sync with global search
-function useFilterState(
-  initialFilters: ServicesFilters,
-  handleServerSearch: (searchTerm: string, page?: number) => Promise<void>,
-) {
-  const params = new URLSearchParams();
-
+function useFilterState(initialFilters: ServicesFilters) {
   // Get global search state from store
-  const { searchTerm, resetSearch, handleSearch } = useSearch();
+  const { resetSearch } = useSearch();
 
-  // Initialize local filters with global search term
+  // Initialize local filters with both search term and location from initial filters
   const [localFilters, setLocalFilters] = useState({
-    ...initialFilters,
-    searchTerm: searchTerm || initialFilters.searchTerm,
+    searchTerm: initialFilters.searchTerm,
+    location: initialFilters.location,
   });
+
+  // Store selected address data separately for autocomplete
+  // Initialize with a mock address object if we have location from URL
+  const [selectedAddress, setSelectedAddress] = useState<AddressData | null>(
+    initialFilters.location
+      ? {
+          google_place_id: '',
+          formatted_address: initialFilters.location,
+          country: '',
+          latitude: 0,
+          longitude: 0,
+          place_types: [],
+          google_data_raw: {} as Place,
+          city: '',
+          state: '',
+          street_address: '',
+        }
+      : null,
+  );
+
+  // Sync selectedAddress when URL location changes
+  useEffect(() => {
+    if (initialFilters.location && !selectedAddress) {
+      // If there's a location from URL but no selectedAddress, create one
+      setSelectedAddress({
+        google_place_id: '',
+        formatted_address: initialFilters.location,
+        country: '',
+        latitude: 0,
+        longitude: 0,
+        place_types: [],
+        google_data_raw: {} as Place,
+        city: '',
+        state: '',
+        street_address: '',
+      });
+    } else if (!initialFilters.location && selectedAddress) {
+      // If no location in URL but we have selectedAddress, clear it
+      setSelectedAddress(null);
+    }
+  }, [initialFilters.location, selectedAddress]);
 
   const hasActiveFilters =
     localFilters.location !== '' || localFilters.searchTerm !== '';
@@ -36,37 +74,65 @@ function useFilterState(
       searchTerm: e.target.value,
     }));
 
-  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setLocalFilters((prev: ServicesFilters) => ({
-      ...prev,
-      location: e.target.value,
-    }));
+  const handleAddressChange = (address: AddressData | null) => {
+    setSelectedAddress(address);
+    // Extract a location string for filtering - use formatted_address for broader matching
+    if (address) {
+      // Use the formatted address for the most comprehensive search
+      // This will include all address components that Google recognizes
+      setLocalFilters((prev: ServicesFilters) => ({
+        ...prev,
+        location: address.formatted_address,
+      }));
+    } else {
+      setLocalFilters((prev: ServicesFilters) => ({
+        ...prev,
+        location: '',
+      }));
+    }
+  };
 
   const handleApplyFilters = () => {
-    // Use the store's search handler
-    handleSearch(localFilters.searchTerm);
+    // Build URL with both search and location parameters
+    const params = new URLSearchParams();
+
+    if (localFilters.searchTerm.trim()) {
+      params.set('search', localFilters.searchTerm.trim());
+    }
+
+    if (localFilters.location.trim()) {
+      params.set('location', localFilters.location.trim());
+    }
+
+    // Reset to first page when applying filters
+    params.delete('page');
+
+    // Navigate to the new URL which will trigger server-side filtering
+    window.location.href = `/services?${params.toString()}`;
   };
 
   const handleClearFilters = () => {
     setLocalFilters({ searchTerm: '', location: '' });
+    setSelectedAddress(null);
     resetSearch();
-    window.location.href = `/services?${params.toString()}`;
-    handleServerSearch('', 1);
+    // Navigate to services page without any parameters
+    window.location.href = '/services';
   };
 
   // Handle search on Enter key
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSearch(localFilters.searchTerm);
+      handleApplyFilters();
     }
   };
 
   return {
     localFilters,
+    selectedAddress,
     hasActiveFilters,
     handleSearchChange,
-    handleLocationChange,
+    handleAddressChange,
     handleApplyFilters,
     handleClearFilters,
     handleSearchKeyDown,
@@ -132,13 +198,41 @@ function SearchInput({
   );
 }
 
+// Custom LocationAutocompleteInput component that fixes the UI issues
+function LocationAutocompleteInput({
+  value,
+  onChange,
+  placeholder = 'Enter city, state, or address...',
+}: {
+  value: AddressData | null;
+  onChange: (address: AddressData | null) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="relative">
+      <AddressAutocompleteInput
+        showIcon={false}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        className="w-full [&_.bg-green-50]:!hidden [&_.border-green-200]:!hidden [&_.text-green-800]:!hidden [&_.bg-green-100]:!hidden [&_.text-green-700]:!hidden" // Hide all green styling variants
+        inputClassName="pl-10" // Space for our custom icon
+      />
+      {/* Custom MapPin icon positioned at the start */}
+      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+      </div>
+    </div>
+  );
+}
+
 // Extract location input to separate component
 function LocationInput({
   value,
   onChange,
 }: {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  value: AddressData | null;
+  onChange: (address: AddressData | null) => void;
 }) {
   return (
     <div>
@@ -148,16 +242,7 @@ function LocationInput({
       >
         Location
       </Typography>
-      <div className="relative">
-        <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Enter location..."
-          disabled
-          value={value}
-          onChange={onChange}
-          className="pl-9"
-        />
-      </div>
+      <LocationAutocompleteInput value={value} onChange={onChange} />
     </div>
   );
 }
@@ -179,18 +264,18 @@ function FilterActions({
 
 export function ServicesTemplateFiltersSection({
   filters,
-  handleServerSearch,
 }: ServicesTemplateFiltersSectionProps) {
   // Use the custom hook for filter state management
   const {
     localFilters,
+    selectedAddress,
     hasActiveFilters,
     handleSearchChange,
-    handleLocationChange,
+    handleAddressChange,
     handleApplyFilters,
     handleClearFilters,
     handleSearchKeyDown,
-  } = useFilterState(filters, handleServerSearch);
+  } = useFilterState(filters);
 
   return (
     <Card className="bg-white shadow-sm">
@@ -208,8 +293,8 @@ export function ServicesTemplateFiltersSection({
           />
 
           <LocationInput
-            value={localFilters.location}
-            onChange={handleLocationChange}
+            value={selectedAddress}
+            onChange={handleAddressChange}
           />
 
           <FilterActions

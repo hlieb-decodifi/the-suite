@@ -43,6 +43,17 @@ async function mapProfessionalData(professional: unknown): Promise<ProfessionalL
     location: string | null;
     is_subscribed: boolean;
     created_at: string;
+    hide_full_address: boolean;
+    address: {
+      id: string;
+      country: string;
+      state: string;
+      city: string;
+      street_address: string;
+      apartment: string;
+      latitude: string;
+      longitude: string;
+    } | null;
     user: {
       id: string;
       first_name: string;
@@ -92,6 +103,12 @@ async function mapProfessionalData(professional: unknown): Promise<ProfessionalL
     serviceCount,
     isSubscribed: professionalData.is_subscribed,
     joinedDate: professionalData.created_at,
+    hide_full_address: professionalData.hide_full_address,
+    address: professionalData.address ? {
+      ...professionalData.address,
+      latitude: parseFloat(professionalData.address.latitude),
+      longitude: parseFloat(professionalData.address.longitude),
+    } : null,
   };
 }
 
@@ -142,6 +159,17 @@ export async function getProfessionals(
           location,
           is_subscribed,
           created_at,
+          hide_full_address,
+          address:address_id(
+            id,
+            country,
+            state,
+            city,
+            street_address,
+            apartment,
+            latitude,
+            longitude
+          ),
           user:user_id(
             id,
             first_name,
@@ -229,6 +257,17 @@ export async function getProfessionals(
           location,
           is_subscribed,
           created_at,
+          hide_full_address,
+          address:address_id(
+            id,
+            country,
+            state,
+            city,
+            street_address,
+            apartment,
+            latitude,
+            longitude
+          ),
           user:user_id(
             id,
             first_name,
