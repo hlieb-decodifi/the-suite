@@ -157,14 +157,14 @@ export function BookingPageClient({
 
       {/* Professional Info */}
       <div className="mb-8">
-        <Card
-          className="cursor-pointer hover:bg-muted/50 transition-colors"
-          onClick={() =>
-            router.push(`/professionals/${service.professional.id}`)
-          }
-        >
+        <Card className="cursor-pointer hover:bg-muted/50 transition-colors">
           <CardContent className="p-6">
-            <div className="flex items-center gap-4 mb-4">
+            <div
+              onClick={() =>
+                router.push(`/professionals/${service.professional.id}`)
+              }
+              className="flex items-center gap-4 mb-4"
+            >
               <Avatar className="h-16 w-16 border-2 border-primary/10">
                 <AvatarImage
                   src={service.professional.avatar}

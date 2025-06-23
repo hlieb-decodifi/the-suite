@@ -112,17 +112,10 @@ export function DashboardPageClient({
         appointment.services?.totalWithServiceFee ||
         (appointment.services?.totalPrice || appointment.services?.price || 0) +
           1.0;
-      console.log(
-        `Appointment ${appointment.id}: service price = ${price}`,
-        appointment.services,
-      );
       return total + price;
     },
     0,
   );
-
-  console.log('Upcoming appointments:', upcomingAppointments);
-  console.log('Calculated total:', upcomingAppointmentsTotal);
 
   // Count unread messages from recent conversations
   const unreadCount = conversations.reduce((total, conversation) => {

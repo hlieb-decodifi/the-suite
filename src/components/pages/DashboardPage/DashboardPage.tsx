@@ -21,7 +21,15 @@ type AppointmentWithServices = {
   } | null;
 };
 
-export async function DashboardPage() {
+export type DashboardPageProps = {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+};
+
+export async function DashboardPage({
+  startDate,
+  endDate,
+}: DashboardPageProps) {
   const supabase = await createClient();
 
   // Get the current user
@@ -38,36 +46,48 @@ export async function DashboardPage() {
     user_uuid: user.id,
   });
 
-  // Get upcoming appointments for the dashboard
-  // Use start of today instead of current time to include appointments scheduled for today
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Set to start of day
-  const startOfToday = today.toISOString();
+  // Determine date range for filtering
+  // If no date range is provided, use start of today for upcoming appointments
+  let filterStartDate = startDate;
+  const filterEndDate = endDate;
 
-  // Get all appointments and filter by status on the client side to include multiple statuses
+  if (!startDate && !endDate) {
+    // Default behavior: show upcoming appointments from start of today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    filterStartDate = today.toISOString();
+  }
+
+  // Get appointments with date filtering
   const allAppointments = await getDashboardAppointments(
     user.id,
     !!isProfessional,
-    startOfToday, // Use start of today instead of current time
-    undefined,
+    filterStartDate,
+    filterEndDate,
     undefined, // Don't filter by status here
   );
 
   // Filter for upcoming appointments (confirmed, pending, upcoming statuses)
-  const upcomingAppointments = allAppointments.filter((appointment) =>
-    ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
-  );
+  // Only apply status filtering if no date range is specified (default behavior)
+  const appointmentsForDashboard =
+    !startDate && !endDate
+      ? allAppointments.filter((appointment) =>
+          ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
+        )
+      : allAppointments;
 
   console.log('All appointments:', allAppointments);
-  console.log('Filtered upcoming appointments:', upcomingAppointments);
+  console.log('Filtered appointments for dashboard:', appointmentsForDashboard);
 
-  // Pass all upcoming appointments to the dashboard
-  const appointmentsForDashboard = upcomingAppointments;
+  // Get stats for the dashboard (always use all appointments for stats)
+  const stats = await getDashboardStats(
+    user.id,
+    !!isProfessional,
+    startDate,
+    endDate,
+  );
 
-  // Get stats for the dashboard
-  const stats = await getDashboardStats(user.id, !!isProfessional);
-
-  // Get recent conversations for the dashboard
+  // Get recent conversations for the dashboard (messages should not be filtered by date)
   const recentConversationsResult = await getRecentConversations();
   const recentConversations = recentConversationsResult.success
     ? recentConversationsResult.conversations || []
@@ -87,14 +107,16 @@ export async function DashboardPage() {
 export async function getDashboardStats(
   userId: string,
   isProfessional: boolean,
+  startDate?: string,
+  endDate?: string,
 ) {
   try {
-    // Get all appointments for the user based on role
+    // Get all appointments for the user based on role and date range
     const allAppointments = (await getDashboardAppointments(
       userId,
       isProfessional,
-      undefined,
-      undefined,
+      startDate,
+      endDate,
       undefined,
     )) as unknown as AppointmentWithServices[];
 
