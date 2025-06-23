@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { BalancePaymentContent } from './BalancePaymentContent';
 import { Loader } from '@/components/common/Loader';
+import { Typography } from '@/components/ui/typography';
+import { ArrowLeftIcon } from 'lucide-react';
+import Link from 'next/link';
 
 type BalancePaymentPageProps = {
   params: Promise<{
@@ -48,9 +51,14 @@ export default async function BalancePaymentPage({
         deposit_amount,
         balance_amount,
         tip_amount,
+        service_fee,
         status,
         requires_balance_payment,
-        balance_notification_sent_at
+        balance_notification_sent_at,
+        payment_methods(
+          name,
+          is_online
+        )
       ),
       professional_profiles!inner(
         id,
@@ -66,7 +74,8 @@ export default async function BalancePaymentPage({
         price,
         duration,
         services(
-          name
+          name,
+          description
         )
       )
     `,
@@ -79,9 +88,15 @@ export default async function BalancePaymentPage({
     redirect('/dashboard');
   }
 
-  // Check if this booking actually needs a balance payment
+  // Check if this booking needs balance payment or is a completed cash payment
   const payment = booking.booking_payments;
-  if (!payment?.requires_balance_payment || payment.status === 'completed') {
+  const isCashPayment =
+    payment?.status === 'completed' && !payment.requires_balance_payment;
+  const needsBalancePayment =
+    payment?.requires_balance_payment && payment.status !== 'completed';
+
+  // Allow access for: 1) Balance payments needed, 2) Cash payments for tips/reviews
+  if (!needsBalancePayment && !isCashPayment) {
     redirect('/bookings/' + id);
   }
 
@@ -89,28 +104,55 @@ export default async function BalancePaymentPage({
   const professional = booking.professional_profiles;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white p-6">
-              <h1 className="text-2xl font-bold">Complete Your Payment</h1>
-              <p className="text-purple-100 mt-2">
-                Finish paying for your appointment with{' '}
-                {professional.profession ||
-                  `${professional.users.first_name} ${professional.users.last_name}`}
-              </p>
+    <div className="w-full">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-6">
+          <Link
+            href="/dashboard/appointments"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+            <Typography>Back to Appointments</Typography>
+          </Link>
+        </div>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="flex flex-col gap-2">
+              <Typography
+                variant="h1"
+                className="font-futura text-4xl md:text-5xl font-bold text-foreground"
+              >
+                {isCashPayment
+                  ? 'Share Your Experience'
+                  : 'Complete Your Payment'}
+              </Typography>
+              <Typography className="text-muted-foreground text-lg">
+                {isCashPayment
+                  ? `Leave a review and add a tip for your appointment with ${
+                      professional.profession ||
+                      `${professional.users.first_name} ${professional.users.last_name}`
+                    }`
+                  : `Finish paying for your appointment with ${
+                      professional.profession ||
+                      `${professional.users.first_name} ${professional.users.last_name}`
+                    }`}
+              </Typography>
             </div>
-
-            <Suspense fallback={<Loader />}>
-              <BalancePaymentContent
-                booking={booking}
-                appointment={appointment}
-                professional={professional}
-                payment={payment}
-              />
-            </Suspense>
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-3">
+          <Suspense fallback={<Loader />}>
+            <BalancePaymentContent
+              booking={booking}
+              appointment={appointment}
+              professional={professional}
+              payment={payment}
+            />
+          </Suspense>
         </div>
       </div>
     </div>

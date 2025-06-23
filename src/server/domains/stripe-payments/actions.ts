@@ -48,13 +48,15 @@ export async function createBookingWithStripePayment(
 
     // If payment method is cash, handle service fee collection
     if (paymentMethod && !paymentMethod.is_online) {
-      return await handleCashPaymentFlow(
-        bookingResult.bookingId,
-        user.id,
-        user.email || '',
-        formData,
-        bookingResult.totalPrice
-      );
+      // For cash payments, the booking payment record is already correctly created
+      // by the original createBooking function with status='completed' and requires_balance_payment=false
+      // We just need to handle service fee collection separately
+      return {
+        success: true,
+        bookingId: bookingResult.bookingId,
+        requiresPayment: false, // No additional payment processing needed
+        paymentType: 'full'
+      };
     }
 
     // For Credit Card payments, handle enhanced Stripe flow
@@ -82,69 +84,6 @@ export async function createBookingWithStripePayment(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to process booking',
-      requiresPayment: false,
-      paymentType: 'full'
-    };
-  }
-}
-
-/**
- * Handle cash payment flow - collect service fee only
- */
-async function handleCashPaymentFlow(
-  bookingId: string,
-  clientId: string,
-  clientEmail: string,
-  formData: BookingFormValues,
-  totalPrice: number
-): Promise<PaymentProcessingResult> {
-  try {
-    const { createEnhancedCheckoutSession } = await import('./stripe-operations');
-    
-    // Create checkout session for service fee only
-    const checkoutParams = {
-      bookingId,
-      clientId,
-      professionalStripeAccountId: 'acct_platform', // Use platform account for service fees
-      amount: 0, // No main payment amount
-      paymentType: 'full' as const,
-      requiresBalancePayment: false,
-      customerEmail: clientEmail,
-      isServiceFeeOnly: true,
-      metadata: {
-        booking_id: bookingId,
-        payment_method: 'cash',
-        total_amount: (totalPrice * 100).toString(),
-        service_fee_only: 'true',
-        tip_amount: ((formData.tipAmount || 0) * 100).toString()
-      }
-    };
-
-    const checkoutResult = await createEnhancedCheckoutSession(checkoutParams);
-
-    if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
-      console.error('Failed to create service fee checkout session:', checkoutResult.error);
-      return {
-        success: true, // Still successful booking, just no service fee collection
-        bookingId,
-        requiresPayment: false,
-        paymentType: 'full'
-      };
-    }
-
-    return {
-      success: true,
-      bookingId,
-      checkoutUrl: checkoutResult.checkoutUrl,
-      requiresPayment: true,
-      paymentType: 'full'
-    };
-
-  } catch (error) {
-    console.error('Error handling cash payment flow:', error);
-    return {
-      success: true, // Still return successful booking
-      bookingId,
       requiresPayment: false,
       paymentType: 'full'
     };

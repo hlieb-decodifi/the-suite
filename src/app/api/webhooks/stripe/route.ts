@@ -1241,6 +1241,21 @@ async function handlePaymentCaptureByPaymentIntentId(paymentIntentId: string) {
     }
     
     console.log(`✅ Successfully updated payment status for booking ${payment.booking_id} - manually captured via Stripe dashboard`);
+    
+    // Send payment confirmation emails
+    try {
+      const { sendPaymentConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+      const emailResult = await sendPaymentConfirmationEmails(payment.booking_id);
+      
+      if (emailResult.success) {
+        console.log(`✅ Payment confirmation emails sent for booking: ${payment.booking_id}`);
+      } else {
+        console.error(`❌ Failed to send payment confirmation emails for booking ${payment.booking_id}: ${emailResult.error}`);
+      }
+    } catch (emailError) {
+      console.error(`💥 Exception sending payment confirmation emails for booking ${payment.booking_id}:`, emailError);
+      // Don't fail the webhook for email errors
+    }
   } catch (error) {
     console.error(`Error handling manual capture for payment intent ${paymentIntentId}:`, error);
   }

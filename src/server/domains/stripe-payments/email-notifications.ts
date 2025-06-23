@@ -2,6 +2,11 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
 import { createBookingConfirmationProfessionalEmail, createBookingConfirmationClientEmail } from '@/lib/email/templates';
 import { sendEmail } from '@/lib/email';
+import { 
+  createPaymentConfirmationClientEmail,
+  createPaymentConfirmationProfessionalEmail
+} from '@/lib/email/templates';
+import { getBookingDetailsForConfirmation } from './db';
 
 // Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
@@ -266,6 +271,102 @@ export async function sendBookingConfirmationEmails(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+/**
+ * Send payment confirmation emails after payment capture
+ */
+export async function sendPaymentConfirmationEmails(
+  bookingId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[EMAIL] Starting payment confirmation emails for booking: ${bookingId}`);
+
+    // Get booking details for confirmation emails
+    const bookingDetailsResult = await getBookingDetailsForConfirmation(bookingId);
+    
+    if (!bookingDetailsResult.success || !bookingDetailsResult.booking) {
+      console.error(`[EMAIL] Failed to get booking details: ${bookingDetailsResult.error}`);
+      return { 
+        success: false, 
+        error: bookingDetailsResult.error || 'Failed to get booking details' 
+      };
+    }
+
+    const booking = bookingDetailsResult.booking;
+
+    // Create client payment confirmation email
+    const clientEmail = createPaymentConfirmationClientEmail(
+      booking.clientEmail,
+      booking.clientName,
+      {
+        bookingId,
+        professionalName: booking.professionalName,
+        appointmentDate: booking.appointmentDate,
+        appointmentTime: booking.appointmentTime,
+        serviceName: booking.serviceName,
+        totalAmount: booking.totalAmount,
+        tipAmount: booking.tipAmount,
+        capturedAmount: booking.capturedAmount
+      }
+    );
+
+    // Create professional payment notification email
+    const professionalEmail = createPaymentConfirmationProfessionalEmail(
+      booking.professionalEmail,
+      booking.professionalName,
+      {
+        bookingId,
+        clientName: booking.clientName,
+        appointmentDate: booking.appointmentDate,
+        appointmentTime: booking.appointmentTime,
+        serviceName: booking.serviceName,
+        totalAmount: booking.totalAmount,
+        tipAmount: booking.tipAmount,
+        capturedAmount: booking.capturedAmount
+      }
+    );
+
+    // Send emails using the existing sendEmail function
+    const [clientEmailResult, professionalEmailResult] = await Promise.allSettled([
+      sendEmail(clientEmail),
+      sendEmail(professionalEmail)
+    ]);
+
+    // Check results
+    const errors: string[] = [];
+    
+    if (clientEmailResult.status === 'rejected') {
+      console.error(`[EMAIL] Failed to send client payment confirmation:`, clientEmailResult.reason);
+      errors.push(`Client email failed: ${clientEmailResult.reason}`);
+    } else {
+      console.log(`[EMAIL] ✅ Client payment confirmation sent to: ${booking.clientEmail}`);
+    }
+
+    if (professionalEmailResult.status === 'rejected') {
+      console.error(`[EMAIL] Failed to send professional payment notification:`, professionalEmailResult.reason);
+      errors.push(`Professional email failed: ${professionalEmailResult.reason}`);
+    } else {
+      console.log(`[EMAIL] ✅ Professional payment notification sent to: ${booking.professionalEmail}`);
+    }
+
+    if (errors.length > 0) {
+      return { 
+        success: false, 
+        error: `Some emails failed: ${errors.join(', ')}` 
+      };
+    }
+
+    console.log(`[EMAIL] ✅ All payment confirmation emails sent successfully for booking: ${bookingId}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error(`[EMAIL] Error sending payment confirmation emails for booking ${bookingId}:`, error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     };
   }
 } 

@@ -54,31 +54,55 @@ export async function GET() {
         const currentTip = appointment.tip_amount || 0;
         const totalDue = balanceAmount + currentTip;
 
-        // Create the email using the template
-        const email = createBalanceNotificationEmail(
-          appointment.client_email,
-          appointment.client_name,
-          {
-            bookingId: appointment.booking_id,
-            professionalName: appointment.professional_name,
-            appointmentDate,
-            appointmentTime,
-            totalAmount,
-            ...(depositPaid && { depositPaid }),
-            balanceAmount,
-            ...(currentTip > 0 && { currentTip }),
-            totalDue
-          }
-        );
+        if (appointment.is_cash_payment) {
+          // For cash payments: send review + tip notification (no balance due)
+          const { createReviewTipNotificationEmail } = await import('@/lib/email/templates');
+          const email = createReviewTipNotificationEmail(
+            appointment.client_email,
+            appointment.client_name,
+            {
+              bookingId: appointment.booking_id,
+              professionalName: appointment.professional_name,
+              appointmentDate,
+              appointmentTime,
+              paymentMethod: appointment.payment_method_name,
+              totalAmount,
+              serviceFee: appointment.service_fee
+            }
+          );
 
-        // Send the email using Brevo
-        await sendEmail(email);
+          // Send the email using Brevo
+          await sendEmail(email);
+          
+          console.log(`[CRON] Successfully sent review/tip notification for cash payment booking: ${appointment.booking_id}`);
+        } else {
+          // For card payments: send balance notification
+          const email = createBalanceNotificationEmail(
+            appointment.client_email,
+            appointment.client_name,
+            {
+              bookingId: appointment.booking_id,
+              professionalName: appointment.professional_name,
+              appointmentDate,
+              appointmentTime,
+              totalAmount,
+              ...(depositPaid && { depositPaid }),
+              balanceAmount,
+              ...(currentTip > 0 && { currentTip }),
+              totalDue
+            }
+          );
+
+          // Send the email using Brevo
+          await sendEmail(email);
+          
+          console.log(`[CRON] Successfully sent balance notification for card payment booking: ${appointment.booking_id}`);
+        }
 
         // Mark notification as sent in database
         await markBalanceNotificationSent(appointment.booking_id);
 
         processedCount++;
-        console.log(`[CRON] Successfully sent balance notification for booking: ${appointment.booking_id}`);
 
       } catch (error) {
         errorCount++;

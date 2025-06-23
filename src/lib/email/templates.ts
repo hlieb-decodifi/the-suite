@@ -321,4 +321,136 @@ export function createBookingConfirmationClientEmail(
     htmlContent,
     textContent
   };
+}
+
+export function createPaymentConfirmationClientEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    bookingId: string;
+    professionalName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    serviceName: string;
+    totalAmount: number;
+    tipAmount: number;
+    capturedAmount: number;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    clientName,
+    professionalName: data.professionalName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    serviceName: data.serviceName,
+    totalAmount: data.totalAmount.toFixed(2),
+    tipAmount: data.tipAmount.toFixed(2),
+    capturedAmount: data.capturedAmount.toFixed(2),
+    bookingId: data.bookingId,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('payment-confirmation-client', 'hbs');
+  const textTemplate = loadTemplate('payment-confirmation-client', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: `Payment confirmed - ${data.professionalName}`,
+    htmlContent,
+    textContent
+  };
+}
+
+export function createPaymentConfirmationProfessionalEmail(
+  professionalEmail: string,
+  professionalName: string,
+  data: {
+    bookingId: string;
+    clientName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    serviceName: string;
+    totalAmount: number;
+    tipAmount: number;
+    capturedAmount: number;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    professionalName,
+    clientName: data.clientName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    serviceName: data.serviceName,
+    totalAmount: data.totalAmount.toFixed(2),
+    tipAmount: data.tipAmount.toFixed(2),
+    capturedAmount: data.capturedAmount.toFixed(2),
+    bookingId: data.bookingId,
+    dashboardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('payment-confirmation-professional', 'hbs');
+  const textTemplate = loadTemplate('payment-confirmation-professional', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: professionalEmail, name: professionalName }],
+    subject: `Payment received from ${data.clientName} - ${data.appointmentDate}`,
+    htmlContent,
+    textContent
+  };
+}
+
+export function createReviewTipNotificationEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    bookingId: string;
+    professionalName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    paymentMethod: string;
+    totalAmount: number;
+    serviceFee: number;
+  }
+): EmailTemplate {
+  const serviceAmount = data.totalAmount - data.serviceFee;
+  
+  const templateData: TemplateData = {
+    clientName,
+    professionalName: data.professionalName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    paymentMethod: data.paymentMethod,
+    totalAmount: data.totalAmount.toFixed(2),
+    serviceAmount: serviceAmount.toFixed(2),
+    serviceFee: data.serviceFee.toFixed(2),
+    bookingId: data.bookingId,
+    reviewTipUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.bookingId}/balance`,
+    websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+    supportEmail: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('review-tip-notification', 'hbs');
+  const textTemplate = loadTemplate('review-tip-notification', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: `Share your experience with ${data.professionalName} - The Suite`,
+    htmlContent,
+    textContent
+  };
 } 

@@ -788,7 +788,7 @@ export async function markPaymentCaptured(
 }
 
 /**
- * Get appointments needing balance notifications
+ * Get appointments needing balance notifications (includes both card and cash payments)
  */
 export async function getAppointmentsNeedingBalanceNotification(limit: number = 50): Promise<{
   booking_id: string;
@@ -798,81 +798,159 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   appointment_date: string;
   appointment_time: string;
   total_amount: number;
+  service_fee: number;
   deposit_amount: number | undefined;
   balance_amount: number;
   tip_amount: number;
+  payment_method_name: string;
+  is_cash_payment: boolean;
 }[]> {
   const supabase = createSupabaseAdminClient();
   
   try {
-    const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000)).toISOString();
+    // Calculate the timestamp for 2 hours ago
+    const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
     
-    const { data, error } = await supabase
+    // Use a simpler approach: query each table separately and join in code
+    // First get completed appointments
+    const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
-      .select(`
-        booking_id,
-        date,
-        end_time,
-        bookings!inner(
-          client_id,
-          professional_profile_id,
-          users!bookings_client_id_fkey(email, first_name, last_name),
-          professional_profiles!inner(
-            users!professional_profiles_user_id_fkey(first_name, last_name)
-          )
-        ),
-        booking_payments!inner(
-          amount,
-          deposit_amount,
-          balance_amount,
-          tip_amount,
-          requires_balance_payment,
-          status
-        )
-      `)
+      .select('booking_id, date, end_time')
       .eq('status', 'completed')
-      .lte('end_time', twoHoursAgo.split('T')[1]) // Compare time only
-      .eq('bookings.booking_payments.status', 'authorized')
-      .eq('bookings.booking_payments.requires_balance_payment', true)
-      .is('bookings.booking_payments.balance_notification_sent_at', null)
       .limit(limit);
 
-    if (error) {
-      console.error('Error fetching appointments needing balance notification:', error);
+    if (appointmentsError) {
+      console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
 
-    return (data || []).map(appointment => {
-      const booking = appointment.bookings as unknown as {
-        users: { email: string; first_name: string; last_name: string };
-        professional_profiles: {
-          users: { first_name: string; last_name: string };
-        };
-      };
-      const payments = appointment.booking_payments as unknown as Array<{
-        amount: number;
-        deposit_amount?: number;
-        balance_amount: number;
-        tip_amount?: number;
-      }>;
+    if (!appointments || appointments.length === 0) {
+      return [];
+    }
+
+    // Filter appointments that are >2 hours past end time
+    const eligibleAppointments = appointments.filter(appointment => {
+      const appointmentEndDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
+      return appointmentEndDateTime <= twoHoursAgo;
+    });
+
+    if (eligibleAppointments.length === 0) {
+      return [];
+    }
+
+    const bookingIds = eligibleAppointments.map(a => a.booking_id);
+
+    // Get booking payments with payment methods
+    const { data: payments, error: paymentsError } = await supabase
+      .from('booking_payments')
+      .select(`
+        booking_id,
+        amount,
+        deposit_amount,
+        balance_amount,
+        tip_amount,
+        service_fee,
+        requires_balance_payment,
+        status,
+        balance_notification_sent_at,
+        payment_method_id,
+        payment_methods!inner(name, is_online)
+      `)
+      .in('booking_id', bookingIds)
+      .is('balance_notification_sent_at', null)
+      .in('status', ['authorized', 'completed']);
+
+    if (paymentsError) {
+      console.error('Error fetching payments:', paymentsError);
+      return [];
+    }
+
+    if (!payments || payments.length === 0) {
+      return [];
+    }
+
+    // Filter payments based on conditions
+    const eligiblePayments = payments.filter(payment => {
+      const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
+      const cardCondition = payment.status === 'authorized' && payment.requires_balance_payment;
+      const cashCondition = payment.status === 'completed' && !paymentMethod.is_online;
       
-      if (!payments || payments.length === 0) {
-        throw new Error('No payment found for appointment');
-      }
+      return cardCondition || cashCondition;
+    });
+
+    if (eligiblePayments.length === 0) {
+      return [];
+    }
+
+    // Get booking details
+    const finalBookingIds = eligiblePayments.map(p => p.booking_id);
+    const { data: bookings, error: bookingsError } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        client_id,
+        professional_profile_id
+      `)
+      .in('id', finalBookingIds);
+
+    if (bookingsError || !bookings) {
+      console.error('Error fetching bookings:', bookingsError);
+      return [];
+    }
+
+    // Get user details - client and professional
+    const clientIds = bookings.map(b => b.client_id);
+    const professionalProfileIds = bookings.map(b => b.professional_profile_id);
+
+    const [clientsResult, professionalsResult] = await Promise.all([
+      supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }), // Get auth users for emails
+      supabase
+        .from('professional_profiles')
+        .select('id, user_id')
+        .in('id', professionalProfileIds)
+    ]);
+
+    const authUsers = clientsResult.data?.users || [];
+    const professionalProfiles = professionalsResult.data || [];
+
+    const { data: allUsers, error: usersError } = await supabase
+      .from('users')
+      .select('id, first_name, last_name')
+      .in('id', [...clientIds, ...professionalProfiles.map(p => p.user_id)]);
+
+    if (usersError || !allUsers) {
+      console.error('Error fetching users:', usersError);
+      return [];
+    }
+
+    // Build the final result
+    return eligiblePayments.map(payment => {
+      const appointment = eligibleAppointments.find(a => a.booking_id === payment.booking_id)!;
+      const booking = bookings.find(b => b.id === payment.booking_id)!;
+      const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
       
-      const payment = payments[0];
+      // Find client details
+      const clientUser = allUsers.find(u => u.id === booking.client_id)!;
+      const clientAuth = authUsers.find(u => u.id === booking.client_id);
       
+      // Find professional details
+      const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
+      const professionalUser = allUsers.find(u => u.id === professionalProfile.user_id)!;
+
       return {
-        booking_id: appointment.booking_id,
-        client_email: booking.users.email,
-        client_name: `${booking.users.first_name} ${booking.users.last_name}`,
-        professional_name: `${booking.professional_profiles.users.first_name} ${booking.professional_profiles.users.last_name}`,
+        booking_id: payment.booking_id,
+        client_email: clientAuth?.email || '',
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
         appointment_date: appointment.date,
         appointment_time: appointment.end_time,
-        total_amount: payment!.amount,
-        deposit_amount: payment!.deposit_amount,
-        balance_amount: payment!.balance_amount,
-        tip_amount: payment!.tip_amount || 0
+        total_amount: payment.amount,
+        service_fee: payment.service_fee,
+        deposit_amount: payment.deposit_amount,
+        balance_amount: payment.balance_amount,
+        tip_amount: payment.tip_amount || 0,
+        payment_method_name: paymentMethod.name,
+        is_cash_payment: !paymentMethod.is_online
       };
     });
   } catch (error) {
@@ -906,6 +984,146 @@ export async function markBalanceNotificationSent(
     return { success: true };
   } catch (error) {
     console.error('Error in markBalanceNotificationSent:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Update tip amount for a booking payment
+ */
+export async function updatePaymentTipAmount(
+  bookingId: string,
+  tipAmount: number
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        tip_amount: tipAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating tip amount:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updatePaymentTipAmount:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Get booking details for payment confirmation emails
+ */
+export async function getBookingDetailsForConfirmation(bookingId: string): Promise<{
+  success: boolean;
+  booking?: {
+    id: string;
+    clientEmail: string;
+    clientName: string;
+    professionalEmail: string;
+    professionalName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    serviceName: string;
+    totalAmount: number;
+    tipAmount: number;
+    capturedAmount: number;
+  };
+  error?: string;
+}> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    // Get booking with all related data
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        client_id,
+        professional_profile_id,
+        appointments!inner(
+          date,
+          start_time,
+          end_time
+        ),
+        booking_payments!inner(
+          amount,
+          tip_amount
+        ),
+        booking_services!inner(
+          services(name)
+        ),
+        professional_profiles!inner(
+          user_id
+        )
+      `)
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    // Get user emails using admin client
+    const { data: clientUser, error: clientError } = await supabase.auth.admin.getUserById(booking.client_id);
+    const { data: professionalUser, error: professionalError } = await supabase.auth.admin.getUserById(booking.professional_profiles.user_id);
+
+    if (clientError || !clientUser.user?.email) {
+      return { success: false, error: 'Client email not found' };
+    }
+
+    if (professionalError || !professionalUser.user?.email) {
+      return { success: false, error: 'Professional email not found' };
+    }
+
+    // Get user names
+    const { data: clientData } = await supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', booking.client_id)
+      .single();
+
+    const { data: professionalData } = await supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', booking.professional_profiles.user_id)
+      .single();
+
+    const appointment = Array.isArray(booking.appointments) ? booking.appointments[0] : booking.appointments;
+    const payment = Array.isArray(booking.booking_payments) ? booking.booking_payments[0] : booking.booking_payments;
+    const service = Array.isArray(booking.booking_services) ? booking.booking_services[0] : booking.booking_services;
+
+    return {
+      success: true,
+      booking: {
+        id: booking.id,
+        clientEmail: clientUser.user.email,
+        clientName: clientData ? `${clientData.first_name} ${clientData.last_name}` : 'Client',
+        professionalEmail: professionalUser.user.email,
+        professionalName: professionalData ? `${professionalData.first_name} ${professionalData.last_name}` : 'Professional',
+        appointmentDate: appointment.date,
+        appointmentTime: appointment.start_time,
+        serviceName: service?.services?.name || 'Service',
+        totalAmount: payment.amount,
+        tipAmount: payment.tip_amount || 0,
+        capturedAmount: payment.amount + (payment.tip_amount || 0)
+      }
+    };
+  } catch (error) {
+    console.error('Error in getBookingDetailsForConfirmation:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 

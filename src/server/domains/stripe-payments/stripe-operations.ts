@@ -611,4 +611,35 @@ export async function createEnhancedCheckoutSession(
       error: error instanceof Error ? error.message : 'Unknown error creating checkout session'
     };
   }
+}
+
+export async function createPaymentIntent(options: {
+  amount: number;
+  stripeCustomerId: string;
+  stripeAccountId: string;
+  bookingId: string;
+  capture: boolean;
+}): Promise<Stripe.PaymentIntent | null> {
+  const { amount, stripeCustomerId, stripeAccountId, bookingId, capture } =
+    options;
+  const amountInCents = Math.round(amount * 100);
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      transfer_data: {
+        destination: stripeAccountId,
+      },
+      capture_method: capture ? 'automatic' : 'manual',
+      metadata: {
+        booking_id: bookingId,
+      },
+    });
+    return paymentIntent;
+  } catch (error) {
+    console.error('Error creating PaymentIntent:', error);
+    return null;
+  }
 } 

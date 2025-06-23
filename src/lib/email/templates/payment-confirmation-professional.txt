@@ -1,0 +1,22 @@
+PAYMENT RECEIVED ✅
+
+Hello {{professionalName}}! You've received a payment from your client.
+
+APPOINTMENT DETAILS:
+Client: {{clientName}}
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
+Service: {{serviceName}}
+
+PAYMENT SUMMARY:
+Service Amount: ${{totalAmount}}
+{{#if tipAmount}}Tip: ${{tipAmount}}{{/if}}
+Total Received: ${{capturedAmount}}
+
+Your funds will be transferred to your connected account according to your payout schedule.
+
+If you have any questions, please contact our support team at {{supportEmail}}.
+
+Best regards,
+The Suite Team
+{{websiteUrl}} 
