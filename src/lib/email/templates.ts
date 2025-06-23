@@ -453,4 +453,166 @@ export function createReviewTipNotificationEmail(
     htmlContent,
     textContent
   };
+}
+
+/**
+ * Refund request notification to professional
+ */
+export function createRefundRequestNotificationEmail(
+  professionalEmail: string,
+  professionalName: string,
+  data: {
+    refundId: string;
+    clientName: string;
+    serviceName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    originalAmount: number;
+    reason: string;
+    reviewUrl: string;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    professionalName,
+    clientName: data.clientName,
+    serviceName: data.serviceName,
+    appointmentDate: data.appointmentDate,
+    appointmentTime: data.appointmentTime,
+    originalAmount: data.originalAmount.toFixed(2),
+    reason: data.reason,
+    reviewUrl: data.reviewUrl,
+    websiteUrl: process.env.NEXT_PUBLIC_APP_URL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('refund-request-professional', 'hbs');
+  const textTemplate = loadTemplate('refund-request-professional', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: professionalEmail, name: professionalName }],
+    subject: 'Refund Request - Action Required',
+    htmlContent,
+    textContent
+  };
+}
+
+/**
+ * Refund decline notification to client
+ */
+export function createRefundDeclineNotificationEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    professionalName: string;
+    serviceName: string;
+    originalAmount: number;
+    declinedReason?: string;
+    professionalNotes?: string;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    clientName,
+    professionalName: data.professionalName,
+    serviceName: data.serviceName,
+    originalAmount: data.originalAmount.toFixed(2),
+    declinedReason: data.declinedReason,
+    professionalNotes: data.professionalNotes,
+    contactUrl: `${process.env.NEXT_PUBLIC_APP_URL}/contact`,
+    websiteUrl: process.env.NEXT_PUBLIC_APP_URL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('refund-decline-client', 'hbs');
+  const textTemplate = loadTemplate('refund-decline-client', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: 'Refund Request Update',
+    htmlContent,
+    textContent
+  };
+}
+
+/**
+ * Refund completion notification to client
+ */
+export function createRefundCompletionClientEmail(
+  clientEmail: string,
+  clientName: string,
+  data: {
+    professionalName: string;
+    serviceName: string;
+    originalAmount: number;
+    refundAmount: number;
+    professionalNotes?: string;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    clientName,
+    professionalName: data.professionalName,
+    serviceName: data.serviceName,
+    originalAmount: data.originalAmount.toFixed(2),
+    refundAmount: data.refundAmount.toFixed(2),
+    professionalNotes: data.professionalNotes,
+    websiteUrl: process.env.NEXT_PUBLIC_APP_URL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('refund-completion-client', 'hbs');
+  const textTemplate = loadTemplate('refund-completion-client', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: clientEmail, name: clientName }],
+    subject: 'Refund Processed Successfully',
+    htmlContent,
+    textContent
+  };
+}
+
+/**
+ * Refund completion notification to professional
+ */
+export function createRefundCompletionProfessionalEmail(
+  professionalEmail: string,
+  professionalName: string,
+  data: {
+    clientName: string;
+    serviceName: string;
+    originalAmount: number;
+    refundAmount: number;
+    transactionFee: number;
+  }
+): EmailTemplate {
+  const templateData: TemplateData = {
+    professionalName,
+    clientName: data.clientName,
+    serviceName: data.serviceName,
+    originalAmount: data.originalAmount.toFixed(2),
+    refundAmount: data.refundAmount.toFixed(2),
+    transactionFee: data.transactionFee.toFixed(2),
+    websiteUrl: process.env.NEXT_PUBLIC_APP_URL!
+  };
+
+  // Load and compile templates
+  const htmlTemplate = loadTemplate('refund-completion-professional', 'hbs');
+  const textTemplate = loadTemplate('refund-completion-professional', 'txt');
+  
+  const htmlContent = compileTemplate(htmlTemplate, templateData);
+  const textContent = compileTemplate(textTemplate, templateData);
+
+  return {
+    to: [{ email: professionalEmail, name: professionalName }],
+    subject: 'Refund Processed - Transaction Complete',
+    htmlContent,
+    textContent
+  };
 } 

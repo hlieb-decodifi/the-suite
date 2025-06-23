@@ -31,6 +31,7 @@ import {
   InfoIcon,
   MapPin,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -38,6 +39,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
 import { LeafletMap } from '@/components/common/LeafletMap';
 import { AddAdditionalServicesModal } from '@/components/modals';
+import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -173,6 +175,7 @@ export function BookingDetailPageClient({
   const [isMessageLoading, setIsMessageLoading] = useState(false);
   const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
   const [appointmentData, setAppointmentData] = useState(appointment);
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -323,8 +326,12 @@ export function BookingDetailPageClient({
     if (isProfessional) {
       return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
     }
-    // Clients can cancel confirmed/pending appointments
-    return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
+
+    // Clients can cancel confirmed/pending appointments or request refunds for completed appointments
+    return (
+      ['pending', 'confirmed', 'upcoming'].includes(currentStatus) ||
+      canRequestRefund()
+    );
   };
 
   const getAvailableStatuses = () => {
@@ -388,6 +395,29 @@ export function BookingDetailPageClient({
     } finally {
       setIsMessageLoading(false);
     }
+  };
+
+  // Check if refund request is available
+  const canRequestRefund = () => {
+    // Only clients can request refunds
+    if (isProfessional) return false;
+
+    // Only for completed appointments
+    if (currentStatus !== 'completed') return false;
+
+    // Only for card payments
+    const payment = appointment.bookings.booking_payments;
+    if (!payment || !payment.payment_methods?.is_online) return false;
+
+    // Only for completed payments
+    if (payment.status !== 'completed') return false;
+
+    return true;
+  };
+
+  const handleRefundSuccess = () => {
+    // Refresh the page to show updated status
+    router.refresh();
   };
 
   const handleAddServicesSuccess = (result: {
@@ -1076,6 +1106,18 @@ export function BookingDetailPageClient({
                       Add Additional Services
                     </Button>
                   )}
+
+                {/* Refund Request Button */}
+                {canRequestRefund() && (
+                  <Button
+                    onClick={() => setIsRefundModalOpen(true)}
+                    variant="destructiveOutline"
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Request Refund
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1379,6 +1421,23 @@ export function BookingDetailPageClient({
         professionalUserId={currentUserId}
         currentServices={appointmentData.bookings.booking_services}
       />
+
+      {/* Refund Request Modal */}
+      {canRequestRefund() && (
+        <RefundRequestModal
+          isOpen={isRefundModalOpen}
+          onClose={() => setIsRefundModalOpen(false)}
+          appointmentId={appointment.id}
+          serviceName={appointment.bookings.booking_services
+            .map((bs) => bs.services.name)
+            .join(', ')}
+          totalAmount={
+            (appointment.bookings.booking_payments?.amount || 0) +
+            (appointment.bookings.booking_payments?.tip_amount || 0)
+          }
+          onSuccess={handleRefundSuccess}
+        />
+      )}
     </div>
   );
 }

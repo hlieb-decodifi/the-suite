@@ -2139,7 +2139,149 @@ create trigger update_reviews_updated_at
   execute function update_reviews_updated_at();
 
 /**
-* Update realtime publication to include reviews
+* REFUNDS SYSTEM
+* Tables for managing refund requests and processing
+*/
+
+/**
+* REFUNDS
+* Tracks refund requests from clients and their processing status
+*/
+create table refunds (
+  id uuid primary key default uuid_generate_v4(),
+  appointment_id uuid references appointments not null unique, -- One refund per appointment
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  booking_payment_id uuid references booking_payments not null,
+  reason text not null,
+  requested_amount decimal(10, 2), -- Amount requested by client (initially null, set by professional)
+  original_amount decimal(10, 2) not null, -- Original payment amount for reference
+  transaction_fee decimal(10, 2) default 0 not null, -- Stripe transaction fee (professional responsibility)
+  refund_amount decimal(10, 2), -- Final refunded amount (after fees)
+  status text not null default 'pending' check (status in ('pending', 'approved', 'processing', 'completed', 'declined', 'failed')),
+  stripe_refund_id text, -- Stripe refund ID when processed
+  professional_notes text, -- Professional's notes when approving/declining
+  declined_reason text, -- Reason for decline if applicable
+  processed_at timestamp with time zone, -- When refund was processed by Stripe
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure client is actually a client and professional is actually a professional
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id)),
+  -- Ensure requested amount doesn't exceed original amount
+  constraint valid_refund_amount check (requested_amount is null or (requested_amount > 0 and requested_amount <= original_amount))
+);
+alter table refunds enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_refunds_appointment_id on refunds(appointment_id);
+create index if not exists idx_refunds_client_id on refunds(client_id);
+create index if not exists idx_refunds_professional_id on refunds(professional_id);
+create index if not exists idx_refunds_status on refunds(status);
+create index if not exists idx_refunds_created_at on refunds(created_at);
+create index if not exists idx_refunds_stripe_refund_id on refunds(stripe_refund_id) where stripe_refund_id is not null;
+
+-- Function to validate refund creation conditions
+create or replace function can_create_refund(p_appointment_id uuid, p_client_id uuid)
+returns boolean as $$
+declare
+  appointment_status text;
+  appointment_client_id uuid;
+  payment_method_online boolean;
+  payment_status text;
+  existing_refund_count integer;
+begin
+  -- Get appointment and payment details
+  select a.status, b.client_id, pm.is_online, bp.status 
+  into appointment_status, appointment_client_id, payment_method_online, payment_status
+  from appointments a
+  join bookings b on a.booking_id = b.id
+  join booking_payments bp on b.id = bp.booking_id
+  join payment_methods pm on bp.payment_method_id = pm.id
+  where a.id = p_appointment_id;
+  
+  -- Check if appointment exists
+  if appointment_status is null then
+    return false;
+  end if;
+  
+  -- Check if appointment is completed
+  if appointment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if requesting user is the client for this appointment
+  if appointment_client_id != p_client_id then
+    return false;
+  end if;
+  
+  -- Check if payment was made by card (online payment method)
+  if payment_method_online != true then
+    return false;
+  end if;
+  
+  -- Check if payment was completed
+  if payment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if refund already exists for this appointment
+  select count(*) into existing_refund_count
+  from refunds
+  where appointment_id = p_appointment_id;
+  
+  if existing_refund_count > 0 then
+    return false;
+  end if;
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+/**
+* RLS policies for refunds
+*/
+
+-- Clients can view their own refund requests
+create policy "Clients can view their own refund requests"
+  on refunds for select
+  using (auth.uid() = client_id);
+
+-- Professionals can view refund requests for their appointments
+create policy "Professionals can view refund requests for their appointments"
+  on refunds for select
+  using (auth.uid() = professional_id);
+
+-- Clients can create refund requests for their completed card-paid appointments
+create policy "Clients can create refund requests for eligible appointments"
+  on refunds for insert
+  with check (
+    auth.uid() = client_id
+    and can_create_refund(appointment_id, client_id)
+  );
+
+-- Professionals can update refund requests (approve/decline, set amounts)
+create policy "Professionals can update refund requests for their appointments"
+  on refunds for update
+  using (auth.uid() = professional_id)
+  with check (auth.uid() = professional_id);
+
+-- Add trigger for updated_at on refunds
+create or replace function update_refunds_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_refunds_updated_at
+  before update on refunds
+  for each row
+  execute function update_refunds_updated_at();
+
+/**
+* Update realtime publication to include refunds and reviews
 */
 drop publication if exists supabase_realtime;
 create publication supabase_realtime for table 
@@ -2150,7 +2292,8 @@ create publication supabase_realtime for table
   professional_subscriptions,
   conversations,
   messages,
-  reviews;
+  reviews,
+  refunds;
 
 -- Add a function to safely insert address and return the ID (bypasses RLS)
 create or replace function insert_address_and_return_id(

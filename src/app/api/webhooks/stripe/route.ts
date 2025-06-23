@@ -148,6 +148,12 @@ export async function POST(req: Request) {
         await handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
         
+      // Handle refund events for our refund system
+      case 'refund.created':
+      case 'refund.updated':
+        await handleRefundEvent(event.data.object as Stripe.Refund);
+        break;
+        
       // Setup Intent events for saving payment methods
       case 'setup_intent.succeeded':
         await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent);
@@ -1446,5 +1452,24 @@ async function handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
     }
   } catch (error) {
     console.error(`Error handling expired checkout session: ${bookingId}`, error);
+  }
+}
+
+// Handle refund events from our refund system
+async function handleRefundEvent(refund: Stripe.Refund) {
+  console.log(`Processing refund event for refund ${refund.id}, status: ${refund.status}`);
+  
+  try {
+    const { handleStripeRefundWebhook } = await import('@/server/domains/refunds/stripe-refund');
+    const result = await handleStripeRefundWebhook(refund);
+    
+    if (!result.success) {
+      console.error(`Failed to process refund webhook: ${result.error}`);
+      return;
+    }
+    
+    console.log(`✅ Successfully processed refund webhook for ${refund.id}`);
+  } catch (error) {
+    console.error(`Error handling refund event for ${refund.id}:`, error);
   }
 } 

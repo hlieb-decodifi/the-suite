@@ -903,6 +903,95 @@ export type Database = {
           },
         ]
       }
+      refunds: {
+        Row: {
+          appointment_id: string
+          booking_payment_id: string
+          client_id: string
+          created_at: string
+          declined_reason: string | null
+          id: string
+          original_amount: number
+          processed_at: string | null
+          professional_id: string
+          professional_notes: string | null
+          reason: string
+          refund_amount: number | null
+          requested_amount: number | null
+          status: string
+          stripe_refund_id: string | null
+          transaction_fee: number
+          updated_at: string
+        }
+        Insert: {
+          appointment_id: string
+          booking_payment_id: string
+          client_id: string
+          created_at?: string
+          declined_reason?: string | null
+          id?: string
+          original_amount: number
+          processed_at?: string | null
+          professional_id: string
+          professional_notes?: string | null
+          reason: string
+          refund_amount?: number | null
+          requested_amount?: number | null
+          status?: string
+          stripe_refund_id?: string | null
+          transaction_fee?: number
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string
+          booking_payment_id?: string
+          client_id?: string
+          created_at?: string
+          declined_reason?: string | null
+          id?: string
+          original_amount?: number
+          processed_at?: string | null
+          professional_id?: string
+          professional_notes?: string | null
+          reason?: string
+          refund_amount?: number | null
+          requested_amount?: number | null
+          status?: string
+          stripe_refund_id?: string | null
+          transaction_fee?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_booking_payment_id_fkey"
+            columns: ["booking_payment_id"]
+            isOneToOne: false
+            referencedRelation: "booking_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           appointment_id: string
@@ -1153,6 +1242,10 @@ export type Database = {
           capture_date: string
           should_pre_auth_now: boolean
         }[]
+      }
+      can_create_refund: {
+        Args: { p_appointment_id: string; p_client_id: string }
+        Returns: boolean
       }
       can_create_review: {
         Args: { p_appointment_id: string; p_client_id: string }

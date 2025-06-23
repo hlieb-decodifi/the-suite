@@ -10,4 +10,5 @@ export { ContactHoursModal } from './ContactHoursModal';
 export { BookingModal } from './BookingModal';
 export { ChangePasswordModal } from './ChangePasswordModal/ChangePasswordModal';
 export { UpdateEmailModal } from './UpdateEmailModal/UpdateEmailModal';
+export { RefundRequestModal } from './RefundRequestModal/RefundRequestModal';
 export { AddAdditionalServicesModal } from './AddAdditionalServicesModal/AddAdditionalServicesModal';

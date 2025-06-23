@@ -1,0 +1,25 @@
+Refund Request - Action Required
+
+Hi {{professionalName}},
+
+You have received a refund request for one of your completed appointments. Please review the details below and take action within 48 hours.
+
+APPOINTMENT DETAILS:
+- Client: {{clientName}}
+- Service: {{serviceName}}
+- Date: {{appointmentDate}} at {{appointmentTime}}
+- Original Amount: ${{originalAmount}}
+
+REFUND REASON:
+"{{reason}}"
+
+IMPORTANT: If you approve this refund, the transaction fee will be deducted from your earnings. Please respond within 48 hours to avoid automatic approval.
+
+REVIEW REFUND REQUEST:
+{{reviewUrl}}
+
+Need help? Contact our support team at {{websiteUrl}}/contact
+
+Thank you for choosing The Suite!
+© 2024 The Suite. All rights reserved.
+Visit our website: {{websiteUrl}} 
