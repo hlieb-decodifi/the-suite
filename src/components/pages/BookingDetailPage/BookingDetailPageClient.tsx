@@ -29,11 +29,13 @@ import {
   MessageCircleIcon,
   ExternalLinkIcon,
   InfoIcon,
+  MapPin,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
+import { LeafletMap } from '@/components/common/LeafletMap';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -99,6 +101,8 @@ type DetailedAppointment = {
           city?: string | null;
           state?: string | null;
           country?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
         } | null;
       } | null;
     } | null;
@@ -115,6 +119,8 @@ type DetailedAppointment = {
         city?: string | null;
         state?: string | null;
         country?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
       } | null;
       users: {
         id: string;
@@ -736,7 +742,7 @@ export function BookingDetailPageClient({
                       {formatAddress(
                         appointment.bookings.clients.client_profiles?.addresses,
                       ) && (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <Typography className="text-sm font-medium text-muted-foreground">
                             Address
                           </Typography>
@@ -746,6 +752,33 @@ export function BookingDetailPageClient({
                                 ?.addresses,
                             )}
                           </Typography>
+
+                          {/* Show map if coordinates are available */}
+                          {appointment.bookings.clients.client_profiles
+                            ?.addresses?.latitude &&
+                            appointment.bookings.clients.client_profiles
+                              ?.addresses?.longitude && (
+                              <div className="mt-3">
+                                <LeafletMap
+                                  latitude={
+                                    appointment.bookings.clients.client_profiles
+                                      .addresses.latitude
+                                  }
+                                  longitude={
+                                    appointment.bookings.clients.client_profiles
+                                      .addresses.longitude
+                                  }
+                                  address={
+                                    formatAddress(
+                                      appointment.bookings.clients
+                                        .client_profiles?.addresses,
+                                    ) || 'Client Location'
+                                  }
+                                  height="h-48"
+                                  className="border border-border rounded-md"
+                                />
+                              </div>
+                            )}
                         </div>
                       )}
                     </div>
@@ -849,44 +882,89 @@ export function BookingDetailPageClient({
                   </>
                 )}
 
-                {/* Additional Information - only show if there's location or address */}
-                {(appointment.bookings.professionals.location ||
-                  formatAddress(
-                    appointment.bookings.professionals.addresses,
-                  )) && (
-                  <>
-                    <Separator />
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {appointment.bookings.professionals.location && (
-                          <div className="space-y-2">
+                {/* Location Information - always show section */}
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <Typography className="text-sm font-medium text-muted-foreground">
+                      Location Information
+                    </Typography>
+
+                    {/* Show if location or address exists */}
+                    {appointment.bookings.professionals.location ||
+                    formatAddress(
+                      appointment.bookings.professionals.addresses,
+                    ) ? (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {appointment.bookings.professionals.location && (
+                            <div className="space-y-2">
+                              <Typography className="text-sm font-medium text-muted-foreground">
+                                Location
+                              </Typography>
+                              <Typography
+                                variant="muted"
+                                className="font-medium"
+                              >
+                                {appointment.bookings.professionals.location}
+                              </Typography>
+                            </div>
+                          )}
+                        </div>
+
+                        {formatAddress(
+                          appointment.bookings.professionals.addresses,
+                        ) && (
+                          <div className="space-y-3">
                             <Typography className="text-sm font-medium text-muted-foreground">
-                              Location
+                              Address
                             </Typography>
                             <Typography variant="muted" className="font-medium">
-                              {appointment.bookings.professionals.location}
+                              {formatAddress(
+                                appointment.bookings.professionals.addresses,
+                              )}
                             </Typography>
+
+                            {/* Show map if coordinates are available */}
+                            {appointment.bookings.professionals.addresses
+                              ?.latitude &&
+                              appointment.bookings.professionals.addresses
+                                ?.longitude && (
+                                <div className="mt-3">
+                                  <LeafletMap
+                                    latitude={
+                                      appointment.bookings.professionals
+                                        .addresses.latitude
+                                    }
+                                    longitude={
+                                      appointment.bookings.professionals
+                                        .addresses.longitude
+                                    }
+                                    address={
+                                      formatAddress(
+                                        appointment.bookings.professionals
+                                          .addresses,
+                                      ) || 'Professional Location'
+                                    }
+                                    height="h-48"
+                                    className="border border-border rounded-md"
+                                  />
+                                </div>
+                              )}
                           </div>
                         )}
+                      </>
+                    ) : (
+                      /* No location specified fallback */
+                      <div className="text-center py-6 space-y-3">
+                        <MapPin className="h-8 w-8 text-muted-foreground mx-auto" />
+                        <Typography variant="muted" className="text-sm">
+                          Location not specified by professional
+                        </Typography>
                       </div>
-
-                      {formatAddress(
-                        appointment.bookings.professionals.addresses,
-                      ) && (
-                        <div className="space-y-2">
-                          <Typography className="text-sm font-medium text-muted-foreground">
-                            Address
-                          </Typography>
-                          <Typography variant="muted" className="font-medium">
-                            {formatAddress(
-                              appointment.bookings.professionals.addresses,
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
+                    )}
+                  </div>
+                </>
               </CardContent>
             </Card>
           )}

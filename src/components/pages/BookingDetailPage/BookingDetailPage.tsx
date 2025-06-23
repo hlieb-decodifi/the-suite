@@ -36,6 +36,8 @@ export type DetailedAppointmentType = {
           city?: string | null;
           state?: string | null;
           country?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
         } | null;
       } | null;
     } | null;
@@ -52,6 +54,8 @@ export type DetailedAppointmentType = {
         city?: string | null;
         state?: string | null;
         country?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
       } | null;
       users: {
         id: string;
@@ -210,7 +214,9 @@ export async function getAppointmentById(
                 street_address,
                 city,
                 state,
-                country
+                country,
+                latitude,
+                longitude
               )
             )
           ),
@@ -226,7 +232,9 @@ export async function getAppointmentById(
               street_address,
               city,
               state,
-              country
+              country,
+              latitude,
+              longitude
             ),
             users:user_id(
               id,

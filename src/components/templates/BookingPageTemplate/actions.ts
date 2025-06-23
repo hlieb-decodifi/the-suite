@@ -50,6 +50,16 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
           is_published,
           working_hours,
           timezone,
+          hide_full_address,
+          address:address_id(
+            id,
+            street_address,
+            city,
+            state,
+            country,
+            latitude,
+            longitude
+          ),
           user:user_id(
             id,
             first_name,
@@ -91,17 +101,43 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
       profilePhotoUrl = getPublicImageUrl(rawPhotoUrl);
     }
     
+    // Format address from address data
+    const formatAddress = (address: {
+      street_address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      country?: string | null;
+    } | null) => {
+      if (!address) return null;
+      const parts = [
+        address.street_address,
+        address.city,
+        address.state,
+        address.country,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(', ') : null;
+    };
+
+    const addressData = Array.isArray(professionalProfile?.address) 
+      ? professionalProfile.address[0] 
+      : professionalProfile?.address;
+
+    const formattedAddress = formatAddress(addressData);
+    const displayAddress = professionalProfile?.hide_full_address && addressData
+      ? `${addressData.city}, ${addressData.state}, ${addressData.country}`.replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '').trim()
+      : formattedAddress;
+
     // Create professional object
     const professional = {
       id: user?.id || 'unknown',
       name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
       avatar: profilePhotoUrl, // Will be undefined if no photo exists
-      address: professionalProfile?.location || 'Location not specified',
+      address: displayAddress || professionalProfile?.location || 'Location not specified',
       rating: 4.5, // Mock data, would come from reviews table
       reviewCount: 0, // Mock data, would come from reviews count
       profile_id: professionalProfile?.id,
-      hide_full_address: false, // Default value for legacy data
-      address_data: null, // No address data in this context
+      hide_full_address: professionalProfile?.hide_full_address || false,
+      address_data: addressData,
     };
 
     // Return mapped service data

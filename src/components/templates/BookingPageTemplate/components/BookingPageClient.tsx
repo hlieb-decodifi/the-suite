@@ -14,6 +14,7 @@ import { formatDuration } from '@/utils/formatDuration';
 import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { LeafletMap } from '@/components/common/LeafletMap';
 
 export type BookingPageClientProps = {
   service: ServiceListItem;
@@ -163,7 +164,7 @@ export function BookingPageClient({
           }
         >
           <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mb-4">
               <Avatar className="h-16 w-16 border-2 border-primary/10">
                 <AvatarImage
                   src={service.professional.avatar}
@@ -189,6 +190,24 @@ export function BookingPageClient({
                 </div>
               </div>
             </div>
+
+            {/* Show map if coordinates are available */}
+            {service.professional.address_data?.latitude &&
+              service.professional.address_data?.longitude && (
+                <div className="mt-4">
+                  <LeafletMap
+                    latitude={service.professional.address_data.latitude}
+                    longitude={service.professional.address_data.longitude}
+                    address={service.professional.address}
+                    height="h-48"
+                    className="border border-border rounded-md"
+                    showAreaOnly={service.professional.hide_full_address}
+                    city={service.professional.address_data.city}
+                    state={service.professional.address_data.state}
+                    country={service.professional.address_data.country}
+                  />
+                </div>
+              )}
           </CardContent>
         </Card>
       </div>
