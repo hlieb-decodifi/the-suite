@@ -76,9 +76,6 @@ export async function DashboardPage({
         )
       : allAppointments;
 
-  console.log('All appointments:', allAppointments);
-  console.log('Filtered appointments for dashboard:', appointmentsForDashboard);
-
   // Get stats for the dashboard (always use all appointments for stats)
   const stats = await getDashboardStats(
     user.id,
@@ -119,9 +116,6 @@ export async function getDashboardStats(
       endDate,
       undefined,
     )) as unknown as AppointmentWithServices[];
-
-    // Log structure to debug
-    console.log('First appointment structure:', allAppointments[0]);
 
     // Calculate total revenue (for professionals)
     let totalRevenue = 0;
