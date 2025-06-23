@@ -1181,6 +1181,17 @@ create policy "Clients can create booking services for their bookings"
     )
   );
 
+create policy "Professionals can create booking services for their bookings"
+  on booking_services for insert
+  with check (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = booking_services.booking_id
+      and pp.user_id = auth.uid()
+    )
+  );
+
 -- Booking payments policies
 create policy "Users can view booking payments for their bookings"
   on booking_payments for select

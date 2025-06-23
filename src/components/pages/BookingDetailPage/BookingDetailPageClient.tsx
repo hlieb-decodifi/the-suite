@@ -30,12 +30,14 @@ import {
   ExternalLinkIcon,
   InfoIcon,
   MapPin,
+  Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
 import { LeafletMap } from '@/components/common/LeafletMap';
+import { AddAdditionalServicesModal } from '@/components/modals';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -169,6 +171,8 @@ export function BookingDetailPageClient({
   const [currentStatus, setCurrentStatus] = useState(appointment.status);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isMessageLoading, setIsMessageLoading] = useState(false);
+  const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
+  const [appointmentData, setAppointmentData] = useState(appointment);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -384,6 +388,36 @@ export function BookingDetailPageClient({
     } finally {
       setIsMessageLoading(false);
     }
+  };
+
+  const handleAddServicesSuccess = (result: {
+    newTotal: number;
+    servicesAdded: Array<{
+      id: string;
+      name: string;
+      price: number;
+      duration: number;
+    }>;
+  }) => {
+    // Update the appointment data with new payment amount
+    setAppointmentData((prev) => ({
+      ...prev,
+      bookings: {
+        ...prev.bookings,
+        booking_payments: prev.bookings.booking_payments
+          ? {
+              ...prev.bookings.booking_payments,
+              amount: result.newTotal,
+            }
+          : null,
+      },
+    }));
+
+    // Close the modal
+    setIsAddServicesModalOpen(false);
+
+    // Refresh the page to show updated services
+    router.refresh();
   };
 
   return (
@@ -1028,6 +1062,20 @@ export function BookingDetailPageClient({
                     {isUpdating ? 'Updating...' : statusOption.label}
                   </Button>
                 ))}
+
+                {/* Add Additional Services Button */}
+                {isProfessional &&
+                  (currentStatus === 'confirmed' ||
+                    currentStatus === 'upcoming') && (
+                    <Button
+                      onClick={() => setIsAddServicesModalOpen(true)}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Additional Services
+                    </Button>
+                  )}
               </CardContent>
             </Card>
           )}
@@ -1047,7 +1095,7 @@ export function BookingDetailPageClient({
                   <div className="flex justify-between items-center">
                     <Typography className="font-medium text-primary text-lg">
                       {formatCurrency(
-                        appointment.bookings.booking_payments.amount,
+                        appointmentData.bookings.booking_payments?.amount || 0,
                       )}
                     </Typography>
                     {getPaymentStatusBadge(
@@ -1321,6 +1369,16 @@ export function BookingDetailPageClient({
           </Card>
         </div>
       </div>
+
+      {/* Add Additional Services Modal */}
+      <AddAdditionalServicesModal
+        isOpen={isAddServicesModalOpen}
+        onClose={() => setIsAddServicesModalOpen(false)}
+        onSuccess={handleAddServicesSuccess}
+        appointmentId={appointmentData.id}
+        professionalUserId={currentUserId}
+        currentServices={appointmentData.bookings.booking_services}
+      />
     </div>
   );
 }
