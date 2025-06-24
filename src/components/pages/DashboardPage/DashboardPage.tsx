@@ -90,12 +90,22 @@ export async function DashboardPage({
     ? recentConversationsResult.conversations || []
     : [];
 
+  // Get recent refunds for the dashboard (latest 3)
+  const recentRefunds = await getDashboardRefunds(
+    user.id,
+    !!isProfessional,
+    undefined,
+    undefined,
+    3, // limit to 3 for dashboard widget
+  );
+
   return (
     <DashboardPageClient
       isProfessional={!!isProfessional}
       upcomingAppointments={appointmentsForDashboard as AppointmentType[]}
       stats={stats}
       recentConversations={recentConversations}
+      recentRefunds={recentRefunds}
     />
   );
 }
@@ -194,5 +204,157 @@ export async function getDashboardStats(
       totalRevenue: isProfessional ? 0 : undefined,
       percentChange: 0,
     };
+  }
+}
+
+// Get refunds for the dashboard
+export async function getDashboardRefunds(
+  userId: string,
+  isProfessional: boolean,
+  startDate?: string,
+  endDate?: string,
+  limit?: number,
+) {
+  try {
+    const supabase = await createClient();
+
+    // First get refunds data with basic info
+    let refundsQuery = supabase.from('refunds').select(`
+        id,
+        reason,
+        requested_amount,
+        original_amount,
+        refund_amount,
+        status,
+        created_at,
+        updated_at,
+        appointment_id,
+        client_id,
+        professional_id
+      `);
+
+    // Filter based on user role
+    if (isProfessional) {
+      refundsQuery = refundsQuery.eq('professional_id', userId);
+    } else {
+      refundsQuery = refundsQuery.eq('client_id', userId);
+    }
+
+    // Apply date filters if provided
+    if (startDate) {
+      refundsQuery = refundsQuery.gte('created_at', startDate);
+    }
+
+    if (endDate) {
+      refundsQuery = refundsQuery.lte('created_at', endDate);
+    }
+
+    // Order by created_at descending and apply limit if specified
+    refundsQuery = refundsQuery.order('created_at', { ascending: false });
+
+    if (limit) {
+      refundsQuery = refundsQuery.limit(limit);
+    }
+
+    const { data: refundsData, error: refundsError } = await refundsQuery;
+
+    if (refundsError) {
+      console.error('Error fetching refunds:', refundsError);
+      return [];
+    }
+
+    if (!refundsData || refundsData.length === 0) {
+      return [];
+    }
+
+    // Get additional data for appointments and user names
+    const appointmentIds = refundsData.map((r) => r.appointment_id);
+    const clientIds = refundsData.map((r) => r.client_id);
+    const professionalIds = refundsData.map((r) => r.professional_id);
+
+    // Fetch appointments data
+    const { data: appointmentsData } = await supabase
+      .from('appointments')
+      .select(
+        `
+        id,
+        date,
+        start_time,
+        bookings!inner(
+          id,
+          booking_services(
+            services(name)
+          )
+        )
+      `,
+      )
+      .in('id', appointmentIds);
+
+    // Fetch user data
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('id, first_name, last_name')
+      .in('id', [...clientIds, ...professionalIds]);
+
+    // Create lookup maps
+    const appointmentsMap = new Map(
+      appointmentsData?.map((a) => [a.id, a]) || [],
+    );
+    const usersMap = new Map(usersData?.map((u) => [u.id, u]) || []);
+
+    // Transform the data to match the expected format
+    const transformedRefunds = refundsData.map((refund) => {
+      const appointment = appointmentsMap.get(refund.appointment_id);
+      const clientUser = usersMap.get(refund.client_id);
+      const professionalUser = usersMap.get(refund.professional_id);
+
+      // Get client/professional name
+      const clientName = clientUser
+        ? `${clientUser.first_name} ${clientUser.last_name}`.trim()
+        : 'Client';
+
+      const professionalName = professionalUser
+        ? `${professionalUser.first_name} ${professionalUser.last_name}`.trim()
+        : 'Professional';
+
+      // Get service name from first booking service
+      const serviceName =
+        appointment?.bookings?.booking_services?.[0]?.services?.name ||
+        'Service';
+
+      // Create appointment date/time
+      const appointmentDate = appointment
+        ? new Date(appointment.date)
+        : new Date();
+      if (appointment?.start_time) {
+        const startTimeParts = appointment.start_time.split(':').map(Number);
+        appointmentDate.setHours(
+          startTimeParts[0] || 0,
+          startTimeParts[1] || 0,
+          0,
+        );
+      }
+
+      return {
+        id: refund.id,
+        appointmentId: refund.appointment_id,
+        reason: refund.reason,
+        requestedAmount: refund.requested_amount,
+        originalAmount: refund.original_amount,
+        refundAmount: refund.refund_amount,
+        status: refund.status,
+        createdAt: refund.created_at,
+        updatedAt: refund.updated_at,
+        serviceName,
+        clientName,
+        professionalName,
+        appointmentDate: appointmentDate.toISOString(),
+      };
+    });
+
+    return transformedRefunds;
+  } catch (error) {
+    console.error('Error in getDashboardRefunds:', error);
+    return [];
   }
 }

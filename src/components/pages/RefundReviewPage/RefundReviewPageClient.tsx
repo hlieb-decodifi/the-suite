@@ -86,10 +86,12 @@ type RefundData = {
 export type RefundReviewPageClientProps = {
   refund: RefundData;
   currentUserId: string;
+  isProfessional?: boolean;
 };
 
 export function RefundReviewPageClient({
   refund,
+  isProfessional = false,
 }: RefundReviewPageClientProps) {
   const [refundAmount, setRefundAmount] = useState<string>(
     refund.original_amount.toString(),
@@ -342,8 +344,8 @@ export function RefundReviewPageClient({
               </CardContent>
             </Card>
 
-            {/* Decision Form - Only show if pending */}
-            {refund.status === 'pending' && (
+            {/* Decision Form - Only show if pending and user is a professional */}
+            {refund.status === 'pending' && isProfessional && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

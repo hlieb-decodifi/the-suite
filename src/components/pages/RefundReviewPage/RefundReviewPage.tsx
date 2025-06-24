@@ -22,10 +22,6 @@ export async function RefundReviewPage({ refundId }: { refundId: string }) {
     user_uuid: user.id,
   });
 
-  if (!isProfessional) {
-    redirect('/');
-  }
-
   try {
     const result = await getRefundForReview(refundId);
 
@@ -35,7 +31,11 @@ export async function RefundReviewPage({ refundId }: { refundId: string }) {
     }
 
     return (
-      <RefundReviewPageClient refund={result.refund} currentUserId={user.id} />
+      <RefundReviewPageClient
+        refund={result.refund}
+        currentUserId={user.id}
+        isProfessional={!!isProfessional}
+      />
     );
   } catch (error) {
     console.error('Error loading refund review page:', error);
