@@ -36,17 +36,6 @@ Tip: ${{tipAmount}}
 {{/if}}
 Total Paid: ${{totalPaid}}
 
-PAYMENT STATUS
-==============
-{{#if isUncaptured}}
-💳 Payment Authorized
-Your payment method has been authorized for ${{totalPaid}}. The final payment will be automatically processed closer to your appointment date.
-
-PAYMENT SCHEDULE: Your payment method is securely authorized. We'll automatically charge your card closer to your appointment date. You can modify or cancel your booking anytime before then.
-{{else}}
-✓ Payment Completed
-Your payment of ${{totalPaid}} has been successfully processed.
-{{/if}}
 
 MANAGE YOUR APPOINTMENT
 =======================

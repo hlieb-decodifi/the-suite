@@ -37,15 +37,7 @@ Your Total (Gross): ${{professionalTotal}}
 
 PAYMENT PROCESSING: This is your gross amount. Stripe processing fees (typically 1.5-2.5%) will be deducted from your payout. Learn more: https://stripe.com/en-pl/pricing
 
-PAYMENT STATUS
-==============
-{{#if isUncaptured}}
-✓ Payment Authorized
-The client's payment method has been authorized. Payment will be automatically processed closer to the appointment date.
-{{else}}
-✓ Payment Completed
-The client's payment has been processed successfully.
-{{/if}}
+
 
 MANAGE YOUR APPOINTMENT
 =======================

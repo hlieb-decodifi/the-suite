@@ -374,43 +374,6 @@
         </div>
       </div>
 
-      <div class='card'>
-        <h3
-          style='color: #DEA85B; margin: 0 0 15px 0; font-size: 18px; font-weight: bold;'
-        >
-          Payment Status
-        </h3>
-
-        <div class='bg-muted'>
-          <p style='margin: 0; font-size: 14px;'>
-            {{#if isUncaptured}}
-              <strong style='color: #3b82f6;'>💳 Payment Authorized</strong><br
-              />
-              Your payment method has been authorized for ${{totalPaid}}. The
-              final payment will be automatically processed closer to your
-              appointment date.
-            {{else}}
-              <strong style='color: #22c55e;'>✓ Payment Completed</strong><br />
-              Your payment of ${{totalPaid}}
-              has been successfully processed.
-            {{/if}}
-          </p>
-        </div>
-
-        {{#if isUncaptured}}
-          <div
-            style='background: #eff6ff; padding: 15px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #3b82f6;'
-          >
-            <p style='margin: 0; font-size: 14px; color: #5d6c6f;'>
-              <strong>Payment Schedule:</strong>
-              Your payment method is securely authorized. We'll automatically
-              charge your card closer to your appointment date. You can modify
-              or cancel your booking anytime before then.
-            </p>
-          </div>
-        {{/if}}
-      </div>
-
       <div class='card text-center'>
         <h3
           style='color: #DEA85B; margin: 0 0 20px 0; font-size: 18px; font-weight: bold;'

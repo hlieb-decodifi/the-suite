@@ -674,6 +674,90 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
       } else {
         console.log('Successfully confirmed booking');
         
+        // Calculate and set capture_scheduled_for for card payments
+        try {
+          console.log('🔍 Getting payment method details for booking:', bookingId);
+          
+          // Get the payment method to check if it's a card payment
+          const { data: paymentDetails } = await supabase
+            .from('booking_payments')
+            .select(`
+              payment_method_id,
+              payment_methods!inner(is_online)
+            `)
+            .eq('booking_id', bookingId)
+            .single();
+          
+          const isCardPayment = paymentDetails?.payment_methods?.is_online === true;
+          console.log('🔍 Is card payment:', isCardPayment);
+          
+          if (isCardPayment) {
+            console.log('💳 Setting capture schedule for card payment...');
+            
+            // Get appointment details with all services to calculate total duration
+            const { data: appointmentDetails } = await supabase
+              .from('appointments')
+              .select(`
+                date,
+                start_time,
+                bookings!inner(
+                  booking_services(
+                    duration
+                  )
+                )
+              `)
+              .eq('booking_id', bookingId)
+              .single();
+            
+                         if (appointmentDetails) {
+               console.log('📅 Appointment details:', appointmentDetails);
+               
+               // Import utility functions for appointment time calculations
+               const { calculateAppointmentTimes, calculateTotalDuration } = await import('@/utils/appointmentUtils');
+               
+               // Calculate total duration from all services
+               const allServices = appointmentDetails.bookings.booking_services;
+               const totalDurationMinutes = calculateTotalDuration(allServices);
+               
+               console.log('⏱️ Total duration minutes:', totalDurationMinutes);
+               
+               // Calculate appointment times
+               const appointmentDate = appointmentDetails.date;
+               const startTime = appointmentDetails.start_time;
+               
+               const { appointmentStart, appointmentEnd, captureScheduledFor } = calculateAppointmentTimes(
+                 appointmentDate,
+                 startTime,
+                 totalDurationMinutes
+               );
+               
+               console.log('📅 Appointment start:', appointmentStart.toISOString());
+               console.log('📅 Appointment end:', appointmentEnd.toISOString());
+               console.log('📅 Capture scheduled for:', captureScheduledFor.toISOString());
+              
+              // Update the booking payment with capture schedule
+              const { error: captureUpdateError } = await supabase
+                .from('booking_payments')
+                .update({
+                  capture_scheduled_for: captureScheduledFor.toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('booking_id', bookingId);
+              
+              if (captureUpdateError) {
+                console.error('❌ Failed to update capture schedule:', captureUpdateError);
+              } else {
+                console.log('✅ Successfully set capture schedule for 12 hours after appointment end');
+              }
+            } else {
+              console.error('❌ Could not get appointment details for capture scheduling');
+            }
+          }
+        } catch (captureError) {
+          console.error('❌ Error setting capture schedule:', captureError);
+          // Don't fail the webhook if capture scheduling fails
+        }
+        
         // Send booking confirmation emails
         try {
           console.log('🔍 Looking for appointment ID for booking:', bookingId);

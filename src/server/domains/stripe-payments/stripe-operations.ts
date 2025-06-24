@@ -306,10 +306,27 @@ export async function schedulePaymentAuthorization(
     const { createClient } = await import('@/lib/supabase/server');
     const supabase = await createClient();
     
+    // Get total duration from booking services
+    const { data: bookingServices, error: servicesError } = await supabase
+      .from('booking_services')
+      .select('duration')
+      .eq('booking_id', bookingId);
+
+    if (servicesError) {
+      console.error('Error fetching booking services:', servicesError);
+      return { success: false, error: servicesError.message };
+    }
+
+    // Calculate total duration in minutes
+    const totalDurationMinutes = bookingServices?.reduce((sum, service) => sum + service.duration, 0) || 60;
+    
+    console.log(`[Payment Schedule] Booking ${bookingId}: Total duration ${totalDurationMinutes} minutes`);
+    
     const { data, error } = await supabase
       .rpc('calculate_payment_schedule', {
         appointment_date: appointmentDate.toISOString().split('T')[0] || '',
-        appointment_time: appointmentTime || '00:00:00'
+        appointment_time: appointmentTime || '00:00:00',
+        duration_minutes: totalDurationMinutes
       })
       .single();
 
@@ -317,6 +334,8 @@ export async function schedulePaymentAuthorization(
       console.error('Error calculating payment schedule:', error);
       return { success: false, error: error.message };
     }
+
+    console.log(`[Payment Schedule] Booking ${bookingId}: Pre-auth at ${data.pre_auth_date}, Capture at ${data.capture_date}`);
 
     return {
       success: true,

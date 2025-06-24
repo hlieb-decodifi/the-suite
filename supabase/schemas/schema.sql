@@ -1796,31 +1796,35 @@ create policy "Clients can create appointments for their bookings"
     )
   );
 
--- Function to calculate pre-auth and capture times based on appointment date
-create or replace function calculate_payment_schedule(appointment_date date, appointment_time time)
+-- Function to calculate pre-auth and capture times based on appointment date and duration
+create or replace function calculate_payment_schedule(appointment_date date, appointment_time time, duration_minutes integer default 60)
 returns table(
   pre_auth_date timestamp with time zone,
   capture_date timestamp with time zone,
   should_pre_auth_now boolean
 ) as $$
 declare
-  appointment_datetime timestamp with time zone;
+  appointment_start_datetime timestamp with time zone;
+  appointment_end_datetime timestamp with time zone;
   six_days_before timestamp with time zone;
-  twelve_hours_after timestamp with time zone;
+  twelve_hours_after_end timestamp with time zone;
 begin
-  -- Combine date and time into full timestamp
-  appointment_datetime := (appointment_date || ' ' || appointment_time)::timestamp with time zone;
+  -- Combine date and time into full timestamp for start
+  appointment_start_datetime := (appointment_date || ' ' || appointment_time)::timestamp with time zone;
   
-  -- Calculate 6 days before appointment (for pre-auth)
-  six_days_before := appointment_datetime - interval '6 days';
+  -- Calculate appointment end time by adding duration
+  appointment_end_datetime := appointment_start_datetime + (duration_minutes || ' minutes')::interval;
   
-  -- Calculate 12 hours after appointment (for capture)
-  twelve_hours_after := appointment_datetime + interval '12 hours';
+  -- Calculate 6 days before appointment start (for pre-auth)
+  six_days_before := appointment_start_datetime - interval '6 days';
+  
+  -- Calculate 12 hours after appointment END (for capture)
+  twelve_hours_after_end := appointment_end_datetime + interval '12 hours';
   
   -- Determine if we should place pre-auth now (if appointment is within 6 days)
   return query select 
     six_days_before as pre_auth_date,
-    twelve_hours_after as capture_date,
+    twelve_hours_after_end as capture_date,
     (now() >= six_days_before) as should_pre_auth_now;
 end;
 $$ language plpgsql;

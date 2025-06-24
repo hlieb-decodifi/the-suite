@@ -457,6 +457,12 @@ export function BookingDetailPageClient({
         status: 'cancelled',
       },
     }));
+
+    // Refresh the page to get updated data including refund information
+    // The backend revalidatePath should have refreshed the data
+    setTimeout(() => {
+      router.refresh();
+    }, 1000); // Small delay to allow backend processing to complete
   };
 
   return (
@@ -504,6 +510,113 @@ export function BookingDetailPageClient({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Cancellation Information - Show when booking is cancelled */}
+          {(currentStatus === 'cancelled' ||
+            appointmentData.status === 'cancelled' ||
+            appointmentData.bookings.status === 'cancelled') && (
+            <Card className="shadow-sm border-red-200 bg-red-50">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2 text-red-700">
+                  <InfoIcon className="h-5 w-5" />
+                  Booking Cancelled
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Typography className="font-medium text-red-700 mb-1">
+                      Status
+                    </Typography>
+                    <Typography variant="muted">
+                      This booking has been cancelled
+                    </Typography>
+                  </div>
+                  <div>
+                    <Typography className="font-medium text-red-700 mb-1">
+                      Cancelled On
+                    </Typography>
+                    <Typography variant="muted">
+                      {appointmentData.updated_at &&
+                        format(
+                          new Date(appointmentData.updated_at),
+                          'MMM d, yyyy h:mm a',
+                        )}
+                    </Typography>
+                  </div>
+                </div>
+
+                {/* Show refund summary if there was a refund */}
+                {appointment.bookings.booking_payments &&
+                  appointment.bookings.booking_payments.refunded_amount > 0 && (
+                    <>
+                      <Separator />
+                      <div className="bg-white p-4 rounded-lg border border-red-200">
+                        <Typography className="font-medium text-red-700 mb-2">
+                          Refund Processed
+                        </Typography>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="flex justify-between">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Refunded Amount:
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-green-600"
+                            >
+                              {formatCurrency(
+                                appointment.bookings.booking_payments
+                                  .refunded_amount,
+                              )}
+                            </Typography>
+                          </div>
+                          {appointment.bookings.booking_payments
+                            .refunded_at && (
+                            <div className="flex justify-between">
+                              <Typography
+                                variant="small"
+                                className="text-muted-foreground"
+                              >
+                                Processed:
+                              </Typography>
+                              <Typography
+                                variant="small"
+                                className="font-medium"
+                              >
+                                {format(
+                                  new Date(
+                                    appointment.bookings.booking_payments.refunded_at!,
+                                  ),
+                                  'MMM d, yyyy',
+                                )}
+                              </Typography>
+                            </div>
+                          )}
+                        </div>
+                        {appointment.bookings.booking_payments
+                          .refund_reason && (
+                          <div className="mt-2">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Reason:{' '}
+                              {
+                                appointment.bookings.booking_payments
+                                  .refund_reason
+                              }
+                            </Typography>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Service Information */}
           <Card className="shadow-sm">
             <CardHeader>
