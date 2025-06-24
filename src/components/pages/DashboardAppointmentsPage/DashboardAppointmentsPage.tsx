@@ -6,7 +6,15 @@ import { DashboardAppointmentsPageClient } from './DashboardAppointmentsPageClie
 import { getDashboardAppointments } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
 import { AppointmentType } from '@/components/common/AppointmentItem';
 
-export async function DashboardAppointmentsPage() {
+export type DashboardAppointmentsPageProps = {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+};
+
+export async function DashboardAppointmentsPage({
+  startDate,
+  endDate,
+}: DashboardAppointmentsPageProps) {
   const supabase = await createClient();
 
   // Get the current user
@@ -23,11 +31,13 @@ export async function DashboardAppointmentsPage() {
     user_uuid: user.id,
   });
 
-  // Get appointments for the dashboard
+  // Get appointments for the dashboard with date filtering
   try {
     const appointments = await getDashboardAppointments(
       user.id,
       !!isProfessional,
+      startDate,
+      endDate,
     );
 
     return (

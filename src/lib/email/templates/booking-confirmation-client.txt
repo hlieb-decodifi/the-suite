@@ -1,0 +1,56 @@
+BOOKING CONFIRMED!
+
+Your appointment with {{professionalName}} has been successfully booked
+
+APPOINTMENT DETAILS
+===================
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
+Professional: {{professionalName}}
+Booking ID: {{bookingId}}
+
+{{#if professionalPhone}}
+Professional Phone: {{professionalPhone}}
+{{/if}}
+
+{{#if professionalAddress}}
+Location: {{professionalAddress}}
+{{/if}}
+
+{{#if notes}}
+Your Notes: {{notes}}
+{{/if}}
+
+SERVICES BOOKED
+===============
+{{#each services}}
+- {{name}} ({{duration}} minutes) - ${{price}}
+{{/each}}
+
+PAYMENT SUMMARY
+===============
+Subtotal: ${{subtotal}}
+Suite Service Fee: ${{serviceFee}}
+{{#if tipAmount}}
+Tip: ${{tipAmount}}
+{{/if}}
+Total Paid: ${{totalPaid}}
+
+
+MANAGE YOUR APPOINTMENT
+=======================
+View appointment details: {{appointmentDetailsUrl}}
+Back to home: {{websiteUrl}}
+
+Questions about your booking? Contact us at {{supportEmail}}
+
+WHAT'S NEXT?
+============
+✓ Confirmation Sent - Your professional has been notified about your booking
+📧 Email Confirmation - Keep this email for your records and appointment details
+📱 Stay Connected - You'll receive updates about your appointment via email
+
+---
+This email was sent by The Suite
+{{websiteUrl}}
+© 2025 The Suite. All rights reserved. 

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { BookingFormValues } from './schema';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
@@ -14,6 +14,26 @@ export function useCalculateTotalPrice({
   extraServices,
   form,
 }: UseCalculateTotalPriceProps) {
+  const [serviceFee, setServiceFee] = useState(1.00); // Default fallback
+
+  // Load service fee from database on component mount
+  useEffect(() => {
+    async function loadServiceFee() {
+      try {
+        const { getServiceFeeAction } = await import('@/server/domains/admin/actions');
+        const result = await getServiceFeeAction();
+        if (result.success && result.fee) {
+          setServiceFee(result.fee);
+        }
+      } catch (error) {
+        console.error('Failed to load service fee:', error);
+        // Keep default value of 1.00
+      }
+    }
+    
+    loadServiceFee();
+  }, []);
+
   return useCallback(() => {
     // Base service price
     let total = service.price;
@@ -26,8 +46,7 @@ export function useCalculateTotalPrice({
     
     total += extraServicesTotal;
     
-    // Add service fee
-    const serviceFee = 1.00; // Fixed $1 service fee
+    // Add service fee from database
     total += serviceFee;
     
     // Add tip
@@ -35,5 +54,5 @@ export function useCalculateTotalPrice({
     total += tipAmount;
     
     return total;
-  }, [service.price, extraServices, form]);
+  }, [service.price, extraServices, form, serviceFee]);
 } 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,10 @@ export function BookingSuccessContent() {
 
   const [status, setStatus] = useState<PaymentStatus>('processing');
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isUncaptured, setIsUncaptured] = useState(false);
+  const hasShownToast = useRef(false);
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
@@ -49,12 +52,21 @@ export function BookingSuccessContent() {
         }
 
         if (result.paymentStatus === 'completed') {
+          console.log('result', result);
           setStatus('success');
-          toast({
-            title: 'Payment Successful!',
-            description:
-              'Your booking has been confirmed and payment processed.',
-          });
+          setIsUncaptured(result.isUncaptured || false);
+          setAppointmentId(result.appointmentId || null);
+          if (!hasShownToast.current) {
+            hasShownToast.current = true;
+            toast({
+              title: result.isUncaptured
+                ? 'Booking Confirmed!'
+                : 'Payment Successful!',
+              description: result.isUncaptured
+                ? 'Your booking is confirmed. Payment will be processed closer to your appointment.'
+                : 'Your booking has been confirmed and payment processed.',
+            });
+          }
         } else if (result.paymentStatus === 'failed') {
           setStatus('error');
           setErrorMessage('Payment failed. Please try again.');
@@ -73,11 +85,19 @@ export function BookingSuccessContent() {
     };
 
     verifyPayment();
-  }, [searchParams, toast]);
+  }, [searchParams]);
 
   const handleContinue = () => {
     // Redirect to dashboard or bookings page
     router.push('/dashboard');
+  };
+
+  const handleViewBooking = () => {
+    if (appointmentId) {
+      router.push(`/bookings/${appointmentId}`);
+    } else {
+      router.push('/dashboard');
+    }
   };
 
   const handleRetry = () => {
@@ -129,7 +149,9 @@ export function BookingSuccessContent() {
           <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-600" />
           <CardTitle>Booking Confirmed!</CardTitle>
           <CardDescription>
-            Your payment has been processed successfully.
+            {isUncaptured
+              ? 'Your payment method has been authorized and your booking is confirmed.'
+              : 'Your payment has been processed successfully.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center space-y-4">
@@ -139,14 +161,40 @@ export function BookingSuccessContent() {
               <p className="font-mono text-sm">{bookingId}</p>
             </div>
           )}
+          {isUncaptured && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium">
+                Payment Schedule
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Your payment method is authorized. The final payment will be
+                automatically processed closer to your appointment date.
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
               You will receive a confirmation email shortly with your booking
               details.
             </p>
-            <Button onClick={handleContinue} className="w-full">
-              Continue to Dashboard
-            </Button>
+            <div className="flex gap-2">
+              {appointmentId ? (
+                <Button onClick={handleViewBooking} className="flex-1">
+                  View Booking Details
+                </Button>
+              ) : (
+                <Button onClick={handleContinue} className="flex-1">
+                  View Dashboard
+                </Button>
+              )}
+              <Button
+                onClick={() => router.push('/')}
+                variant="outline"
+                className="flex-1"
+              >
+                Back to Home
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -6,6 +6,7 @@ import { ServicesTemplateHeader } from './components/ServicesTemplateHeader';
 type SearchParams = {
   page?: string;
   search?: string;
+  location?: string;
 };
 
 export async function ServicesTemplate({
@@ -19,20 +20,22 @@ export async function ServicesTemplate({
     ? parseInt(resolvedSearchParams.page, 10)
     : 1;
   const searchTerm = resolvedSearchParams?.search || '';
+  const location = resolvedSearchParams?.location || '';
   const pageSize = 12;
 
-  // Fetch paginated services data on the server with search filter
+  // Fetch paginated services data on the server with search and location filters
   const { services, pagination } = await getServices(
     page,
     pageSize,
     searchTerm,
+    location,
   );
 
   return (
     <div className="max-w-7xl w-full mx-auto">
       <div className="py-8 space-y-8">
         {/* Page Header */}
-        <ServicesTemplateHeader searchTerm={searchTerm} />
+        <ServicesTemplateHeader searchTerm={searchTerm} location={location} />
 
         {/* Main Content Area */}
         <Suspense
@@ -44,6 +47,7 @@ export async function ServicesTemplate({
             initialServices={services}
             initialPagination={pagination}
             initialSearchTerm={searchTerm}
+            initialLocation={location}
           />
         </Suspense>
       </div>

@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Clock, CreditCard } from 'lucide-react';
+import { AlertTriangle, Clock, CreditCard, MapPin } from 'lucide-react';
 import { Typography } from '@/components/ui/typography';
 
 type ConnectStatus = {
@@ -64,6 +64,10 @@ function validateProfileForPublishing(validationData: ProfileValidationData): {
 
   if (!hasPaymentMethods(validationData.paymentMethods)) {
     missingRequirements.push('At least one payment method must be selected');
+  }
+
+  if (!validationData.hasAddress) {
+    missingRequirements.push('Business address must be set');
   }
 
   return {
@@ -256,8 +260,10 @@ export function ProfilePageLayoutClient({
               >
                 {requirement.includes('working day') ? (
                   <Clock className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                ) : (
+                ) : requirement.includes('payment method') ? (
                   <CreditCard className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <MapPin className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
                 )}
                 <Typography className="text-sm text-foreground">
                   {requirement}

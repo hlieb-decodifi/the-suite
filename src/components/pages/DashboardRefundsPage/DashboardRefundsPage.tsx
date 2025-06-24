@@ -4,7 +4,15 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardRefundsPageClient } from './DashboardRefundsPageClient';
 
-export async function DashboardRefundsPage() {
+export type DashboardRefundsPageProps = {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+};
+
+export async function DashboardRefundsPage({
+  startDate,
+  endDate,
+}: DashboardRefundsPageProps) {
   const supabase = await createClient();
 
   // Get the current user
@@ -22,6 +30,11 @@ export async function DashboardRefundsPage() {
   });
 
   return (
-    <DashboardRefundsPageClient user={user} isProfessional={!!isProfessional} />
+    <DashboardRefundsPageClient
+      user={user}
+      isProfessional={!!isProfessional}
+      startDate={startDate}
+      endDate={endDate}
+    />
   );
 }

@@ -11,28 +11,40 @@ export type Database = {
     Tables: {
       addresses: {
         Row: {
+          apartment: string | null
           city: string | null
           country: string | null
           created_at: string
+          google_place_id: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           state: string | null
           street_address: string | null
           updated_at: string
         }
         Insert: {
+          apartment?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
+          google_place_id?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           state?: string | null
           street_address?: string | null
           updated_at?: string
         }
         Update: {
+          apartment?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
+          google_place_id?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           state?: string | null
           street_address?: string | null
           updated_at?: string
@@ -115,7 +127,7 @@ export type Database = {
           amount: number
           authorization_expires_at: string | null
           balance_amount: number
-          balance_payment_method: string | null
+          balance_notification_sent_at: string | null
           booking_id: string
           capture_method: string | null
           capture_scheduled_for: string | null
@@ -127,11 +139,16 @@ export type Database = {
           payment_type: string
           pre_auth_placed_at: string | null
           pre_auth_scheduled_for: string | null
+          refund_reason: string | null
+          refund_transaction_id: string | null
+          refunded_amount: number
+          refunded_at: string | null
           requires_balance_payment: boolean
           service_fee: number
           status: string
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
+          stripe_payment_method_id: string | null
           tip_amount: number
           updated_at: string
         }
@@ -139,7 +156,7 @@ export type Database = {
           amount: number
           authorization_expires_at?: string | null
           balance_amount?: number
-          balance_payment_method?: string | null
+          balance_notification_sent_at?: string | null
           booking_id: string
           capture_method?: string | null
           capture_scheduled_for?: string | null
@@ -151,11 +168,16 @@ export type Database = {
           payment_type?: string
           pre_auth_placed_at?: string | null
           pre_auth_scheduled_for?: string | null
+          refund_reason?: string | null
+          refund_transaction_id?: string | null
+          refunded_amount?: number
+          refunded_at?: string | null
           requires_balance_payment?: boolean
           service_fee: number
           status: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
           tip_amount?: number
           updated_at?: string
         }
@@ -163,7 +185,7 @@ export type Database = {
           amount?: number
           authorization_expires_at?: string | null
           balance_amount?: number
-          balance_payment_method?: string | null
+          balance_notification_sent_at?: string | null
           booking_id?: string
           capture_method?: string | null
           capture_scheduled_for?: string | null
@@ -175,11 +197,16 @@ export type Database = {
           payment_type?: string
           pre_auth_placed_at?: string | null
           pre_auth_scheduled_for?: string | null
+          refund_reason?: string | null
+          refund_transaction_id?: string | null
+          refunded_amount?: number
+          refunded_at?: string | null
           requires_balance_payment?: boolean
           service_fee?: number
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
           tip_amount?: number
           updated_at?: string
         }
@@ -696,7 +723,6 @@ export type Database = {
           address_id: string | null
           allow_messages: boolean
           appointment_requirements: string | null
-          balance_payment_method: string | null
           cancellation_24h_charge_percentage: number
           cancellation_48h_charge_percentage: number
           cancellation_policy_enabled: boolean
@@ -705,6 +731,7 @@ export type Database = {
           deposit_value: number | null
           description: string | null
           facebook_url: string | null
+          hide_full_address: boolean
           id: string
           instagram_url: string | null
           is_published: boolean | null
@@ -726,7 +753,6 @@ export type Database = {
           address_id?: string | null
           allow_messages?: boolean
           appointment_requirements?: string | null
-          balance_payment_method?: string | null
           cancellation_24h_charge_percentage?: number
           cancellation_48h_charge_percentage?: number
           cancellation_policy_enabled?: boolean
@@ -735,6 +761,7 @@ export type Database = {
           deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
+          hide_full_address?: boolean
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
@@ -756,7 +783,6 @@ export type Database = {
           address_id?: string | null
           allow_messages?: boolean
           appointment_requirements?: string | null
-          balance_payment_method?: string | null
           cancellation_24h_charge_percentage?: number
           cancellation_48h_charge_percentage?: number
           cancellation_policy_enabled?: boolean
@@ -765,6 +791,7 @@ export type Database = {
           deposit_value?: number | null
           description?: string | null
           facebook_url?: string | null
+          hide_full_address?: boolean
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
@@ -883,6 +910,95 @@ export type Database = {
             foreignKeyName: "profile_photos_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refunds: {
+        Row: {
+          appointment_id: string
+          booking_payment_id: string
+          client_id: string
+          created_at: string
+          declined_reason: string | null
+          id: string
+          original_amount: number
+          processed_at: string | null
+          professional_id: string
+          professional_notes: string | null
+          reason: string
+          refund_amount: number | null
+          requested_amount: number | null
+          status: string
+          stripe_refund_id: string | null
+          transaction_fee: number
+          updated_at: string
+        }
+        Insert: {
+          appointment_id: string
+          booking_payment_id: string
+          client_id: string
+          created_at?: string
+          declined_reason?: string | null
+          id?: string
+          original_amount: number
+          processed_at?: string | null
+          professional_id: string
+          professional_notes?: string | null
+          reason: string
+          refund_amount?: number | null
+          requested_amount?: number | null
+          status?: string
+          stripe_refund_id?: string | null
+          transaction_fee?: number
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string
+          booking_payment_id?: string
+          client_id?: string
+          created_at?: string
+          declined_reason?: string | null
+          id?: string
+          original_amount?: number
+          processed_at?: string | null
+          professional_id?: string
+          professional_notes?: string | null
+          reason?: string
+          refund_amount?: number | null
+          requested_amount?: number | null
+          status?: string
+          stripe_refund_id?: string | null
+          transaction_fee?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_booking_payment_id_fkey"
+            columns: ["booking_payment_id"]
+            isOneToOne: false
+            referencedRelation: "booking_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1132,12 +1248,20 @@ export type Database = {
     }
     Functions: {
       calculate_payment_schedule: {
-        Args: { appointment_date: string; appointment_time: string }
+        Args: {
+          appointment_date: string
+          appointment_time: string
+          duration_minutes?: number
+        }
         Returns: {
           pre_auth_date: string
           capture_date: string
           should_pre_auth_now: boolean
         }[]
+      }
+      can_create_refund: {
+        Args: { p_appointment_id: string; p_client_id: string }
+        Returns: boolean
       }
       can_create_review: {
         Args: { p_appointment_id: string; p_client_id: string }
@@ -1162,6 +1286,19 @@ export type Database = {
       get_service_limit: {
         Args: { prof_profile_id: string }
         Returns: number
+      }
+      insert_address_and_return_id: {
+        Args: {
+          p_country?: string
+          p_state?: string
+          p_city?: string
+          p_street_address?: string
+          p_apartment?: string
+          p_latitude?: number
+          p_longitude?: number
+          p_google_place_id?: string
+        }
+        Returns: string
       }
       is_client: {
         Args: { user_uuid: string }

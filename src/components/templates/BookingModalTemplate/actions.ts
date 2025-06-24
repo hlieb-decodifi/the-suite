@@ -81,8 +81,10 @@ async function calculateTotalPrice(
     extraServicesPrice = extraServices.reduce((sum, service) => sum + Number(service.price), 0);
   }
   
-  // Fixed service fee
-  const serviceFee = 1.0;
+  // Get service fee from admin configuration
+  const { getServiceFeeFromConfig } = await import('@/server/domains/stripe-payments/stripe-operations');
+  const serviceFeeInCents = await getServiceFeeFromConfig();
+  const serviceFee = serviceFeeInCents / 100; // Convert to dollars
   
   // Calculate total
   const total = Number(serviceData.price) + extraServicesPrice + serviceFee + (tipAmount || 0);

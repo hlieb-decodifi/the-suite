@@ -16,15 +16,6 @@ export async function GET(request: Request) {
     const mode = url.searchParams.get('mode') || 'signin';
     const role = url.searchParams.get('role');
     
-    // Debug logging
-    console.log('OAuth callback params:', { 
-      mode, 
-      role, 
-      redirectTo,
-      hasCode: !!code,
-      fullUrl: request.url 
-    });
-    
     if (code) {
       const supabase = await createClient();
       
@@ -32,8 +23,6 @@ export async function GET(request: Request) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       
       if (data.session && !error) {
-        console.log('OAuth session established for user:', data.user.id);
-        
         // For signin mode, check if user already exists in our database
         if (mode === 'signin') {
           const { data: existingUser, error: userError } = await supabase

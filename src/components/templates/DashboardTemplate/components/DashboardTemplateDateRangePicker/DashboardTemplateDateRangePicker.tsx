@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, X } from 'lucide-react';
 import {
   format,
   subDays,
@@ -153,21 +153,53 @@ function CalendarFooter({
 }
 
 // Button content component to display the selected date range or placeholder
-function DateRangeDisplay({ dateRange }: { dateRange: DateRange | undefined }) {
+function DateRangeDisplay({
+  dateRange,
+  onClear,
+}: {
+  dateRange: DateRange | undefined;
+  onClear?: () => void;
+}) {
+  const handleClear = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClear?.();
+  };
+
   return (
-    <div className="text-primary hover:text-accent-foreground flex items-center gap-2">
+    <div className="text-primary flex items-center gap-2 w-full">
       <CalendarIcon className="mr-2 h-4 w-4 " />
-      {dateRange?.from ? (
-        dateRange.to ? (
-          <>
-            {format(dateRange.from, 'LLL dd, y')} -{' '}
-            {format(dateRange.to, 'LLL dd, y')}
-          </>
+      <span className="flex-1">
+        {dateRange?.from ? (
+          dateRange.to ? (
+            <>
+              {format(dateRange.from, 'LLL dd, y')} -{' '}
+              {format(dateRange.to, 'LLL dd, y')}
+            </>
+          ) : (
+            format(dateRange.from, 'LLL dd, y')
+          )
         ) : (
-          format(dateRange.from, 'LLL dd, y')
-        )
-      ) : (
-        <span>Filter by date range</span>
+          'Filter by date range'
+        )}
+      </span>
+      {dateRange?.from && onClear && (
+        <span
+          className="inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground"
+          onClick={handleClear}
+          role="button"
+          tabIndex={0}
+          aria-label="Clear date selection"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onClear?.();
+            }
+          }}
+        >
+          <X className="text-primary" />
+        </span>
       )}
     </div>
   );
@@ -254,6 +286,12 @@ export function DashboardTemplateDateRangePicker({
     onDateRangeChange(emptyRange);
   };
 
+  // Handle clear from the display button
+  const handleClearFromDisplay = () => {
+    handleClear();
+    setIsOpen(false);
+  };
+
   return (
     <div className={cn('grid gap-2', className)}>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -266,7 +304,10 @@ export function DashboardTemplateDateRangePicker({
               !dateRange && 'text-muted-foreground',
             )}
           >
-            <DateRangeDisplay dateRange={dateRange} />
+            <DateRangeDisplay
+              dateRange={dateRange}
+              onClear={handleClearFromDisplay}
+            />
           </Button>
         </PopoverTrigger>
 

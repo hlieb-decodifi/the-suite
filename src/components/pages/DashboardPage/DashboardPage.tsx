@@ -21,7 +21,15 @@ type AppointmentWithServices = {
   } | null;
 };
 
-export async function DashboardPage() {
+export type DashboardPageProps = {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+};
+
+export async function DashboardPage({
+  startDate,
+  endDate,
+}: DashboardPageProps) {
   const supabase = await createClient();
 
   // Get the current user
@@ -38,40 +46,58 @@ export async function DashboardPage() {
     user_uuid: user.id,
   });
 
-  // Get upcoming appointments for the dashboard
-  // Use start of today instead of current time to include appointments scheduled for today
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Set to start of day
-  const startOfToday = today.toISOString();
+  // Determine date range for filtering
+  // If no date range is provided, use start of today for upcoming appointments
+  let filterStartDate = startDate;
+  const filterEndDate = endDate;
 
-  // Get all appointments and filter by status on the client side to include multiple statuses
+  if (!startDate && !endDate) {
+    // Default behavior: show upcoming appointments from start of today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    filterStartDate = today.toISOString();
+  }
+
+  // Get appointments with date filtering
   const allAppointments = await getDashboardAppointments(
     user.id,
     !!isProfessional,
-    startOfToday, // Use start of today instead of current time
-    undefined,
+    filterStartDate,
+    filterEndDate,
     undefined, // Don't filter by status here
   );
 
   // Filter for upcoming appointments (confirmed, pending, upcoming statuses)
-  const upcomingAppointments = allAppointments.filter((appointment) =>
-    ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
+  // Only apply status filtering if no date range is specified (default behavior)
+  const appointmentsForDashboard =
+    !startDate && !endDate
+      ? allAppointments.filter((appointment) =>
+          ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
+        )
+      : allAppointments;
+
+  // Get stats for the dashboard (always use all appointments for stats)
+  const stats = await getDashboardStats(
+    user.id,
+    !!isProfessional,
+    startDate,
+    endDate,
   );
 
-  console.log('All appointments:', allAppointments);
-  console.log('Filtered upcoming appointments:', upcomingAppointments);
-
-  // Pass all upcoming appointments to the dashboard
-  const appointmentsForDashboard = upcomingAppointments;
-
-  // Get stats for the dashboard
-  const stats = await getDashboardStats(user.id, !!isProfessional);
-
-  // Get recent conversations for the dashboard
+  // Get recent conversations for the dashboard (messages should not be filtered by date)
   const recentConversationsResult = await getRecentConversations();
   const recentConversations = recentConversationsResult.success
     ? recentConversationsResult.conversations || []
     : [];
+
+  // Get recent refunds for the dashboard (latest 3)
+  const recentRefunds = await getDashboardRefunds(
+    user.id,
+    !!isProfessional,
+    undefined,
+    undefined,
+    3, // limit to 3 for dashboard widget
+  );
 
   return (
     <DashboardPageClient
@@ -79,6 +105,7 @@ export async function DashboardPage() {
       upcomingAppointments={appointmentsForDashboard as AppointmentType[]}
       stats={stats}
       recentConversations={recentConversations}
+      recentRefunds={recentRefunds}
     />
   );
 }
@@ -87,19 +114,18 @@ export async function DashboardPage() {
 export async function getDashboardStats(
   userId: string,
   isProfessional: boolean,
+  startDate?: string,
+  endDate?: string,
 ) {
   try {
-    // Get all appointments for the user based on role
+    // Get all appointments for the user based on role and date range
     const allAppointments = (await getDashboardAppointments(
       userId,
       isProfessional,
-      undefined,
-      undefined,
+      startDate,
+      endDate,
       undefined,
     )) as unknown as AppointmentWithServices[];
-
-    // Log structure to debug
-    console.log('First appointment structure:', allAppointments[0]);
 
     // Calculate total revenue (for professionals)
     let totalRevenue = 0;
@@ -178,5 +204,157 @@ export async function getDashboardStats(
       totalRevenue: isProfessional ? 0 : undefined,
       percentChange: 0,
     };
+  }
+}
+
+// Get refunds for the dashboard
+export async function getDashboardRefunds(
+  userId: string,
+  isProfessional: boolean,
+  startDate?: string,
+  endDate?: string,
+  limit?: number,
+) {
+  try {
+    const supabase = await createClient();
+
+    // First get refunds data with basic info
+    let refundsQuery = supabase.from('refunds').select(`
+        id,
+        reason,
+        requested_amount,
+        original_amount,
+        refund_amount,
+        status,
+        created_at,
+        updated_at,
+        appointment_id,
+        client_id,
+        professional_id
+      `);
+
+    // Filter based on user role
+    if (isProfessional) {
+      refundsQuery = refundsQuery.eq('professional_id', userId);
+    } else {
+      refundsQuery = refundsQuery.eq('client_id', userId);
+    }
+
+    // Apply date filters if provided
+    if (startDate) {
+      refundsQuery = refundsQuery.gte('created_at', startDate);
+    }
+
+    if (endDate) {
+      refundsQuery = refundsQuery.lte('created_at', endDate);
+    }
+
+    // Order by created_at descending and apply limit if specified
+    refundsQuery = refundsQuery.order('created_at', { ascending: false });
+
+    if (limit) {
+      refundsQuery = refundsQuery.limit(limit);
+    }
+
+    const { data: refundsData, error: refundsError } = await refundsQuery;
+
+    if (refundsError) {
+      console.error('Error fetching refunds:', refundsError);
+      return [];
+    }
+
+    if (!refundsData || refundsData.length === 0) {
+      return [];
+    }
+
+    // Get additional data for appointments and user names
+    const appointmentIds = refundsData.map((r) => r.appointment_id);
+    const clientIds = refundsData.map((r) => r.client_id);
+    const professionalIds = refundsData.map((r) => r.professional_id);
+
+    // Fetch appointments data
+    const { data: appointmentsData } = await supabase
+      .from('appointments')
+      .select(
+        `
+        id,
+        date,
+        start_time,
+        bookings!inner(
+          id,
+          booking_services(
+            services(name)
+          )
+        )
+      `,
+      )
+      .in('id', appointmentIds);
+
+    // Fetch user data
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('id, first_name, last_name')
+      .in('id', [...clientIds, ...professionalIds]);
+
+    // Create lookup maps
+    const appointmentsMap = new Map(
+      appointmentsData?.map((a) => [a.id, a]) || [],
+    );
+    const usersMap = new Map(usersData?.map((u) => [u.id, u]) || []);
+
+    // Transform the data to match the expected format
+    const transformedRefunds = refundsData.map((refund) => {
+      const appointment = appointmentsMap.get(refund.appointment_id);
+      const clientUser = usersMap.get(refund.client_id);
+      const professionalUser = usersMap.get(refund.professional_id);
+
+      // Get client/professional name
+      const clientName = clientUser
+        ? `${clientUser.first_name} ${clientUser.last_name}`.trim()
+        : 'Client';
+
+      const professionalName = professionalUser
+        ? `${professionalUser.first_name} ${professionalUser.last_name}`.trim()
+        : 'Professional';
+
+      // Get service name from first booking service
+      const serviceName =
+        appointment?.bookings?.booking_services?.[0]?.services?.name ||
+        'Service';
+
+      // Create appointment date/time
+      const appointmentDate = appointment
+        ? new Date(appointment.date)
+        : new Date();
+      if (appointment?.start_time) {
+        const startTimeParts = appointment.start_time.split(':').map(Number);
+        appointmentDate.setHours(
+          startTimeParts[0] || 0,
+          startTimeParts[1] || 0,
+          0,
+        );
+      }
+
+      return {
+        id: refund.id,
+        appointmentId: refund.appointment_id,
+        reason: refund.reason,
+        requestedAmount: refund.requested_amount,
+        originalAmount: refund.original_amount,
+        refundAmount: refund.refund_amount,
+        status: refund.status,
+        createdAt: refund.created_at,
+        updatedAt: refund.updated_at,
+        serviceName,
+        clientName,
+        professionalName,
+        appointmentDate: appointmentDate.toISOString(),
+      };
+    });
+
+    return transformedRefunds;
+  } catch (error) {
+    console.error('Error in getDashboardRefunds:', error);
+    return [];
   }
 }

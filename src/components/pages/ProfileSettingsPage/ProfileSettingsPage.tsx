@@ -14,7 +14,6 @@ export type DepositSettings = {
   requires_deposit: boolean;
   deposit_type: string | null;
   deposit_value: number | null;
-  balance_payment_method: string | null;
 };
 
 export type MessagingSettings = {
@@ -112,9 +111,7 @@ export async function getDepositSettings(
 
     const { data, error } = await supabase
       .from('professional_profiles')
-      .select(
-        'requires_deposit, deposit_type, deposit_value, balance_payment_method',
-      )
+      .select('requires_deposit, deposit_type, deposit_value')
       .eq('user_id', userId)
       .single();
 
@@ -127,7 +124,6 @@ export async function getDepositSettings(
       requires_deposit: data.requires_deposit || false,
       deposit_type: data.deposit_type,
       deposit_value: data.deposit_value,
-      balance_payment_method: data.balance_payment_method,
     };
   } catch (error) {
     console.error('Error fetching deposit settings:', error);
@@ -226,16 +222,15 @@ export async function updateDepositSettingsAction({
       string | number | boolean | null | undefined
     > = {
       requires_deposit: data.requires_deposit,
-      balance_payment_method: data.balance_payment_method,
       updated_at: new Date().toISOString(),
     };
 
-    // Only include deposit fields if deposit is required
+    // Add deposit configuration if deposit is required
     if (data.requires_deposit) {
-      updateData.deposit_type = data.deposit_type;
-      updateData.deposit_value = data.deposit_value;
+      updateData.deposit_type = data.deposit_type || null;
+      updateData.deposit_value = data.deposit_value || null;
     } else {
-      // Clear deposit fields when not required
+      // Clear deposit configuration if not required
       updateData.deposit_type = null;
       updateData.deposit_value = null;
     }

@@ -7,6 +7,7 @@ import type { HeaderFormValues } from '@/components/forms/HeaderForm/schema';
 import type { WorkingHoursEntry } from '@/types/working_hours';
 import type { PaymentMethod } from '@/types/payment_methods';
 import type { PortfolioPhotoUI } from '@/types/portfolio-photos';
+import type { Address } from '@/api/profiles/types';
 import { PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber';
 import { ContactSection } from './components/ContactSection/ContactSection';
 import { LocationSection } from './components/LocationSection/LocationSection';
@@ -68,6 +69,11 @@ const formatPhoneNumber = (phone: string): string => {
 export type ProfilePageClientProps = {
   user: User;
   profileData: ProfileData | null;
+  address: Address | null;
+  professionalProfile: {
+    address_id: string | null;
+    hide_full_address: boolean;
+  } | null;
   workingHours: WorkingHoursEntry[];
   timezone: string;
   paymentMethods: PaymentMethod[];
@@ -508,11 +514,11 @@ function InlinePaymentMethodsSection({
             isPublished={isPublished}
           />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-0.5">
             {acceptedMethods.length > 0 ? (
               acceptedMethods.map((method) => (
-                <div key={method.id} className="flex items-center gap-2">
-                  <Typography variant="small">{method.name}</Typography>
+                <div key={method.id} className="flex items-center">
+                  <Typography>{method.name}</Typography>
                 </div>
               ))
             ) : (
@@ -530,6 +536,8 @@ function InlinePaymentMethodsSection({
 export function ProfilePageClient({
   user,
   profileData,
+  address,
+  professionalProfile,
   workingHours,
   timezone,
   portfolioPhotos,
@@ -576,7 +584,12 @@ export function ProfilePageClient({
             isLoading={false}
             isEditable={isEditable}
           />
-          <LocationSection user={user} isEditable={isEditable} />
+          <LocationSection
+            user={user}
+            address={address}
+            professionalProfile={professionalProfile}
+            isEditable={isEditable}
+          />
           {/* {showPaymentMethods && ( */}
           <InlinePaymentMethodsSection user={user} isEditable={isEditable} />
           {/* )} */}

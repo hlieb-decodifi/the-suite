@@ -12,7 +12,7 @@ export function MobileNavLinks({ onItemClick }: MobileNavLinksProps) {
     { href: '/', label: 'Home' },
     { href: '/services', label: 'Services' },
     { href: '/professionals', label: 'Professionals' },
-    { href: '/about', label: 'About Us' },
+    { href: '/about-us', label: 'About Us' },
     { href: '/contact', label: 'Contact' },
   ];
 

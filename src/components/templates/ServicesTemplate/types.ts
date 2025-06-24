@@ -7,6 +7,17 @@ export type Professional = {
   rating: number;
   reviewCount: number;
   profile_id: string; // Database profile ID for use with APIs
+  hide_full_address: boolean;
+  address_data: {
+    id: string;
+    country: string;
+    state: string;
+    city: string;
+    street_address: string;
+    apartment: string;
+    latitude: number;
+    longitude: number;
+  } | null;
 };
 
 // Service type with related professional information

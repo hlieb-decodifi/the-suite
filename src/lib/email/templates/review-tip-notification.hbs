@@ -1,0 +1,240 @@
+<html lang='en'>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Share Your Experience - The Suite</title>
+    <style>
+      body {
+        font-family:
+          'Titillium Web',
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        line-height: 1.6;
+        color: #313131;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+      .header {
+        background: linear-gradient(135deg, #dea85b 0%, #c4924f 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .logo {
+        font-size: 28px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .greeting {
+        font-size: 18px;
+        margin-bottom: 20px;
+        color: #313131;
+      }
+      .appointment-details {
+        background-color: #f8fafc;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #dea85b;
+      }
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding: 5px 0;
+      }
+      .detail-label {
+        font-weight: 600;
+        color: #313131;
+      }
+      .detail-value {
+        color: #5d6c6f;
+      }
+      .review-section {
+        background-color: #fefaf6;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #dea85b;
+      }
+      .tip-section {
+        background-color: #fefaf6;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #c4924f;
+      }
+      .feature-icon {
+        font-size: 24px;
+        margin-bottom: 10px;
+      }
+      .feature-title {
+        font-weight: 600;
+        color: #313131;
+        margin-bottom: 8px;
+      }
+      .feature-description {
+        font-size: 14px;
+        color: #5d6c6f;
+        line-height: 1.5;
+      }
+      .cta-button {
+        display: inline-block;
+        background: linear-gradient(135deg, #dea85b 0%, #c4924f 100%);
+        color: white;
+        padding: 15px 30px;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 600;
+        margin: 20px 0;
+        text-align: center;
+        transition: transform 0.2s;
+      }
+      .cta-button:hover {
+        transform: translateY(-2px);
+      }
+      .footer {
+        background-color: #f8fafc;
+        padding: 20px;
+        text-align: center;
+        font-size: 14px;
+        color: #5d6c6f;
+        border-top: 1px solid #ececec;
+      }
+      .footer a {
+        color: #dea85b;
+        text-decoration: none;
+      }
+      @media only screen and (max-width: 600px) {
+        body {
+          padding: 10px;
+        }
+        .container {
+          margin: 0;
+        }
+        .header,
+        .content {
+          padding: 20px;
+        }
+        .detail-row {
+          flex-direction: column;
+          gap: 5px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <div class='header'>
+        <div class='logo'>The Suite</div>
+        <div>Share your experience with us!</div>
+      </div>
+
+      <div class='content'>
+        <div class='greeting'>
+          Hi
+          {{clientName}}! 👋
+        </div>
+
+        <p>Thank you for your recent appointment with
+          <strong>{{professionalName}}</strong>. We hope you had a wonderful
+          experience!</p>
+
+        <div class='appointment-details'>
+          <h3 style='margin-top: 0; color: #374151;'>Appointment Details</h3>
+          <div class='detail-row'>
+            <span class='detail-label'>Professional:</span>
+            <span class='detail-value'>{{professionalName}}</span>
+          </div>
+          <div class='detail-row'>
+            <span class='detail-label'>Date:</span>
+            <span class='detail-value'>{{appointmentDate}}</span>
+          </div>
+          <div class='detail-row'>
+            <span class='detail-label'>Time:</span>
+            <span class='detail-value'>{{appointmentTime}}</span>
+          </div>
+          <div class='detail-row'>
+            <span class='detail-label'>Payment:</span>
+            <span class='detail-value'>{{paymentMethod}}</span>
+          </div>
+          <div class='detail-row'>
+            <span class='detail-label'>Service Amount:</span>
+            <span class='detail-value'>${{serviceAmount}}</span>
+          </div>
+          <div class='detail-row'>
+            <span class='detail-label'>Platform Fee:</span>
+            <span class='detail-value'>${{serviceFee}}</span>
+          </div>
+          <div class='detail-row'>
+            <span class='detail-label'><strong>Total Paid:</strong></span>
+            <span class='detail-value'><strong>${{totalAmount}}</strong></span>
+          </div>
+        </div>
+
+        <div class='review-section'>
+          <div class='feature-icon'>⭐</div>
+          <div class='feature-title'>Leave a Review</div>
+          <div class='feature-description'>
+            Share your experience and help other clients find the perfect
+            professional. Your feedback helps us maintain our high standards of
+            service.
+          </div>
+        </div>
+
+        <div class='tip-section'>
+          <div class='feature-icon'>💝</div>
+          <div class='feature-title'>Add a Tip (Optional)</div>
+          <div class='feature-description'>
+            Show your appreciation for exceptional service. You can easily add a
+            tip to your professional's earnings.
+          </div>
+        </div>
+
+        <div style='text-align: center;'>
+          <a href='{{reviewTipUrl}}' class='cta-button'>
+            Leave Review & Add Tip
+          </a>
+        </div>
+
+        <p style='margin-top: 30px; font-size: 14px; color: #6b7280;'>
+          <strong>Your feedback matters:</strong>
+          Reviews help professionals improve their services and help other
+          clients make informed decisions. Tips are processed securely and go
+          directly to your professional.
+        </p>
+
+        <p style='font-size: 14px; color: #6b7280;'>
+          If you have any questions or concerns, please don't hesitate to
+          contact us.
+        </p>
+      </div>
+
+      <div class='footer'>
+        <p>Thank you for choosing The Suite!</p>
+        <p>
+          <a href='{{websiteUrl}}'>Visit our website</a>
+          |
+          <a href='{{supportEmail}}'>Contact Support</a>
+        </p>
+        <p style='margin-top: 15px; font-size: 12px; color: #9ca3af;'>
+          This email was sent regarding your appointment booking #{{bookingId}}
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
