@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { ServiceListItem, Professional, PaginationInfo } from './types';
+import { getProfessionalRatingStats, shouldShowPublicReviews } from '@/api/reviews/api';
 
 // Supabase project URL from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,7 +25,6 @@ function getPublicImageUrl(path: string | undefined): string | undefined {
   }
   
   // Construct the storage URL
-  // Format: {SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{PATH}
   const bucketName = 'profile-photos';
   return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${path}`;
 }
@@ -32,7 +32,7 @@ function getPublicImageUrl(path: string | undefined): string | undefined {
 /**
  * Maps raw service data to the ServiceListItem type
  */
-function mapServiceData(service: unknown): ServiceListItem {
+async function mapServiceData(service: unknown): Promise<ServiceListItem> {
   // Safely type cast the service object
   const serviceData = service as {
     id: string;
@@ -44,6 +44,17 @@ function mapServiceData(service: unknown): ServiceListItem {
       id: string;
       location: string | null;
       is_subscribed: boolean;
+      hide_full_address: boolean;
+      address: {
+        id: string;
+        country: string;
+        state: string;
+        city: string;
+        street_address: string;
+        apartment: string;
+        latitude: number;
+        longitude: number;
+      } | null;
       user: {
         id: string;
         first_name: string;
@@ -62,15 +73,45 @@ function mapServiceData(service: unknown): ServiceListItem {
   // Generate proper public URL for the avatar
   const profilePhoto = getPublicImageUrl(rawPhotoUrl);
   
+  // Get real review data for professional
+  let rating = 0;
+  let reviewCount = 0;
+  try {
+    const ratingStats = await getProfessionalRatingStats(user?.id || '');
+    const shouldShow = await shouldShowPublicReviews(user?.id || '');
+    
+    if (shouldShow && ratingStats) {
+      rating = ratingStats.averageRating;
+      reviewCount = ratingStats.totalReviews;
+    }
+  } catch (error) {
+    console.error('Error fetching review stats for professional:', user?.id, error);
+  }
+  
+  // Format address for display based on privacy settings
+  const address = professionalProfile?.address;
+  const hideFullAddress = professionalProfile?.hide_full_address || false;
+  const displayAddress = address
+    ? hideFullAddress
+      ? `${address.city}, ${address.state}, ${address.country}`
+        .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+        .trim()
+      : `${address.street_address}${address.apartment ? `, ${address.apartment}` : ''}, ${address.city}, ${address.state}, ${address.country}`
+        .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+        .trim()
+    : professionalProfile?.location || 'Location not specified'; // Fallback to legacy location field
+  
   // Create professional object
   const professional: Professional = {
     id: user?.id || 'unknown',
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
     avatar: profilePhoto,
-    address: professionalProfile?.location || 'Location not specified',
-    rating: 4.5, // Mock data, would come from reviews table
-    reviewCount: 0, // Mock data, would come from reviews count
+    address: displayAddress,
+    rating,
+    reviewCount,
     profile_id: professionalProfile?.id, // Include the professional profile ID
+    hide_full_address: hideFullAddress,
+    address_data: address,
   };
 
   // Return mapped service data
@@ -80,8 +121,6 @@ function mapServiceData(service: unknown): ServiceListItem {
     description: serviceData.description || '',
     price: serviceData.price,
     duration: serviceData.duration,
-    // TODO: Add back in when we have a way to check if a professional is subscribed
-    // isBookable: true,
     isBookable: professionalProfile?.is_subscribed === true,
     professional,
   };
@@ -128,8 +167,14 @@ function createEmptyPaginationResult(page: number, pageSize: number): ServicesWi
 export async function getServices(
   page = 1,
   pageSize = 12,
-  search?: string
+  search?: string,
+  location?: string
 ): Promise<ServicesWithPagination> {
+  // If we have location filtering, use the more comprehensive filtering function
+  if (location && location.trim() !== '') {
+    return getFilteredServices(page, pageSize, search, location);
+  }
+  
   const supabase = await createClient();
   
   // Get published profile IDs
@@ -151,6 +196,17 @@ export async function getServices(
         id,
         location,
         is_subscribed,
+        hide_full_address,
+        address:address_id(
+          id,
+          country,
+          state,
+          city,
+          street_address,
+          apartment,
+          latitude,
+          longitude
+        ),
         user:user_id(
           id,
           first_name,
@@ -163,26 +219,17 @@ export async function getServices(
     `)
     .in('professional_profile_id', publishedProfileIds);
   
-  // Add search filter if provided
+  // If there's a search term, add it to the query
   if (search && search.trim() !== '') {
-    const trimmedSearch = search.trim().toLowerCase();
-    // Use ilike for case-insensitive matching with wildcards
+    const trimmedSearch = search.trim();
     query = query.ilike('name', `%${trimmedSearch}%`);
   }
   
-  // First, get the count of total items matching the search criteria
-  let countQuery = supabase
+  // Get total count for pagination
+  const { count, error: countError } = await supabase
     .from('services')
-    .select('id', { count: 'exact' })
+    .select('*', { count: 'exact', head: true })
     .in('professional_profile_id', publishedProfileIds);
-    
-  // Add search filter to count query if needed
-  if (search && search.trim() !== '') {
-    const trimmedSearch = search.trim().toLowerCase();
-    countQuery = countQuery.ilike('name', `%${trimmedSearch}%`);
-  }
-  
-  const { count, error: countError } = await countQuery;
   
   if (countError) {
     console.error('Error counting services:', countError);
@@ -190,54 +237,39 @@ export async function getServices(
   }
   
   const totalCount = count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
   
-  if (totalCount === 0) {
-    return createEmptyPaginationResult(page, pageSize);
-  }
-  
-  // Calculate start and end for pagination
+  // Apply pagination
   const start = (page - 1) * pageSize;
   const end = start + pageSize - 1;
   
-  // Execute the query with pagination
-  const { data: servicesData, error } = await query
-    .order('name')
-    .range(start, end);
-
+  query = query.range(start, end);
+  
+  const { data: services, error } = await query;
+  
   if (error) {
     console.error('Error fetching services:', error);
     return createEmptyPaginationResult(page, pageSize);
   }
   
-  if (!servicesData || servicesData.length === 0) {
-    return { 
-      services: [], 
-      pagination: { 
-        currentPage: page, 
-        totalPages: Math.ceil(totalCount / pageSize), 
-        totalItems: totalCount, 
-        pageSize 
-      } 
-    };
-  }
+  const pagination: PaginationInfo = {
+    currentPage: page,
+    totalPages,
+    totalItems: totalCount,
+    pageSize,
+  };
   
-  // Transform the data to match our ServiceListItem type
-  const mappedServices = servicesData.map(mapServiceData);
+  // Map the services to the expected format
+  const mappedServices = await Promise.all((services || []).map(mapServiceData));
   
   return {
     services: mappedServices,
-    pagination: {
-      currentPage: page,
-      totalPages: Math.ceil(totalCount / pageSize),
-      totalItems: totalCount,
-      pageSize
-    }
+    pagination,
   };
 }
 
 /**
- * Server action that can be called from client components to fetch services
- * without requiring a full page reload
+ * Client-side action to fetch services (for use in client components)
  */
 export async function fetchServicesAction(
   page: number,
@@ -248,38 +280,138 @@ export async function fetchServicesAction(
 }
 
 /**
- * Fetches services filtered by search term and location
+ * Fetches services with both service name and location filtering
  */
 export async function getFilteredServices(
-  searchTerm?: string,
-  location?: string,
   page = 1,
-  pageSize = 12
+  pageSize = 12,
+  serviceName?: string,
+  location?: string
 ): Promise<ServicesWithPagination> {
-  // Use the updated getServices function with search parameter
-  const { services, pagination } = await getServices(page, pageSize, searchTerm);
+  const supabase = await createClient();
   
-  // If no additional location filtering is needed, return the results directly
-  if (!location) {
-    return { services, pagination };
+  // Get published profile IDs
+  const publishedProfileIds = await getPublishedProfileIds();
+  if (publishedProfileIds.length === 0) {
+    return createEmptyPaginationResult(page, pageSize);
   }
   
-  // Additional filtering for location if needed
-  const filteredServices = services.filter((service) => {
-    const locationMatch = service.professional.address
-      .toLowerCase()
-      .includes(location.toLowerCase());
-      
-    return locationMatch;
-  });
-  
-  // Adjust pagination for filtered results
-  return {
-    services: filteredServices,
-    pagination: {
-      ...pagination,
-      totalItems: filteredServices.length,
-      totalPages: Math.ceil(filteredServices.length / pageSize)
+  try {
+    // For location filtering, we need to fetch all services and filter client-side
+    // since we need to search across address components
+    let query = supabase
+      .from('services')
+      .select(`
+        id, 
+        name, 
+        description, 
+        duration,
+        price,
+        professional_profile:professional_profile_id(
+          id,
+          location,
+          is_subscribed,
+          hide_full_address,
+          address:address_id(
+            id,
+            country,
+            state,
+            city,
+            street_address,
+            apartment,
+            latitude,
+            longitude
+          ),
+          user:user_id(
+            id,
+            first_name,
+            last_name,
+            profile_photo:profile_photos(
+              url
+            )
+          )
+        )
+      `)
+      .in('professional_profile_id', publishedProfileIds);
+    
+    // Add service name filter if provided
+    if (serviceName && serviceName.trim() !== '') {
+      const trimmedSearch = serviceName.trim().toLowerCase();
+      query = query.ilike('name', `%${trimmedSearch}%`);
     }
-  };
+    
+    const { data: allServices, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching services for filtering:', error);
+      return createEmptyPaginationResult(page, pageSize);
+    }
+    
+    let filteredServices = allServices || [];
+    
+    // Apply location filter if provided
+    if (location && location.trim() !== '') {
+      const locationLower = location.trim().toLowerCase();
+      
+      // Split location into individual search terms (city, country, etc.)
+      const locationTerms = locationLower
+        .split(',')
+        .map(term => term.trim())
+        .filter(term => term.length > 0);
+      
+      filteredServices = filteredServices.filter((service) => {
+        const professionalProfile = service.professional_profile;
+        if (!professionalProfile) return false;
+        
+        // Check legacy location field
+        const legacyLocation = professionalProfile.location?.toLowerCase() || '';
+        
+        // Check address components if address exists
+        const address = professionalProfile.address;
+        
+        // Collect all searchable address fields
+        const searchableFields = [
+          legacyLocation,
+          address?.country?.toLowerCase() || '',
+          address?.state?.toLowerCase() || '',
+          address?.city?.toLowerCase() || '',
+          address?.street_address?.toLowerCase() || '',
+          address?.apartment?.toLowerCase() || '',
+        ].filter(field => field.length > 0);
+        
+        // Check if ANY of the location terms match ANY of the searchable fields
+        const matches = locationTerms.some(term => 
+          searchableFields.some(field => 
+            field.includes(term) || term.includes(field)
+          )
+        );
+        
+        return matches;
+      });
+    }
+    
+    // Calculate pagination for filtered results
+    const totalCount = filteredServices.length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedResults = filteredServices.slice(start, end);
+    
+    const pagination: PaginationInfo = {
+      currentPage: page,
+      totalPages,
+      totalItems: totalCount,
+      pageSize,
+    };
+    
+    const mappedServices = await Promise.all(paginatedResults.map(mapServiceData));
+    
+    return {
+      services: mappedServices,
+      pagination,
+    };
+  } catch (error) {
+    console.error('Unexpected error in getFilteredServices:', error);
+    return createEmptyPaginationResult(page, pageSize);
+  }
 } 

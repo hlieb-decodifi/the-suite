@@ -20,9 +20,17 @@ export type HeaderProps = {
   className?: string;
   isAuthenticated: boolean;
   userInfo: UserInfo | null;
+  isProfessional?: boolean;
+  unreadMessagesCount?: number;
 };
 
-export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
+export function Header({
+  className,
+  isAuthenticated,
+  userInfo,
+  isProfessional = false,
+  unreadMessagesCount = 0,
+}: HeaderProps) {
   const {
     isSignUpModalOpen,
     isSignInModalOpen,
@@ -34,7 +42,11 @@ export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
 
   const content =
     isAuthenticated && userInfo ? (
-      <UserMenu userInfo={userInfo} />
+      <UserMenu
+        isProfessional={isProfessional}
+        userInfo={userInfo}
+        unreadMessagesCount={unreadMessagesCount}
+      />
     ) : (
       <AuthButtons
         onSignUpClick={authHandlers.handleSignUpClick}
@@ -74,6 +86,8 @@ export function Header({ className, isAuthenticated, userInfo }: HeaderProps) {
         <MobileMenu
           isAuthenticated={isAuthenticated}
           userInfo={mobileUserInfo}
+          isProfessional={isProfessional}
+          unreadMessagesCount={unreadMessagesCount}
           onSignUpClick={authHandlers.handleSignUpClick}
           onSignInClick={authHandlers.handleSignInClick}
           onSearch={handleSearch}

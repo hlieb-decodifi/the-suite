@@ -1,6 +1,10 @@
 'use client';
 
-import type { Address, ClientProfile } from '@/api/profiles/types';
+import type {
+  Address,
+  AddressFormData,
+  ClientProfile,
+} from '@/api/profiles/types';
 import { AvatarUpload } from '@/components/common/AvatarUpload';
 import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
 import { ChangeEmailForm, ChangePasswordForm } from '@/components/forms';
@@ -16,6 +20,13 @@ import {
 } from '@/components/forms/LocationForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { MessageBadge } from '@/components/ui/message-badge';
 import { Separator } from '@/components/ui/separator';
 import { Typography } from '@/components/ui/typography';
 import { toast } from '@/components/ui/use-toast';
@@ -26,7 +37,6 @@ import {
 } from '@/utils/auth';
 import { User } from '@supabase/supabase-js';
 import {
-  Calendar,
   Edit2,
   LayoutDashboard,
   Lock,
@@ -40,21 +50,22 @@ import {
   updateClientLocationAction,
   updateUserDetailsAction,
 } from './ClientProfilePage';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 export type ClientProfilePageClientProps = {
   user: User;
   profile: ClientProfile | null;
   address: Address | null;
+  unreadMessagesCount?: number;
 };
 
 // Inline AccountSection component
-function InlineAccountSection({ user }: { user: User }) {
+function InlineAccountSection({
+  user,
+  unreadMessagesCount = 0,
+}: {
+  user: User;
+  unreadMessagesCount?: number;
+}) {
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
@@ -100,10 +111,17 @@ function InlineAccountSection({ user }: { user: User }) {
             <Link href="/dashboard" className="w-full cursor-pointer">
               <Button
                 variant="outline"
-                className="w-full font-medium justify-start text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                className="w-full font-medium justify-start text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary relative"
               >
                 <LayoutDashboard size={16} className="mr-2 text-primary" />
                 Go to Dashboard
+                {unreadMessagesCount > 0 && (
+                  <MessageBadge
+                    count={unreadMessagesCount}
+                    size="sm"
+                    className="ml-auto"
+                  />
+                )}
               </Button>
             </Link>
 
@@ -321,6 +339,10 @@ function InlineLocationSection({
         state: address.state || '',
         city: address.city || '',
         streetAddress: address.street_address || '',
+        apartment: address.apartment || '',
+        googlePlaceId: address.google_place_id || '',
+        latitude: address.latitude || undefined,
+        longitude: address.longitude || undefined,
       };
     } else if (user.user_metadata?.address) {
       // Fallback to user metadata if no address in DB
@@ -332,6 +354,10 @@ function InlineLocationSection({
         city: userAddress.city || '',
         streetAddress:
           `${userAddress.houseNumber || ''} ${userAddress.street || ''}`.trim(),
+        apartment: '',
+        googlePlaceId: '',
+        latitude: undefined,
+        longitude: undefined,
       };
     }
 
@@ -342,6 +368,10 @@ function InlineLocationSection({
       state: '',
       city: '',
       streetAddress: '',
+      apartment: '',
+      googlePlaceId: '',
+      latitude: undefined,
+      longitude: undefined,
     };
   }, [address, user.user_metadata]);
 
@@ -355,14 +385,26 @@ function InlineLocationSection({
   const handleSubmit = async (data: LocationFormValues) => {
     startTransition(async () => {
       try {
+        const addressData: AddressFormData = {
+          country: data.country || '',
+          state: data.state || '',
+          city: data.city || '',
+          streetAddress: data.streetAddress || '',
+          apartment: data.apartment || '',
+          googlePlaceId: data.googlePlaceId || '',
+        };
+
+        // Only include latitude/longitude if they exist
+        if (data.latitude !== undefined) {
+          addressData.latitude = data.latitude;
+        }
+        if (data.longitude !== undefined) {
+          addressData.longitude = data.longitude;
+        }
+
         const result = await updateClientLocationAction(
           user.id,
-          {
-            country: data.country || '',
-            state: data.state || '',
-            city: data.city || '',
-            streetAddress: data.streetAddress || '',
-          },
+          addressData,
           profile?.address_id || null,
         );
 
@@ -431,48 +473,12 @@ function InlineLocationSection({
   );
 }
 
-// Inline ServicesSection component (simplified for client view)
-function InlineServicesSection() {
-  return (
-    <Card className="border-[#ECECEC]">
-      <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
-        <div className="flex items-center">
-          <Calendar size={18} className="text-[#DEA85B] mr-2" />
-          <CardTitle className="text-[#313131]">Your Bookings</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <div className="text-center py-8">
-          <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <Typography variant="h4" className="text-[#313131] mb-2">
-            No bookings yet
-          </Typography>
-          <Typography variant="small" className="text-[#5D6C6F] mb-4">
-            When you book services, they'll appear here
-          </Typography>
-          <Link href="/dashboard">
-            <Button
-              variant="outline"
-              className="text-[#DEA85B] border-[#DEA85B] hover:bg-[#DEA85B] hover:text-white"
-            >
-              Browse Services
-            </Button>
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function ClientProfilePageClient({
   user,
   profile,
   address,
+  unreadMessagesCount = 0,
 }: ClientProfilePageClientProps) {
-  const hasAddress = Boolean(
-    address?.city || address?.state || address?.country,
-  );
-
   return (
     <div className="w-full space-y-8">
       <div className="space-y-2">
@@ -490,7 +496,10 @@ export function ClientProfilePageClient({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-1 space-y-6">
-          <InlineAccountSection user={user} />
+          <InlineAccountSection
+            user={user}
+            unreadMessagesCount={unreadMessagesCount}
+          />
           <div className="hidden md:block p-6 bg-[#F5F5F5] rounded-lg border border-[#ECECEC]">
             <Typography variant="h4" className="font-bold text-[#313131] mb-4">
               Manage Your Account
@@ -525,12 +534,6 @@ export function ClientProfilePageClient({
             profile={profile}
             address={address}
           />
-          {hasAddress && (
-            <>
-              <Separator className="my-8" />
-              <InlineServicesSection />
-            </>
-          )}
         </div>
       </div>
     </div>

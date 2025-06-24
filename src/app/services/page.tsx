@@ -2,6 +2,7 @@ import { ServicesTemplate } from '@/components/templates/ServicesTemplate';
 
 type SearchParams = {
   search?: string;
+  location?: string;
   page?: string;
 };
 

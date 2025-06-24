@@ -1,0 +1,322 @@
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Refund Processed - Transaction Complete</title>
+    <style>
+      /* Brand Colors from The Suite */
+      :root {
+        --suite-gold: #dea85b;
+        --suite-gold-light: #e6b875;
+        --suite-gold-dark: #d69a42;
+        --suite-text-dark: #313131;
+        --suite-text-muted: #5d6c6f;
+        --suite-bg-light: #f5f5f5;
+        --suite-border: #ececec;
+        --suite-white: #ffffff;
+        --suite-gold-bg: #fdf6e3;
+        --suite-info: #3b82f6;
+        --suite-info-bg: #dbeafe;
+      }
+
+      /* Email-safe font stack following Tailwind config */
+      body,
+      .font-sans {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+      }
+
+      /* Base styles */
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: var(--suite-bg-light);
+      }
+
+      .card {
+        background: var(--suite-white);
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--suite-border);
+      }
+
+      .card-header {
+        background: var(--suite-info-bg);
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 20px;
+        border: 2px solid var(--suite-info);
+      }
+
+      .bg-muted {
+        background-color: var(--suite-bg-light);
+        padding: 15px;
+        border-radius: 6px;
+      }
+
+      .text-primary {
+        color: var(--suite-gold);
+      }
+
+      .text-dark {
+        color: var(--suite-text-dark);
+      }
+
+      .text-muted {
+        color: var(--suite-text-muted);
+      }
+
+      .text-info {
+        color: var(--suite-info);
+      }
+
+      .btn-primary {
+        background: var(--suite-gold);
+        color: var(--suite-white);
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: bold;
+        display: inline-block;
+        transition: background-color 0.2s;
+      }
+
+      .btn-primary:hover {
+        background: var(--suite-gold-dark);
+      }
+
+      .link {
+        color: var(--suite-gold);
+        text-decoration: none;
+        font-weight: bold;
+      }
+
+      .link:hover {
+        color: var(--suite-gold-dark);
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      .info-circle {
+        background: var(--suite-info-bg);
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 20px auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid var(--suite-info);
+      }
+
+      .info-icon {
+        color: var(--suite-info);
+        font-size: 24px;
+        font-weight: bold;
+      }
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--suite-border);
+      }
+
+      .detail-row:last-child {
+        border-bottom: none;
+      }
+
+      .fee-highlight {
+        background: #fef3c7;
+        padding: 15px;
+        border-radius: 6px;
+        border: 2px solid #fbbf24;
+      }
+
+      /* Utility classes */
+      .mb-0 {
+        margin-bottom: 0;
+      }
+      .mt-0 {
+        margin-top: 0;
+      }
+      .my-0 {
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+      .mb-1 {
+        margin-bottom: 5px;
+      }
+      .mb-2 {
+        margin-bottom: 10px;
+      }
+      .mb-3 {
+        margin-bottom: 15px;
+      }
+      .mb-4 {
+        margin-bottom: 20px;
+      }
+      .mb-6 {
+        margin-bottom: 30px;
+      }
+      .mt-6 {
+        margin-top: 30px;
+      }
+
+      .text-sm {
+        font-size: 14px;
+      }
+      .text-base {
+        font-size: 16px;
+      }
+      .text-lg {
+        font-size: 18px;
+      }
+      .text-xl {
+        font-size: 20px;
+      }
+      .text-2xl {
+        font-size: 24px;
+      }
+      .text-3xl {
+        font-size: 28px;
+      }
+
+      .font-bold {
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body
+    style='margin: 0; padding: 0; background-color: #F5F5F5; color: #313131; line-height: 1.6;'
+  >
+    <div class='container'>
+      <div class='card-header'>
+        <div class='text-center mb-6'>
+          <div class='info-circle'>
+            <span class='info-icon'>$</span>
+          </div>
+          <h1
+            style='color: #3B82F6; margin: 0; font-size: 28px; font-weight: bold;'
+          >
+            Refund Processed
+          </h1>
+          <p style='margin: 10px 0 0 0; font-size: 16px; color: #5d6c6f;'>
+            Transaction completed successfully
+          </p>
+        </div>
+      </div>
+
+      <div class='card'>
+        <p style='margin-top: 0; margin-bottom: 20px; font-size: 16px;'>
+          Hi
+          <strong>{{professionalName}}</strong>,
+        </p>
+
+        <p style='margin-bottom: 20px; font-size: 16px;'>
+          The refund for your appointment with
+          <strong>{{clientName}}</strong>
+          has been successfully processed through Stripe. Here are the
+          transaction details:
+        </p>
+
+        <div class='bg-muted mb-4'>
+          <h3
+            style='margin-top: 0; margin-bottom: 15px; color: #DEA85B; font-size: 18px;'
+          >
+            Transaction Details
+          </h3>
+
+          <div class='detail-row'>
+            <span class='text-muted'>Client:</span>
+            <span class='font-bold'>{{clientName}}</span>
+          </div>
+
+          <div class='detail-row'>
+            <span class='text-muted'>Service:</span>
+            <span class='font-bold'>{{serviceName}}</span>
+          </div>
+
+          <div class='detail-row'>
+            <span class='text-muted'>Original Amount:</span>
+            <span class='font-bold'>${{originalAmount}}</span>
+          </div>
+
+          <div class='detail-row'>
+            <span class='text-muted'>Refund Amount:</span>
+            <span class='font-bold'>${{refundAmount}}</span>
+          </div>
+        </div>
+
+        <div class='fee-highlight mb-4'>
+          <h3
+            style='margin-top: 0; margin-bottom: 15px; color: #92400E; font-size: 18px;'
+          >
+            Transaction Fee Deducted
+          </h3>
+          <div
+            style='display: flex; justify-content: space-between; align-items: center;'
+          >
+            <span style='color: #92400E; font-weight: bold;'>Processing Fee:</span>
+            <span
+              style='color: #92400E; font-weight: bold; font-size: 18px;'
+            >${{transactionFee}}</span>
+          </div>
+          <p style='margin: 10px 0 0 0; font-size: 14px; color: #92400E;'>
+            This fee covers the cost of processing the original payment and
+            refund transaction.
+          </p>
+        </div>
+
+        <div
+          style='margin-top: 30px; padding: 15px; background-color: #DBEAFE; border-radius: 6px; border-left: 4px solid #3B82F6;'
+        >
+          <p style='margin: 0; font-size: 14px; color: #1E40AF;'>
+            <strong>Next Steps:</strong>
+            The transaction fee will be reflected in your next earnings
+            statement. If you have any questions about this refund or the
+            associated fees, please contact our support team.
+          </p>
+        </div>
+      </div>
+
+      <div class='card'>
+        <div class='text-center'>
+          <h3
+            style='margin-top: 0; margin-bottom: 15px; color: #DEA85B; font-size: 18px;'
+          >
+            Need Help?
+          </h3>
+          <p style='margin-bottom: 15px; font-size: 14px; color: #5d6c6f;'>
+            If you have questions about this refund transaction or fee
+            structure, our support team is here to assist you.
+          </p>
+          <a
+            href='{{websiteUrl}}/contact'
+            class='link'
+            style='font-size: 14px;'
+          >
+            Contact Support
+          </a>
+        </div>
+      </div>
+
+      <div style='text-align: center; margin-top: 30px;'>
+        <p style='margin: 0; font-size: 12px; color: #5d6c6f;'>
+          © 2024 The Suite. All rights reserved.
+        </p>
+        <p style='margin: 5px 0 0 0; font-size: 12px; color: #5d6c6f;'>
+          <a href='{{websiteUrl}}' class='link' style='font-size: 12px;'>Visit
+            our website</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

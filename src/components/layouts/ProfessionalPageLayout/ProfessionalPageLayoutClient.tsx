@@ -10,6 +10,7 @@ export type ProfessionalPageLayoutClientProps = {
   isOwnProfile?: boolean;
   allowMessages?: boolean;
   isCurrentUserClient?: boolean;
+  hasSharedAppointments?: boolean;
   professionalName?: string;
 };
 
@@ -19,6 +20,7 @@ export function ProfessionalPageLayoutClient({
   isOwnProfile = false,
   allowMessages = false,
   isCurrentUserClient = false,
+  hasSharedAppointments = false,
   professionalName = '',
 }: ProfessionalPageLayoutClientProps) {
   const pathname = usePathname();
@@ -80,6 +82,7 @@ export function ProfessionalPageLayoutClient({
         title={professionalName}
         allowMessages={allowMessages}
         isCurrentUserClient={isCurrentUserClient}
+        hasSharedAppointments={hasSharedAppointments}
         professionalId={profileId}
       />
 

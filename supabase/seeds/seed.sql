@@ -21,3 +21,10 @@ INSERT INTO public.subscription_plans (name, description, price, interval, strip
 ('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true);
 
 -- You can add other seed data for other tables here if needed 
+
+insert into admin_configs (key, value, description, data_type) values
+  ('min_reviews_to_display', '5', 'Minimum number of reviews before displaying professional reviews publicly', 'integer'),
+  ('service_fee_dollars', '1.0', 'Service fee charged on transactions', 'decimal'),
+  ('max_portfolio_photos', '20', 'Maximum number of portfolio photos per professional', 'integer'),
+  ('max_services_default', '50', 'Default maximum number of services per professional', 'integer'),
+  ('review_edit_window_days', '7', 'Number of days clients can edit their reviews after creation', 'integer');

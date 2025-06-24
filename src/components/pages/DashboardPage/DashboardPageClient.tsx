@@ -29,11 +29,28 @@ type DashboardStats = {
   percentChange: number;
 };
 
+export type RefundType = {
+  id: string;
+  appointmentId: string;
+  reason: string;
+  requestedAmount: number | null;
+  originalAmount: number;
+  refundAmount: number | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  serviceName: string;
+  clientName: string;
+  professionalName: string;
+  appointmentDate: string;
+};
+
 type DashboardPageClientProps = {
   isProfessional: boolean;
   upcomingAppointments: AppointmentType[];
   stats: DashboardStats;
   recentConversations: ConversationWithUser[];
+  recentRefunds?: RefundType[];
 };
 
 export function DashboardPageClient({
@@ -41,6 +58,7 @@ export function DashboardPageClient({
   upcomingAppointments = [],
   stats,
   recentConversations = [],
+  recentRefunds = [],
 }: DashboardPageClientProps) {
   // State for conversations to enable real-time updates
   const [conversations, setConversations] =
@@ -112,43 +130,22 @@ export function DashboardPageClient({
         appointment.services?.totalWithServiceFee ||
         (appointment.services?.totalPrice || appointment.services?.price || 0) +
           1.0;
-      console.log(
-        `Appointment ${appointment.id}: service price = ${price}`,
-        appointment.services,
-      );
       return total + price;
     },
     0,
   );
-
-  console.log('Upcoming appointments:', upcomingAppointments);
-  console.log('Calculated total:', upcomingAppointmentsTotal);
 
   // Count unread messages from recent conversations
   const unreadCount = conversations.reduce((total, conversation) => {
     return total + (conversation.unread_count || 0);
   }, 0);
 
-  // Refunds data - mock data for now
-  const refunds = [
-    {
-      id: '1',
-      amount: 65,
-      status: 'completed',
-      createdAt: '2023-10-05T10:00:00Z',
-      description: 'Hair Cut (Cancelled by Robert Brown)',
-    },
-    {
-      id: '2',
-      amount: 45,
-      status: 'pending',
-      createdAt: '2023-09-20T10:00:00Z',
-      description: 'Partial refund for Jennifer Lee',
-    },
-  ];
-
-  const pendingRefunds = 1;
-  const totalRefunds = 2;
+  // Refunds data from props
+  const refunds = recentRefunds;
+  const pendingRefunds = refunds.filter(
+    (refund) => refund.status === 'pending',
+  ).length;
+  const totalRefunds = refunds.length;
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -213,7 +210,7 @@ export function DashboardPageClient({
         >
           <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
             {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.map((appointment) => {
+              upcomingAppointments.slice(0, 3).map((appointment) => {
                 // Get service name from the appointment
                 const serviceName = appointment.services?.name || 'Service';
 
@@ -350,33 +347,55 @@ export function DashboardPageClient({
           viewAllText="View all refunds"
         >
           <div className="space-y-4">
-            {refunds.map((refund) => (
-              <div key={refund.id} className="p-3 bg-muted/30 rounded-lg">
-                <div className="flex justify-between items-center mb-1">
-                  <Typography className="font-medium">
-                    ${refund.amount.toFixed(2)}
-                  </Typography>
-                  <div
-                    className={cn(
-                      'text-xs px-2 py-0.5 rounded-full',
-                      refund.status === 'completed'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800',
-                    )}
-                  >
-                    {refund.status === 'completed'
-                      ? 'Refund Completed'
-                      : 'Pending Refund'}
+            {refunds.length > 0 ? (
+              refunds.map((refund) => (
+                <Link
+                  key={refund.id}
+                  href={`/refunds/${refund.id}`}
+                  className="block"
+                >
+                  <div className="p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex justify-between items-center mb-1">
+                      <Typography className="font-medium">
+                        $
+                        {(
+                          refund.requestedAmount || refund.originalAmount
+                        ).toFixed(2)}
+                      </Typography>
+                      <div
+                        className={cn(
+                          'text-xs px-2 py-0.5 rounded-full',
+                          refund.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : refund.status === 'approved'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-800',
+                        )}
+                      >
+                        {refund.status === 'completed'
+                          ? 'Completed'
+                          : refund.status === 'approved'
+                            ? 'Approved'
+                            : 'Pending'}
+                      </div>
+                    </div>
+                    <Typography className="text-sm text-muted-foreground line-clamp-2">
+                      {refund.serviceName} -{' '}
+                      {isProfessional
+                        ? refund.clientName
+                        : refund.professionalName}
+                    </Typography>
+                    <Typography className="text-xs text-muted-foreground">
+                      {format(new Date(refund.createdAt), 'MMM d, yyyy')}
+                    </Typography>
                   </div>
-                </div>
-                <Typography className="text-sm text-muted-foreground">
-                  {refund.description}
-                </Typography>
-                <Typography className="text-xs text-muted-foreground">
-                  {format(new Date(refund.createdAt), 'MMM d, yyyy')}
-                </Typography>
+                </Link>
+              ))
+            ) : (
+              <div className="py-4 text-center text-muted-foreground">
+                No recent refunds
               </div>
-            ))}
+            )}
           </div>
         </WidgetCard>
       </div>

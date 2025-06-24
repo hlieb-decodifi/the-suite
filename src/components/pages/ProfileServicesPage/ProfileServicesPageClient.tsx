@@ -6,7 +6,6 @@ import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Clock, Pencil, Trash2, Copy, Calendar } from 'lucide-react';
-import Link from 'next/link';
 import { ServiceUI, ServiceLimitInfo } from '@/types/services';
 import { cn } from '@/utils/cn';
 import { ExpandableText } from '@/components/common/ExpandableText/ExpandableText';
@@ -15,6 +14,10 @@ import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal';
 import { ServiceForm, ServiceFormValues } from '@/components/forms/ServiceForm';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useToast } from '@/components/ui/use-toast';
+import { SignInModal } from '@/components/modals/SignInModal';
+import { SignUpModal } from '@/components/modals/SignUpModal';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import {
   upsertServiceAction,
   deleteServiceAction,
@@ -45,6 +48,8 @@ function ServiceCard({
   isEditable = true,
   isDeletable = true,
   isAtLimit = false,
+  authStatus,
+  onBookNowClick,
 }: {
   service: ServiceUI;
   onEdit: (service: ServiceUI) => void;
@@ -55,7 +60,25 @@ function ServiceCard({
   isEditable?: boolean;
   isDeletable?: boolean;
   isAtLimit?: boolean;
+  authStatus?: {
+    isAuthenticated: boolean;
+    isLoading: boolean;
+    isClient: boolean;
+  };
+  onBookNowClick?: (serviceId: string) => void;
 }) {
+  // Determine if the Book Now button should be shown
+  const shouldShowBookButton =
+    !isEditable &&
+    authStatus &&
+    (!authStatus.isAuthenticated || authStatus.isClient);
+
+  const handleBookNowClick = () => {
+    if (onBookNowClick) {
+      onBookNowClick(service.id);
+    }
+  };
+
   return (
     <Card
       className={cn(
@@ -97,13 +120,14 @@ function ServiceCard({
           </div>
           <div className="flex items-center space-x-2 ml-4">
             {/* Booking button for client view */}
-            {!isEditable && (
-              <Link href={`/booking/${service.id}`}>
-                <Button>
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Book Now
-                </Button>
-              </Link>
+            {shouldShowBookButton && (
+              <Button
+                onClick={handleBookNowClick}
+                disabled={authStatus?.isLoading}
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                {authStatus?.isLoading ? 'Loading...' : 'Book Now'}
+              </Button>
             )}
 
             {/* Edit controls for professional view */}
@@ -284,14 +308,56 @@ export function ProfileServicesPageClient({
   const [isSubmittingService, setIsSubmittingService] = useState(false);
   const [isDeletingService, setIsDeletingService] = useState(false);
 
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+
   // Hooks
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const { toast } = useToast();
+  const router = useRouter();
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        setIsAuthenticated(true);
+
+        // Check if user is a client
+        const { data: isClientData } = await supabase.rpc('is_client', {
+          user_uuid: currentUser.id,
+        });
+        setIsClient(!!isClientData);
+      } else {
+        setIsAuthenticated(false);
+        setIsClient(false);
+      }
+
+      setIsAuthLoading(false);
+    };
+
+    checkAuth();
+  }, []);
 
   // Calculate remaining slots
   const maxServices = serviceLimitInfo?.maxServices || 50;
   const currentCount = serviceLimitInfo?.currentCount || services.length;
   const isAtLimit = serviceLimitInfo?.isAtLimit || currentCount >= maxServices;
+
+  // Create auth status object
+  const authStatus = {
+    isAuthenticated: !!isAuthenticated,
+    isLoading: isAuthLoading,
+    isClient,
+  };
 
   // On mobile, open modal when editingService changes
   useEffect(() => {
@@ -299,6 +365,54 @@ export function ProfileServicesPageClient({
       setIsServiceModalOpen(true);
     }
   }, [editingService, isMobile, isEditable]);
+
+  // Book Now button handler
+  const handleBookNowClick = (serviceId: string) => {
+    if (!isAuthenticated) {
+      // Show sign-in modal for unauthenticated users
+      setIsSignInModalOpen(true);
+    } else if (isClient) {
+      // Redirect authenticated clients directly to booking page
+      router.push(`/booking/${serviceId}`);
+    }
+  };
+
+  // Auth modal handlers
+  const handleSignUpClick = () => {
+    setIsSignInModalOpen(false);
+    setIsSignUpModalOpen(true);
+  };
+
+  const handleSignInClick = () => {
+    setIsSignUpModalOpen(false);
+    setIsSignInModalOpen(true);
+  };
+
+  const handleAuthSuccess = async () => {
+    setIsSignInModalOpen(false);
+    setIsSignUpModalOpen(false);
+
+    // Refresh authentication state
+    const supabase = createClient();
+    const {
+      data: { user: currentUser },
+    } = await supabase.auth.getUser();
+
+    if (currentUser) {
+      setIsAuthenticated(true);
+
+      // Check if user is a client
+      const { data: isClientData } = await supabase.rpc('is_client', {
+        user_uuid: currentUser.id,
+      });
+      setIsClient(!!isClientData);
+
+      toast({
+        title: 'Successfully signed in!',
+        description: 'You can now book services.',
+      });
+    }
+  };
 
   // Service handlers
   const handleAddServiceClick = () => {
@@ -543,6 +657,8 @@ export function ProfileServicesPageClient({
                 isEditable={isEditable}
                 isDeletable={isEditable}
                 isAtLimit={isAtLimit}
+                authStatus={authStatus}
+                onBookNowClick={handleBookNowClick}
               />
             ))}
           </div>
@@ -589,6 +705,8 @@ export function ProfileServicesPageClient({
                     isEditable={isEditable}
                     isDeletable={isEditable}
                     isAtLimit={isAtLimit}
+                    authStatus={authStatus}
+                    onBookNowClick={handleBookNowClick}
                   />
                 ))}
               </>
@@ -653,6 +771,26 @@ export function ProfileServicesPageClient({
           title="Delete Service?"
           description={`Are you sure you want to delete the service "${serviceToDelete?.name ?? 'this service'}"? This action cannot be undone.`}
           isDeleting={isDeletingService}
+        />
+      )}
+
+      {/* Sign In Modal */}
+      {isSignInModalOpen && (
+        <SignInModal
+          isOpen={isSignInModalOpen}
+          onOpenChange={setIsSignInModalOpen}
+          onSignUpClick={handleSignUpClick}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
+      {/* Sign Up Modal */}
+      {isSignUpModalOpen && (
+        <SignUpModal
+          isOpen={isSignUpModalOpen}
+          onOpenChange={setIsSignUpModalOpen}
+          onSignInClick={handleSignInClick}
+          onSuccess={handleAuthSuccess}
         />
       )}
     </div>

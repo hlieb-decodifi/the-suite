@@ -437,7 +437,7 @@ function DatePickerSection({
 
       <div className="flex justify-start">
         {isLoading ? (
-          <div className="border rounded-md p-2 w-full w-[242px]  h-[279.2px] flex items-center justify-center">
+          <div className="border rounded-md p-2 w-[242px] h-[279.2px] flex items-center justify-center">
             <Typography variant="small" className="text-muted-foreground">
               Loading available dates...
             </Typography>
@@ -617,7 +617,7 @@ export function BookingFormDateTimePicker({
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <div className="space-y-1">
         <Typography className="font-medium">Select Date & Time</Typography>
 

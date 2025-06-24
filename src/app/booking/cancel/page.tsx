@@ -3,7 +3,7 @@ import { BookingCancelContent } from './BookingCancelContent';
 
 export default function BookingCancelPage() {
   return (
-    <div className="w-full bg-background">
+    <div className="w-full flex flex-col items-center justify-center">
       <Suspense
         fallback={
           <div className="flex items-center justify-center min-h-[400px]">

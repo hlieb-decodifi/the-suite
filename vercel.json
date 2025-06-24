@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/pre-auth-payments",
+      "schedule": "0 9,21 * * *"
+    },
+    {
+      "path": "/api/cron/capture-payments",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/balance-notifications",
+      "schedule": "15 */2 * * *"
+    }
+  ]
+}

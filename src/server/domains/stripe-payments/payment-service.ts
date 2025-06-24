@@ -1,6 +1,6 @@
 import type {
-  PaymentProcessingResult,
   StripeCheckoutParams,
+  PaymentProcessingResult,
   BookingWithPaymentData
 } from './types';
 import {
@@ -12,7 +12,7 @@ import {
 import { createStripeCheckoutSession } from './stripe-operations';
 
 /**
- * Process payment for a booking based on professional's deposit settings
+ * Process booking payment using Stripe
  */
 export async function processBookingPayment(
   bookingData: BookingWithPaymentData,
@@ -21,32 +21,30 @@ export async function processBookingPayment(
   tipAmount: number = 0
 ): Promise<PaymentProcessingResult> {
   try {
-    const { bookingId, totalPrice, professionalProfile } = bookingData;
+    const { bookingId, totalPrice, paymentCalculation, professionalProfile } = bookingData;
 
-    // Check if professional has Stripe Connect account
-    if (!professionalProfile.stripe_account_id || professionalProfile.stripe_connect_status !== 'complete') {
+    if (!professionalProfile.stripe_account_id) {
       return {
         success: false,
-        error: 'Professional does not have a complete Stripe Connect account',
+        error: 'Professional has not connected their Stripe account',
         requiresPayment: false,
         paymentType: 'full'
       };
     }
 
-    // Calculate payment amounts based on deposit settings
+    // Convert to cents for Stripe
     const totalAmountInCents = Math.round(totalPrice * 100);
-    const paymentCalculation = calculatePaymentAmounts(totalAmountInCents, professionalProfile);
 
     // Determine payment type based on deposit settings
     let paymentType: 'full' | 'deposit' | 'setup_only';
 
     if (!paymentCalculation.requiresDeposit) {
-      // No deposit required - check if we need to charge full amount or just setup payment method
-      if (paymentCalculation.requiresBalancePayment && paymentCalculation.balancePaymentMethod === 'card') {
-        // Full amount will be charged via card, but we need to setup payment method first
+      // No deposit required - for card payments, we either charge full amount or setup for later
+      if (paymentCalculation.requiresBalancePayment) {
+        // Full amount will be charged later, setup payment method first
         paymentType = 'setup_only';
       } else {
-        // Full amount charged immediately (cash balance payment or no balance payment needed)
+        // Full amount charged immediately
         paymentType = 'full';
       }
     } else {
@@ -77,15 +75,8 @@ export async function processBookingPayment(
       };
     }
 
-    // If no payment is required (cash only), return success
-    if (paymentType === 'full' && paymentCalculation.balancePaymentMethod === 'cash' && !paymentCalculation.requiresDeposit) {
-      return {
-        success: true,
-        bookingId,
-        requiresPayment: false,
-        paymentType: 'full'
-      };
-    }
+    // For Stripe payment service, we always require payment through Stripe
+    // (cash payments would be handled through a different service)
 
     // Create Stripe checkout session
     const checkoutParams: StripeCheckoutParams = {
@@ -97,7 +88,6 @@ export async function processBookingPayment(
       balanceAmount: paymentCalculation.balanceAmount,
       paymentType,
       requiresBalancePayment: paymentCalculation.requiresBalancePayment,
-      balancePaymentMethod: paymentCalculation.balancePaymentMethod,
       metadata: {
         booking_id: bookingId,
         professional_profile_id: professionalProfile.id,
@@ -200,7 +190,6 @@ export async function createBookingWithPayment(
         balanceAmount: bookingWithPaymentData.paymentCalculation.balanceAmount,
         paymentType: result.paymentType,
         requiresBalancePayment: bookingWithPaymentData.paymentCalculation.requiresBalancePayment,
-        balancePaymentMethod: bookingWithPaymentData.paymentCalculation.balancePaymentMethod,
         metadata: {
           booking_id: bookingId,
           professional_profile_id: professionalProfile.id,

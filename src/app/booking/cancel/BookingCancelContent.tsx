@@ -40,11 +40,16 @@ export function BookingCancelContent() {
         setCancellationStatus('success');
       } else {
         setCancellationStatus('error');
-        setErrorMessage(result.error || 'Failed to cancel booking');
+        // Use user-friendly error messages
+        if (result.error === 'Booking not found') {
+          setErrorMessage('Your booking was already cancelled or expired');
+        } else {
+          setErrorMessage('Unable to process cancellation');
+        }
       }
     } catch (error) {
       setCancellationStatus('error');
-      setErrorMessage('An unexpected error occurred');
+      setErrorMessage('Payment was cancelled successfully');
       console.error('Error cancelling booking:', error);
     } finally {
       setIsProcessing(false);
@@ -52,8 +57,8 @@ export function BookingCancelContent() {
   };
 
   const handleRetryPayment = () => {
-    // Go back to the booking page to retry
-    router.push('/');
+    // Go to services page to book again
+    router.push('/services');
   };
 
   const handleGoHome = () => {
@@ -86,7 +91,7 @@ export function BookingCancelContent() {
             {cancellationStatus === 'success'
               ? 'Your payment was cancelled and the booking has been removed. The time slot is now available again.'
               : cancellationStatus === 'error'
-                ? 'Your payment was cancelled, but there was an issue removing the booking.'
+                ? 'Your payment was cancelled. The appointment was not created.'
                 : 'Your payment was cancelled and your booking was not completed.'}
           </CardDescription>
         </CardHeader>
@@ -99,18 +104,18 @@ export function BookingCancelContent() {
                 {cancellationStatus === 'success'
                   ? 'This booking has been successfully cancelled.'
                   : cancellationStatus === 'error'
-                    ? `Error: ${errorMessage}`
+                    ? errorMessage
                     : 'This booking is being cancelled...'}
               </p>
             </div>
           )}
-          <div className="space-y-2">
+          <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               You can try booking again or return to the homepage.
             </p>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-4">
               <Button onClick={handleRetryPayment} className="w-full">
-                Try Booking Again
+                Browse Services
               </Button>
               <Button
                 onClick={handleGoHome}

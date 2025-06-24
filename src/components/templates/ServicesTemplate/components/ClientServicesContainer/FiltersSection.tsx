@@ -4,7 +4,6 @@ import { ServicesTemplateFiltersSection } from '../ServicesTemplateFiltersSectio
 type FiltersSectionProps = {
   filters: ServicesFilters;
   isMobile?: boolean;
-  handleServerSearch: (searchTerm: string, page?: number) => Promise<void>;
 };
 
 /**
@@ -13,15 +12,11 @@ type FiltersSectionProps = {
 export function FiltersSection({
   filters,
   isMobile = false,
-  handleServerSearch,
 }: FiltersSectionProps) {
   if (isMobile) {
     return (
       <div className="md:hidden mb-2">
-        <ServicesTemplateFiltersSection
-          filters={filters}
-          handleServerSearch={handleServerSearch}
-        />
+        <ServicesTemplateFiltersSection filters={filters} />
       </div>
     );
   }
@@ -29,10 +24,7 @@ export function FiltersSection({
   return (
     <div className="hidden md:block md:w-72 flex-shrink-0">
       <div className="sticky top-24">
-        <ServicesTemplateFiltersSection
-          filters={filters}
-          handleServerSearch={handleServerSearch}
-        />
+        <ServicesTemplateFiltersSection filters={filters} />
       </div>
     </div>
   );

@@ -1,0 +1,443 @@
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Booking Confirmation</title>
+    <style>
+      /* Brand Colors from The Suite */
+      :root {
+        --suite-gold: #dea85b;
+        --suite-gold-light: #e6b875;
+        --suite-gold-dark: #d69a42;
+        --suite-text-dark: #313131;
+        --suite-text-muted: #5d6c6f;
+        --suite-bg-light: #f5f5f5;
+        --suite-border: #ececec;
+        --suite-white: #ffffff;
+        --suite-gold-bg: #fdf6e3;
+        --suite-green: #22c55e;
+        --suite-green-bg: #f0fdf4;
+        --suite-blue: #3b82f6;
+        --suite-blue-bg: #eff6ff;
+      }
+
+      /* Email-safe font stack following Tailwind config */
+      body,
+      .font-sans {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+      }
+
+      /* Base styles */
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: var(--suite-bg-light);
+      }
+
+      .card {
+        background: var(--suite-white);
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--suite-border);
+      }
+
+      .card-header {
+        background: var(--suite-gold-bg);
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .bg-muted {
+        background-color: var(--suite-bg-light);
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+      }
+
+      .text-primary {
+        color: var(--suite-gold);
+      }
+
+      .text-dark {
+        color: var(--suite-text-dark);
+      }
+
+      .text-muted {
+        color: var(--suite-text-muted);
+      }
+
+      .text-success {
+        color: var(--suite-green);
+      }
+
+      .text-blue {
+        color: var(--suite-blue);
+      }
+
+      .btn-primary {
+        background: var(--suite-gold);
+        color: var(--suite-white);
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: bold;
+        display: inline-block;
+        transition: background-color 0.2s;
+        margin: 10px 5px;
+      }
+
+      .btn-primary:hover {
+        background: var(--suite-gold-dark);
+      }
+
+      .btn-secondary {
+        background: var(--suite-blue);
+        color: var(--suite-white);
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: bold;
+        display: inline-block;
+        transition: background-color 0.2s;
+        margin: 10px 5px;
+      }
+
+      .link {
+        color: var(--suite-gold);
+        text-decoration: none;
+        font-weight: bold;
+      }
+
+      .link:hover {
+        color: var(--suite-gold-dark);
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      .checkmark-circle {
+        background: var(--suite-gold-bg);
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 20px auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid var(--suite-gold);
+        font-size: 24px;
+      }
+
+      .service-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--suite-border);
+      }
+
+      .service-item:last-child {
+        border-bottom: none;
+      }
+
+      .service-details {
+        flex: 1;
+      }
+
+      .service-name {
+        font-weight: bold;
+        color: var(--suite-text-dark);
+        margin-bottom: 4px;
+      }
+
+      .service-duration {
+        font-size: 14px;
+        color: var(--suite-text-muted);
+      }
+
+      .service-price {
+        font-weight: bold;
+        color: var(--suite-gold);
+        font-size: 16px;
+      }
+
+      .total-section {
+        background: var(--suite-gold-bg);
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+      }
+
+      .total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .total-row:last-child {
+        margin-bottom: 0;
+        padding-top: 8px;
+        border-top: 2px solid var(--suite-gold);
+        font-weight: bold;
+        font-size: 18px;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .info-item {
+        background: var(--suite-bg-light);
+        padding: 15px;
+        border-radius: 6px;
+      }
+
+      .info-label {
+        font-size: 12px;
+        color: var(--suite-text-muted);
+        text-transform: uppercase;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+
+      .info-value {
+        color: var(--suite-text-dark);
+        font-weight: bold;
+      }
+
+      /* Utility classes */
+      .mb-0 {
+        margin-bottom: 0;
+      }
+      .mt-0 {
+        margin-top: 0;
+      }
+      .mb-1 {
+        margin-bottom: 5px;
+      }
+      .mb-2 {
+        margin-bottom: 10px;
+      }
+      .mb-3 {
+        margin-bottom: 15px;
+      }
+      .mb-4 {
+        margin-bottom: 20px;
+      }
+      .mb-6 {
+        margin-bottom: 30px;
+      }
+      .mt-6 {
+        margin-top: 30px;
+      }
+
+      .text-sm {
+        font-size: 14px;
+      }
+      .text-base {
+        font-size: 16px;
+      }
+      .text-lg {
+        font-size: 18px;
+      }
+      .text-xl {
+        font-size: 20px;
+      }
+      .text-2xl {
+        font-size: 24px;
+      }
+      .text-3xl {
+        font-size: 28px;
+      }
+
+      .font-bold {
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body
+    style='margin: 0; padding: 0; background-color: #F5F5F5; color: #313131; line-height: 1.6;'
+  >
+    <div class='container'>
+      <div class='card-header'>
+        <div class='checkmark-circle text-primary'>✓</div>
+        <h1
+          style='color: #DEA85B; margin: 0; font-size: 28px; font-weight: bold;'
+        >
+          Booking Confirmed!
+        </h1>
+        <p style='margin: 10px 0 0 0; font-size: 16px; color: #5d6c6f;'>
+          Your appointment with
+          {{professionalName}}
+          has been successfully booked
+        </p>
+      </div>
+
+      <div class='card'>
+        <h2
+          style='color: #DEA85B; margin: 0 0 20px 0; font-size: 22px; font-weight: bold;'
+        >
+          Appointment Details
+        </h2>
+
+        <div class='info-grid'>
+          <div class='info-item'>
+            <div class='info-label'>Date</div>
+            <div class='info-value'>{{appointmentDate}}</div>
+          </div>
+          <div class='info-item'>
+            <div class='info-label'>Time</div>
+            <div class='info-value'>{{appointmentTime}}</div>
+          </div>
+          <div class='info-item'>
+            <div class='info-label'>Professional</div>
+            <div class='info-value'>{{professionalName}}</div>
+          </div>
+          <div class='info-item'>
+            <div class='info-label'>Booking ID</div>
+            <div class='info-value'>{{bookingId}}</div>
+          </div>
+        </div>
+
+        {{#if professionalPhone}}
+          <div class='bg-muted'>
+            <div class='info-label'>Professional Phone</div>
+            <div class='info-value'>{{professionalPhone}}</div>
+          </div>
+        {{/if}}
+
+        {{#if professionalAddress}}
+          <div class='bg-muted'>
+            <div class='info-label'>Location</div>
+            <div class='info-value'>{{professionalAddress}}</div>
+          </div>
+        {{/if}}
+
+        {{#if notes}}
+          <div class='bg-muted'>
+            <div class='info-label'>Your Notes</div>
+            <div class='info-value'>{{notes}}</div>
+          </div>
+        {{/if}}
+      </div>
+
+      <div class='card'>
+        <h3
+          style='color: #DEA85B; margin: 0 0 15px 0; font-size: 18px; font-weight: bold;'
+        >
+          Services Booked
+        </h3>
+
+        <div class='services-list'>
+          {{#each services}}
+            <div class='service-item'>
+              <div class='service-details'>
+                <div class='service-name'>{{name}}</div>
+                <div class='service-duration'>{{duration}} minutes</div>
+              </div>
+              <div class='service-price'>${{price}}</div>
+            </div>
+          {{/each}}
+        </div>
+
+        <div class='total-section'>
+          <div class='total-row'>
+            <span>Subtotal:</span>
+            <span>${{subtotal}}</span>
+          </div>
+          <div class='total-row'>
+            <span>Suite Service Fee:</span>
+            <span>${{serviceFee}}</span>
+          </div>
+          {{#if tipAmount}}
+            <div class='total-row'>
+              <span>Tip:</span>
+              <span>${{tipAmount}}</span>
+            </div>
+          {{/if}}
+          <div class='total-row'>
+            <span>Total Paid:</span>
+            <span>${{totalPaid}}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class='card text-center'>
+        <h3
+          style='color: #DEA85B; margin: 0 0 20px 0; font-size: 18px; font-weight: bold;'
+        >
+          Manage Your Appointment
+        </h3>
+
+        <div style='margin-bottom: 20px;'>
+          <a href='{{appointmentDetailsUrl}}' class='btn-primary'>
+            View Appointment Details
+          </a>
+          <a href='{{websiteUrl}}' class='btn-secondary'>
+            Back to Home
+          </a>
+        </div>
+
+        <p style='margin: 0; font-size: 14px; color: #5d6c6f;'>
+          Questions about your booking? Contact us at
+          <a href='mailto:{{supportEmail}}' class='link'>{{supportEmail}}</a>
+        </p>
+      </div>
+
+      <div class='card'>
+        <h3
+          style='color: #DEA85B; margin: 0 0 15px 0; font-size: 18px; font-weight: bold;'
+        >
+          What's Next?
+        </h3>
+
+        <div
+          style='background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e;'
+        >
+          <div style='margin-bottom: 15px;'>
+            <strong style='color: #22c55e;'>✓ Confirmation Sent</strong><br />
+            <span style='font-size: 14px; color: #5d6c6f;'>Your professional has
+              been notified about your booking</span>
+          </div>
+
+          <div style='margin-bottom: 15px;'>
+            <strong style='color: #22c55e;'>📧 Email Confirmation</strong><br />
+            <span style='font-size: 14px; color: #5d6c6f;'>Keep this email for
+              your records and appointment details</span>
+          </div>
+
+          <div style='margin-bottom: 0;'>
+            <strong style='color: #22c55e;'>📱 Stay Connected</strong><br />
+            <span style='font-size: 14px; color: #5d6c6f;'>You'll receive
+              updates about your appointment via email</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style='text-align: center; margin-top: 30px; padding: 20px; color: #5d6c6f; font-size: 12px;'
+      >
+        <p style='margin: 0 0 10px 0;'>
+          This email was sent by
+          <strong>The Suite</strong><br />
+          <a href='{{websiteUrl}}' class='link'>{{websiteUrl}}</a>
+        </p>
+        <p style='margin: 0; font-size: 11px;'>
+          © 2025 The Suite. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

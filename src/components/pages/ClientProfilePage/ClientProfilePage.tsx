@@ -55,6 +55,7 @@ export async function ClientProfilePage() {
       }}
       profile={clientData.profile}
       address={clientData.address}
+      unreadMessagesCount={clientData.unreadMessagesCount}
     />
   );
 }
@@ -102,11 +103,23 @@ export async function getClientProfileData(userId: string) {
       }
     }
 
+    // Fetch unread messages count
+    let unreadMessagesCount = 0;
+    try {
+      const { getUnreadMessagesCount } = await import(
+        '@/components/layouts/DashboardPageLayout/DashboardPageLayout'
+      );
+      unreadMessagesCount = await getUnreadMessagesCount(userId);
+    } catch (messageError) {
+      console.error('Error fetching unread messages count:', messageError);
+    }
+
     return {
       firstName: userData?.first_name || '',
       lastName: userData?.last_name || '',
       profile: profile || null,
       address,
+      unreadMessagesCount,
     };
   } catch (error) {
     console.error('Error fetching client profile data:', error);
@@ -115,6 +128,7 @@ export async function getClientProfileData(userId: string) {
       lastName: '',
       profile: null as ClientProfile | null,
       address: null as Address | null,
+      unreadMessagesCount: 0,
     };
   }
 }
@@ -198,15 +212,28 @@ export async function updateClientLocationAction(
     const supabase = await createClient();
     let addressId = existingAddressId;
 
+    // If manually edited, clear coordinates and Google Place ID to prevent invalid data
+    const isManualEdit = addressData.googlePlaceId === 'MANUAL_EDIT';
+    const cleanedAddressData = {
+      ...addressData,
+      latitude: isManualEdit ? null : (addressData.latitude ?? null),
+      longitude: isManualEdit ? null : (addressData.longitude ?? null),
+      googlePlaceId: isManualEdit ? null : (addressData.googlePlaceId ?? null),
+    };
+
     // If we have an existing address, update it
     if (existingAddressId) {
       const { error: updateError } = await supabase
         .from('addresses')
         .update({
-          country: addressData.country,
-          state: addressData.state,
-          city: addressData.city,
-          street_address: addressData.streetAddress,
+          country: cleanedAddressData.country,
+          state: cleanedAddressData.state,
+          city: cleanedAddressData.city,
+          street_address: cleanedAddressData.streetAddress,
+          apartment: cleanedAddressData.apartment ?? null,
+          latitude: cleanedAddressData.latitude,
+          longitude: cleanedAddressData.longitude,
+          google_place_id: cleanedAddressData.googlePlaceId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingAddressId);
@@ -216,24 +243,27 @@ export async function updateClientLocationAction(
         return { success: false, error: updateError.message };
       }
     } else {
-      // Create a new address
-      const { data: newAddress, error: insertError } = await supabase
-        .from('addresses')
-        .insert({
-          country: addressData.country,
-          state: addressData.state,
-          city: addressData.city,
-          street_address: addressData.streetAddress,
-        })
-        .select('id')
-        .single();
+      // Create a new address using the RPC function that bypasses RLS
+      const { data: newAddressId, error: rpcError } = await supabase.rpc(
+        'insert_address_and_return_id',
+        {
+          p_country: cleanedAddressData.country,
+          p_state: cleanedAddressData.state,
+          p_city: cleanedAddressData.city,
+          p_street_address: cleanedAddressData.streetAddress,
+          p_apartment: cleanedAddressData.apartment ?? undefined,
+          p_latitude: cleanedAddressData.latitude ?? undefined,
+          p_longitude: cleanedAddressData.longitude ?? undefined,
+          p_google_place_id: cleanedAddressData.googlePlaceId ?? undefined,
+        } as never, // Type assertion to handle RPC parameter mismatch
+      );
 
-      if (insertError) {
-        console.error('Error creating address:', insertError);
-        return { success: false, error: insertError.message };
+      if (rpcError) {
+        console.error('Error creating address via RPC:', rpcError);
+        return { success: false, error: rpcError.message };
       }
 
-      addressId = newAddress.id;
+      addressId = newAddressId as string;
 
       // Update the client profile with the new address ID
       const { error: profileError } = await supabase
@@ -242,7 +272,7 @@ export async function updateClientLocationAction(
           {
             user_id: userId,
             address_id: addressId,
-            location: `${addressData.city}, ${addressData.state}`,
+            location: `${cleanedAddressData.city}, ${cleanedAddressData.state}`,
             updated_at: new Date().toISOString(),
           },
           {

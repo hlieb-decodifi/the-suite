@@ -24,6 +24,7 @@ type ClientServicesContainerProps = {
   initialServices: ServiceListItem[];
   initialPagination: PaginationInfo;
   initialSearchTerm?: string;
+  initialLocation?: string;
 };
 
 // Helper function to handle smooth scrolling
@@ -122,7 +123,6 @@ function renderLayout(
   containerRef: RefObject<HTMLDivElement | null>,
   filters: ServicesFilters,
   handleFiltersChange: (filters: ServicesFilters) => void,
-  handleServerSearch: (searchTerm: string, page?: number) => Promise<void>,
   displayedServices: ServiceListItem[],
   pagination: PaginationInfo,
   handlePageChange: (page: number) => void,
@@ -136,19 +136,12 @@ function renderLayout(
       id="services-container"
     >
       {/* Mobile filters */}
-      <FiltersSection
-        filters={filters}
-        isMobile={true}
-        handleServerSearch={handleServerSearch}
-      />
+      <FiltersSection filters={filters} isMobile={true} />
 
       {/* Desktop view - two-column layout */}
       <div className="flex flex-col md:flex-row gap-6">
         {/* Desktop filters */}
-        <FiltersSection
-          filters={filters}
-          handleServerSearch={handleServerSearch}
-        />
+        <FiltersSection filters={filters} />
 
         {/* Services list */}
         <div className="flex-1">
@@ -169,6 +162,7 @@ export function ClientServicesContainer({
   initialServices,
   initialPagination,
   initialSearchTerm = '',
+  initialLocation = '',
 }: ClientServicesContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const authStatus = useAuthStatus();
@@ -184,7 +178,12 @@ export function ClientServicesContainer({
     isLoading,
     services,
     setServices,
-  } = useServicesState(initialServices, initialPagination, initialSearchTerm);
+  } = useServicesState(
+    initialServices,
+    initialPagination,
+    initialSearchTerm,
+    initialLocation,
+  );
 
   // Set up server-side search without page reload
   const handleServerSearch = useServerSearch(
@@ -228,7 +227,6 @@ export function ClientServicesContainer({
     containerRef,
     filters,
     handleFiltersChange,
-    handleServerSearch,
     displayedServices,
     pagination,
     handlePageChange,

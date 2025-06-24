@@ -1,0 +1,19 @@
+NEW CONTACT INQUIRY - {{urgency}} PRIORITY
+
+Subject: {{subject}}
+
+From: {{name}}
+Email: {{email}}
+{{#if phone}}Phone: {{phone}}{{/if}}
+
+Message:
+{{message}}
+
+Inquiry Details:
+- Inquiry ID: {{inquiryId}}
+- Submitted: {{submittedAt}}
+
+View in dashboard: {{dashboardUrl}}
+
+---
+This is an automated notification from The Suite contact form. 

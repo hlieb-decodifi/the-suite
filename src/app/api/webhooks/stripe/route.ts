@@ -4,8 +4,8 @@ import { updatePlanPriceInDb, updateStripeConnectStatus } from '@/server/domains
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
 
-// Configure this API route to use Edge Runtime
-export const runtime = 'edge';
+// Configure this API route to use Node.js Runtime for email functionality
+export const runtime = 'nodejs';
 
 // Simple GET endpoint for testing
 export async function GET() {
@@ -118,6 +118,58 @@ export async function POST(req: Request) {
         
       case 'person.updated':
         await handlePersonUpdated(event.data.object as Stripe.Person);
+        break;
+        
+      // Payment Intent events for our uncaptured payment flow
+      case 'payment_intent.requires_action':
+        await handlePaymentIntentRequiresAction(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      case 'payment_intent.payment_failed':
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      case 'payment_intent.canceled':
+        await handlePaymentIntentCanceled(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      case 'payment_intent.succeeded':
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        break;
+        
+      // Handle manual payment captures from Stripe dashboard
+      case 'charge.succeeded':
+        await handleChargeSucceeded(event.data.object as Stripe.Charge);
+        break;
+        
+      case 'charge.captured':
+        await handleChargeCaptured(event.data.object as Stripe.Charge);
+        break;
+        
+      // Handle refunds created through Stripe dashboard
+      case 'charge.dispute.created':
+      case 'charge.refunded':
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
+        
+      // Handle refund events for our refund system
+      case 'refund.created':
+      case 'refund.updated':
+        await handleRefundEvent(event.data.object as Stripe.Refund);
+        break;
+        
+      // Setup Intent events for saving payment methods
+      case 'setup_intent.succeeded':
+        await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent);
+        break;
+        
+      case 'setup_intent.setup_failed':
+        await handleSetupIntentFailed(event.data.object as Stripe.SetupIntent);
+        break;
+        
+      // Session events
+      case 'checkout.session.expired':
+        await handleCheckoutSessionExpired(event.data.object as Stripe.Checkout.Session);
         break;
         
       // Events we don't need to handle (created by our own API calls)
@@ -480,34 +532,125 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
     let paymentStatus = 'pending';
     let paymentIntentId: string | undefined;
     
+    console.log('🔍 Session payment_status:', session.payment_status);
+    console.log('🔍 Session payment_intent:', session.payment_intent);
+    console.log('🔍 Session payment_intent type:', typeof session.payment_intent);
+    
     if (session.mode === 'payment') {
       if (session.payment_status === 'paid') {
         paymentStatus = 'completed';
-        if (session.payment_intent && typeof session.payment_intent === 'object') {
-          paymentIntentId = session.payment_intent.id;
+        if (session.payment_intent) {
+          paymentIntentId = typeof session.payment_intent === 'string' 
+            ? session.payment_intent 
+            : session.payment_intent.id;
         }
       } else if (session.payment_status === 'unpaid') {
-        paymentStatus = 'failed';
+        // Check if this is an uncaptured payment that's actually authorized
+        if (session.payment_intent) {
+          paymentIntentId = typeof session.payment_intent === 'string' 
+            ? session.payment_intent 
+            : session.payment_intent.id;
+          
+          console.log('🔍 Payment intent ID:', paymentIntentId);
+          
+          // For uncaptured payments, we need to fetch the payment intent to check its status
+          try {
+            console.log('🔍 Fetching payment intent details...');
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            console.log('🔍 Payment intent status:', paymentIntent.status);
+            
+            // For uncaptured payments, 'requires_capture' means authorized and successful
+            if (paymentIntent.status === 'requires_capture') {
+              paymentStatus = 'completed'; // Treat as successful
+              console.log('✅ Uncaptured payment authorized successfully');
+            } else if (paymentIntent.status === 'succeeded') {
+              paymentStatus = 'completed';
+              console.log('✅ Payment succeeded');
+            } else {
+              paymentStatus = 'failed';
+              console.log('❌ Payment intent failed with status:', paymentIntent.status);
+            }
+          } catch (error) {
+            console.error('❌ Error fetching payment intent:', error);
+            paymentStatus = 'failed';
+          }
+        } else {
+          paymentStatus = 'failed';
+          console.log('❌ No payment intent found');
+        }
+      } else if (session.payment_status === 'no_payment_required') {
+        // Handle case where no payment is required (e.g., free services)
+        paymentStatus = 'completed';
+        console.log('✅ No payment required');
       }
     } else if (session.mode === 'setup') {
-      // For setup mode, we consider it successful if setup_intent succeeded
+      // For setup mode, payment method is saved but no payment taken yet
       if (session.setup_intent && typeof session.setup_intent === 'object') {
         if (session.setup_intent.status === 'succeeded') {
-          paymentStatus = 'completed';
+          paymentStatus = 'pending'; // Payment method saved, payment will be processed later
         }
       }
     }
     
     console.log('Payment status determined:', paymentStatus);
     
+    // Check if this is a split payment that needs special handling  
+    const paymentFlow = session.metadata?.payment_flow;
+    if (paymentFlow === 'split_service_fee_and_amount' && session.payment_intent && typeof session.payment_intent === 'object') {
+      // For split payments, the payment intent should be uncaptured (requires_capture status)
+      const paymentIntent = session.payment_intent;
+      if (paymentIntent.status === 'requires_capture') {
+        console.log('🔍 Processing split payment - partially capturing service fee, leaving service amount uncaptured');
+        await handleSplitPaymentPartialCapture(session, bookingId);
+      } else {
+        console.log('⚠️ Split payment intent has unexpected status:', paymentIntent.status);
+      }
+    }
+    
+    // Get payment method ID from payment intent (for any payment type)
+    let paymentMethodId: string | undefined;
+    if (session.mode === 'payment' && session.payment_intent) {
+      const paymentIntentId = typeof session.payment_intent === 'string' 
+        ? session.payment_intent 
+        : session.payment_intent.id;
+      
+      if (paymentIntentId) {
+        try {
+          // Retrieve the full payment intent to get payment method
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (paymentIntent.payment_method) {
+            paymentMethodId = typeof paymentIntent.payment_method === 'string' 
+              ? paymentIntent.payment_method 
+              : paymentIntent.payment_method.id;
+            console.log('🔍 Extracted payment method ID from payment intent:', paymentMethodId);
+          }
+        } catch (error) {
+          console.error('Error retrieving payment intent for payment method:', error);
+        }
+      }
+    }
+
     // Update booking payment status
+    const updateData: {
+      status: string;
+      stripe_payment_intent_id: string | null;
+      stripe_payment_method_id?: string;
+      updated_at: string;
+    } = {
+      status: paymentStatus,
+      stripe_payment_intent_id: paymentIntentId || null,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Add payment method ID if we have one (for uncaptured payments)
+    if (paymentMethodId) {
+      updateData.stripe_payment_method_id = paymentMethodId;
+      console.log('🔍 Saving payment method ID to database:', paymentMethodId);
+    }
+
     const { error: paymentUpdateError } = await supabase
       .from('booking_payments')
-      .update({
-        status: paymentStatus,
-        stripe_payment_intent_id: paymentIntentId || null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('booking_id', bookingId);
     
     if (paymentUpdateError) {
@@ -530,6 +673,134 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         console.error('Failed to update booking status:', bookingUpdateError);
       } else {
         console.log('Successfully confirmed booking');
+        
+        // Calculate and set capture_scheduled_for for card payments
+        try {
+          console.log('🔍 Getting payment method details for booking:', bookingId);
+          
+          // Get the payment method to check if it's a card payment
+          const { data: paymentDetails } = await supabase
+            .from('booking_payments')
+            .select(`
+              payment_method_id,
+              payment_methods!inner(is_online)
+            `)
+            .eq('booking_id', bookingId)
+            .single();
+          
+          const isCardPayment = paymentDetails?.payment_methods?.is_online === true;
+          console.log('🔍 Is card payment:', isCardPayment);
+          
+          if (isCardPayment) {
+            console.log('💳 Setting capture schedule for card payment...');
+            
+            // Get appointment details with all services to calculate total duration
+            const { data: appointmentDetails } = await supabase
+              .from('appointments')
+              .select(`
+                date,
+                start_time,
+                bookings!inner(
+                  booking_services(
+                    duration
+                  )
+                )
+              `)
+              .eq('booking_id', bookingId)
+              .single();
+            
+                         if (appointmentDetails) {
+               console.log('📅 Appointment details:', appointmentDetails);
+               
+               // Import utility functions for appointment time calculations
+               const { calculateAppointmentTimes, calculateTotalDuration } = await import('@/utils/appointmentUtils');
+               
+               // Calculate total duration from all services
+               const allServices = appointmentDetails.bookings.booking_services;
+               const totalDurationMinutes = calculateTotalDuration(allServices);
+               
+               console.log('⏱️ Total duration minutes:', totalDurationMinutes);
+               
+               // Calculate appointment times
+               const appointmentDate = appointmentDetails.date;
+               const startTime = appointmentDetails.start_time;
+               
+               const { appointmentStart, appointmentEnd, captureScheduledFor } = calculateAppointmentTimes(
+                 appointmentDate,
+                 startTime,
+                 totalDurationMinutes
+               );
+               
+               console.log('📅 Appointment start:', appointmentStart.toISOString());
+               console.log('📅 Appointment end:', appointmentEnd.toISOString());
+               console.log('📅 Capture scheduled for:', captureScheduledFor.toISOString());
+              
+              // Update the booking payment with capture schedule
+              const { error: captureUpdateError } = await supabase
+                .from('booking_payments')
+                .update({
+                  capture_scheduled_for: captureScheduledFor.toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq('booking_id', bookingId);
+              
+              if (captureUpdateError) {
+                console.error('❌ Failed to update capture schedule:', captureUpdateError);
+              } else {
+                console.log('✅ Successfully set capture schedule for 12 hours after appointment end');
+              }
+            } else {
+              console.error('❌ Could not get appointment details for capture scheduling');
+            }
+          }
+        } catch (captureError) {
+          console.error('❌ Error setting capture schedule:', captureError);
+          // Don't fail the webhook if capture scheduling fails
+        }
+        
+        // Send booking confirmation emails
+        try {
+          console.log('🔍 Looking for appointment ID for booking:', bookingId);
+          // Get appointment ID for this booking
+          const { data: appointment } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('booking_id', bookingId)
+            .single();
+          
+          console.log('📋 Appointment found:', appointment);
+          
+          if (appointment?.id) {
+            console.log('📧 Importing email notification function...');
+            const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+            
+            // Check if payment is uncaptured by looking at payment intent status
+            const isUncaptured = session.payment_intent && 
+              typeof session.payment_intent === 'object' && 
+              session.payment_intent.status === 'requires_capture';
+            
+            console.log('🔍 Payment status - isUncaptured:', isUncaptured);
+            console.log('📬 Calling sendBookingConfirmationEmails with:', {
+              bookingId,
+              appointmentId: appointment.id,
+              isUncaptured: isUncaptured || false
+            });
+            
+            const emailResult = await sendBookingConfirmationEmails(bookingId, appointment.id, isUncaptured || false);
+            console.log('📨 Email sending result:', emailResult);
+            
+            if (emailResult.success) {
+              console.log('✅ Booking confirmation emails sent successfully');
+            } else {
+              console.error('❌ Failed to send booking confirmation emails:', emailResult.error);
+            }
+          } else {
+            console.error('❌ No appointment found for booking:', bookingId);
+          }
+        } catch (emailError) {
+          console.error('💥 Exception while sending booking confirmation emails:', emailError);
+          // Don't fail the webhook if email sending fails
+        }
       }
     }
     
@@ -914,5 +1185,511 @@ async function handlePersonUpdated(person: Stripe.Person) {
     console.log(`Person update processed for user: ${userId}`);
   } catch (error) {
     console.error('Error handling person update:', error);
+  }
+}
+
+// Handle payment intent requiring action (3D Secure)
+async function handlePaymentIntentRequiresAction(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} requires action`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Update payment status to indicate authentication required
+    await supabase
+      .from('booking_payments')
+      .update({
+        status: 'pending',
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId)
+      .eq('stripe_payment_intent_id', paymentIntent.id);
+      
+    console.log(`Updated payment status for booking ${bookingId} - requires action`);
+  } catch (error) {
+    console.error(`Error updating payment for requires action: ${bookingId}`, error);
+  }
+}
+
+// Handle failed payment intent
+async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} failed`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete the pending_payment booking since payment failed
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+      .eq('status', 'pending_payment');
+      
+    if (deleteError) {
+      console.error(`Failed to delete failed booking ${bookingId}:`, deleteError);
+      
+      // Fallback: update payment status to failed
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId)
+        .eq('stripe_payment_intent_id', paymentIntent.id);
+    } else {
+      console.log(`Successfully deleted failed booking ${bookingId} and freed up the time slot`);
+    }
+    
+    // TODO: Send failure notification to client
+  } catch (error) {
+    console.error(`Error handling failed payment intent: ${bookingId}`, error);
+  }
+}
+
+// Handle canceled payment intent
+async function handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} canceled`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete the pending_payment booking since payment was cancelled
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+      .eq('status', 'pending_payment');
+      
+    if (deleteError) {
+      console.error(`Failed to delete cancelled booking ${bookingId}:`, deleteError);
+      
+      // Fallback: update booking status to cancelled and payment to failed  
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId)
+        .eq('stripe_payment_intent_id', paymentIntent.id);
+        
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+    } else {
+      console.log(`Successfully deleted cancelled booking ${bookingId} and freed up the time slot`);
+    }
+  } catch (error) {
+    console.error(`Error handling cancelled payment intent: ${bookingId}`, error);
+  }
+}
+
+// Handle successful payment intent
+async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`Payment intent ${paymentIntent.id} succeeded`);
+  
+  const bookingId = paymentIntent.metadata?.booking_id;
+  if (!bookingId) {
+    console.log(`No booking_id in payment intent metadata, checking database for payment intent ${paymentIntent.id}`);
+    return await handlePaymentCaptureByPaymentIntentId(paymentIntent.id);
+  }
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Update payment status to completed
+    await supabase
+      .from('booking_payments')
+      .update({
+        status: 'completed',
+        captured_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId)
+      .eq('stripe_payment_intent_id', paymentIntent.id);
+      
+    console.log(`Updated payment status for booking ${bookingId} - completed`);
+  } catch (error) {
+    console.error(`Error updating payment for success: ${bookingId}`, error);
+  }
+}
+
+// Handle charge succeeded (for manual captures via Stripe dashboard)
+async function handleChargeSucceeded(charge: Stripe.Charge) {
+  console.log(`Charge ${charge.id} succeeded`);
+  
+  // If charge is associated with a payment intent, use the payment intent ID
+  if (charge.payment_intent) {
+    const paymentIntentId = typeof charge.payment_intent === 'string' 
+      ? charge.payment_intent 
+      : charge.payment_intent.id;
+    
+    console.log(`Charge ${charge.id} is associated with payment intent ${paymentIntentId}`);
+    return await handlePaymentCaptureByPaymentIntentId(paymentIntentId);
+  }
+  
+  console.log(`Charge ${charge.id} has no associated payment intent, skipping`);
+}
+
+// Handle charge captured (for cancellation fee charges)
+async function handleChargeCaptured(charge: Stripe.Charge) {
+  console.log(`Charge ${charge.id} captured`);
+  
+  // Check if this is a cancellation fee charge
+  if (charge.metadata?.payment_type === 'cancellation_fee') {
+    const bookingId = charge.metadata?.booking_id;
+    console.log(`✅ Cancellation fee charge captured for booking ${bookingId}: $${charge.amount/100}`);
+    
+    // We don't need to update booking payment status here since the cancellation
+    // logic already handles the database updates. This is just for logging purposes.
+    return;
+  }
+  
+  // For other charges, use the existing payment intent handler
+  if (charge.payment_intent) {
+    const paymentIntentId = typeof charge.payment_intent === 'string' 
+      ? charge.payment_intent 
+      : charge.payment_intent.id;
+    
+    console.log(`Charge ${charge.id} captured - associated with payment intent ${paymentIntentId}`);
+    return await handlePaymentCaptureByPaymentIntentId(paymentIntentId);
+  }
+  
+  console.log(`Charge ${charge.id} has no associated payment intent, skipping`);
+}
+
+// Helper function to handle payment captures by payment intent ID (for manual captures)
+async function handlePaymentCaptureByPaymentIntentId(paymentIntentId: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    // Find the booking payment by stripe payment intent ID
+    const { data: payment, error: findError } = await supabase
+      .from('booking_payments')
+      .select('id, booking_id, status, captured_at')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .single();
+    
+    if (findError || !payment) {
+      console.log(`No booking payment found for payment intent ${paymentIntentId}`);
+      return;
+    }
+    
+    // Only update if payment hasn't been captured already
+    if (payment.status === 'completed' && payment.captured_at) {
+      console.log(`Payment for booking ${payment.booking_id} already captured, skipping`);
+      return;
+    }
+    
+    // Update payment status to completed
+    const { error: updateError } = await supabase
+      .from('booking_payments')
+      .update({
+        status: 'completed',
+        captured_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', payment.id);
+    
+    if (updateError) {
+      console.error(`Error updating payment status for ${payment.booking_id}:`, updateError);
+      return;
+    }
+    
+    console.log(`✅ Successfully updated payment status for booking ${payment.booking_id} - manually captured via Stripe dashboard`);
+    
+    // Send payment confirmation emails
+    try {
+      const { sendPaymentConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+      const emailResult = await sendPaymentConfirmationEmails(payment.booking_id);
+      
+      if (emailResult.success) {
+        console.log(`✅ Payment confirmation emails sent for booking: ${payment.booking_id}`);
+      } else {
+        console.error(`❌ Failed to send payment confirmation emails for booking ${payment.booking_id}: ${emailResult.error}`);
+      }
+    } catch (emailError) {
+      console.error(`💥 Exception sending payment confirmation emails for booking ${payment.booking_id}:`, emailError);
+      // Don't fail the webhook for email errors
+    }
+  } catch (error) {
+    console.error(`Error handling manual capture for payment intent ${paymentIntentId}:`, error);
+  }
+}
+
+// Handle charge refunded (manual refunds via Stripe dashboard)
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  console.log(`Charge ${charge.id} refunded`);
+  
+  // If charge is associated with a payment intent, use the payment intent ID
+  if (charge.payment_intent) {
+    const paymentIntentId = typeof charge.payment_intent === 'string' 
+      ? charge.payment_intent 
+      : charge.payment_intent.id;
+    
+    console.log(`Charge ${charge.id} refunded - associated with payment intent ${paymentIntentId}`);
+    
+    try {
+      const supabase = createAdminClient();
+      
+      // Find the booking payment by stripe payment intent ID
+      const { data: payment, error: findError } = await supabase
+        .from('booking_payments')
+        .select('id, booking_id, status')
+        .eq('stripe_payment_intent_id', paymentIntentId)
+        .single();
+      
+      if (findError || !payment) {
+        console.log(`No booking payment found for refunded payment intent ${paymentIntentId}`);
+        return;
+      }
+      
+      // Update payment status to refunded
+      const { error: updateError } = await supabase
+        .from('booking_payments')
+        .update({
+          status: 'refunded',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id);
+      
+      if (updateError) {
+        console.error(`Error updating payment status to refunded for ${payment.booking_id}:`, updateError);
+        return;
+      }
+      
+      // Also update booking status to cancelled if not already
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.booking_id)
+        .neq('status', 'cancelled'); // Only update if not already cancelled
+      
+      console.log(`✅ Successfully updated payment and booking status for booking ${payment.booking_id} - refunded via Stripe dashboard`);
+    } catch (error) {
+      console.error(`Error handling refund for payment intent ${paymentIntentId}:`, error);
+    }
+  } else {
+    console.log(`Charge ${charge.id} has no associated payment intent, skipping refund processing`);
+  }
+}
+
+// Handle successful setup intent (saved payment method)
+async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
+  console.log(`Setup intent ${setupIntent.id} succeeded`);
+  
+  const bookingId = setupIntent.metadata?.booking_id;
+  const customerId = setupIntent.customer as string;
+  const paymentMethodId = setupIntent.payment_method as string;
+  
+  if (!customerId || !bookingId || !paymentMethodId) {
+    console.error('Missing required data from setup intent:', { customerId, bookingId, paymentMethodId });
+    return;
+  }
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Get user ID from customer
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('user_id')
+      .eq('stripe_customer_id', customerId)
+      .single();
+      
+    if (customer) {
+      console.log(`Setup intent succeeded for user ${customer.user_id}, booking ${bookingId} - payment method ${paymentMethodId} saved`);
+      
+      // Update booking status to confirmed since payment method is now saved
+      await supabase
+        .from('bookings')
+        .update({ 
+          status: 'confirmed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+
+      // Update payment status to pending and save the payment method ID for cron job
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'pending',
+          stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId);
+
+      // Send booking confirmation emails
+      try {
+        // Get appointment ID for the booking
+        const { data: appointment } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('booking_id', bookingId)
+          .single();
+
+        if (appointment) {
+          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+          await sendBookingConfirmationEmails(bookingId, appointment.id, false); // false = not uncaptured, this is setup intent
+          console.log(`✅ Booking confirmation emails sent for booking ${bookingId}`);
+        } else {
+          console.error(`❌ No appointment found for booking ${bookingId}`);
+        }
+      } catch (emailError) {
+        console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
+        // Don't fail the webhook for email errors
+      }
+    }
+  } catch (error) {
+    console.error(`Error processing setup intent success:`, error);
+  }
+}
+
+// Handle failed setup intent
+async function handleSetupIntentFailed(setupIntent: Stripe.SetupIntent) {
+  console.log(`Setup intent ${setupIntent.id} failed`);
+  
+  const bookingId = setupIntent.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  void bookingId; // Suppress unused variable warning
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Log the failure - don't fail the booking for setup intent failures
+    console.log(`Setup intent failed for booking ${bookingId} - payment method not saved`);
+    void supabase; // Suppress unused variable warning
+  } catch (error) {
+    console.error(`Error processing setup intent failure:`, error);
+  }
+}
+
+// Handle expired checkout session
+async function handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
+  console.log(`Checkout session ${session.id} expired`);
+  
+  const bookingId = session.metadata?.booking_id;
+  if (!bookingId) return;
+  
+  try {
+    const supabase = createAdminClient();
+    
+    // Delete the pending_payment booking since checkout expired
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', bookingId)
+      .eq('status', 'pending_payment');
+      
+    if (deleteError) {
+      console.error(`Failed to delete expired booking ${bookingId}:`, deleteError);
+      
+      // Fallback: update payment status to failed
+      await supabase
+        .from('booking_payments')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId)
+        .eq('stripe_checkout_session_id', session.id);
+    } else {
+      console.log(`Successfully deleted expired booking ${bookingId} and freed up the time slot`);
+    }
+  } catch (error) {
+    console.error(`Error handling expired checkout session: ${bookingId}`, error);
+  }
+}
+
+// Handle refund events from our refund system
+async function handleRefundEvent(refund: Stripe.Refund) {
+  console.log(`Processing refund event for refund ${refund.id}, status: ${refund.status}`);
+  
+  try {
+    const { handleStripeRefundWebhook } = await import('@/server/domains/refunds/stripe-refund');
+    const result = await handleStripeRefundWebhook(refund);
+    
+    if (!result.success) {
+      console.error(`Failed to process refund webhook: ${result.error}`);
+      return;
+    }
+    
+    console.log(`✅ Successfully processed refund webhook for ${refund.id}`);
+  } catch (error) {
+    console.error(`Error handling refund event for ${refund.id}:`, error);
+  }
+}
+
+// Handle split payment partial capture - capture service fee, leave service amount uncaptured
+async function handleSplitPaymentPartialCapture(session: Stripe.Checkout.Session, bookingId: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    // Extract metadata
+    const serviceAmount = parseInt(session.metadata?.service_amount || '0');
+    const serviceFee = parseInt(session.metadata?.service_fee || '0');
+    const professionalStripeAccountId = session.metadata?.professional_stripe_account_id;
+    
+    if (!serviceAmount || !serviceFee || !professionalStripeAccountId) {
+      console.error('❌ Missing required data for split payment partial capture');
+      return;
+    }
+    
+    console.log(`🔍 Split payment partial capture - Total: $${(serviceAmount + serviceFee)/100}, Service fee: $${serviceFee/100}, Service amount: $${serviceAmount/100}`);
+    
+    const paymentIntentId = typeof session.payment_intent === 'string' 
+      ? session.payment_intent 
+      : session.payment_intent?.id;
+    
+    if (!paymentIntentId) {
+      console.error('❌ No payment intent ID found for split payment');
+      return;
+    }
+    
+    // Partially capture only the service fee (platform keeps this)
+    const captureResult = await stripe.paymentIntents.capture(paymentIntentId, {
+      amount_to_capture: serviceFee // Only capture service fee for platform
+    });
+    
+    console.log(`✅ Partially captured service fee: $${captureResult.amount_received/100} for platform, Service amount: $${serviceAmount/100} remains uncaptured for professional`);
+    
+    // The remaining $serviceAmount is still uncaptured and can be:
+    // 1. Fully captured later (professional gets full service amount)
+    // 2. Partially captured for cancellation fees (professional gets percentage)
+    // 3. Cancelled completely (customer gets full refund of service amount)
+    
+    // Note: Payment method ID will be handled by the main checkout handler
+    // Just update the booking payment with the payment intent ID
+    await supabase
+      .from('booking_payments')
+      .update({
+        stripe_payment_intent_id: paymentIntentId,
+        status: 'completed', // Booking is confirmed even though service amount is uncaptured
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+    
+    console.log('✅ Updated booking payment record with split payment info');
+    
+  } catch (error) {
+    console.error('❌ Error processing split payment partial capture:', error);
   }
 } 

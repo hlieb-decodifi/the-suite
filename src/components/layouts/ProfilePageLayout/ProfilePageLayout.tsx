@@ -32,6 +32,7 @@ export type UserData = {
 export type ProfileValidationData = {
   workingHours: WorkingHoursEntry[];
   paymentMethods: PaymentMethod[];
+  hasAddress: boolean;
 };
 
 export type ProfilePageLayoutProps = {
@@ -75,6 +76,17 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
   // Fetch validation data (working hours and payment methods)
   const validationData = await getValidationData(user.id);
 
+  // Fetch unread messages count
+  let unreadMessagesCount = 0;
+  try {
+    const { getUnreadMessagesCount } = await import(
+      '@/components/layouts/DashboardPageLayout/DashboardPageLayout'
+    );
+    unreadMessagesCount = await getUnreadMessagesCount(user.id);
+  } catch (messageError) {
+    console.error('Error fetching unread messages count:', messageError);
+  }
+
   return (
     <div className="w-full mx-auto">
       <ProfilePageLayoutClient
@@ -82,6 +94,7 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
         userData={userData}
         connectStatus={connectStatus}
         validationData={validationData}
+        unreadMessagesCount={unreadMessagesCount}
       >
         {children}
       </ProfilePageLayoutClient>
@@ -231,15 +244,27 @@ export async function getValidationData(
       ? paymentMethodsResult.methods || []
       : [];
 
+    // Check if professional has an address
+    const supabase = await createClient();
+    const { data: profProfile } = await supabase
+      .from('professional_profiles')
+      .select('address_id')
+      .eq('user_id', userId)
+      .single();
+
+    const hasAddress = !!profProfile?.address_id;
+
     return {
       workingHours,
       paymentMethods,
+      hasAddress,
     };
   } catch (error) {
     console.error('Error fetching validation data:', error);
     return {
       workingHours: [],
       paymentMethods: [],
+      hasAddress: false,
     };
   }
 }

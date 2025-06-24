@@ -84,10 +84,23 @@ create table addresses (
   state text,
   city text,
   street_address text,
+  apartment text, -- Apartment/unit number
+  latitude decimal(10, 8), -- Store latitude with high precision
+  longitude decimal(11, 8), -- Store longitude with high precision  
+  google_place_id text, -- Google Places API place ID for reference
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table addresses enable row level security;
+
+-- Create indexes for geographic queries and place lookups
+create index if not exists idx_addresses_coordinates 
+on addresses(latitude, longitude) 
+where latitude is not null and longitude is not null;
+
+create index if not exists idx_addresses_google_place_id 
+on addresses(google_place_id) 
+where google_place_id is not null;
 
 /**
 * PROFESSIONAL_PROFILES
@@ -121,9 +134,15 @@ create table professional_profiles (
     (requires_deposit = true AND deposit_type = 'percentage' AND deposit_value >= 0 AND deposit_value <= 100) OR
     (requires_deposit = true AND deposit_type = 'fixed' AND deposit_value >= 0)
   ),
-  balance_payment_method text default 'card' check (balance_payment_method in ('card', 'cash')),
+
   -- Messaging settings
   allow_messages boolean default true not null,
+  -- Address display settings
+  hide_full_address boolean default false not null, -- Flag to hide full address on public profile
+  -- Cancellation policy settings
+  cancellation_policy_enabled boolean default false not null,
+  cancellation_24h_charge_percentage decimal(5,2) default 50.00 not null,
+  cancellation_48h_charge_percentage decimal(5,2) default 25.00 not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -136,6 +155,17 @@ where stripe_account_id is not null;
 
 create index if not exists idx_professional_profiles_stripe_connect_status 
 on professional_profiles(stripe_connect_status);
+
+-- Add constraints for cancellation policy fields
+alter table professional_profiles add constraint chk_cancellation_24h_percentage 
+  check (cancellation_24h_charge_percentage >= 0 and cancellation_24h_charge_percentage <= 100);
+
+alter table professional_profiles add constraint chk_cancellation_48h_percentage 
+  check (cancellation_48h_charge_percentage >= 0 and cancellation_48h_charge_percentage <= 100);
+
+-- Ensure 24h charge is >= 48h charge (stricter policy for less notice)
+alter table professional_profiles add constraint chk_cancellation_policy_logic 
+  check (cancellation_24h_charge_percentage >= cancellation_48h_charge_percentage);
 
 /**
 * CLIENT_PROFILES
@@ -210,18 +240,23 @@ create policy "Professionals can view their own service limits"
     )
   );
 
--- Function to get service limit for a professional (with default of 50)
+-- Function to get service limit for a professional (updated to use admin config)
 create or replace function get_service_limit(prof_profile_id uuid)
 returns integer as $$
 declare
   limit_value integer;
+  default_limit integer;
 begin
+  -- Get custom limit if set
   select max_services into limit_value
   from service_limits
   where professional_profile_id = prof_profile_id;
   
-  -- Return default of 50 if no custom limit is set
-  return coalesce(limit_value, 50);
+  -- Get default limit from admin configuration
+  select get_admin_config('max_services_default', '50')::integer into default_limit;
+  
+  -- Return custom limit if set, otherwise return admin-configured default
+  return coalesce(limit_value, default_limit);
 end;
 $$ language plpgsql security definer;
 
@@ -375,6 +410,17 @@ create policy "Users can delete addresses linked to their profile"
     )
   );
 
+-- Allow public viewing of addresses for published professionals
+create policy "Anyone can view addresses of published professionals"
+  on addresses for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.address_id = addresses.id
+      and professional_profiles.is_published = true
+    )
+  );
+
 -- RLS policies for professional profiles
 drop policy if exists "Professionals can view their own profile" on professional_profiles;
 drop policy if exists "Professionals can update their own profile" on professional_profiles;
@@ -408,6 +454,8 @@ create policy "Clients can update their own profile"
 create policy "Clients can create their own profile"
   on client_profiles for insert
   with check (auth.uid() = user_id);
+
+
 
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
@@ -648,9 +696,14 @@ alter table portfolio_photos enable row level security;
 -- Add constraint to limit portfolio photos to 20 per user
 create or replace function check_portfolio_photo_limit()
 returns trigger as $$
+declare
+  max_photos integer;
 begin
-  if (select count(*) from portfolio_photos where user_id = new.user_id) >= 20 then
-    raise exception 'Maximum of 20 portfolio photos allowed per professional';
+  -- Get the maximum portfolio photos from configuration
+  select get_admin_config('max_portfolio_photos', '20')::integer into max_photos;
+  
+  if (select count(*) from portfolio_photos where user_id = new.user_id) >= max_photos then
+    raise exception 'Maximum of % portfolio photos allowed per professional', max_photos;
   end if;
   return new;
 end;
@@ -906,12 +959,16 @@ create table bookings (
   id uuid primary key default uuid_generate_v4(),
   client_id uuid references users not null,
   professional_profile_id uuid references professional_profiles not null,
-  status text not null check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
+  status text not null,
   notes text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table bookings enable row level security;
+
+-- Add named constraint for booking status  
+alter table bookings add constraint bookings_status_check 
+  check ((status = ANY (ARRAY['pending_payment'::text, 'pending'::text, 'confirmed'::text, 'completed'::text, 'cancelled'::text])));
 
 /**
 * APPOINTMENTS
@@ -954,17 +1011,30 @@ create table booking_payments (
   amount decimal(10, 2) not null,
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
-  status text not null check (status in ('pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance')),
+  status text not null check (status in ('incomplete', 'pending', 'completed', 'failed', 'refunded', 'partially_refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
   stripe_payment_intent_id text, -- For Stripe integration
+  stripe_payment_method_id text, -- For stored payment methods from setup intents
   -- Stripe checkout session fields
   stripe_checkout_session_id text,
   deposit_amount decimal(10, 2) default 0 not null,
   balance_amount decimal(10, 2) default 0 not null,
   payment_type text default 'full' not null check (payment_type in ('full', 'deposit', 'balance')),
   requires_balance_payment boolean default false not null,
-  balance_payment_method text check (balance_payment_method in ('card', 'cash')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Add fields to booking_payments table for uncaptured payment support
+  capture_method text default 'automatic' check (capture_method in ('automatic', 'manual')),
+  authorization_expires_at timestamp with time zone,
+  pre_auth_scheduled_for timestamp with time zone,
+  capture_scheduled_for timestamp with time zone,
+  captured_at timestamp with time zone,
+  pre_auth_placed_at timestamp with time zone,
+  balance_notification_sent_at timestamp with time zone,
+  -- Refund tracking fields for cancelled bookings
+  refunded_amount decimal(10, 2) default 0 not null,
+  refund_reason text,
+  refunded_at timestamp with time zone,
+  refund_transaction_id text
 );
 alter table booking_payments enable row level security;
 
@@ -972,6 +1042,25 @@ alter table booking_payments enable row level security;
 create index if not exists idx_booking_payments_stripe_checkout_session_id 
 on booking_payments(stripe_checkout_session_id) 
 where stripe_checkout_session_id is not null;
+
+-- Add index for efficient querying of scheduled pre-auths and captures
+create index if not exists idx_booking_payments_pre_auth_scheduled 
+on booking_payments(pre_auth_scheduled_for) 
+where pre_auth_scheduled_for is not null and status in ('incomplete', 'pending');
+
+create index if not exists idx_booking_payments_capture_scheduled 
+on booking_payments(capture_scheduled_for) 
+where capture_scheduled_for is not null and status in ('pending', 'authorized');
+
+-- Add index for refund lookups
+create index if not exists idx_booking_payments_refunded_at 
+on booking_payments(refunded_at) 
+where refunded_at is not null;
+
+-- Add constraint to ensure refunded amount doesn't exceed total amount
+alter table booking_payments 
+add constraint booking_payments_refund_amount_check 
+check (refunded_amount >= 0 and refunded_amount <= (amount + tip_amount + service_fee));
 
 /**
 * Function to check professional availability
@@ -988,6 +1077,7 @@ begin
     )
     and a.date = new.date
     and a.status != 'cancelled'
+    and b.status not in ('pending_payment', 'cancelled') -- Exclude pending payments and cancelled bookings
     and a.booking_id != new.booking_id
     and (
       (new.start_time < a.end_time and new.end_time > a.start_time) -- time slots overlap
@@ -1106,6 +1196,17 @@ create policy "Clients can create booking services for their bookings"
     )
   );
 
+create policy "Professionals can create booking services for their bookings"
+  on booking_services for insert
+  with check (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = booking_services.booking_id
+      and pp.user_id = auth.uid()
+    )
+  );
+
 -- Booking payments policies
 create policy "Users can view booking payments for their bookings"
   on booking_payments for select
@@ -1131,6 +1232,29 @@ create policy "Clients can create booking payments for their bookings"
       select 1 from bookings
       where bookings.id = booking_payments.booking_id
       and bookings.client_id = auth.uid()
+    )
+  );
+
+-- Additional policies for professionals to view client data when they have shared appointments
+create policy "Professionals can view client profiles for shared appointments"
+  on client_profiles for select
+  using (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.client_id = client_profiles.user_id
+      and pp.user_id = auth.uid()
+    )
+  );
+
+create policy "Professionals can view user data for clients with shared appointments"
+  on users for select
+  using (
+    exists (
+      select 1 from bookings b
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.client_id = users.id
+      and pp.user_id = auth.uid()
     )
   );
 
@@ -1257,6 +1381,8 @@ create policy "Users can update their own basic data"
     auth.uid() = id AND
     role_id IS NOT NULL
   );
+
+
 
 -- RLS policies for profile photos
 drop policy if exists "Anyone can view profile photos of published professionals" on profile_photos;
@@ -1428,16 +1554,42 @@ create policy "Users can view their own conversations"
   on conversations for select
   using (auth.uid() = client_id or auth.uid() = professional_id);
 
-create policy "Clients can create conversations with professionals who allow messages"
+create policy "Users can create conversations based on appointment history or message settings"
   on conversations for insert
   with check (
-    auth.uid() = client_id
-    and is_client(auth.uid())
-    and is_professional(professional_id)
-    and exists (
-      select 1 from professional_profiles
-      where user_id = professional_id
-      and allow_messages = true
+    -- Ensure proper user roles
+    is_client(client_id) and is_professional(professional_id)
+    and (
+      -- Case 1: If users have shared appointments, either can start conversation
+      (
+        (auth.uid() = client_id or auth.uid() = professional_id)
+        and exists (
+          select 1 from bookings b
+          where b.client_id = conversations.client_id
+          and b.professional_profile_id in (
+            select id from professional_profiles 
+            where user_id = conversations.professional_id
+          )
+        )
+      )
+      or
+      -- Case 2: If no shared appointments, only client can start and professional must allow messages
+      (
+        auth.uid() = client_id
+        and not exists (
+          select 1 from bookings b
+          where b.client_id = conversations.client_id
+          and b.professional_profile_id in (
+            select id from professional_profiles 
+            where user_id = conversations.professional_id
+          )
+        )
+        and exists (
+          select 1 from professional_profiles
+          where user_id = professional_id
+          and allow_messages = true
+        )
+      )
     )
   );
 
@@ -1643,6 +1795,569 @@ create policy "Clients can create appointments for their bookings"
       and bookings.client_id = auth.uid()
     )
   );
+
+-- Function to calculate pre-auth and capture times based on appointment date and duration
+create or replace function calculate_payment_schedule(appointment_date date, appointment_time time, duration_minutes integer default 60)
+returns table(
+  pre_auth_date timestamp with time zone,
+  capture_date timestamp with time zone,
+  should_pre_auth_now boolean
+) as $$
+declare
+  appointment_start_datetime timestamp with time zone;
+  appointment_end_datetime timestamp with time zone;
+  six_days_before timestamp with time zone;
+  twelve_hours_after_end timestamp with time zone;
+begin
+  -- Combine date and time into full timestamp for start
+  appointment_start_datetime := (appointment_date || ' ' || appointment_time)::timestamp with time zone;
+  
+  -- Calculate appointment end time by adding duration
+  appointment_end_datetime := appointment_start_datetime + (duration_minutes || ' minutes')::interval;
+  
+  -- Calculate 6 days before appointment start (for pre-auth)
+  six_days_before := appointment_start_datetime - interval '6 days';
+  
+  -- Calculate 12 hours after appointment END (for capture)
+  twelve_hours_after_end := appointment_end_datetime + interval '12 hours';
+  
+  -- Determine if we should place pre-auth now (if appointment is within 6 days)
+  return query select 
+    six_days_before as pre_auth_date,
+    twelve_hours_after_end as capture_date,
+    (now() >= six_days_before) as should_pre_auth_now;
+end;
+$$ language plpgsql;
+
+/**
+* CONTACT INQUIRIES
+* Table for storing contact form submissions from clients to suite admins
+*/
+create table contact_inquiries (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  email text not null,
+  phone text,
+  subject text not null,
+  message text not null,
+  urgency text not null default 'medium' check (urgency in ('low', 'medium', 'high')),
+  status text not null default 'new' check (status in ('new', 'in_progress', 'resolved', 'closed')),
+  user_id uuid references auth.users(id),
+  page_url text,
+  user_agent text,
+  attachments jsonb default '[]'::jsonb,
+  admin_notes text,
+  assigned_to uuid references auth.users(id),
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table contact_inquiries enable row level security;
+
+-- Create indexes for faster queries
+create index if not exists idx_contact_inquiries_status on contact_inquiries(status);
+create index if not exists idx_contact_inquiries_created_at on contact_inquiries(created_at);
+create index if not exists idx_contact_inquiries_user_id on contact_inquiries(user_id);
+create index if not exists idx_contact_inquiries_assigned_to on contact_inquiries(assigned_to);
+
+-- RLS Policies for contact_inquiries
+-- Users can view their own inquiries
+create policy "Users can view their own inquiries" on contact_inquiries
+  for select using (user_id = auth.uid());
+
+-- Anyone (including unauthenticated users) can create inquiries
+create policy "Anyone can create inquiries" on contact_inquiries
+  for insert with check (true);
+
+-- Admins can view all inquiries (assuming admins have a specific role)
+create policy "Admins can view all inquiries" on contact_inquiries
+  for select using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Admins can update inquiries
+create policy "Admins can update inquiries" on contact_inquiries
+  for update using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Create trigger for updated_at
+create or replace function update_contact_inquiries_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_contact_inquiries_updated_at
+  before update on contact_inquiries
+  for each row
+  execute function update_contact_inquiries_updated_at();
+
+/**
+* ADMIN CONFIGURATION SYSTEM
+* Table for storing configurable application settings
+*/
+
+/**
+* ADMIN_CONFIGS
+* Stores application configuration that can be managed from admin panel
+*/
+create table admin_configs (
+  id uuid primary key default uuid_generate_v4(),
+  key text not null unique,
+  value text not null,
+  description text not null,
+  data_type text not null check (data_type in ('integer', 'decimal', 'boolean', 'text')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table admin_configs enable row level security;
+
+-- Create index for faster lookups
+create index if not exists idx_admin_configs_key on admin_configs(key);
+
+-- Function to get admin configuration value with default fallback
+create or replace function get_admin_config(config_key text, default_value text default null)
+returns text as $$
+declare
+  config_value text;
+begin
+  select value into config_value
+  from admin_configs
+  where key = config_key;
+  
+  return coalesce(config_value, default_value);
+end;
+$$ language plpgsql security definer;
+
+-- Function to set admin configuration value
+create or replace function set_admin_config(config_key text, config_value text)
+returns boolean as $$
+begin
+  insert into admin_configs (key, value, description, data_type)
+  values (config_key, config_value, 'Auto-created configuration', 'text')
+  on conflict (key)
+  do update set 
+    value = config_value,
+    updated_at = timezone('utc'::text, now());
+    
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Insert default configuration values
+insert into admin_configs (key, value, description, data_type) values
+  ('min_reviews_to_display', '5', 'Minimum number of reviews before displaying professional reviews publicly', 'integer'),
+  ('service_fee_dollars', '1.0', 'Service fee charged on transactions', 'decimal'),
+  ('max_portfolio_photos', '20', 'Maximum number of portfolio photos per professional', 'integer'),
+  ('max_services_default', '50', 'Default maximum number of services per professional', 'integer'),
+  ('review_edit_window_days', '7', 'Number of days clients can edit their reviews after creation', 'integer');
+
+/**
+* RLS policies for admin configurations
+*/
+
+-- Anyone can read admin configurations (needed for app functionality)
+create policy "Anyone can read admin configurations"
+  on admin_configs for select
+  using (true);
+
+-- Only admins can modify configurations
+create policy "Admins can manage configurations"
+  on admin_configs for all
+  using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Add trigger for updated_at on admin_configs
+create or replace function update_admin_configs_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_admin_configs_updated_at
+  before update on admin_configs
+  for each row
+  execute function update_admin_configs_updated_at();
+
+/**
+* REVIEWS SYSTEM
+* Tables for client reviews of professional appointments
+*/
+
+/**
+* REVIEWS
+* Client reviews for completed appointments
+*/
+create table reviews (
+  id uuid primary key default uuid_generate_v4(),
+  appointment_id uuid references appointments not null unique, -- One review per appointment
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  score integer not null check (score >= 1 and score <= 5),
+  message text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure client is actually a client and professional is actually a professional
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id))
+);
+alter table reviews enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_reviews_appointment_id on reviews(appointment_id);
+create index if not exists idx_reviews_client_id on reviews(client_id);
+create index if not exists idx_reviews_professional_id on reviews(professional_id);
+create index if not exists idx_reviews_score on reviews(score);
+create index if not exists idx_reviews_created_at on reviews(created_at);
+
+-- Function to validate review creation conditions
+create or replace function can_create_review(p_appointment_id uuid, p_client_id uuid)
+returns boolean as $$
+declare
+  appointment_status text;
+  appointment_client_id uuid;
+  appointment_professional_id uuid;
+  existing_review_count integer;
+begin
+  -- Get appointment details
+  select a.status, b.client_id, pp.user_id into appointment_status, appointment_client_id, appointment_professional_id
+  from appointments a
+  join bookings b on a.booking_id = b.id
+  join professional_profiles pp on b.professional_profile_id = pp.id
+  where a.id = p_appointment_id;
+  
+  -- Check if appointment exists
+  if appointment_status is null then
+    return false;
+  end if;
+  
+  -- Check if appointment is completed
+  if appointment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if requesting user is the client for this appointment
+  if appointment_client_id != p_client_id then
+    return false;
+  end if;
+  
+  -- Check if review already exists for this appointment
+  select count(*) into existing_review_count
+  from reviews
+  where appointment_id = p_appointment_id;
+  
+  if existing_review_count > 0 then
+    return false;
+  end if;
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Function to get professional's average rating and review count
+create or replace function get_professional_rating_stats(p_professional_id uuid)
+returns table(
+  average_rating decimal(3,2),
+  total_reviews integer,
+  five_star integer,
+  four_star integer,
+  three_star integer,
+  two_star integer,
+  one_star integer
+) as $$
+begin
+  return query
+  select 
+    round(avg(r.score), 2) as average_rating,
+    count(r.id)::integer as total_reviews,
+    count(case when r.score = 5 then 1 end)::integer as five_star,
+    count(case when r.score = 4 then 1 end)::integer as four_star,
+    count(case when r.score = 3 then 1 end)::integer as three_star,
+    count(case when r.score = 2 then 1 end)::integer as two_star,
+    count(case when r.score = 1 then 1 end)::integer as one_star
+  from reviews r
+  where r.professional_id = p_professional_id;
+end;
+$$ language plpgsql security definer;
+
+/**
+* RLS policies for reviews
+*/
+
+-- Clients can view their own reviews
+create policy "Clients can view their own reviews"
+  on reviews for select
+  using (auth.uid() = client_id);
+
+-- Professionals can view reviews about them
+create policy "Professionals can view their own reviews"
+  on reviews for select
+  using (auth.uid() = professional_id);
+
+-- Anyone can view reviews for published professionals
+-- Note: Minimum review threshold is enforced at the application level to avoid RLS recursion
+create policy "Anyone can view reviews for published professionals"
+  on reviews for select
+  using (
+    exists (
+      select 1 from professional_profiles pp
+      where pp.user_id = reviews.professional_id
+      and pp.is_published = true
+    )
+  );
+
+-- Clients can create reviews for their completed appointments
+create policy "Clients can create reviews for completed appointments"
+  on reviews for insert
+  with check (
+    auth.uid() = client_id
+    and can_create_review(appointment_id, client_id)
+  );
+
+-- Clients can update their own reviews (within reasonable time limits)
+create policy "Clients can update their own reviews"
+  on reviews for update
+  using (
+    auth.uid() = client_id
+    and created_at > (now() - make_interval(days => get_admin_config('review_edit_window_days', '7')::integer))
+  );
+
+-- Add trigger for updated_at on reviews
+create or replace function update_reviews_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_reviews_updated_at
+  before update on reviews
+  for each row
+  execute function update_reviews_updated_at();
+
+/**
+* REFUNDS SYSTEM
+* Tables for managing refund requests and processing
+*/
+
+/**
+* REFUNDS
+* Tracks refund requests from clients and their processing status
+*/
+create table refunds (
+  id uuid primary key default uuid_generate_v4(),
+  appointment_id uuid references appointments not null unique, -- One refund per appointment
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  booking_payment_id uuid references booking_payments not null,
+  reason text not null,
+  requested_amount decimal(10, 2), -- Amount requested by client (initially null, set by professional)
+  original_amount decimal(10, 2) not null, -- Original payment amount for reference
+  transaction_fee decimal(10, 2) default 0 not null, -- Stripe transaction fee (professional responsibility)
+  refund_amount decimal(10, 2), -- Final refunded amount (after fees)
+  status text not null default 'pending' check (status in ('pending', 'approved', 'processing', 'completed', 'declined', 'failed')),
+  stripe_refund_id text, -- Stripe refund ID when processed
+  professional_notes text, -- Professional's notes when approving/declining
+  declined_reason text, -- Reason for decline if applicable
+  processed_at timestamp with time zone, -- When refund was processed by Stripe
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure client is actually a client and professional is actually a professional
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id)),
+  -- Ensure requested amount doesn't exceed original amount
+  constraint valid_refund_amount check (requested_amount is null or (requested_amount > 0 and requested_amount <= original_amount))
+);
+alter table refunds enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_refunds_appointment_id on refunds(appointment_id);
+create index if not exists idx_refunds_client_id on refunds(client_id);
+create index if not exists idx_refunds_professional_id on refunds(professional_id);
+create index if not exists idx_refunds_status on refunds(status);
+create index if not exists idx_refunds_created_at on refunds(created_at);
+create index if not exists idx_refunds_stripe_refund_id on refunds(stripe_refund_id) where stripe_refund_id is not null;
+
+-- Function to validate refund creation conditions
+create or replace function can_create_refund(p_appointment_id uuid, p_client_id uuid)
+returns boolean as $$
+declare
+  appointment_status text;
+  appointment_client_id uuid;
+  payment_method_online boolean;
+  payment_status text;
+  existing_refund_count integer;
+begin
+  -- Get appointment and payment details
+  select a.status, b.client_id, pm.is_online, bp.status 
+  into appointment_status, appointment_client_id, payment_method_online, payment_status
+  from appointments a
+  join bookings b on a.booking_id = b.id
+  join booking_payments bp on b.id = bp.booking_id
+  join payment_methods pm on bp.payment_method_id = pm.id
+  where a.id = p_appointment_id;
+  
+  -- Check if appointment exists
+  if appointment_status is null then
+    return false;
+  end if;
+  
+  -- Check if appointment is completed
+  if appointment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if requesting user is the client for this appointment
+  if appointment_client_id != p_client_id then
+    return false;
+  end if;
+  
+  -- Check if payment was made by card (online payment method)
+  if payment_method_online != true then
+    return false;
+  end if;
+  
+  -- Check if payment was completed
+  if payment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if refund already exists for this appointment
+  select count(*) into existing_refund_count
+  from refunds
+  where appointment_id = p_appointment_id;
+  
+  if existing_refund_count > 0 then
+    return false;
+  end if;
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+/**
+* RLS policies for refunds
+*/
+
+-- Clients can view their own refund requests
+create policy "Clients can view their own refund requests"
+  on refunds for select
+  using (auth.uid() = client_id);
+
+-- Professionals can view refund requests for their appointments
+create policy "Professionals can view refund requests for their appointments"
+  on refunds for select
+  using (auth.uid() = professional_id);
+
+-- Clients can create refund requests for their completed card-paid appointments
+create policy "Clients can create refund requests for eligible appointments"
+  on refunds for insert
+  with check (
+    auth.uid() = client_id
+    and can_create_refund(appointment_id, client_id)
+  );
+
+-- Professionals can update refund requests (approve/decline, set amounts)
+create policy "Professionals can update refund requests for their appointments"
+  on refunds for update
+  using (auth.uid() = professional_id)
+  with check (auth.uid() = professional_id);
+
+-- Add trigger for updated_at on refunds
+create or replace function update_refunds_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_refunds_updated_at
+  before update on refunds
+  for each row
+  execute function update_refunds_updated_at();
+
+/**
+* Update realtime publication to include refunds and reviews
+*/
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions,
+  conversations,
+  messages,
+  reviews,
+  refunds;
+
+-- Add a function to safely insert address and return the ID (bypasses RLS)
+create or replace function insert_address_and_return_id(
+  p_country text default null,
+  p_state text default null,
+  p_city text default null,
+  p_street_address text default null,
+  p_apartment text default null,
+  p_latitude decimal(10,8) default null,
+  p_longitude decimal(11,8) default null,
+  p_google_place_id text default null
+) 
+returns uuid
+language plpgsql
+security definer -- bypasses RLS
+as $$
+declare
+  new_id uuid;
+begin
+  insert into addresses (
+    country, 
+    state, 
+    city, 
+    street_address,
+    apartment,
+    latitude,
+    longitude,
+    google_place_id
+  ) values (
+    p_country, 
+    p_state, 
+    p_city, 
+    p_street_address,
+    p_apartment,
+    p_latitude,
+    p_longitude,
+    p_google_place_id
+  ) returning id into new_id;
+  
+  return new_id;
+end;
+$$;
+
+-- Grant execute permission to authenticated users
+grant execute on function insert_address_and_return_id to authenticated;
 
 
 

@@ -291,7 +291,7 @@ function DashboardTemplateAppointmentsTable({
       <div className="hidden md:block overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-muted/20 hover:bg-muted/20">
               <TableHead className="w-[180px]">Date & Time</TableHead>
               <TableHead className="w-[200px]">Service</TableHead>
               <TableHead className="w-[180px]">

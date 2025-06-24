@@ -361,7 +361,9 @@ export async function getDashboardAppointments(
           (sum, bs) => sum + (bs.duration || 0),
           0,
         );
-        const serviceFee = 1.0; // Fixed service fee
+        // Note: Service fee is loaded dynamically by the booking form
+        // This calculation is for display purposes only
+        const serviceFee = 1.0; // Fallback value, actual fee is loaded from database
         const totalWithServiceFee = totalServicePrice + serviceFee;
 
         // Create service object with main service info plus totals

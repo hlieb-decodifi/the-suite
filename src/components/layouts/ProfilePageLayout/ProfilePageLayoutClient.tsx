@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Clock, CreditCard } from 'lucide-react';
+import { AlertTriangle, Clock, CreditCard, MapPin } from 'lucide-react';
 import { Typography } from '@/components/ui/typography';
 
 type ConnectStatus = {
@@ -36,6 +36,7 @@ type ProfilePageLayoutClientProps = {
   userData: UserData;
   connectStatus: ConnectStatus;
   validationData: ProfileValidationData;
+  unreadMessagesCount?: number;
 };
 
 // Validation functions
@@ -65,6 +66,10 @@ function validateProfileForPublishing(validationData: ProfileValidationData): {
     missingRequirements.push('At least one payment method must be selected');
   }
 
+  if (!validationData.hasAddress) {
+    missingRequirements.push('Business address must be set');
+  }
+
   return {
     isValid: missingRequirements.length === 0,
     missingRequirements,
@@ -77,6 +82,7 @@ export function ProfilePageLayoutClient({
   connectStatus,
   validationData,
   children,
+  unreadMessagesCount = 0,
 }: ProfilePageLayoutClientProps) {
   const [isPending, startTransition] = useTransition();
   const [showValidationDialog, setShowValidationDialog] = useState(false);
@@ -217,6 +223,7 @@ export function ProfilePageLayoutClient({
           isSubscribed={isSubscribed}
           connectStatus={connectStatus}
           isLoading={isPending}
+          unreadMessagesCount={unreadMessagesCount}
         />
 
         <div className="w-full">
@@ -253,8 +260,10 @@ export function ProfilePageLayoutClient({
               >
                 {requirement.includes('working day') ? (
                   <Clock className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                ) : (
+                ) : requirement.includes('payment method') ? (
                   <CreditCard className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <MapPin className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
                 )}
                 <Typography className="text-sm text-foreground">
                   {requirement}

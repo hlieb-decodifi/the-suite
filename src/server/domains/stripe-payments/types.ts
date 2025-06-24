@@ -13,7 +13,6 @@ export type ProfessionalProfileForPayment = {
   requires_deposit: boolean;
   deposit_type: 'percentage' | 'fixed';
   deposit_value: number | null;
-  balance_payment_method: 'card' | 'cash';
   stripe_account_id: string | null;
   stripe_connect_status: 'not_connected' | 'pending' | 'complete';
 };
@@ -25,7 +24,6 @@ export type PaymentCalculation = {
   balanceAmount: number;
   requiresDeposit: boolean;
   requiresBalancePayment: boolean;
-  balancePaymentMethod: 'card' | 'cash';
   isFullPayment: boolean; // true if deposit >= total amount
 };
 
@@ -39,7 +37,6 @@ export type StripeCheckoutParams = {
   balanceAmount?: number; // in cents
   paymentType: 'full' | 'deposit' | 'setup_only';
   requiresBalancePayment: boolean;
-  balancePaymentMethod: 'card' | 'cash';
   metadata: Record<string, string>;
 };
 

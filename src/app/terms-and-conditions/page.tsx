@@ -1,7 +1,8 @@
 import { LegalDocumentPage } from '@/components/pages/LegalDocumentPage/LegalDocumentPage';
 import type { Metadata } from 'next';
 
-// Cache the page for a longer time since legal documents don't change frequently
+// Use static generation with revalidation instead of dynamic rendering
+export const dynamic = 'force-static';
 export const revalidate = 3600; // Revalidate every hour
 
 export const metadata: Metadata = {

@@ -1,0 +1,33 @@
+SHARE YOUR EXPERIENCE WITH US! ⭐
+
+Hi {{clientName}}!
+
+Thank you for your recent appointment with {{professionalName}}. We hope you had a wonderful experience!
+
+APPOINTMENT DETAILS:
+Professional: {{professionalName}}
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
+Payment: {{paymentMethod}}
+Service Amount: ${{serviceAmount}}
+Platform Fee: ${{serviceFee}}
+Total Paid: ${{totalAmount}}
+
+LEAVE A REVIEW ⭐
+Share your experience and help other clients find the perfect professional. Your feedback helps us maintain our high standards of service.
+
+ADD A TIP (OPTIONAL) 💝
+Show your appreciation for exceptional service. You can easily add a tip to your professional's earnings.
+
+Complete your experience here:
+{{reviewTipUrl}}
+
+Your feedback matters: Reviews help professionals improve their services and help other clients make informed decisions. Tips are processed securely and go directly to your professional.
+
+If you have any questions or concerns, please don't hesitate to contact us at {{supportEmail}}.
+
+Thank you for choosing The Suite!
+{{websiteUrl}}
+
+--
+This email was sent regarding your appointment booking #{{bookingId}} 

@@ -44,11 +44,27 @@ export async function ProfessionalPageLayout({
 
   // Check if current user is a client (for showing message button)
   let isCurrentUserClient = false;
+  let hasSharedAppointments = false;
+
   if (user && !isOwnProfile) {
     const { data: isClient } = await supabase.rpc('is_client', {
       user_uuid: user.id,
     });
     isCurrentUserClient = !!isClient;
+
+    // If current user is a client, check for shared appointments
+    if (isCurrentUserClient) {
+      const { data: sharedAppointments } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('client_id', user.id)
+        .eq('professional_profile_id', profile.id)
+        .limit(1);
+
+      hasSharedAppointments = !!(
+        sharedAppointments && sharedAppointments.length > 0
+      );
+    }
   }
 
   return (
@@ -58,6 +74,7 @@ export async function ProfessionalPageLayout({
         isOwnProfile={isOwnProfile}
         allowMessages={profile.allow_messages}
         isCurrentUserClient={isCurrentUserClient}
+        hasSharedAppointments={hasSharedAppointments}
         professionalName={`${profile.users.first_name} ${profile.users.last_name}`}
       >
         {children}

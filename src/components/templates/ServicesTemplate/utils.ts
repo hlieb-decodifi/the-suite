@@ -42,7 +42,8 @@ export function calculateTotalPages(filteredServices: ServiceListItem[], pageSiz
 /**
  * Gets services for display based on filtering state
  * If no filters applied, uses server-side paginated data
- * Otherwise, applies client-side filtering and pagination
+ * If only search term applied, uses client-side filtering
+ * If location filtering applied, uses server results directly (since server filtering is more comprehensive)
  */
 export function getServicesForDisplay(
   initialServices: ServiceListItem[],
@@ -51,12 +52,18 @@ export function getServicesForDisplay(
   currentPage: number,
   pageSize: number
 ): ServiceListItem[] {
+  // If location filter is applied, use server results directly
+  // Server-side location filtering is more comprehensive and handles complex address matching
+  if (filters.location !== '') {
+    return initialServices;
+  }
+  
   // If no filters are applied, use the services as is (already paginated from server)
-  if (filters.searchTerm === '' && filters.location === '') {
+  if (filters.searchTerm === '') {
     return initialServices;
   }
 
-  // Otherwise, apply pagination on client-side filtered results
+  // Otherwise, apply pagination on client-side filtered results (search only)
   return getPaginatedServices(filteredServices, currentPage, pageSize);
 }
 
