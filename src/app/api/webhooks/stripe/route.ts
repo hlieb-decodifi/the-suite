@@ -142,6 +142,10 @@ export async function POST(req: Request) {
         await handleChargeSucceeded(event.data.object as Stripe.Charge);
         break;
         
+      case 'charge.captured':
+        await handleChargeCaptured(event.data.object as Stripe.Charge);
+        break;
+        
       // Handle refunds created through Stripe dashboard
       case 'charge.dispute.created':
       case 'charge.refunded':
@@ -590,14 +594,63 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
     
     console.log('Payment status determined:', paymentStatus);
     
+    // Check if this is a split payment that needs special handling  
+    const paymentFlow = session.metadata?.payment_flow;
+    if (paymentFlow === 'split_service_fee_and_amount' && session.payment_intent && typeof session.payment_intent === 'object') {
+      // For split payments, the payment intent should be uncaptured (requires_capture status)
+      const paymentIntent = session.payment_intent;
+      if (paymentIntent.status === 'requires_capture') {
+        console.log('🔍 Processing split payment - partially capturing service fee, leaving service amount uncaptured');
+        await handleSplitPaymentPartialCapture(session, bookingId);
+      } else {
+        console.log('⚠️ Split payment intent has unexpected status:', paymentIntent.status);
+      }
+    }
+    
+    // Get payment method ID from payment intent (for any payment type)
+    let paymentMethodId: string | undefined;
+    if (session.mode === 'payment' && session.payment_intent) {
+      const paymentIntentId = typeof session.payment_intent === 'string' 
+        ? session.payment_intent 
+        : session.payment_intent.id;
+      
+      if (paymentIntentId) {
+        try {
+          // Retrieve the full payment intent to get payment method
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (paymentIntent.payment_method) {
+            paymentMethodId = typeof paymentIntent.payment_method === 'string' 
+              ? paymentIntent.payment_method 
+              : paymentIntent.payment_method.id;
+            console.log('🔍 Extracted payment method ID from payment intent:', paymentMethodId);
+          }
+        } catch (error) {
+          console.error('Error retrieving payment intent for payment method:', error);
+        }
+      }
+    }
+
     // Update booking payment status
+    const updateData: {
+      status: string;
+      stripe_payment_intent_id: string | null;
+      stripe_payment_method_id?: string;
+      updated_at: string;
+    } = {
+      status: paymentStatus,
+      stripe_payment_intent_id: paymentIntentId || null,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Add payment method ID if we have one (for uncaptured payments)
+    if (paymentMethodId) {
+      updateData.stripe_payment_method_id = paymentMethodId;
+      console.log('🔍 Saving payment method ID to database:', paymentMethodId);
+    }
+
     const { error: paymentUpdateError } = await supabase
       .from('booking_payments')
-      .update({
-        status: paymentStatus,
-        stripe_payment_intent_id: paymentIntentId || null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('booking_id', bookingId);
     
     if (paymentUpdateError) {
@@ -1208,6 +1261,33 @@ async function handleChargeSucceeded(charge: Stripe.Charge) {
   console.log(`Charge ${charge.id} has no associated payment intent, skipping`);
 }
 
+// Handle charge captured (for cancellation fee charges)
+async function handleChargeCaptured(charge: Stripe.Charge) {
+  console.log(`Charge ${charge.id} captured`);
+  
+  // Check if this is a cancellation fee charge
+  if (charge.metadata?.payment_type === 'cancellation_fee') {
+    const bookingId = charge.metadata?.booking_id;
+    console.log(`✅ Cancellation fee charge captured for booking ${bookingId}: $${charge.amount/100}`);
+    
+    // We don't need to update booking payment status here since the cancellation
+    // logic already handles the database updates. This is just for logging purposes.
+    return;
+  }
+  
+  // For other charges, use the existing payment intent handler
+  if (charge.payment_intent) {
+    const paymentIntentId = typeof charge.payment_intent === 'string' 
+      ? charge.payment_intent 
+      : charge.payment_intent.id;
+    
+    console.log(`Charge ${charge.id} captured - associated with payment intent ${paymentIntentId}`);
+    return await handlePaymentCaptureByPaymentIntentId(paymentIntentId);
+  }
+  
+  console.log(`Charge ${charge.id} has no associated payment intent, skipping`);
+}
+
 // Helper function to handle payment captures by payment intent ID (for manual captures)
 async function handlePaymentCaptureByPaymentIntentId(paymentIntentId: string) {
   try {
@@ -1471,5 +1551,61 @@ async function handleRefundEvent(refund: Stripe.Refund) {
     console.log(`✅ Successfully processed refund webhook for ${refund.id}`);
   } catch (error) {
     console.error(`Error handling refund event for ${refund.id}:`, error);
+  }
+}
+
+// Handle split payment partial capture - capture service fee, leave service amount uncaptured
+async function handleSplitPaymentPartialCapture(session: Stripe.Checkout.Session, bookingId: string) {
+  try {
+    const supabase = createAdminClient();
+    
+    // Extract metadata
+    const serviceAmount = parseInt(session.metadata?.service_amount || '0');
+    const serviceFee = parseInt(session.metadata?.service_fee || '0');
+    const professionalStripeAccountId = session.metadata?.professional_stripe_account_id;
+    
+    if (!serviceAmount || !serviceFee || !professionalStripeAccountId) {
+      console.error('❌ Missing required data for split payment partial capture');
+      return;
+    }
+    
+    console.log(`🔍 Split payment partial capture - Total: $${(serviceAmount + serviceFee)/100}, Service fee: $${serviceFee/100}, Service amount: $${serviceAmount/100}`);
+    
+    const paymentIntentId = typeof session.payment_intent === 'string' 
+      ? session.payment_intent 
+      : session.payment_intent?.id;
+    
+    if (!paymentIntentId) {
+      console.error('❌ No payment intent ID found for split payment');
+      return;
+    }
+    
+    // Partially capture only the service fee (platform keeps this)
+    const captureResult = await stripe.paymentIntents.capture(paymentIntentId, {
+      amount_to_capture: serviceFee // Only capture service fee for platform
+    });
+    
+    console.log(`✅ Partially captured service fee: $${captureResult.amount_received/100} for platform, Service amount: $${serviceAmount/100} remains uncaptured for professional`);
+    
+    // The remaining $serviceAmount is still uncaptured and can be:
+    // 1. Fully captured later (professional gets full service amount)
+    // 2. Partially captured for cancellation fees (professional gets percentage)
+    // 3. Cancelled completely (customer gets full refund of service amount)
+    
+    // Note: Payment method ID will be handled by the main checkout handler
+    // Just update the booking payment with the payment intent ID
+    await supabase
+      .from('booking_payments')
+      .update({
+        stripe_payment_intent_id: paymentIntentId,
+        status: 'completed', // Booking is confirmed even though service amount is uncaptured
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+    
+    console.log('✅ Updated booking payment record with split payment info');
+    
+  } catch (error) {
+    console.error('❌ Error processing split payment partial capture:', error);
   }
 } 

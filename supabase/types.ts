@@ -139,6 +139,10 @@ export type Database = {
           payment_type: string
           pre_auth_placed_at: string | null
           pre_auth_scheduled_for: string | null
+          refund_reason: string | null
+          refund_transaction_id: string | null
+          refunded_amount: number
+          refunded_at: string | null
           requires_balance_payment: boolean
           service_fee: number
           status: string
@@ -164,6 +168,10 @@ export type Database = {
           payment_type?: string
           pre_auth_placed_at?: string | null
           pre_auth_scheduled_for?: string | null
+          refund_reason?: string | null
+          refund_transaction_id?: string | null
+          refunded_amount?: number
+          refunded_at?: string | null
           requires_balance_payment?: boolean
           service_fee: number
           status: string
@@ -189,6 +197,10 @@ export type Database = {
           payment_type?: string
           pre_auth_placed_at?: string | null
           pre_auth_scheduled_for?: string | null
+          refund_reason?: string | null
+          refund_transaction_id?: string | null
+          refunded_amount?: number
+          refunded_at?: string | null
           requires_balance_payment?: boolean
           service_fee?: number
           status?: string

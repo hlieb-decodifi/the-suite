@@ -952,6 +952,25 @@ export async function createCancellationPolicyChargeClientEmail(
   },
   websiteUrl: string = ''
 ): Promise<{ subject: string; html: string; text: string }> {
+  // Get service fee from database
+  let serviceFee = '1.00'; // Default fallback
+  try {
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+    
+    const { data: configData } = await supabase
+      .from('admin_configs')
+      .select('value')
+      .eq('key', 'service_fee_dollars')
+      .single();
+    
+    if (configData?.value) {
+      serviceFee = parseFloat(configData.value).toFixed(2);
+    }
+  } catch (error) {
+    console.error('Error getting service fee from config for email:', error);
+  }
+
   const data = {
     clientName,
     professionalName,
@@ -962,6 +981,7 @@ export async function createCancellationPolicyChargeClientEmail(
     services,
     policyInfo,
     refundInfo,
+    serviceFee,
     websiteUrl,
   };
 

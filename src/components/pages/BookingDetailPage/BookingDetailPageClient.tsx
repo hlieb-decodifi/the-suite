@@ -41,7 +41,7 @@ import { LeafletMap } from '@/components/common/LeafletMap';
 import { AddAdditionalServicesModal } from '@/components/modals';
 import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
-import { NoShowModal, CancellationPolicyModal } from '@/components/modals';
+import { NoShowModal } from '@/components/modals';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -57,6 +57,11 @@ type BookingPayment = {
   pre_auth_placed_at: string | null;
   captured_at: string | null;
   created_at: string;
+  // Refund tracking fields
+  refunded_amount: number;
+  refund_reason: string | null;
+  refunded_at: string | null;
+  refund_transaction_id: string | null;
   payment_methods: {
     id: string;
     name: string;
@@ -180,8 +185,7 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
-  const [isCancellationPolicyModalOpen, setIsCancellationPolicyModalOpen] =
-    useState(false);
+
   const router = useRouter();
   const { toast } = useToast();
 
@@ -1148,19 +1152,6 @@ export function BookingDetailPageClient({
                       Mark as No Show
                     </Button>
                   )}
-
-                {/* Cancellation Policy Button - Client only, for upcoming appointments */}
-                {!isProfessional &&
-                  (currentStatus === 'confirmed' ||
-                    currentStatus === 'upcoming') && (
-                    <Button
-                      onClick={() => setIsCancellationPolicyModalOpen(true)}
-                      variant="destructiveOutline"
-                      className="w-full"
-                    >
-                      Cancel with Policy
-                    </Button>
-                  )}
               </CardContent>
             </Card>
           )}
@@ -1372,6 +1363,108 @@ export function BookingDetailPageClient({
                   </>
                 )}
 
+                {/* Refund Information */}
+                {appointment.bookings.booking_payments.refunded_amount > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <TooltipProvider>
+                        <div className="flex items-center gap-2">
+                          <Typography className="font-medium text-foreground">
+                            Refund Information
+                          </Typography>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Amount refunded due to booking cancellation</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
+
+                      <div className="flex justify-between items-center">
+                        <Typography
+                          variant="small"
+                          className="text-muted-foreground"
+                        >
+                          Refunded Amount:
+                        </Typography>
+                        <Typography
+                          variant="small"
+                          className="font-medium text-green-600"
+                        >
+                          {formatCurrency(
+                            appointment.bookings.booking_payments
+                              .refunded_amount,
+                          )}
+                        </Typography>
+                      </div>
+
+                      {appointment.bookings.booking_payments.refund_reason && (
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Reason:
+                          </Typography>
+                          <Typography variant="small" className="font-medium">
+                            {
+                              appointment.bookings.booking_payments
+                                .refund_reason
+                            }
+                          </Typography>
+                        </div>
+                      )}
+
+                      {appointment.bookings.booking_payments.refunded_at && (
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Refunded on:
+                          </Typography>
+                          <Typography
+                            variant="small"
+                            className="font-medium text-green-600"
+                          >
+                            {format(
+                              new Date(
+                                appointment.bookings.booking_payments.refunded_at,
+                              ),
+                              'MMM d, yyyy h:mm a',
+                            )}
+                          </Typography>
+                        </div>
+                      )}
+
+                      {appointment.bookings.booking_payments
+                        .refund_transaction_id && (
+                        <div className="flex justify-between items-center">
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground"
+                          >
+                            Transaction ID:
+                          </Typography>
+                          <Typography
+                            variant="small"
+                            className="font-mono text-xs"
+                          >
+                            {
+                              appointment.bookings.booking_payments
+                                .refund_transaction_id
+                            }
+                          </Typography>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 {/* Payment Timeline */}
                 <Separator />
                 <div>
@@ -1500,16 +1593,6 @@ export function BookingDetailPageClient({
           (total, service) => total + service.price,
           0,
         )}
-        onSuccess={handleCancellationSuccess}
-      />
-
-      {/* Cancellation Policy Modal */}
-      <CancellationPolicyModal
-        isOpen={isCancellationPolicyModalOpen}
-        onClose={() => setIsCancellationPolicyModalOpen(false)}
-        bookingId={appointment.booking_id}
-        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
-        professionalName={getOtherPartyName()}
         onSuccess={handleCancellationSuccess}
       />
     </div>

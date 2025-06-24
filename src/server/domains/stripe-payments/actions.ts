@@ -232,8 +232,8 @@ async function handleCardPaymentFlow(
       };
       
     } else {
-      // For appointments ≤6 days away: Create uncaptured payment intent immediately
-      console.log(`Appointment is ${daysUntilAppointment} days away - using immediate uncaptured payment`);
+      // For appointments ≤6 days away: Use split payment approach
+      console.log(`Appointment is ${daysUntilAppointment} days away - using split payment (instant service fee + uncaptured service amount)`);
       
       // Update existing booking payment record with enhanced payment data
       const { updateBookingPaymentForStripe } = await import('./db');
@@ -251,24 +251,14 @@ async function handleCardPaymentFlow(
         };
       }
 
-      // Calculate payment schedule for this appointment
-      const scheduleResult = await schedulePaymentAuthorization(
-        bookingId,
-        appointmentDateTime,
-        formData.timeSlot
-      );
+      // Calculate service amount (total - service fee)
+      const { getServiceFeeFromConfig } = await import('./stripe-operations');
+      const serviceFee = await getServiceFeeFromConfig();
+      const serviceAmount = paymentCalculation.totalAmount - serviceFee;
 
-      if (!scheduleResult.success) {
-        return {
-          success: false,
-          error: scheduleResult.error || 'Failed to schedule payment',
-        requiresPayment: false,
-        paymentType: 'full'
-      };
-    }
-
-      // Create checkout session with uncaptured payment
-      const checkoutResult = await createEnhancedCheckoutSession({
+      // Create split payment checkout session
+      const { createSplitPaymentCheckoutSession } = await import('./stripe-operations');
+      const checkoutResult = await createSplitPaymentCheckoutSession({
         bookingId,
         clientId: userId,
         professionalStripeAccountId: professionalProfile.stripe_account_id,
@@ -277,11 +267,11 @@ async function handleCardPaymentFlow(
         balanceAmount: paymentCalculation.balanceAmount,
         paymentType: paymentCalculation.isFullPayment ? 'full' : 'deposit',
         requiresBalancePayment: paymentCalculation.requiresBalancePayment,
-        useUncapturedPayment: true, // This creates uncaptured payment intent
+        serviceAmount: serviceAmount,
         metadata: {
           booking_id: bookingId,
           professional_profile_id: professionalProfileId,
-          payment_flow: 'immediate_uncaptured'
+          payment_flow: 'split_payment'
         },
         customerEmail: userEmail
       });
@@ -289,29 +279,22 @@ async function handleCardPaymentFlow(
       if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
         return {
           success: false,
-          error: checkoutResult.error || 'Failed to create payment session',
+          error: checkoutResult.error || 'Failed to create split payment session',
           requiresPayment: false,
           paymentType: 'full'
         };
       }
 
-      // Update payment record with session and scheduling information
+      // Update payment record with session information
       await updateBookingPaymentWithSession(bookingId, checkoutResult.sessionId!);
-      await updateBookingPaymentWithScheduling(
-        bookingId,
-        scheduleResult.preAuthDate!,
-        scheduleResult.captureDate!,
-        scheduleResult.shouldPreAuthNow || false,
-        undefined // Payment intent will be set by webhook
-      );
 
-    return {
-      success: true,
+      return {
+        success: true,
         bookingId,
-      checkoutUrl: checkoutResult.checkoutUrl,
-      requiresPayment: true,
+        checkoutUrl: checkoutResult.checkoutUrl,
+        requiresPayment: true,
         paymentType: paymentCalculation.isFullPayment ? 'full' : 'deposit'
-    };
+      };
     }
 
   } catch (error) {

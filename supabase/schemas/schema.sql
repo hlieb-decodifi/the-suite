@@ -1011,7 +1011,7 @@ create table booking_payments (
   amount decimal(10, 2) not null,
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
-  status text not null check (status in ('incomplete', 'pending', 'completed', 'failed', 'refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
+  status text not null check (status in ('incomplete', 'pending', 'completed', 'failed', 'refunded', 'partially_refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
   stripe_payment_intent_id text, -- For Stripe integration
   stripe_payment_method_id text, -- For stored payment methods from setup intents
   -- Stripe checkout session fields
@@ -1029,7 +1029,12 @@ create table booking_payments (
   capture_scheduled_for timestamp with time zone,
   captured_at timestamp with time zone,
   pre_auth_placed_at timestamp with time zone,
-  balance_notification_sent_at timestamp with time zone
+  balance_notification_sent_at timestamp with time zone,
+  -- Refund tracking fields for cancelled bookings
+  refunded_amount decimal(10, 2) default 0 not null,
+  refund_reason text,
+  refunded_at timestamp with time zone,
+  refund_transaction_id text
 );
 alter table booking_payments enable row level security;
 
@@ -1046,6 +1051,16 @@ where pre_auth_scheduled_for is not null and status in ('incomplete', 'pending')
 create index if not exists idx_booking_payments_capture_scheduled 
 on booking_payments(capture_scheduled_for) 
 where capture_scheduled_for is not null and status in ('pending', 'authorized');
+
+-- Add index for refund lookups
+create index if not exists idx_booking_payments_refunded_at 
+on booking_payments(refunded_at) 
+where refunded_at is not null;
+
+-- Add constraint to ensure refunded amount doesn't exceed total amount
+alter table booking_payments 
+add constraint booking_payments_refund_amount_check 
+check (refunded_amount >= 0 and refunded_amount <= (amount + tip_amount + service_fee));
 
 /**
 * Function to check professional availability

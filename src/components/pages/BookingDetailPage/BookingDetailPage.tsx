@@ -87,6 +87,11 @@ export type DetailedAppointmentType = {
       pre_auth_placed_at: string | null;
       captured_at: string | null;
       created_at: string;
+      // Refund tracking fields
+      refunded_amount: number;
+      refund_reason: string | null;
+      refunded_at: string | null;
+      refund_transaction_id: string | null;
       payment_methods: {
         id: string;
         name: string;
@@ -266,6 +271,10 @@ export async function getAppointmentById(
             pre_auth_placed_at,
             captured_at,
             created_at,
+            refunded_amount,
+            refund_reason,
+            refunded_at,
+            refund_transaction_id,
             payment_methods:payment_method_id(
               id,
               name,

@@ -32,8 +32,11 @@ This cancellation fee has been charged to your payment method according to the p
 REFUND INFORMATION
 Original Amount: ${{refundInfo.originalAmount}}
 Cancellation Fee: -${{policyInfo.chargeAmount}}
+Suite Service Fee: -${{serviceFee}}
 Refund Amount: ${{refundInfo.refundAmount}}
 Refund Status: {{refundInfo.status}}
+
+Note: The Suite service fee (${{serviceFee}}) is retained as per our terms of service and is not refundable, similar to the cancellation fee policy.
 {{/if}}
 
 We understand that sometimes cancellations are unavoidable. To avoid cancellation fees in the future, please cancel your appointments at least 48 hours in advance when possible. If you have questions about this charge or need to book a new appointment, please contact our support team.

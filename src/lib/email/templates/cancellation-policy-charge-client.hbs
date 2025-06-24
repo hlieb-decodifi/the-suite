@@ -242,6 +242,10 @@
               <div class='info-value'>-${{policyInfo.chargeAmount}}</div>
             </div>
             <div class='info-row'>
+              <div class='info-label'>Suite Service Fee:</div>
+              <div class='info-value'>-${{serviceFee}}</div>
+            </div>
+            <div class='info-row'>
               <div class='info-label'>Refund Amount:</div>
               <div class='info-value'>${{refundInfo.refundAmount}}</div>
             </div>
@@ -249,6 +253,11 @@
               <div class='info-label'>Refund Status:</div>
               <div class='info-value'>{{refundInfo.status}}</div>
             </div>
+            <p style='margin: 12px 0; color: #1d4ed8; font-size: 14px;'>
+              Note: The Suite service fee (${{serviceFee}}) is retained as per
+              our terms of service and is not refundable, similar to the
+              cancellation fee policy.
+            </p>
           </div>
         {{/if}}
 

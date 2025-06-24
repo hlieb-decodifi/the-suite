@@ -68,8 +68,10 @@ export async function cancelBookingAction(
           id,
           amount,
           tip_amount,
+          service_fee,
           status,
-          stripe_payment_intent_id
+          stripe_payment_intent_id,
+          stripe_payment_method_id
         )
       `)
       .eq('id', bookingId)
@@ -126,23 +128,52 @@ export async function cancelBookingAction(
 
     // Update payment status and clear scheduled jobs if payment exists
     if (payment) {
-      // Cancel uncaptured payment intent in Stripe if it exists
+      // Handle uncaptured payment intent for cancellations without policy
       if (payment.stripe_payment_intent_id) {
         try {
           const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
           
-          // Only cancel if payment intent is in a cancelable state
-          if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'requires_confirmation') {
+          if (paymentIntent.status === 'requires_capture') {
+            // Get customer ID for partial capture
+            const customerId = paymentIntent.customer as string;
+            const paymentMethodId = payment.stripe_payment_method_id;
+            
+            console.log(`[Debug] Customer ID: ${customerId}, Payment Method ID: ${paymentMethodId}`);
+              
+            if (customerId) {
+              // For split payment architecture with no-policy cancellations:
+              // Service fee was already captured ($1.00 for platform)
+              // We just need to cancel the remaining uncaptured service amount (full refund to customer)
+              console.log(`[Split Payment Cancellation] Regular cancellation - no policy`);
+              console.log(`[Split Payment Cancellation] Service fee already captured: $1.00 (platform)`);
+              console.log(`[Split Payment Cancellation] Cancelling remaining uncaptured amount for full customer refund`);
+              
+              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+              console.log(`✅ Split payment cancellation completed:`);
+              console.log(`   - Service fee already captured: $1.00 (platform)`);
+              console.log(`   - Uncaptured service amount cancelled and refunded to customer`);
+            } else {
+              // Missing customer ID, cannot do partial capture
+              console.error(`Missing customer ID for payment intent ${payment.stripe_payment_intent_id}. Customer: ${customerId}`);
+              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+              console.log(`Fallback: Cancelled entire payment intent due to missing customer ID: ${payment.stripe_payment_intent_id}`);
+            }
+          } else if (paymentIntent.status === 'requires_confirmation') {
             await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
             console.log(`Cancelled Stripe payment intent: ${payment.stripe_payment_intent_id}`);
           } else {
             console.log(`Payment intent ${payment.stripe_payment_intent_id} is in status ${paymentIntent.status}, cannot cancel`);
           }
         } catch (stripeError) {
-          console.error('Failed to cancel Stripe payment intent:', stripeError);
+          console.error('Failed to handle payment intent during cancellation:', stripeError);
           // Don't fail the entire cancellation for Stripe errors
         }
       }
+
+      // Calculate refund amount for regular cancellation (full refund minus service fee)
+      const originalAmount = payment.amount + payment.tip_amount;
+      const serviceFee = payment.service_fee || 1.00; // Default to $1 if not set
+      const refundAmount = originalAmount - serviceFee; // Customer gets everything back except suite service fee
 
       const { error: updatePaymentError } = await supabase
         .from('booking_payments')
@@ -150,6 +181,9 @@ export async function cancelBookingAction(
           status: 'refunded',
           pre_auth_scheduled_for: null,
           capture_scheduled_for: null,
+          refunded_amount: refundAmount,
+          refund_reason: `Regular cancellation: ${cancellationReason}`,
+          refunded_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', payment.id);
@@ -297,9 +331,14 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
     }));
 
     // Prepare refund info if payment exists
+    // For regular cancellations: Tips (100%) + Service amount (100%) - Suite fee NOT refunded (platform keeps configured service fee)
+    const serviceAmount = bookingServices.reduce((sum: number, bs: any) => sum + bs.price, 0);
+    
+    // Note: Service fee is kept by platform and not refunded
+    
     const refundInfo = payment ? {
-      originalAmount: payment.amount + (payment.tip_amount || 0),
-      refundAmount: payment.amount + (payment.tip_amount || 0), // Full refund for cancellations
+      originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment
+      refundAmount: (payment.tip_amount || 0) + serviceAmount, // Tips (100%) + Service amount (100%) - Suite fee stays with platform
       status: 'Processing'
     } : undefined;
 
@@ -530,6 +569,7 @@ export async function cancelWithPolicyAction(
           cancellation_policy_enabled,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
+          stripe_account_id,
           users!inner(id, first_name, last_name)
         ),
         clients:users!client_id(id, first_name, last_name, client_profiles(*)),
@@ -542,8 +582,10 @@ export async function cancelWithPolicyAction(
           id,
           amount,
           tip_amount,
+          service_fee,
           status,
           stripe_payment_intent_id,
+          stripe_payment_method_id,
           payment_methods(name, is_online)
         )
       `)
@@ -636,27 +678,134 @@ export async function cancelWithPolicyAction(
 
     // Handle payment status
     if (payment) {
-      // Cancel uncaptured payment intent if exists
+      // Handle uncaptured payment intent for cancellations with policy
       if (payment.stripe_payment_intent_id) {
         try {
           const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
           
-          if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'requires_confirmation') {
+          if (paymentIntent.status === 'requires_capture') {
+            // Get customer ID and payment method for dual payment approach
+            const customerId = paymentIntent.customer as string;
+            const paymentMethodId = payment.stripe_payment_method_id;
+            
+            console.log(`[Debug] Customer ID: ${customerId}, Payment Method ID: ${paymentMethodId}, Professional Stripe Account: ${professionalProfile.stripe_account_id}`);
+            
+            if (customerId && professionalProfile.stripe_account_id) {
+              // For split payment architecture: service fee already captured by platform
+              // Now we need to capture cancellation fee and transfer it to professional
+              const totalServiceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
+              const cancellationFeeAmount = Math.round(chargeAmount * 100); // Convert to cents
+              
+              console.log(`[Split Payment Cancellation] Processing cancellation with fee`);
+              console.log(`[Split Payment Cancellation] Service amount uncaptured: $${totalServiceAmount}, Cancellation fee: $${cancellationFeeAmount/100}`);
+              
+              try {
+                // Check if payment method is available for charging cancellation fee
+                if (!payment.stripe_payment_method_id) {
+                  console.error('❌ No payment method ID found - cannot charge cancellation fee');
+                  
+                  // Try to cancel the payment intent to refund service amount to customer
+                  try {
+                    const cancelResult = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+                    console.log(`[Split Payment Cancellation] ✅ Cancelled payment intent: ${cancelResult.id} - service amount refunded to customer`);
+                  } catch (cancelError: any) {
+                    if (cancelError.code === 'payment_intent_unexpected_state') {
+                      console.log(`[Split Payment Cancellation] Payment intent already cancelled/processed - continuing`);
+                    } else {
+                      console.error('Error cancelling payment intent:', cancelError);
+                    }
+                  }
+                  chargedSuccessfully = false;
+                } else {
+                  // We have a payment method, so we can charge cancellation fee
+                  console.log(`[Split Payment Cancellation] Payment method available: ${payment.stripe_payment_method_id}`);
+                  
+                  if (cancellationFeeAmount > 0) {
+                    // Step 1: Try to cancel the uncaptured payment intent (this refunds service amount to customer)
+                    try {
+                      const cancelResult = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+                      console.log(`[Split Payment Cancellation] Cancelled uncaptured PaymentIntent: ${cancelResult.id}`);
+                    } catch (cancelError: any) {
+                      if (cancelError.code === 'payment_intent_unexpected_state') {
+                        console.log(`[Split Payment Cancellation] Payment intent already cancelled - continuing with fee charge`);
+                      } else {
+                        throw cancelError;
+                      }
+                    }
+                    
+                    // Step 2: Create separate charge for cancellation fee
+                    console.log(`[Split Payment Cancellation] Creating separate charge for cancellation fee: $${cancellationFeeAmount/100}`);
+                    
+                    const cancellationCharge = await stripe.paymentIntents.create({
+                      amount: cancellationFeeAmount,
+                      currency: 'usd',
+                      payment_method: payment.stripe_payment_method_id,
+                      customer: customerId,
+                      confirm: true,
+                      payment_method_types: ['card'], // Specify payment method types instead of disabling automatic
+                      transfer_data: {
+                        destination: professionalProfile.stripe_account_id,
+                        amount: cancellationFeeAmount // Transfer full cancellation fee to professional
+                      },
+                      metadata: {
+                        payment_type: 'cancellation_fee',
+                        booking_id: booking.id,
+                        original_payment_intent: payment.stripe_payment_intent_id
+                      }
+                    });
+                    
+                    console.log(`[Split Payment Cancellation] ✅ Cancellation fee charged: $${cancellationCharge.amount/100}`);
+                    chargedSuccessfully = true;
+                  } else {
+                    // No cancellation fee, just cancel the uncaptured payment intent
+                    try {
+                      const cancelResult = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+                      console.log(`[Split Payment Cancellation] No fee - cancelled uncaptured amount: ${cancelResult.id}`);
+                    } catch (cancelError: any) {
+                      if (cancelError.code === 'payment_intent_unexpected_state') {
+                        console.log(`[Split Payment Cancellation] Payment intent already cancelled - no action needed`);
+                      } else {
+                        throw cancelError;
+                      }
+                    }
+                    chargedSuccessfully = false; // No fee charged
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Failed to process split payment cancellation:', error);
+                chargedSuccessfully = false;
+              }
+            } else {
+              // Missing required data, cannot do partial capture
+              console.error(`Missing required data for split payment cancellation - Customer: ${customerId}, Professional Account: ${professionalProfile.stripe_account_id}`);
+              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+              console.log(`Fallback: Cancelled entire payment intent due to missing data: ${payment.stripe_payment_intent_id}`);
+            }
+          } else if (paymentIntent.status === 'requires_confirmation') {
             await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
             console.log(`Cancelled Stripe payment intent: ${payment.stripe_payment_intent_id}`);
           }
         } catch (stripeError) {
-          console.error('Failed to cancel Stripe payment intent:', stripeError);
+          console.error('Failed to handle payment intent during cancellation:', stripeError);
         }
       }
 
       const newPaymentStatus = chargeAmount > 0 ? 'partially_refunded' : 'refunded';
+      
+      // Calculate refund amount (original amount minus cancellation fee and service fee)
+      const originalAmount = payment.amount + payment.tip_amount; // Total originally charged to customer
+      const serviceFee = payment.service_fee || 1.00; // Default to $1 if not set
+      const refundAmount = originalAmount - chargeAmount - serviceFee;
+      
       const { error: updatePaymentError } = await supabase
         .from('booking_payments')
         .update({
           status: newPaymentStatus,
           pre_auth_scheduled_for: null,
           capture_scheduled_for: null,
+          refunded_amount: refundAmount,
+          refund_reason: `Cancellation: ${cancellationReason}`,
+          refunded_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', payment.id);
@@ -919,11 +1068,22 @@ async function sendNoShowEmails(appointment: any, chargeAmount: number, chargePe
 }
 
 async function sendCancellationPolicyEmails(booking: any, reason: string, chargeAmount: number, chargePercentage: number) {
+  const adminSupabase = createSupabaseAdminClient();
+  
   try {
     const appointment = booking.appointments as any;
     const professionalProfile = booking.professional_profiles as any;
     const professionalUser = professionalProfile.users as any;
     const clientUser = booking.clients as any;
+    
+    // Get user emails using admin client
+    const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
+    const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(professionalUser.id);
+
+    if (!clientAuth.user?.email || !professionalAuth.user?.email) {
+      console.error('Failed to get user emails for cancellation policy notifications');
+      return;
+    }
     
     const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -956,9 +1116,12 @@ async function sendCancellationPolicyEmails(booking: any, reason: string, charge
     };
     
     const payment = booking.booking_payments as any;
+    
+    // Note: Service fee is kept by platform and not included in refund calculation
+    
     const refundInfo = payment ? {
-      originalAmount: payment.amount + (payment.tip_amount || 0),
-      refundAmount: (payment.amount + (payment.tip_amount || 0)) - chargeAmount,
+      originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment  
+      refundAmount: (payment.tip_amount || 0) + (serviceAmount - chargeAmount), // Tips (100%) + Service amount after cancellation fee (Suite fee NOT refunded)
       status: 'Processing'
     } : undefined;
     
@@ -977,7 +1140,7 @@ async function sendCancellationPolicyEmails(booking: any, reason: string, charge
     );
     
     await sendEmail({
-      to: [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
+      to: [{ email: clientAuth.user.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
       subject: clientEmail.subject,
       htmlContent: clientEmail.html,
       textContent: clientEmail.text,
@@ -998,7 +1161,7 @@ async function sendCancellationPolicyEmails(booking: any, reason: string, charge
     );
     
     await sendEmail({
-      to: [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      to: [{ email: professionalAuth.user.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
       subject: professionalEmail.subject,
       htmlContent: professionalEmail.html,
       textContent: professionalEmail.text,
