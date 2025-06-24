@@ -12,3 +12,5 @@ export { ChangePasswordModal } from './ChangePasswordModal/ChangePasswordModal';
 export { UpdateEmailModal } from './UpdateEmailModal/UpdateEmailModal';
 export { RefundRequestModal } from './RefundRequestModal/RefundRequestModal';
 export { AddAdditionalServicesModal } from './AddAdditionalServicesModal/AddAdditionalServicesModal';
+export { NoShowModal } from './NoShowModal/NoShowModal';
+export { CancellationPolicyModal } from './CancellationPolicyModal/CancellationPolicyModal';

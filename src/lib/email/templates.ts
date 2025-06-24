@@ -840,4 +840,182 @@ export function createBookingCancellationProfessionalEmail(
     htmlContent,
     textContent
   };
+}
+
+/**
+ * Create no-show notification email for client
+ */
+export async function createNoShowNotificationClientEmail(
+  clientName: string,
+  professionalName: string,
+  appointmentDate: string,
+  appointmentTime: string,
+  appointmentId: string,
+  services: Array<{ name: string; price: number }>,
+  chargeInfo?: {
+    amount: number;
+    percentage: number;
+    originalAmount: number;
+  },
+  contactUrl: string = '',
+  websiteUrl: string = ''
+): Promise<{ subject: string; html: string; text: string }> {
+  const data = {
+    clientName,
+    professionalName,
+    appointmentDate,
+    appointmentTime,
+    appointmentId,
+    services,
+    chargeInfo,
+    contactUrl,
+    websiteUrl,
+  };
+
+  const htmlTemplate = loadTemplate('no-show-notification-client', 'hbs');
+  const textTemplate = loadTemplate('no-show-notification-client', 'txt');
+
+  const html = compileTemplate(htmlTemplate, data);
+  const text = compileTemplate(textTemplate, data);
+
+  const subject = chargeInfo 
+    ? `Appointment No-Show - $${chargeInfo.amount.toFixed(2)} Fee Applied`
+    : 'Appointment No-Show Notification';
+
+  return { subject, html, text };
+}
+
+/**
+ * Create no-show notification email for professional
+ */
+export async function createNoShowNotificationProfessionalEmail(
+  professionalName: string,
+  clientName: string,
+  clientPhone: string | undefined,
+  appointmentDate: string,
+  appointmentTime: string,
+  appointmentId: string,
+  services: Array<{ name: string; price: number }>,
+  chargeInfo?: {
+    amount: number;
+    percentage: number;
+    originalAmount: number;
+  },
+  websiteUrl: string = ''
+): Promise<{ subject: string; html: string; text: string }> {
+  const data = {
+    professionalName,
+    clientName,
+    clientPhone,
+    appointmentDate,
+    appointmentTime,
+    appointmentId,
+    services,
+    chargeInfo,
+    websiteUrl,
+  };
+
+  const htmlTemplate = loadTemplate('no-show-notification-professional', 'hbs');
+  const textTemplate = loadTemplate('no-show-notification-professional', 'txt');
+
+  const html = compileTemplate(htmlTemplate, data);
+  const text = compileTemplate(textTemplate, data);
+
+  const subject = chargeInfo 
+    ? `No-Show Recorded - $${chargeInfo.amount.toFixed(2)} Fee Applied`
+    : 'Client No-Show Recorded';
+
+  return { subject, html, text };
+}
+
+/**
+ * Create cancellation policy charge email for client
+ */
+export async function createCancellationPolicyChargeClientEmail(
+  clientName: string,
+  professionalName: string,
+  appointmentDate: string,
+  appointmentTime: string,
+  bookingId: string,
+  cancellationReason: string,
+  services: Array<{ name: string; price: number }>,
+  policyInfo: {
+    chargeAmount: number;
+    chargePercentage: number;
+    serviceAmount: number;
+    timeDescription: string;
+  },
+  refundInfo?: {
+    originalAmount: number;
+    refundAmount: number;
+    status: string;
+  },
+  websiteUrl: string = ''
+): Promise<{ subject: string; html: string; text: string }> {
+  const data = {
+    clientName,
+    professionalName,
+    appointmentDate,
+    appointmentTime,
+    bookingId,
+    cancellationReason,
+    services,
+    policyInfo,
+    refundInfo,
+    websiteUrl,
+  };
+
+  const htmlTemplate = loadTemplate('cancellation-policy-charge-client', 'hbs');
+  const textTemplate = loadTemplate('cancellation-policy-charge-client', 'txt');
+
+  const html = compileTemplate(htmlTemplate, data);
+  const text = compileTemplate(textTemplate, data);
+
+  const subject = `Booking Cancelled - $${policyInfo.chargeAmount.toFixed(2)} Cancellation Fee Applied`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Create cancellation policy charge email for professional
+ */
+export async function createCancellationPolicyChargeProfessionalEmail(
+  professionalName: string,
+  clientName: string,
+  clientPhone: string | undefined,
+  appointmentDate: string,
+  appointmentTime: string,
+  bookingId: string,
+  cancellationReason: string,
+  services: Array<{ name: string; price: number }>,
+  policyInfo: {
+    chargeAmount: number;
+    chargePercentage: number;
+    serviceAmount: number;
+    timeDescription: string;
+  },
+  websiteUrl: string = ''
+): Promise<{ subject: string; html: string; text: string }> {
+  const data = {
+    professionalName,
+    clientName,
+    clientPhone,
+    appointmentDate,
+    appointmentTime,
+    bookingId,
+    cancellationReason,
+    services,
+    policyInfo,
+    websiteUrl,
+  };
+
+  const htmlTemplate = loadTemplate('cancellation-policy-charge-professional', 'hbs');
+  const textTemplate = loadTemplate('cancellation-policy-charge-professional', 'txt');
+
+  const html = compileTemplate(htmlTemplate, data);
+  const text = compileTemplate(textTemplate, data);
+
+  const subject = `Client Cancelled - $${policyInfo.chargeAmount.toFixed(2)} Fee Applied`;
+
+  return { subject, html, text };
 } 

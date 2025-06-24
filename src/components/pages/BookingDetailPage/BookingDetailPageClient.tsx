@@ -41,6 +41,7 @@ import { LeafletMap } from '@/components/common/LeafletMap';
 import { AddAdditionalServicesModal } from '@/components/modals';
 import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
+import { NoShowModal, CancellationPolicyModal } from '@/components/modals';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -178,6 +179,9 @@ export function BookingDetailPageClient({
   const [appointmentData, setAppointmentData] = useState(appointment);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
+  const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
+  const [isCancellationPolicyModalOpen, setIsCancellationPolicyModalOpen] =
+    useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -441,13 +445,13 @@ export function BookingDetailPageClient({
   const handleCancellationSuccess = () => {
     // Update local state to reflect cancellation
     setCurrentStatus('cancelled');
-    setAppointmentData(prev => ({
+    setAppointmentData((prev) => ({
       ...prev,
       status: 'cancelled',
       bookings: {
         ...prev.bookings,
-        status: 'cancelled'
-      }
+        status: 'cancelled',
+      },
     }));
   };
 
@@ -933,7 +937,7 @@ export function BookingDetailPageClient({
                   </div>
                 </div>
 
-                appointment.bookings.professionals.description && (
+                {appointment.bookings.professionals.description && (
                   <>
                     <Separator />
                     <div className="space-y-2">
@@ -1130,6 +1134,33 @@ export function BookingDetailPageClient({
                     Request Refund
                   </Button>
                 )}
+
+                {/* No Show Button - Professional only, for completed appointments */}
+                {isProfessional &&
+                  currentStatus === 'completed' &&
+                  appointment.bookings.booking_payments?.payment_methods
+                    ?.is_online && (
+                    <Button
+                      onClick={() => setIsNoShowModalOpen(true)}
+                      variant="destructiveOutline"
+                      className="w-full"
+                    >
+                      Mark as No Show
+                    </Button>
+                  )}
+
+                {/* Cancellation Policy Button - Client only, for upcoming appointments */}
+                {!isProfessional &&
+                  (currentStatus === 'confirmed' ||
+                    currentStatus === 'upcoming') && (
+                    <Button
+                      onClick={() => setIsCancellationPolicyModalOpen(true)}
+                      variant="destructiveOutline"
+                      className="w-full"
+                    >
+                      Cancel with Policy
+                    </Button>
+                  )}
               </CardContent>
             </Card>
           )}
@@ -1456,6 +1487,30 @@ export function BookingDetailPageClient({
         bookingId={appointment.booking_id}
         appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
         professionalName={getOtherPartyName()}
+      />
+
+      {/* No Show Modal */}
+      <NoShowModal
+        isOpen={isNoShowModalOpen}
+        onClose={() => setIsNoShowModalOpen(false)}
+        appointmentId={appointment.id}
+        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        clientName={getOtherPartyName()}
+        serviceAmount={appointment.bookings.booking_services.reduce(
+          (total, service) => total + service.price,
+          0,
+        )}
+        onSuccess={handleCancellationSuccess}
+      />
+
+      {/* Cancellation Policy Modal */}
+      <CancellationPolicyModal
+        isOpen={isCancellationPolicyModalOpen}
+        onClose={() => setIsCancellationPolicyModalOpen(false)}
+        bookingId={appointment.booking_id}
+        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        professionalName={getOtherPartyName()}
+        onSuccess={handleCancellationSuccess}
       />
     </div>
   );
