@@ -118,8 +118,10 @@ export async function getConversations(): Promise<{
       })
     );
 
-    // Filter out null values and return valid conversations
-    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => conv !== null);
+    // Filter out null values and conversations without messages
+    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
+      conv !== null && conv.last_message !== undefined
+    );
     
     return { success: true, conversations: validConversations };
   } catch (error) {
@@ -688,8 +690,10 @@ export async function getRecentConversations(): Promise<{
       })
     );
 
-    // Filter out null values and return valid conversations
-    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => conv !== null);
+    // Filter out null values and conversations without messages
+    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
+      conv !== null && conv.last_message !== undefined
+    );
     
     return { success: true, conversations: validConversations };
   } catch (error) {
