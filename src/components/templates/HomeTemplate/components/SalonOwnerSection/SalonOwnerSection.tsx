@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils/cn';
 import Image from 'next/image';
+import Link from 'next/link';
 import { PLACEHOLDER_IMAGES } from '../../constants';
 
 type SalonOwnerSectionProps = {
@@ -43,10 +44,11 @@ export function SalonOwnerSection({ className }: SalonOwnerSectionProps) {
             </Typography>
 
             <Button
+              asChild
               size="lg"
-              className="mt-8 bg-primary px-8 py-4 font-futura font-bold text-white"
+              className="mt-8 bg-primary px-10 py-6 font-futura text-xl font-bold text-white hover:bg-primary/90"
             >
-              Connect with us
+              <Link href="/contact">Connect with us</Link>
             </Button>
           </div>
 
