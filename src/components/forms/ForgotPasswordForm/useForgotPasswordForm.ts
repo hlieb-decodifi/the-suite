@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ForgotPasswordFormValues, forgotPasswordSchema } from './schema';
@@ -8,14 +7,14 @@ import { ForgotPasswordFormValues, forgotPasswordSchema } from './schema';
 export type UseForgotPasswordFormProps = {
   onSubmit: (data: ForgotPasswordFormValues) => void;
   defaultValues?: Partial<ForgotPasswordFormValues>;
+  isLoading?: boolean;
 };
 
 export function useForgotPasswordForm({ 
   onSubmit, 
-  defaultValues 
+  defaultValues,
+  isLoading = false
 }: UseForgotPasswordFormProps) {
-  const [isPending, setIsPending] = useState(false);
-
   const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
@@ -25,23 +24,12 @@ export function useForgotPasswordForm({
   });
 
   const handleSubmit = async (data: ForgotPasswordFormValues) => {
-    try {
-      setIsPending(true);
-      
-      // Simulate API request
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      onSubmit(data);
-    } catch (error) {
-      console.error('Error submitting form:', error);
-    } finally {
-      setIsPending(false);
-    }
+    onSubmit(data);
   };
 
   return {
     form,
-    isPending,
+    isPending: isLoading,
     onSubmit: handleSubmit,
   };
 } 

@@ -135,6 +135,68 @@ export async function signOutAction() {
 }
 
 /**
+ * Server action for password reset
+ */
+export async function resetPasswordAction(email: string) {
+  const supabase = await createClient();
+  
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${getURL()}/auth/reset-password`,
+    });
+
+    if (error) {
+      console.error('Password reset error:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return {
+      success: false,
+      error: "Failed to send password reset email. Please try again.",
+    };
+  }
+}
+
+/**
+ * Server action to update password during reset flow
+ */
+export async function updatePasswordAction(newPassword: string) {
+  const supabase = await createClient();
+  
+  try {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      console.error('Password update error:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Password update error:', error);
+    return {
+      success: false,
+      error: "Failed to update password. Please try again.",
+    };
+  }
+}
+
+/**
  * Server action to change user password
  */
 export async function changePasswordAction(currentPassword: string, newPassword: string) {
