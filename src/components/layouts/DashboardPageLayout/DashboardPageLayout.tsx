@@ -446,10 +446,10 @@ export async function getDashboardAppointments(
       );
     }
 
-    // Sort by start time (ascending)
+    // Sort by start time (descending - most recent first)
     filteredAppointments.sort(
       (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+        new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
     );
 
     return filteredAppointments;
