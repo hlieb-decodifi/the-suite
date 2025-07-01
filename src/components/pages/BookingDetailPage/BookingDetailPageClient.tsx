@@ -646,7 +646,7 @@ export function BookingDetailPageClient({
                   0,
                   totalAmount - subtotal - totalTips,
                 ); // Calculate service fee from actual data
-                const total = totalAmount + totalTips;
+                const total = totalAmount;
 
                 return (
                   <>
@@ -1282,28 +1282,12 @@ export function BookingDetailPageClient({
                 {/* Payment Amount and Status */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <Typography className="font-medium text-primary text-lg">
+                    <Typography className="font-bold text-primary text-lg">
                       {formatCurrency(
                         appointmentData.bookings.booking_payments?.amount || 0,
                       )}
                     </Typography>
                   </div>
-
-                  {appointment.bookings.booking_payments.tip_amount > 0 && (
-                    <div className="flex justify-between items-center">
-                      <Typography
-                        variant="small"
-                        className="text-muted-foreground"
-                      >
-                        Tip:
-                      </Typography>
-                      <Typography variant="small" className="font-medium">
-                        {formatCurrency(
-                          appointment.bookings.booking_payments.tip_amount,
-                        )}
-                      </Typography>
-                    </div>
-                  )}
                 </div>
 
                 <Separator />

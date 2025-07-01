@@ -14,7 +14,7 @@ export function filterServices(
       const searchLower = filters.searchTerm.toLowerCase();
       const nameMatch = service.name.toLowerCase().includes(searchLower);
       const descriptionMatch = service.description
-        .toLowerCase()
+      .toLowerCase()
         .includes(searchLower);
       const professionalMatch = service.professional.name
         .toLowerCase()

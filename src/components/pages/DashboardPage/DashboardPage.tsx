@@ -18,6 +18,7 @@ type AppointmentWithServices = {
     id: string;
     name: string;
     description?: string | null;
+    actualPaymentAmount?: number;
   } | null;
 };
 
@@ -130,42 +131,16 @@ export async function getDashboardStats(
     // Calculate total revenue (for professionals)
     let totalRevenue = 0;
     if (isProfessional) {
-      // For the revenue calculation, we need to get the service prices
-      // But based on the logged structure, we don't have prices in the returned data
-      // We'll need to query the database directly to get the prices
-
-      const supabase = await createClient();
-
-      // Get all service IDs from appointments
-      const serviceIds = allAppointments
-        .map((appointment) => appointment.services?.id)
-        .filter(Boolean) as string[];
-
-      if (serviceIds.length > 0) {
-        // Get prices for these services
-        const { data: services } = await supabase
-          .from('services')
-          .select('id, price')
-          .in('id', serviceIds);
-
-        if (services && services.length > 0) {
-          // Create a map of service ID to price
-          const priceMap = new Map();
-          services.forEach((service) => {
-            if (service.price) {
-              priceMap.set(service.id, service.price);
-            }
-          });
-
-          // Sum up prices for appointments
-          allAppointments.forEach((appointment) => {
-            const serviceId = appointment.services?.id;
-            if (serviceId && priceMap.has(serviceId)) {
-              totalRevenue += priceMap.get(serviceId);
-            }
-          });
+      // Use actual payment amounts from the appointment data
+      allAppointments.forEach((appointment) => {
+        // Use actual payment amount if available, otherwise fallback to service price
+        const appointmentWithPayment = appointment as AppointmentWithServices;
+        const paymentAmount =
+          appointmentWithPayment.services?.actualPaymentAmount;
+        if (paymentAmount) {
+          totalRevenue += paymentAmount;
         }
-      }
+      });
     }
 
     // Count appointments by status
