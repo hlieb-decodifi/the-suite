@@ -1,21 +1,68 @@
 import { ServiceListItem, ServicesFilters } from './types';
+import type { SortOption } from './types';
 
 /**
- * Filters services based on search term and location
+ * Filters services based on search term
  */
-export function filterServices(services: ServiceListItem[], filters: ServicesFilters): ServiceListItem[] {
+export function filterServices(
+  services: ServiceListItem[],
+  filters: ServicesFilters,
+): ServiceListItem[] {
   return services.filter((service) => {
-    const matchesSearch = service.name
-      .toLowerCase()
-      .includes(filters.searchTerm.toLowerCase());
-    
-    const matchesLocation = !filters.location || 
-      service.professional.address
+    // Filter by search term if provided
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      const nameMatch = service.name.toLowerCase().includes(searchLower);
+      const descriptionMatch = service.description
         .toLowerCase()
-        .includes(filters.location.toLowerCase());
-    
-    return matchesSearch && matchesLocation;
+        .includes(searchLower);
+      const professionalMatch = service.professional.name
+        .toLowerCase()
+        .includes(searchLower);
+
+      if (!nameMatch && !descriptionMatch && !professionalMatch) {
+        return false;
+      }
+    }
+
+    return true;
   });
+}
+
+/**
+ * Sorts services based on the selected sort option
+ */
+export function sortServices(
+  services: ServiceListItem[],
+  sortBy: SortOption,
+): ServiceListItem[] {
+  const sortedServices = [...services];
+  
+  switch (sortBy) {
+    case 'name-asc':
+      return sortedServices.sort((a, b) => a.name.localeCompare(b.name));
+    
+    case 'name-desc':
+      return sortedServices.sort((a, b) => b.name.localeCompare(a.name));
+    
+    case 'location-asc':
+      return sortedServices.sort((a, b) => {
+        // For location sorting, we'll sort by city first, then by name as a tiebreaker
+        const locationA = a.professional.address_data?.city || a.professional.address || '';
+        const locationB = b.professional.address_data?.city || b.professional.address || '';
+        
+        const cityComparison = locationA.localeCompare(locationB);
+        if (cityComparison !== 0) {
+          return cityComparison;
+        }
+        
+        // If cities are the same, sort by service name
+        return a.name.localeCompare(b.name);
+      });
+    
+    default:
+      return sortedServices;
+  }
 }
 
 /**
@@ -33,10 +80,20 @@ export function getPaginatedServices(
 }
 
 /**
- * Calculates the total number of pages based on filtered services and page size
+ * Calculates pagination information for filtered services
  */
-export function calculateTotalPages(filteredServices: ServiceListItem[], pageSize: number): number {
-  return Math.ceil(filteredServices.length / pageSize);
+export function calculatePagination(
+  totalItems: number,
+  currentPage: number,
+  pageSize: number
+) {
+  const totalPages = Math.ceil(totalItems / pageSize);
+  return {
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+  };
 }
 
 /**
@@ -84,7 +141,7 @@ export function createFilteredPagination(
   
   return {
     currentPage: 1,
-    totalPages: calculateTotalPages(filteredServices, pageSize),
+    totalPages: Math.ceil(filteredServices.length / pageSize),
     totalItems: filteredServices.length,
     pageSize,
   };

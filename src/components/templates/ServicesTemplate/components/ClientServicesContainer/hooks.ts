@@ -5,10 +5,12 @@ import {
   ServicesFilters, 
   PaginationInfo, 
   ServiceListItem, 
-  AuthStatus 
+  AuthStatus,
+  SortOption
 } from '../../types';
 import {
   filterServices,
+  sortServices,
   getServicesForDisplay,
   createFilteredPagination,
 } from '../../utils';
@@ -77,6 +79,7 @@ export function useServicesState(
   initialPagination: PaginationInfo,
   initialSearchTerm: string,
   initialLocation: string = '',
+  initialSortBy: SortOption = 'name-asc',
 ) {
   const [services, setServices] = useState<ServiceListItem[]>(initialServices);
   const [pagination, setPagination] = useState<PaginationInfo>(initialPagination);
@@ -84,11 +87,15 @@ export function useServicesState(
   const [filters, setFilters] = useState<ServicesFilters>({
     searchTerm: initialSearchTerm,
     location: initialLocation,
+    sortBy: initialSortBy,
   });
 
-  // Get filtered services
+  // Get filtered and sorted services
   const filteredServices = useMemo(
-    () => filterServices(services, filters),
+    () => {
+      const filtered = filterServices(services, filters);
+      return sortServices(filtered, filters.sortBy);
+    },
     [services, filters],
   );
 
@@ -135,13 +142,19 @@ export function useURLSync(
       : 1;
     const searchParam = searchParams.get('search') || '';
     const locationParam = searchParams.get('location') || '';
+    const sortParam = (searchParams.get('sort') as SortOption) || 'name-asc';
 
-    // Update filters if search param or location param changes
-    if (searchParam !== filters.searchTerm || locationParam !== filters.location) {
+    // Update filters if search param, location param, or sort param changes
+    if (
+      searchParam !== filters.searchTerm || 
+      locationParam !== filters.location ||
+      sortParam !== filters.sortBy
+    ) {
       setFilters({ 
         ...filters, 
         searchTerm: searchParam,
-        location: locationParam 
+        location: locationParam,
+        sortBy: sortParam,
       });
     }
 
@@ -176,7 +189,7 @@ export function useFiltersHandler(
   setPagination: (pagination: PaginationInfo) => void,
   setFilters: (filters: ServicesFilters) => void,
   containerRef: RefObject<HTMLDivElement | null>,
-  serverSearch: (searchTerm: string, page?: number) => Promise<void>
+  serverSearch: (searchTerm: string, page?: number, sortBy?: SortOption) => Promise<void>
 ) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -192,7 +205,7 @@ export function useFiltersHandler(
         smoothScrollToContainer(containerRef, true);
         
         // Perform server search
-        serverSearch(newFilters.searchTerm.trim(), 1);
+        serverSearch(newFilters.searchTerm.trim(), 1, newFilters.sortBy);
         return;
       }
 
@@ -211,6 +224,13 @@ export function useFiltersHandler(
         params.set('location', newFilters.location);
       } else {
         params.delete('location');
+      }
+
+      // Handle sort parameter
+      if (newFilters.sortBy && newFilters.sortBy !== 'name-asc') {
+        params.set('sort', newFilters.sortBy);
+      } else {
+        params.delete('sort');
       }
 
       // Always reset to page 1 when filters change
@@ -255,7 +275,7 @@ export function usePageChangeHandler(
   pagination: PaginationInfo,
   setPagination: (pagination: PaginationInfo) => void,
   containerRef: RefObject<HTMLDivElement | null>,
-  serverSearch: (searchTerm: string, page?: number) => Promise<void>
+  serverSearch: (searchTerm: string, page?: number, sortBy?: SortOption) => Promise<void>
 ) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -269,7 +289,7 @@ export function usePageChangeHandler(
         smoothScrollToContainer(containerRef, true);
         
         // Then perform the server search
-        await serverSearch(filters.searchTerm, page);
+        await serverSearch(filters.searchTerm, page, filters.sortBy);
         
         // Final scroll after data is loaded to ensure we're at the top
         setTimeout(() => {

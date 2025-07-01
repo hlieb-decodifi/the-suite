@@ -10,6 +10,8 @@ import type {
   AddressFormData,
 } from '@/api/profiles/types';
 import { revalidatePath } from 'next/cache';
+import { getFilteredServices } from '@/components/templates/ServicesTemplate/actions';
+import type { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 
 export async function ClientProfilePage() {
   const supabase = await createClient();
@@ -55,9 +57,83 @@ export async function ClientProfilePage() {
       }}
       profile={clientData.profile}
       address={clientData.address}
+      nearbyServices={clientData.nearbyServices}
       unreadMessagesCount={clientData.unreadMessagesCount}
     />
   );
+}
+
+// Helper function to calculate distance between two coordinates using Haversine formula
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // Distance in kilometers
+  return distance;
+}
+
+// Server function to fetch services for client area
+export async function getServicesForClientArea(address: Address | null) {
+  if (!address || !address.city || !address.state) {
+    return [];
+  }
+
+  try {
+    // Create a location string similar to what's used in the services page
+    const location = `${address.city}, ${address.state}`;
+
+    // Fetch more services initially to have a better selection for distance filtering
+    const { services } = await getFilteredServices(1, 12, '', location);
+
+    // If client has coordinates, sort by distance and limit to 3 closest
+    if (address.latitude && address.longitude && services.length > 0) {
+      const servicesWithDistance = services
+        .map((service) => {
+          let distance = Infinity;
+
+          // Calculate distance if professional has address coordinates
+          if (
+            service.professional.address_data?.latitude &&
+            service.professional.address_data?.longitude
+          ) {
+            distance = calculateDistance(
+              address.latitude!,
+              address.longitude!,
+              service.professional.address_data.latitude,
+              service.professional.address_data.longitude,
+            );
+          }
+
+          return { ...service, distance };
+        })
+        .sort((a, b) => a.distance - b.distance) // Sort by distance (closest first)
+        .slice(0, 3); // Limit to 3 closest services
+
+      return servicesWithDistance.map((item) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { distance, ...service } = item;
+        return service;
+      });
+    }
+
+    // If no coordinates available, just limit to 3 services
+    return services.slice(0, 3);
+  } catch (error) {
+    console.error('Error fetching services for client area:', error);
+    return [];
+  }
 }
 
 // Server function to fetch client profile data
@@ -103,6 +179,9 @@ export async function getClientProfileData(userId: string) {
       }
     }
 
+    // Fetch services in the client's area if they have an address
+    const nearbyServices = await getServicesForClientArea(address);
+
     // Fetch unread messages count
     let unreadMessagesCount = 0;
     try {
@@ -119,6 +198,7 @@ export async function getClientProfileData(userId: string) {
       lastName: userData?.last_name || '',
       profile: profile || null,
       address,
+      nearbyServices,
       unreadMessagesCount,
     };
   } catch (error) {
@@ -128,6 +208,7 @@ export async function getClientProfileData(userId: string) {
       lastName: '',
       profile: null as ClientProfile | null,
       address: null as Address | null,
+      nearbyServices: [] as ServiceListItem[],
       unreadMessagesCount: 0,
     };
   }

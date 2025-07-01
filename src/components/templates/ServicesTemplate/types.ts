@@ -38,10 +38,19 @@ export type AuthStatus = {
   isClient: boolean;
 };
 
+// Sorting options for services
+export type SortOption = 'name-asc' | 'name-desc' | 'location-asc';
+
+export type SortConfig = {
+  value: SortOption;
+  label: string;
+};
+
 // Services filter types
 export type ServicesFilters = {
   searchTerm: string;
   location: string;
+  sortBy: SortOption;
 };
 
 // Pagination type
