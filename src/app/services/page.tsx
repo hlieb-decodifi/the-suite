@@ -4,6 +4,7 @@ type SearchParams = {
   search?: string;
   location?: string;
   page?: string;
+  sort?: string;
 };
 
 // Enable dynamic rendering for this page to access searchParams

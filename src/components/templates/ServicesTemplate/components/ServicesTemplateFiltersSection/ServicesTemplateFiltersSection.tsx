@@ -21,6 +21,7 @@ function useFilterState(initialFilters: ServicesFilters) {
   const [localFilters, setLocalFilters] = useState({
     searchTerm: initialFilters.searchTerm,
     location: initialFilters.location,
+    sortBy: initialFilters.sortBy || 'name-asc',
   });
 
   // Store selected address data separately for autocomplete
@@ -113,7 +114,7 @@ function useFilterState(initialFilters: ServicesFilters) {
   };
 
   const handleClearFilters = () => {
-    setLocalFilters({ searchTerm: '', location: '' });
+    setLocalFilters({ searchTerm: '', location: '', sortBy: 'name-asc' });
     setSelectedAddress(null);
     resetSearch();
     // Navigate to services page without any parameters

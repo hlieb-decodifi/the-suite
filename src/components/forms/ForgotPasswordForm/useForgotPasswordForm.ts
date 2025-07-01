@@ -24,7 +24,7 @@ export function useForgotPasswordForm({
   });
 
   const handleSubmit = async (data: ForgotPasswordFormValues) => {
-    onSubmit(data);
+      onSubmit(data);
   };
 
   return {

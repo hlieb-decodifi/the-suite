@@ -2,11 +2,13 @@ import { Suspense } from 'react';
 import { getServices } from './actions';
 import { ClientServicesContainer } from './components/ClientServicesContainer';
 import { ServicesTemplateHeader } from './components/ServicesTemplateHeader';
+import { SortOption } from './types';
 
 type SearchParams = {
   page?: string;
   search?: string;
   location?: string;
+  sort?: string;
 };
 
 export async function ServicesTemplate({
@@ -21,6 +23,7 @@ export async function ServicesTemplate({
     : 1;
   const searchTerm = resolvedSearchParams?.search || '';
   const location = resolvedSearchParams?.location || '';
+  const sortBy = (resolvedSearchParams?.sort as SortOption) || 'name-asc';
   const pageSize = 12;
 
   // Fetch paginated services data on the server with search and location filters
@@ -48,6 +51,7 @@ export async function ServicesTemplate({
             initialPagination={pagination}
             initialSearchTerm={searchTerm}
             initialLocation={location}
+            initialSortBy={sortBy}
           />
         </Suspense>
       </div>

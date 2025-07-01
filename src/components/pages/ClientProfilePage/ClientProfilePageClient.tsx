@@ -5,6 +5,7 @@ import type {
   AddressFormData,
   ClientProfile,
 } from '@/api/profiles/types';
+import type { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { AvatarUpload } from '@/components/common/AvatarUpload';
 import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
 import { ChangeEmailForm, ChangePasswordForm } from '@/components/forms';
@@ -43,6 +44,8 @@ import {
   Mail,
   MapPinned,
   UserRound,
+  MapPin,
+  ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, useTransition } from 'react';
@@ -50,11 +53,13 @@ import {
   updateClientLocationAction,
   updateUserDetailsAction,
 } from './ClientProfilePage';
+import { ServicesTemplateServiceCard } from '@/components/templates/ServicesTemplate/components/ServicesTemplateListSection/components/ServicesTemplateServiceCard/ServicesTemplateServiceCard';
 
 export type ClientProfilePageClientProps = {
   user: User;
   profile: ClientProfile | null;
   address: Address | null;
+  nearbyServices: ServiceListItem[];
   unreadMessagesCount?: number;
 };
 
@@ -455,6 +460,17 @@ function InlineLocationSection({
         )}
       </CardHeader>
       <CardContent className="pt-6">
+        {!isEditing && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-start space-x-2">
+              <MapPin className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <Typography variant="small" className="text-blue-800">
+                Your address is private and only visible to you.
+              </Typography>
+            </div>
+          </div>
+        )}
+
         {isEditing ? (
           <LocationForm
             user={user}
@@ -473,10 +489,92 @@ function InlineLocationSection({
   );
 }
 
+// Nearby Services Section component
+function NearbyServicesSection({
+  services,
+  userLocation,
+}: {
+  services: ServiceListItem[];
+  userLocation: string;
+}) {
+  // Show empty state if no services
+  if (services.length === 0) {
+    return (
+      <Card className="border-[#ECECEC]">
+        <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
+          <div className="flex items-center">
+            <MapPin size={18} className="text-[#DEA85B] mr-2" />
+            <CardTitle className="text-[#313131] text-lg">
+              Available Services in Your Area
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <div className="bg-muted rounded-full p-3 mb-4">
+              <MapPin className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <Typography variant="h4" className="font-semibold mb-2">
+              No services found in your area
+            </Typography>
+            <Typography className="text-muted-foreground max-w-md mb-4">
+              We couldn't find any services near {userLocation}. Check out all
+              available services to find what you need.
+            </Typography>
+            <Link href="/services">
+              <Button variant="outline" className="flex items-center">
+                View All Services
+                <ArrowRight size={14} className="ml-2" />
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show services with the same card design as services page
+  return (
+    <Card className="border-[#ECECEC]">
+      <CardHeader className="min-h-16 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-[#ECECEC]">
+        <div className="flex items-center">
+          <MapPin size={18} className="text-[#DEA85B] mr-2" />
+          <CardTitle className="text-[#313131] text-lg">
+            Available Services in Your Area
+          </CardTitle>
+        </div>
+        <Link
+          href="/services"
+          className="text-sm text-[#5D6C6F] hover:text-[#DEA85B] flex items-center"
+        >
+          View All
+          <ArrowRight size={14} className="ml-1" />
+        </Link>
+      </CardHeader>
+      <CardContent className="pt-6">
+        <div className="flex flex-col space-y-4">
+          {services.map((service) => (
+            <ServicesTemplateServiceCard
+              key={service.id}
+              service={service}
+              authStatus={{
+                isAuthenticated: true,
+                isLoading: false,
+                isClient: true,
+              }}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ClientProfilePageClient({
   user,
   profile,
   address,
+  nearbyServices,
   unreadMessagesCount = 0,
 }: ClientProfilePageClientProps) {
   return (
@@ -534,6 +632,12 @@ export function ClientProfilePageClient({
             profile={profile}
             address={address}
           />
+          {address && nearbyServices.length > 0 && (
+            <NearbyServicesSection
+              services={nearbyServices}
+              userLocation={`${address.city}, ${address.state}`}
+            />
+          )}
         </div>
       </div>
     </div>

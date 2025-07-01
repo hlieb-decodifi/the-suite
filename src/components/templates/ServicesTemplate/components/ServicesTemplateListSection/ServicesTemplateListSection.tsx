@@ -5,6 +5,7 @@ import { ServicesTemplateListSectionProps } from './types';
 import { ServicesTemplateServicesList } from './components/ServicesTemplateServicesList/ServicesTemplateServicesList';
 import { ServicesTemplateEmptyState } from './components/ServicesTemplateEmptyState/ServicesTemplateEmptyState';
 import { ServicesTemplatePagination } from './components/ServicesTemplatePagination';
+import { ServicesSortDropdown } from '../ServicesSortDropdown';
 import { Loader2 } from 'lucide-react';
 
 export function ServicesTemplateListSection({
@@ -13,6 +14,8 @@ export function ServicesTemplateListSection({
   onPageChange,
   authStatus,
   isLoading = false,
+  sortBy,
+  onSortChange,
 }: ServicesTemplateListSectionProps) {
   const { currentPage, totalPages, totalItems, pageSize } = pagination;
 
@@ -22,7 +25,7 @@ export function ServicesTemplateListSection({
 
   return (
     <div className="space-y-4">
-      {/* Results summary */}
+      {/* Results summary and sorting */}
       <div className="flex justify-between items-center">
         <Typography className="text-muted-foreground">
           {isLoading ? (
@@ -36,6 +39,15 @@ export function ServicesTemplateListSection({
             'No services found'
           )}
         </Typography>
+
+        {/* Sort dropdown - only show when we have services */}
+        {!isLoading && services.length > 0 && (
+          <ServicesSortDropdown
+            value={sortBy}
+            onSortChange={onSortChange}
+            disabled={isLoading}
+          />
+        )}
       </div>
 
       {/* Services list or empty state */}
@@ -55,7 +67,7 @@ export function ServicesTemplateListSection({
       )}
 
       {/* Pagination controls */}
-      {totalPages > 1 && (
+      {totalPages > 1 && totalItems > 0 && (
         <ServicesTemplatePagination
           currentPage={currentPage}
           totalPages={totalPages}
