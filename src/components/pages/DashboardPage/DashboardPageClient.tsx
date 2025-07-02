@@ -125,8 +125,9 @@ export function DashboardPageClient({
   // Calculate total amount of upcoming appointments
   const upcomingAppointmentsTotal = upcomingAppointments.reduce(
     (total, appointment) => {
-      // Use total including service fee for both professionals and clients
+      // Use actual payment amount first, then fallback to calculated amounts
       const price =
+        appointment.services?.actualPaymentAmount ||
         appointment.services?.totalWithServiceFee ||
         (appointment.services?.totalPrice || appointment.services?.price || 0) +
           1.0;

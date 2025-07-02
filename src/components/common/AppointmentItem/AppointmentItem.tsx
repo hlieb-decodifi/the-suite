@@ -24,6 +24,7 @@ export type AppointmentType = {
     totalPrice?: number;
     totalDuration?: number;
     totalWithServiceFee?: number;
+    actualPaymentAmount?: number;
     hasAdditionalServices?: boolean;
     additionalServicesCount?: number;
     allServices?: Array<{

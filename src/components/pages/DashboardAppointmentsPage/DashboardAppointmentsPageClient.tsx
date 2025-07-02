@@ -43,6 +43,7 @@ type AppointmentType = {
       price: number;
       duration: number;
     }>;
+    actualPaymentAmount?: number;
   } | null;
   professionals?: {
     id: string;
@@ -395,6 +396,7 @@ export function DashboardAppointmentsPageClient({
 
       // Get amount including service fee for both professionals and clients
       const amount =
+        appointment.services?.actualPaymentAmount ||
         appointment.services?.totalWithServiceFee ||
         (appointment.services?.totalPrice || appointment.services?.price || 0) +
           1.0;

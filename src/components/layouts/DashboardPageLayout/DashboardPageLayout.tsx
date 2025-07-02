@@ -135,6 +135,7 @@ export async function getDashboardAppointments(
   endDateIso?: string,
   status?: string,
 ) {
+  console.log('status', status);
   try {
     const supabase = await createClient();
 
@@ -301,6 +302,13 @@ export async function getDashboardAppointments(
               description
             )
           ),
+          booking_payments(
+            id,
+            amount,
+            tip_amount,
+            service_fee,
+            status
+          ),
           clients:client_id(
             id,
             first_name,
@@ -361,10 +369,16 @@ export async function getDashboardAppointments(
           (sum, bs) => sum + (bs.duration || 0),
           0,
         );
-        // Note: Service fee is loaded dynamically by the booking form
-        // This calculation is for display purposes only
-        const serviceFee = 1.0; // Fallback value, actual fee is loaded from database
-        const totalWithServiceFee = totalServicePrice + serviceFee;
+
+        // Get the actual payment amount from booking_payments
+        const bookingPayment = booking.booking_payments;
+        const actualPaymentAmount = bookingPayment?.amount || 0;
+        const paymentServiceFee = bookingPayment?.service_fee || 0;
+
+        // For backward compatibility, still calculate service fee fallback
+        const serviceFeeDisplay = paymentServiceFee || 1.0; // Fallback value for display
+        const totalWithServiceFeeCalculated =
+          totalServicePrice + serviceFeeDisplay;
 
         // Create service object with main service info plus totals
         const service = mainService?.services
@@ -375,7 +389,9 @@ export async function getDashboardAppointments(
               // Add additional fields for UI
               totalPrice: totalServicePrice, // Total of all services
               totalDuration: totalDuration, // Total duration
-              totalWithServiceFee: totalWithServiceFee, // Total including service fee
+              totalWithServiceFee:
+                actualPaymentAmount || totalWithServiceFeeCalculated, // Use actual payment amount or fallback
+              actualPaymentAmount: actualPaymentAmount, // Add the actual payment amount for display
               hasAdditionalServices: additionalServices.length > 0,
               additionalServicesCount: additionalServices.length,
               allServices: bookingServices.map((bs) => ({
@@ -431,10 +447,10 @@ export async function getDashboardAppointments(
       );
     }
 
-    // Sort by start time (ascending)
+    // Sort by start time (descending - most recent first)
     filteredAppointments.sort(
       (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+        new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
     );
 
     return filteredAppointments;
