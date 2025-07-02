@@ -222,14 +222,22 @@ export async function getServices(
   // If there's a search term, add it to the query
   if (search && search.trim() !== '') {
     const trimmedSearch = search.trim();
-    query = query.ilike('name', `%${trimmedSearch}%`);
+    query = query.or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
   }
   
-  // Get total count for pagination
-  const { count, error: countError } = await supabase
+  // Get total count for pagination with same filters as main query
+  let countQuery = supabase
     .from('services')
     .select('*', { count: 'exact', head: true })
     .in('professional_profile_id', publishedProfileIds);
+  
+  // Apply the same search filter to count query
+  if (search && search.trim() !== '') {
+    const trimmedSearch = search.trim();
+    countQuery = countQuery.or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
+  }
+  
+  const { count, error: countError } = await countQuery;
   
   if (countError) {
     console.error('Error counting services:', countError);

@@ -8,6 +8,7 @@ import {
   PaginationInfo,
   ServiceListItem,
   ServicesFilters,
+  SortOption,
 } from '../../types';
 import { ServicesTemplateListSection } from '../ServicesTemplateListSection';
 import { FiltersSection } from './FiltersSection';
@@ -25,6 +26,7 @@ type ClientServicesContainerProps = {
   initialPagination: PaginationInfo;
   initialSearchTerm?: string;
   initialLocation?: string;
+  initialSortBy?: SortOption;
 };
 
 // Helper function to handle smooth scrolling
@@ -73,7 +75,7 @@ function useServerSearch(
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  return async (searchTerm: string, page: number = 1) => {
+  return async (searchTerm: string, page: number = 1, sortBy?: SortOption) => {
     try {
       // Perform an immediate scroll for better UX before loading
       smoothScrollToContainer(containerRef, true);
@@ -89,11 +91,22 @@ function useServerSearch(
       }
       params.set('page', page.toString());
 
+      // Handle sort parameter if provided
+      if (sortBy && sortBy !== 'name-asc') {
+        params.set('sort', sortBy);
+      } else if (sortBy === 'name-asc') {
+        params.delete('sort');
+      }
+
       // Update browser history without causing navigation
       window.history.pushState({}, '', `${pathname}?${params.toString()}`);
 
       // Update local filter state
-      setFilters((prev) => ({ ...prev, searchTerm }));
+      setFilters((prev) => ({
+        ...prev,
+        searchTerm,
+        ...(sortBy && { sortBy }),
+      }));
 
       // Fetch services from server
       const result = await fetchServicesAction(
@@ -151,6 +164,10 @@ function renderLayout(
             onPageChange={handlePageChange}
             authStatus={authStatus}
             isLoading={isLoading}
+            sortBy={filters.sortBy}
+            onSortChange={(sortBy) =>
+              handleFiltersChange({ ...filters, sortBy })
+            }
           />
         </div>
       </div>
@@ -163,6 +180,7 @@ export function ClientServicesContainer({
   initialPagination,
   initialSearchTerm = '',
   initialLocation = '',
+  initialSortBy = 'name-asc',
 }: ClientServicesContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const authStatus = useAuthStatus();
@@ -183,6 +201,7 @@ export function ClientServicesContainer({
     initialPagination,
     initialSearchTerm,
     initialLocation,
+    initialSortBy,
   );
 
   // Set up server-side search without page reload

@@ -17,11 +17,13 @@ import { SignUpModal } from '@/components/modals/SignUpModal';
 export type ServicesTemplateServiceCardProps = {
   service: ServiceListItem;
   authStatus: AuthStatus;
+  size?: 'default' | 'compact';
 };
 
 export function ServicesTemplateServiceCard({
   service,
   authStatus,
+  size = 'default',
 }: ServicesTemplateServiceCardProps) {
   const { name, description, price, duration, professional, isBookable } =
     service;
@@ -77,13 +79,18 @@ export function ServicesTemplateServiceCard({
       .toUpperCase();
   };
 
+  // Calculate layout proportions based on size
+  const serviceInfoWidth = size === 'compact' ? 'md:w-[60%]' : 'md:w-[60%]'; // 3/5 instead of 68%
+  const professionalInfoWidth =
+    size === 'compact' ? 'md:w-[40%]' : 'md:w-[40%]'; // 2/5 instead of 32%
+
   return (
     <>
       <Card className="border border-border w-full overflow-hidden hover:shadow-card transition-shadow duration-200">
         <CardContent className="p-0">
           <div className="flex flex-col md:flex-row w-full">
             {/* Service info section - left side on desktop */}
-            <div className="flex-grow p-6 md:w-[68%]">
+            <div className={`flex-grow p-6 ${serviceInfoWidth}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1.5">
                   <Typography
@@ -197,7 +204,9 @@ export function ServicesTemplateServiceCard({
             </div>
 
             {/* Professional info section - right side on desktop only */}
-            <div className="hidden md:flex md:flex-col p-6 md:w-[32%] md:border-l md:border-border md:bg-muted/10">
+            <div
+              className={`hidden md:flex md:flex-col p-6 ${professionalInfoWidth} md:border-l md:border-border md:bg-muted/10`}
+            >
               {/* Professional profile info */}
               <div className="flex pb-2 items-start space-x-4">
                 <Link

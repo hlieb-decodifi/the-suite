@@ -21,31 +21,33 @@ function useFilterState(initialFilters: ServicesFilters) {
   const [localFilters, setLocalFilters] = useState({
     searchTerm: initialFilters.searchTerm,
     location: initialFilters.location,
+    sortBy: initialFilters.sortBy || 'name-asc',
   });
 
   // Store selected address data separately for autocomplete
   // Initialize with a mock address object if we have location from URL
   const [selectedAddress, setSelectedAddress] = useState<AddressData | null>(
-    initialFilters.location
-      ? {
-          google_place_id: '',
-          formatted_address: initialFilters.location,
-          country: '',
-          latitude: 0,
-          longitude: 0,
-          place_types: [],
-          google_data_raw: {} as Place,
-          city: '',
-          state: '',
-          street_address: '',
-        }
-      : null,
+    () => {
+      if (!initialFilters.location) return null;
+      return {
+        google_place_id: '',
+        formatted_address: initialFilters.location,
+        country: '',
+        latitude: 0,
+        longitude: 0,
+        place_types: [],
+        google_data_raw: {} as Place,
+        city: '',
+        state: '',
+        street_address: '',
+      };
+    },
   );
 
   // Sync selectedAddress when URL location changes
   useEffect(() => {
-    if (initialFilters.location && !selectedAddress) {
-      // If there's a location from URL but no selectedAddress, create one
+    if (initialFilters.location) {
+      // If there's a location from URL, always update the selectedAddress
       setSelectedAddress({
         google_place_id: '',
         formatted_address: initialFilters.location,
@@ -58,11 +60,11 @@ function useFilterState(initialFilters: ServicesFilters) {
         state: '',
         street_address: '',
       });
-    } else if (!initialFilters.location && selectedAddress) {
-      // If no location in URL but we have selectedAddress, clear it
+    } else {
+      // If no location in URL, clear the selectedAddress
       setSelectedAddress(null);
     }
-  }, [initialFilters.location, selectedAddress]);
+  }, [initialFilters.location]); // Only depend on location changes
 
   const hasActiveFilters =
     localFilters.location !== '' || localFilters.searchTerm !== '';
@@ -112,7 +114,7 @@ function useFilterState(initialFilters: ServicesFilters) {
   };
 
   const handleClearFilters = () => {
-    setLocalFilters({ searchTerm: '', location: '' });
+    setLocalFilters({ searchTerm: '', location: '', sortBy: 'name-asc' });
     setSelectedAddress(null);
     resetSearch();
     // Navigate to services page without any parameters

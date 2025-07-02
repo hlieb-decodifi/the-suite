@@ -77,12 +77,15 @@ export async function uploadPortfolioPhoto(
   formData: FormData
 ): Promise<PortfolioPhotoResponse> {
   try {
+    // Get the max photos limit
+    const { maxPhotos = 20 } = await getMaxPortfolioPhotosAction();
+
     // Check if the user is at the photo limit
     const count = await countPortfolioPhotos(userId);
-    if (count >= 10) {
+    if (count >= maxPhotos) {
       return {
         success: false,
-        error: 'You have reached the maximum limit of 10 portfolio photos'
+        error: `You have reached the maximum limit of ${maxPhotos} portfolio photos`
       };
     }
 
@@ -264,6 +267,38 @@ export async function updatePortfolioPhoto(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+/**
+ * Get the maximum number of portfolio photos allowed per professional
+ */
+export async function getMaxPortfolioPhotosAction(): Promise<{
+  success: boolean;
+  maxPhotos?: number;
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    
+    const { data } = await supabase.rpc('get_admin_config', {
+      config_key: 'max_portfolio_photos',
+      default_value: '20'
+    });
+    
+    const maxPhotos = parseInt(data || '20');
+    
+    return {
+      success: true,
+      maxPhotos
+    };
+  } catch (error) {
+    console.error('Error getting max portfolio photos:', error);
+    return {
+      success: false,
+      error: 'Failed to get max portfolio photos limit',
+      maxPhotos: 20 // Default fallback
     };
   }
 } 

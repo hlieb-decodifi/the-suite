@@ -7,6 +7,8 @@ import {
   ForgotPasswordFormValues,
 } from '@/components/forms/ForgotPasswordForm';
 import { ForgotPasswordSuccess } from './components/ForgotPasswordSuccess';
+import { resetPasswordAction } from '@/api/auth/actions';
+import { useToast } from '@/components/ui/use-toast';
 
 type ForgotPasswordModalProps = {
   isOpen: boolean;
@@ -23,25 +25,46 @@ export function ForgotPasswordModal({
 }: ForgotPasswordModalProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   const handleClose = () => {
     onOpenChange(false);
-
-    // Reset form state when modal is closed
-    setTimeout(() => {
-      if (!isOpen) {
-        setIsSubmitted(false);
-      }
-    }, 300);
+    // Reset state immediately when modal closes
+    setIsSubmitted(false);
+    setSubmittedEmail('');
+    setIsLoading(false);
   };
 
   const handleSubmit = async (data: ForgotPasswordFormValues) => {
-    console.log('Forgot password form submitted:', data);
-    setSubmittedEmail(data.email);
-    setIsSubmitted(true);
+    setIsLoading(true);
 
-    if (onSuccess) {
-      onSuccess();
+    try {
+      const result = await resetPasswordAction(data.email);
+
+      if (result.success) {
+        setSubmittedEmail(data.email);
+        setIsSubmitted(true);
+
+        if (onSuccess) {
+          onSuccess();
+        }
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to send password reset email',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Password reset error:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -65,6 +88,7 @@ export function ForgotPasswordModal({
           onSubmit={handleSubmit}
           onCancel={handleCancel}
           className="w-full"
+          isLoading={isLoading}
         />
       )}
     </Modal>

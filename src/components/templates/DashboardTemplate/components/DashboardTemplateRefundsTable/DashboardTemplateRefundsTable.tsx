@@ -10,7 +10,7 @@ import {
 import { Typography } from '@/components/ui/typography';
 import { formatCurrency } from '@/utils';
 import { format } from 'date-fns';
-import { CalendarDays, Clock, ChevronRight, DollarSign } from 'lucide-react';
+import { CalendarDays, ChevronRight, Clock, DollarSign } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export type Refund = {

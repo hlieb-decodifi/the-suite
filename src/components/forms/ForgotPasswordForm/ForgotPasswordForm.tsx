@@ -8,12 +8,14 @@ export type ForgotPasswordFormProps = {
   onSubmit: (data: ForgotPasswordFormValues) => void;
   onCancel: () => void;
   className?: string;
+  isLoading?: boolean;
 };
 
 export function ForgotPasswordForm({
   onSubmit,
   onCancel,
   className = '',
+  isLoading = false,
 }: ForgotPasswordFormProps) {
   const {
     form,
@@ -21,6 +23,7 @@ export function ForgotPasswordForm({
     onSubmit: handleSubmit,
   } = useForgotPasswordForm({
     onSubmit,
+    isLoading,
   });
 
   return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import {
   uploadPortfolioPhotoAction,
   deletePortfolioPhotoAction,
 } from './ProfilePortfolioPage';
+import { getMaxPortfolioPhotosAction } from '@/server/domains/portfolio-photos/actions';
 
 export type ProfilePortfolioPageClientProps = {
   user: User;
@@ -374,12 +375,21 @@ export function ProfilePortfolioPageClient({
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [photoToDelete, setPhotoToDelete] = useState<string | null>(null);
+  const [maxPhotos, setMaxPhotos] = useState<number>(20); // Default to 20
 
   // Hooks
   const { toast } = useToast();
 
-  // Constants
-  const MAX_PHOTOS = 10;
+  // Fetch max photos limit on mount
+  useEffect(() => {
+    async function fetchMaxPhotos() {
+      const result = await getMaxPortfolioPhotosAction();
+      if (result.success && result.maxPhotos) {
+        setMaxPhotos(result.maxPhotos);
+      }
+    }
+    fetchMaxPhotos();
+  }, []);
 
   // Handlers
   const handleUploadSuccess = (newPhoto: PortfolioPhotoUI) => {
@@ -497,7 +507,7 @@ export function ProfilePortfolioPageClient({
             )}
             <PortfolioUploader
               userId={user.id}
-              maxPhotos={MAX_PHOTOS}
+              maxPhotos={maxPhotos}
               currentPhotosCount={photos.length}
               onUploadSuccess={handleUploadSuccess}
             />
