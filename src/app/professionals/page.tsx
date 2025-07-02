@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { ProfessionalsTemplate } from '@/components/templates/ProfessionalsTemplate';
 import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
 type SearchParams = {
   q?: string;
@@ -29,5 +31,6 @@ export default async function ProfessionalsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  return <ProfessionalsTemplate searchParams={searchParams} />;
+  redirect('/');
+  // return <ProfessionalsTemplate searchParams={searchParams} />;
 }
