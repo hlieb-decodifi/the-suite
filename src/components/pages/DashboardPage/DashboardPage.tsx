@@ -65,17 +65,19 @@ export async function DashboardPage({
     !!isProfessional,
     filterStartDate,
     filterEndDate,
-    undefined, // Don't filter by status here
+    'all', // Don't filter by status here
   );
+
+  // console.log('allAppointments', allAppointments.length);
 
   // Filter for upcoming appointments (confirmed, pending, upcoming statuses)
   // Only apply status filtering if no date range is specified (default behavior)
-  const appointmentsForDashboard =
-    !startDate && !endDate
-      ? allAppointments.filter((appointment) =>
-          ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
-        )
-      : allAppointments;
+  const appointmentsForDashboard = allAppointments;
+  // !startDate && !endDate
+  //   ? allAppointments.filter((appointment) =>
+  //       ['confirmed', 'pending', 'upcoming'].includes(appointment.status),
+  //     )
+  //   : allAppointments;
 
   // Get stats for the dashboard (always use all appointments for stats)
   const stats = await getDashboardStats(

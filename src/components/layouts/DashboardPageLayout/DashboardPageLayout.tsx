@@ -135,6 +135,7 @@ export async function getDashboardAppointments(
   endDateIso?: string,
   status?: string,
 ) {
+  console.log('status', status);
   try {
     const supabase = await createClient();
 
