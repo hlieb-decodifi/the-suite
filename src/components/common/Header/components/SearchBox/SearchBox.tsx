@@ -1,10 +1,9 @@
- 
 'use client';
 
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { useRef, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useSearch } from '@/stores/searchStore';
 
 export type SearchBoxProps = {
@@ -21,6 +20,7 @@ export function SearchBox({
   autoFocus = false,
 }: SearchBoxProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Get search state from store
@@ -29,6 +29,12 @@ export function SearchBox({
   // Determine if we're on the services page
   const isServicesPage =
     pathname === '/services' || pathname?.startsWith('/services?');
+
+  // Set initial search term from URL parameters
+  useEffect(() => {
+    const urlSearchTerm = searchParams.get('search') || '';
+    setSearchTerm(urlSearchTerm);
+  }, []); // Empty dependency array means this only runs once on mount
 
   // Focus the input when autoFocus is true
   useEffect(() => {

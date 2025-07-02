@@ -222,7 +222,7 @@ export async function getServices(
   // If there's a search term, add it to the query
   if (search && search.trim() !== '') {
     const trimmedSearch = search.trim();
-    query = query.ilike('name', `%${trimmedSearch}%`);
+    query = query.or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
   }
   
   // Get total count for pagination with same filters as main query
@@ -234,7 +234,7 @@ export async function getServices(
   // Apply the same search filter to count query
   if (search && search.trim() !== '') {
     const trimmedSearch = search.trim();
-    countQuery = countQuery.ilike('name', `%${trimmedSearch}%`);
+    countQuery = countQuery.or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
   }
   
   const { count, error: countError } = await countQuery;
