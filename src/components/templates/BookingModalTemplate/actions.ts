@@ -204,7 +204,7 @@ export async function createBooking(
         date: dateFormatted,
         start_time: timeInfo.start,
         end_time: timeInfo.end,
-        status: 'upcoming',
+        status: 'active',
       })
       .select('id')
       .single();

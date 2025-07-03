@@ -88,6 +88,7 @@ export type DetailedAppointmentType = {
       pre_auth_placed_at: string | null;
       captured_at: string | null;
       created_at: string;
+      service_fee: number;
       // Refund tracking fields
       refunded_amount: number;
       refund_reason: string | null;
@@ -137,11 +138,7 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
     const appointment = await getAppointmentById(id);
 
-    console.log('appointment', {
-      id: appointment.id,
-      status: appointment.status,
-      computed_status: appointment.computed_status,
-    });
+    console.log('appointment', appointment);
 
     // Check if user has permission to view this appointment
     const hasPermission = checkAppointmentPermission(
@@ -285,6 +282,7 @@ export async function getAppointmentById(
             refund_reason,
             refunded_at,
             refund_transaction_id,
+            service_fee,
             payment_methods (
               id,
               name,

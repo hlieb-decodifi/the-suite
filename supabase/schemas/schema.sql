@@ -988,7 +988,7 @@ alter table appointments enable row level security;
 
 /**
 * Function to compute appointment status based on time
-* Returns 'upcoming', 'completed', or 'cancelled'
+* Returns 'upcoming', 'ongoing', 'completed', or 'cancelled'
 */
 create or replace function get_appointment_computed_status(
   p_date date,
@@ -1022,8 +1022,8 @@ begin
     return 'completed';
   end if;
 
-  -- If we're between start and end time, it's in progress (treat as upcoming)
-  return 'upcoming';
+  -- If we're between start and end time, it's ongoing
+  return 'ongoing';
 end;
 $$ language plpgsql;
 
@@ -1316,6 +1316,32 @@ create policy "Professionals can view user data for clients with shared appointm
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.client_id = users.id
       and pp.user_id = auth.uid()
+    )
+  );
+
+-- Add policy for professionals to update booking payments during ongoing appointments
+create policy "Professionals can update payment amounts for ongoing appointments"
+  on booking_payments for update
+  using (
+    exists (
+      select 1 
+      from bookings b
+      join appointments a on a.booking_id = b.id
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = booking_payments.booking_id
+      and pp.user_id = auth.uid()
+      and get_appointment_computed_status(a.date, a.start_time, a.end_time, a.status) = 'ongoing'
+    )
+  )
+  with check (
+    exists (
+      select 1 
+      from bookings b
+      join appointments a on a.booking_id = b.id
+      join professional_profiles pp on b.professional_profile_id = pp.id
+      where b.id = booking_payments.booking_id
+      and pp.user_id = auth.uid()
+      and get_appointment_computed_status(a.date, a.start_time, a.end_time, a.status) = 'ongoing'
     )
   );
 

@@ -59,6 +59,7 @@ type BookingPayment = {
   pre_auth_placed_at: string | null;
   captured_at: string | null;
   created_at: string;
+  service_fee: number;
   // Refund tracking fields
   refunded_amount: number;
   refund_reason: string | null;
@@ -632,10 +633,7 @@ export function BookingDetailPageClient({
                 // Get actual payment data including tips
                 const totalAmount = payment?.amount || 0;
                 const totalTips = payment?.tip_amount || 0;
-                const serviceFee = Math.max(
-                  0,
-                  totalAmount - subtotal - totalTips,
-                ); // Calculate service fee from actual data
+                const serviceFee = payment?.service_fee || 0;
                 const total = totalAmount + totalTips;
 
                 return (
@@ -1208,8 +1206,7 @@ export function BookingDetailPageClient({
 
                 {/* Add Additional Services Button */}
                 {isProfessional &&
-                  (appointmentData.computed_status === 'upcoming' ||
-                    appointmentData.status === 'upcoming') && (
+                  appointmentData.computed_status === 'ongoing' && (
                     <Button
                       onClick={() => setIsAddServicesModalOpen(true)}
                       variant="outline"
