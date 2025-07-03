@@ -2096,25 +2096,25 @@ create index if not exists idx_reviews_created_at on reviews(created_at);
 create or replace function can_create_review(p_appointment_id uuid, p_client_id uuid)
 returns boolean as $$
 declare
-  appointment_status text;
+  appointment_computed_status text;
   appointment_client_id uuid;
   appointment_professional_id uuid;
   existing_review_count integer;
 begin
   -- Get appointment details
-  select a.status, b.client_id, pp.user_id into appointment_status, appointment_client_id, appointment_professional_id
-  from appointments a
+  select a.computed_status, b.client_id, pp.user_id into appointment_computed_status, appointment_client_id, appointment_professional_id
+  from appointments_with_status a
   join bookings b on a.booking_id = b.id
   join professional_profiles pp on b.professional_profile_id = pp.id
   where a.id = p_appointment_id;
   
   -- Check if appointment exists
-  if appointment_status is null then
+  if appointment_computed_status is null then
     return false;
   end if;
   
   -- Check if appointment is completed
-  if appointment_status != 'completed' then
+  if appointment_computed_status != 'completed' then
     return false;
   end if;
   

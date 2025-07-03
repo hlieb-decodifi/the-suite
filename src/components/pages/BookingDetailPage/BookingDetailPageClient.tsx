@@ -32,6 +32,7 @@ import {
   MapPin,
   Plus,
   RefreshCw,
+  Star,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -42,6 +43,7 @@ import { AddAdditionalServicesModal } from '@/components/modals';
 import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
 import { NoShowModal } from '@/components/modals';
+import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
 
 // Local types to avoid import issues
 type BookingPayment = {
@@ -1590,6 +1592,25 @@ export function BookingDetailPageClient({
               </CardContent>
             </Card>
           )}
+
+          {/* Review Section - Show for completed appointments when user is client */}
+          {!isProfessional &&
+            appointmentData.computed_status === 'completed' && (
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Star className="h-5 w-5 text-muted-foreground" />
+                    Review
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ReviewSection
+                    bookingId={appointment.booking_id}
+                    professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                  />
+                </CardContent>
+              </Card>
+            )}
 
           {/* Booking Details */}
           <Card className="shadow-sm">
