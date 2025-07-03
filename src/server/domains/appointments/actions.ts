@@ -66,10 +66,10 @@ export async function getAppointmentsCountByStatus(userId: string) {
     // Get all booking IDs
     const bookingIds = bookingsData.map(booking => booking.id);
     
-    // Now fetch appointments with their status
+    // Now fetch appointments with their computed status
     const { data: appointmentsData, error: appointmentsError } = await supabase
-      .from('appointments')
-      .select('id, status')
+      .from('appointments_with_status')
+      .select('id, computed_status')
       .in('booking_id', bookingIds);
     
     if (appointmentsError) {
@@ -82,17 +82,17 @@ export async function getAppointmentsCountByStatus(userId: string) {
       };
     }
     
-    // Count appointments by status
+    // Count appointments by computed status
     const upcomingCount = appointmentsData.filter(app => 
-      app.status === 'upcoming' || app.status === 'confirmed' || app.status === 'pending'
+      app.computed_status === 'upcoming'
     ).length;
     
     const completedCount = appointmentsData.filter(app => 
-      app.status === 'completed'
+      app.computed_status === 'completed'
     ).length;
     
     const cancelledCount = appointmentsData.filter(app => 
-      app.status === 'cancelled'
+      app.computed_status === 'cancelled'
     ).length;
     
     return {

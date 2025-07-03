@@ -99,7 +99,7 @@ export type Database = {
           end_time: string
           id?: string
           start_time: string
-          status: string
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -982,6 +982,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "refunds_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments_with_status"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "refunds_booking_payment_id_fkey"
             columns: ["booking_payment_id"]
             isOneToOne: false
@@ -1041,6 +1048,13 @@ export type Database = {
             columns: ["appointment_id"]
             isOneToOne: true
             referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments_with_status"
             referencedColumns: ["id"]
           },
           {
@@ -1244,7 +1258,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      appointments_with_status: {
+        Row: {
+          booking_id: string | null
+          computed_status: string | null
+          created_at: string | null
+          date: string | null
+          end_time: string | null
+          id: string | null
+          start_time: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          computed_status?: never
+          created_at?: string | null
+          date?: string | null
+          end_time?: string | null
+          id?: string | null
+          start_time?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          computed_status?: never
+          created_at?: string | null
+          date?: string | null
+          end_time?: string | null
+          id?: string | null
+          start_time?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       calculate_payment_schedule: {
@@ -1269,6 +1326,24 @@ export type Database = {
       }
       get_admin_config: {
         Args: { config_key: string; default_value?: string }
+        Returns: string
+      }
+      get_appointment_computed_status: {
+        Args: {
+          p_date: string
+          p_start_time: string
+          p_end_time: string
+          p_status: string
+        }
+        Returns: string
+      }
+      get_appointment_status: {
+        Args: {
+          p_date: string
+          p_start_time: string
+          p_end_time: string
+          p_status: string
+        }
         Returns: string
       }
       get_professional_rating_stats: {

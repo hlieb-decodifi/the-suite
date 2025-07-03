@@ -270,9 +270,9 @@ export async function getDashboardAppointments(
     // Get all booking IDs
     const bookingIds = bookingsData.map((booking) => booking.id);
 
-    // Now fetch appointments with related data
+    // Now fetch appointments with computed status and join with related data
     const { data: appointmentsData, error: appointmentsError } = await supabase
-      .from('appointments')
+      .from('appointments_with_status')
       .select(
         `
         id,
@@ -281,49 +281,9 @@ export async function getDashboardAppointments(
         start_time,
         end_time,
         status,
+        computed_status,
         created_at,
-        updated_at,
-        bookings!appointments_booking_id_fkey(
-          id,
-          client_id,
-          professional_profile_id,
-          status,
-          notes,
-          created_at,
-          updated_at,
-          booking_services(
-            id, 
-            service_id,
-            price,
-            duration,
-            services(
-              id,
-              name,
-              description
-            )
-          ),
-          booking_payments(
-            id,
-            amount,
-            tip_amount,
-            service_fee,
-            status
-          ),
-          clients:client_id(
-            id,
-            first_name,
-            last_name
-          ),
-          professionals:professional_profile_id(
-            id,
-            user_id,
-            users:user_id(
-              id,
-              first_name,
-              last_name
-            )
-          )
-        )
+        updated_at
       `,
       )
       .in('booking_id', bookingIds);
@@ -333,11 +293,84 @@ export async function getDashboardAppointments(
       return [];
     }
 
+    if (!appointmentsData || appointmentsData.length === 0) {
+      return [];
+    }
+
+    // Get booking data for all appointments
+    const { data: bookingsFullData, error: bookingsFullError } = await supabase
+      .from('bookings')
+      .select(
+        `
+        id,
+        client_id,
+        professional_profile_id,
+        status,
+        notes,
+        created_at,
+        updated_at,
+        booking_services(
+          id, 
+          service_id,
+          price,
+          duration,
+          services(
+            id,
+            name,
+            description
+          )
+        ),
+        booking_payments(
+          id,
+          amount,
+          tip_amount,
+          service_fee,
+          status
+        ),
+        clients:client_id(
+          id,
+          first_name,
+          last_name
+        ),
+        professionals:professional_profile_id(
+          id,
+          user_id,
+          users:user_id(
+            id,
+            first_name,
+            last_name
+          )
+        )
+      `,
+      )
+      .in('id', bookingIds);
+
+    if (bookingsFullError) {
+      console.error('Error fetching bookings:', bookingsFullError);
+      return [];
+    }
+
+    // Create a map for efficient lookup
+    const bookingsMap = new Map(bookingsFullData?.map((b) => [b.id, b]) || []);
+
     // Transform the data to match the expected format for the UI
     const transformedAppointments = appointmentsData
       .map((appointment) => {
-        const booking = appointment.bookings;
+        const booking = bookingsMap.get(appointment.booking_id || '');
         if (!booking) return null;
+
+        // Handle null dates/times safely
+        if (
+          !appointment.date ||
+          !appointment.start_time ||
+          !appointment.end_time
+        ) {
+          console.error(
+            'Appointment missing required date/time data:',
+            appointment.id,
+          );
+          return null;
+        }
 
         // Combine date and time into ISO strings for start_time and end_time
         const startDate = new Date(appointment.date);
@@ -362,11 +395,11 @@ export async function getDashboardAppointments(
 
         // Calculate totals
         const totalServicePrice = bookingServices.reduce(
-          (sum, bs) => sum + (bs.price || 0),
+          (sum: number, bs) => sum + (bs.price || 0),
           0,
         );
         const totalDuration = bookingServices.reduce(
-          (sum, bs) => sum + (bs.duration || 0),
+          (sum: number, bs) => sum + (bs.duration || 0),
           0,
         );
 
@@ -408,6 +441,7 @@ export async function getDashboardAppointments(
           start_time: startDate.toISOString(),
           end_time: endDate.toISOString(),
           status: appointment.status,
+          computed_status: appointment.computed_status, // Add computed status
           location: 'Location not specified', // Add actual location if available
           notes: booking.notes,
           created_at: booking.created_at,

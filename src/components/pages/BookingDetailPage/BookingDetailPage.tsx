@@ -11,6 +11,7 @@ export type DetailedAppointmentType = {
   start_time: string;
   end_time: string;
   status: string;
+  computed_status: string;
   created_at: string;
   updated_at: string;
   booking_id: string;
@@ -120,14 +121,12 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
   // Get appointment details
   try {
-    // const appointment = await getAppointmentById(id);
-
     const supabase = await createClient();
 
     // First, check if the appointment exists
     const { error: checkError } = await supabase
-      .from('appointments')
-      .select('id, booking_id')
+      .from('appointments_with_status')
+      .select('id, booking_id, computed_status')
       .eq('id', id)
       .single();
 
@@ -138,16 +137,22 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
     const appointment = await getAppointmentById(id);
 
-    // Check if user has permission to view this appointment
-    // const hasPermission = checkAppointmentPermission(
-    //   appointment,
-    //   user.id,
-    //   !!isProfessional,
-    // );
+    console.log('appointment', {
+      id: appointment.id,
+      status: appointment.status,
+      computed_status: appointment.computed_status,
+    });
 
-    // if (!hasPermission) {
-    //   return notFound();
-    // }
+    // Check if user has permission to view this appointment
+    const hasPermission = checkAppointmentPermission(
+      appointment,
+      user.id,
+      !!isProfessional,
+    );
+
+    if (!hasPermission) {
+      return notFound();
+    }
 
     return (
       <BookingDetailPageClient
@@ -166,13 +171,12 @@ export async function BookingDetailPage({ id }: { id: string }) {
 export async function getAppointmentById(
   appointmentId: string,
 ): Promise<DetailedAppointmentType> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-
     // First, check if the appointment exists
     const { data: appointmentCheck, error: checkError } = await supabase
-      .from('appointments')
-      .select('id, booking_id')
+      .from('appointments_with_status')
+      .select('id, booking_id, computed_status')
       .eq('id', appointmentId)
       .single();
 
@@ -185,9 +189,14 @@ export async function getAppointmentById(
       throw new Error('Appointment not found');
     }
 
+    console.log('Appointment check:', {
+      id: appointmentCheck.id,
+      computed_status: appointmentCheck.computed_status,
+    });
+
     // Now get the full appointment data with all related info
     const { data, error } = await supabase
-      .from('appointments')
+      .from('appointments_with_status')
       .select(
         `
         id,
@@ -195,10 +204,11 @@ export async function getAppointmentById(
         start_time,
         end_time,
         status,
+        computed_status,
         created_at,
         updated_at,
         booking_id,
-        bookings!booking_id(
+        bookings!inner (
           id,
           client_id,
           professional_profile_id,
@@ -206,15 +216,15 @@ export async function getAppointmentById(
           notes,
           created_at,
           updated_at,
-          clients:client_id(
+          clients:users!client_id (
             id,
             first_name,
             last_name,
-            client_profiles(
+            client_profiles (
               id,
               phone_number,
               location,
-              addresses:address_id(
+              addresses (
                 id,
                 street_address,
                 city,
@@ -225,14 +235,14 @@ export async function getAppointmentById(
               )
             )
           ),
-          professionals:professional_profile_id(
+          professionals:professional_profiles!professional_profile_id (
             id,
             user_id,
             description,
             profession,
             phone_number,
             location,
-            addresses:address_id(
+            addresses (
               id,
               street_address,
               city,
@@ -241,24 +251,24 @@ export async function getAppointmentById(
               latitude,
               longitude
             ),
-            users:user_id(
+            users (
               id,
               first_name,
               last_name
             )
           ),
-          booking_services(
+          booking_services (
             id,
             service_id,
             price,
             duration,
-            services(
+            services (
               id,
               name,
               description
             )
           ),
-          booking_payments(
+          booking_payments (
             id,
             amount,
             tip_amount,
@@ -275,7 +285,7 @@ export async function getAppointmentById(
             refund_reason,
             refunded_at,
             refund_transaction_id,
-            payment_methods:payment_method_id(
+            payment_methods (
               id,
               name,
               is_online
@@ -288,40 +298,120 @@ export async function getAppointmentById(
       .single();
 
     if (error) {
-      console.error('Error fetching appointment details:', error);
-      throw new Error(`Failed to fetch appointment details: ${error.message}`);
+      console.error('Error fetching appointment:', error);
+      throw new Error(`Failed to fetch appointment: ${error.message}`);
     }
 
     if (!data) {
-      throw new Error('Appointment details not found');
+      throw new Error('Appointment not found');
     }
 
-    return data as unknown as DetailedAppointmentType;
+    console.log('Fetched appointment:', {
+      id: data.id,
+      status: data.status,
+      computed_status: data.computed_status,
+      raw: data,
+    });
+
+    // Verify that the computed_status is one of the expected values
+    if (
+      !data.computed_status ||
+      !['upcoming', 'completed', 'cancelled'].includes(data.computed_status)
+    ) {
+      console.error('Invalid computed_status value:', data.computed_status);
+      throw new Error(`Invalid computed_status value: ${data.computed_status}`);
+    }
+
+    // Verify that the computed_status matches the expected value based on the appointment data
+    const currentDateTime = new Date();
+    const appointmentDateTime = new Date(`${data.date} ${data.end_time}`);
+    const expectedStatus =
+      data.status === 'cancelled'
+        ? 'cancelled'
+        : currentDateTime > appointmentDateTime
+          ? 'completed'
+          : 'upcoming';
+
+    if (data.computed_status !== expectedStatus) {
+      console.error('Computed status mismatch:', {
+        computed_status: data.computed_status,
+        expected_status: expectedStatus,
+        current_datetime: currentDateTime,
+        appointment_datetime: appointmentDateTime,
+      });
+      throw new Error(
+        `Computed status mismatch: expected ${expectedStatus}, got ${data.computed_status}`,
+      );
+    }
+
+    // Verify that the computed_status is being returned in the response
+    const { data: verifyData, error: verifyError } = await supabase
+      .from('appointments_with_status')
+      .select('id, computed_status')
+      .eq('id', appointmentId)
+      .single();
+
+    if (verifyError) {
+      console.error('Error verifying computed_status:', verifyError);
+      throw new Error(
+        `Failed to verify computed_status: ${verifyError.message}`,
+      );
+    }
+
+    if (!verifyData || !verifyData.computed_status) {
+      console.error(
+        'Missing computed_status in verification data:',
+        verifyData,
+      );
+      throw new Error('Missing computed_status in verification data');
+    }
+
+    if (verifyData.computed_status !== data.computed_status) {
+      console.error('Computed status inconsistency:', {
+        original_status: data.computed_status,
+        verify_status: verifyData.computed_status,
+      });
+      throw new Error(
+        `Computed status inconsistency: ${data.computed_status} vs ${verifyData.computed_status}`,
+      );
+    }
+
+    return data as DetailedAppointmentType;
   } catch (error) {
     console.error('Error in getAppointmentById:', error);
-    throw new Error('Failed to get appointment details');
+    // Check if the error is related to the computed status
+    if (error instanceof Error && error.message.includes('computed_status')) {
+      // Log additional information about the appointment
+      const { data: debugData } = await supabase
+        .from('appointments')
+        .select('id, date, start_time, end_time, status')
+        .eq('id', appointmentId)
+        .single();
+      console.error('Debug data:', debugData);
+    }
+    throw error;
   }
 }
 
-// Check if user has permission to view this appointment (simplified for now)
+// Check if user has permission to view this appointment
 function checkAppointmentPermission(
   appointment: DetailedAppointmentType,
   userId: string,
   isProfessional: boolean,
 ): boolean {
-  // For now, just check if client matches for non-professionals
-  if (!isProfessional && appointment.bookings.client_id === userId) {
-    return true;
-  }
-
-  // For professionals, we need to check if they own this appointment
-  // We'll need to add a separate query for this later
   if (isProfessional) {
-    // TODO: Add professional check after we get basic query working
-    return true; // Allow all professionals for now
+    // Professional can only view their own appointments
+    return (
+      appointment.bookings.professionals?.user_id === userId ||
+      appointment.bookings.professionals?.users.id === userId
+    );
+  } else {
+    // Client can only view their own appointments
+    return (
+      appointment.bookings.client_id === userId ||
+      appointment.bookings.clients?.id === userId
+    );
   }
-
-  return false;
 }
 
 // Update appointment status

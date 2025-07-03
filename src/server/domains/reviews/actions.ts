@@ -197,9 +197,10 @@ export async function getReviewStatus(
       .select(`
         id,
         client_id,
-        appointments (
+        appointments_with_status (
           id,
           status,
+          computed_status,
           reviews (
             id,
             score,
@@ -226,7 +227,7 @@ export async function getReviewStatus(
       };
     }
 
-    const appointment = booking.appointments;
+    const appointment = booking.appointments_with_status;
     if (!appointment) {
       return {
         success: false,
@@ -237,7 +238,7 @@ export async function getReviewStatus(
     const existingReview = appointment.reviews;
 
     const reviewStatus: ReviewStatus = {
-      canReview: appointment.status === 'completed' && !existingReview,
+      canReview: appointment.computed_status === 'completed' && !existingReview,
       hasReview: !!existingReview,
       review: existingReview ? {
         id: existingReview.id,

@@ -23,6 +23,7 @@ type AppointmentType = {
   start_time: string;
   end_time: string;
   status: string;
+  computed_status?: string;
   location?: string;
   services?: {
     id: string;
@@ -149,8 +150,15 @@ function FilterButtons({
 }
 
 // Helper component to render the status badge
-function AppointmentStatusBadge({ status }: { status: Appointment['status'] }) {
-  switch (status) {
+function AppointmentStatusBadge({
+  status,
+  computedStatus,
+}: {
+  status: string;
+  computedStatus?: string;
+}) {
+  const displayStatus = computedStatus || status;
+  switch (displayStatus) {
     case 'upcoming':
       return (
         <Badge
@@ -176,15 +184,6 @@ function AppointmentStatusBadge({ status }: { status: Appointment['status'] }) {
           className="bg-destructive/10 text-destructive border-destructive/20"
         >
           Cancelled
-        </Badge>
-      );
-    case 'pending':
-      return (
-        <Badge
-          variant="outline"
-          className="bg-amber-500/10 text-amber-800 border-amber-200"
-        >
-          Pending
         </Badge>
       );
     default:
@@ -403,17 +402,14 @@ export function DashboardAppointmentsPageClient({
 
       // Map status to expected format
       let formattedStatus: Appointment['status'] = 'upcoming';
-      switch (appointment.status) {
+      const computedStatus = appointment.computed_status || appointment.status;
+      switch (computedStatus) {
         case 'completed':
           formattedStatus = 'completed';
           break;
         case 'cancelled':
           formattedStatus = 'cancelled';
           break;
-        case 'pending':
-          formattedStatus = 'pending';
-          break;
-        case 'confirmed':
         case 'upcoming':
         default:
           formattedStatus = 'upcoming';

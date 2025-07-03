@@ -229,7 +229,7 @@ export async function canCancelBookingAction(
       .from('bookings')
       .select(`
         *,
-        appointments!inner(*),
+        appointments_with_status!inner(*),
         professional_profiles!inner(
           cancellation_policy_enabled,
           users!inner(id)
@@ -243,7 +243,7 @@ export async function canCancelBookingAction(
       return { canCancel: false, reason: 'Booking not found' };
     }
 
-    const appointment = booking.appointments;
+    const appointment = booking.appointments_with_status;
     const professionalProfile = booking.professional_profiles;
      
     const professionalUser = professionalProfile.users;
@@ -262,8 +262,8 @@ export async function canCancelBookingAction(
       return { canCancel: false, reason: 'Already cancelled' };
     }
 
-    // Check if completed
-    if (booking.status === 'completed' || appointment.status === 'completed') {
+    // Check if completed based on computed status
+    if (appointment.computed_status === 'completed') {
       return { canCancel: false, reason: 'Cannot cancel completed booking' };
     }
 
@@ -276,7 +276,6 @@ export async function canCancelBookingAction(
     // TODO: Implement cancellation policy logic for when it's enabled
     
     return { canCancel: true };
-
   } catch (error) {
     console.error('Error checking cancellation eligibility:', error);
     return { canCancel: false, reason: 'Error checking eligibility' };

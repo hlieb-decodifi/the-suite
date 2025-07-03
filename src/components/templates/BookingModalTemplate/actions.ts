@@ -104,7 +104,6 @@ async function calculateTotalPrice(
  * @param professionalProfileId The ID of the professional's profile
  * @returns Object containing the booking ID and total price
  */
- 
 export async function createBooking(
   formData: BookingFormValues,
   professionalProfileId: string
@@ -112,49 +111,55 @@ export async function createBooking(
   const supabase = await createClient();
   
   // Get the current user
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   
-  if (!user) {
+  if (authError || !user) {
     throw new Error('Not authenticated');
   }
   
-  // Get main service details including duration
+  // Get the main service details
   const { data: mainService, error: mainServiceError } = await supabase
     .from('services')
-    .select('price, duration')
+    .select('id, name, price, duration')
     .eq('id', formData.serviceId)
     .single();
   
   if (mainServiceError || !mainService) {
-    throw new Error(`Error fetching main service: ${mainServiceError?.message || 'Service not found'}`);
+    throw new Error(`Error getting main service: ${mainServiceError?.message}`);
   }
   
-  // Get extra services details including durations if any
-  let extraServiceDurations: number[] = [];
+  // Get extra service durations
+  const extraServiceDurations: number[] = [];
   if (formData.extraServiceIds.length > 0) {
     const { data: extraServices, error: extraServicesError } = await supabase
       .from('services')
-      .select('id, price, duration')
+      .select('duration')
       .in('id', formData.extraServiceIds);
     
-    if (extraServicesError) {
-      throw new Error(`Error fetching extra services: ${extraServicesError.message}`);
+    if (extraServicesError || !extraServices) {
+      throw new Error(`Error fetching extra services: ${extraServicesError?.message}`);
     }
     
-    extraServiceDurations = extraServices?.map(service => service.duration) || [];
+    extraServices.forEach(service => {
+      if (service.duration) {
+        extraServiceDurations.push(service.duration);
+      }
+    });
   }
   
-  // Parse the time slot with correct service durations
-  // This will convert local time to UTC for database storage
+  // Format date and time
+  const dateFormatted = new Date(formData.date).toISOString().split('T')[0];
+  if (!dateFormatted) {
+    throw new Error('Invalid date format');
+  }
   const timeInfo = timeSlotToTimeObject(
     formData.timeSlot,
     mainService.duration,
     extraServiceDurations
   );
-  
-  // Format date for database
-  const dateObject = new Date(formData.date);
-  const dateFormatted = format(dateObject, 'yyyy-MM-dd');
   
   // Calculate total price
   const { total: totalPrice, serviceFee } = await calculateTotalPrice(
@@ -172,6 +177,7 @@ export async function createBooking(
   
   // Determine initial payment status
   const paymentStatus = paymentMethod?.is_online ? 'pending' : 'completed';
+  const bookingStatus = paymentMethod?.is_online ? 'pending' : 'confirmed';
   
   try {
     // Start transaction by inserting booking record
@@ -180,7 +186,7 @@ export async function createBooking(
       .insert({
         client_id: user.id,
         professional_profile_id: professionalProfileId,
-        status: 'pending',
+        status: bookingStatus,
         notes: formData.notes || null,
       })
       .select('id')
@@ -191,7 +197,7 @@ export async function createBooking(
     }
     
     // Create appointment record
-    const { error: appointmentError } = await supabase
+    const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
       .insert({
         booking_id: booking.id,
@@ -199,10 +205,12 @@ export async function createBooking(
         start_time: timeInfo.start,
         end_time: timeInfo.end,
         status: 'upcoming',
-      });
+      })
+      .select('id')
+      .single();
     
-    if (appointmentError) {
-      throw new Error(`Error creating appointment: ${appointmentError.message}`);
+    if (appointmentError || !appointment) {
+      throw new Error(`Error creating appointment: ${appointmentError?.message}`);
     }
     
     // Insert main service into booking_services
@@ -260,21 +268,21 @@ export async function createBooking(
       throw new Error(`Error creating payment record: ${paymentError.message}`);
     }
     
-    // If payment method is online (e.g., credit card), we would typically
-    // create a Stripe payment intent here and return it for client-side processing
-    if (paymentMethod?.is_online) {
-      // Future implementation: Create Stripe payment intent
-      // const stripeIntent = await createStripePaymentIntent(totalPrice, booking.id);
-      
-      // For now, just return the booking ID
-      return { bookingId: booking.id, totalPrice };
+    // For cash payments, send confirmation emails immediately
+    if (!paymentMethod?.is_online) {
+      try {
+        const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+        await sendBookingConfirmationEmails(booking.id, appointment.id, false);
+      } catch (emailError) {
+        console.error('Failed to send booking confirmation emails:', emailError);
+        // Don't fail the booking creation if email sending fails
+      }
     }
     
     // Return the booking details
     return { bookingId: booking.id, totalPrice };
     
   } catch (error) {
-    // We need to keep this error to log and re-throw it
     console.error('Error in createBooking:', error);
     throw error;
   }

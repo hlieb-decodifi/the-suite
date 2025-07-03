@@ -87,6 +87,7 @@ type DetailedAppointment = {
   start_time: string;
   end_time: string;
   status: string;
+  computed_status: string;
   created_at: string;
   updated_at: string;
   booking_id: string;
@@ -177,7 +178,6 @@ export function BookingDetailPageClient({
   currentUserId,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState(appointment.status);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isMessageLoading, setIsMessageLoading] = useState(false);
   const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
@@ -235,22 +235,12 @@ export function BookingDetailPageClient({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'upcoming':
-      case 'confirmed':
         return (
           <Badge
             variant="outline"
             className="bg-primary/10 text-primary border-primary/20"
           >
             Upcoming
-          </Badge>
-        );
-      case 'pending':
-        return (
-          <Badge
-            variant="outline"
-            className="bg-amber-500/10 text-amber-800 border-amber-200"
-          >
-            Pending
           </Badge>
         );
       case 'cancelled':
@@ -288,7 +278,11 @@ export function BookingDetailPageClient({
         isProfessional,
       );
       if (result.success) {
-        setCurrentStatus(newStatus);
+        setAppointmentData((prev) => ({
+          ...prev,
+          status: newStatus,
+          computed_status: newStatus,
+        }));
       } else {
         alert(result.error || 'Failed to update appointment status');
       }
@@ -301,33 +295,28 @@ export function BookingDetailPageClient({
   };
 
   const canUpdateStatus = () => {
-    // Professionals can update status for confirmed/pending appointments
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
+
+    // Professionals can update status for upcoming appointments
     if (isProfessional) {
-      return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
+      return computedStatus === 'upcoming';
     }
 
-    // Clients can cancel confirmed/pending appointments or request refunds for completed appointments
-    return (
-      ['pending', 'confirmed', 'upcoming'].includes(currentStatus) ||
-      canRequestRefund()
-    );
+    // Clients can cancel upcoming appointments or request refunds for completed appointments
+    return computedStatus === 'upcoming' || canRequestRefund();
   };
 
   const getAvailableStatuses = () => {
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
+
     if (isProfessional) {
-      switch (currentStatus) {
-        case 'pending':
-          return [{ value: 'confirmed', label: 'Confirm Appointment' }];
-        case 'confirmed':
-        case 'upcoming':
-          return [{ value: 'completed', label: 'Mark as Completed' }];
-        default:
-          return [];
+      if (computedStatus === 'upcoming') {
+        return [{ value: 'completed', label: 'Mark as Completed' }];
       }
-    } else {
-      // Clients have no status update options (cancellation is handled separately)
-      return [];
     }
+    return [];
   };
 
   const handleCopyBookingId = async () => {
@@ -372,18 +361,21 @@ export function BookingDetailPageClient({
 
   // Check if refund request is available
   const canRequestRefund = () => {
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
+
     // Only clients can request refunds
     if (isProfessional) return false;
 
     // Only for completed appointments
-    if (currentStatus !== 'completed') return false;
+    if (computedStatus !== 'completed') return false;
 
     // Only for card payments
-    const payment = appointment.bookings.booking_payments;
+    const payment = appointmentData.bookings.booking_payments;
     if (!payment || !payment.payment_methods?.is_online) return false;
 
-    // Only for completed payments
-    if (payment.status !== 'completed') return false;
+    // Only if not already refunded
+    if (payment.refunded_amount > 0 || payment.refunded_at) return false;
 
     return true;
   };
@@ -425,11 +417,14 @@ export function BookingDetailPageClient({
 
   // Check if booking can be cancelled
   const canCancelBooking = () => {
-    // Cannot cancel if already cancelled or completed
-    if (['cancelled', 'completed'].includes(currentStatus)) return false;
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
 
-    // Both professionals and clients can cancel if status allows
-    return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
+    // Cannot cancel if already cancelled or completed
+    if (['cancelled', 'completed'].includes(computedStatus)) return false;
+
+    // Both professionals and clients can cancel upcoming appointments
+    return computedStatus === 'upcoming';
   };
 
   // Get professional or client name for cancellation modal
@@ -448,21 +443,23 @@ export function BookingDetailPageClient({
 
   const handleCancellationSuccess = () => {
     // Update local state to reflect cancellation
-    setCurrentStatus('cancelled');
     setAppointmentData((prev) => ({
       ...prev,
       status: 'cancelled',
+      computed_status: 'cancelled',
       bookings: {
         ...prev.bookings,
         status: 'cancelled',
       },
     }));
 
+    // Close the modal
+    setIsCancellationModalOpen(false);
+
     // Refresh the page to get updated data including refund information
-    // The backend revalidatePath should have refreshed the data
     setTimeout(() => {
       router.refresh();
-    }, 1000); // Small delay to allow backend processing to complete
+    }, 1000);
   };
 
   return (
@@ -501,7 +498,11 @@ export function BookingDetailPageClient({
               </div>
             </div>
             <div className="flex items-center mt-2 sm:mt-0">
-              <div className="scale-110">{getStatusBadge(currentStatus)}</div>
+              <div className="scale-110">
+                {getStatusBadge(
+                  appointmentData.computed_status || appointmentData.status,
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -511,9 +512,8 @@ export function BookingDetailPageClient({
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Cancellation Information - Show when booking is cancelled */}
-          {(currentStatus === 'cancelled' ||
-            appointmentData.status === 'cancelled' ||
-            appointmentData.bookings.status === 'cancelled') && (
+          {(appointmentData.computed_status === 'cancelled' ||
+            appointmentData.status === 'cancelled') && (
             <Card className="shadow-sm border-red-200 bg-red-50">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2 text-red-700">
@@ -646,7 +646,7 @@ export function BookingDetailPageClient({
                   0,
                   totalAmount - subtotal - totalTips,
                 ); // Calculate service fee from actual data
-                const total = totalAmount;
+                const total = totalAmount + totalTips;
 
                 return (
                   <>
@@ -1054,6 +1054,7 @@ export function BookingDetailPageClient({
                   </div>
                 </div>
 
+                {/* Professional Description */}
                 {appointment.bookings.professionals.description && (
                   <>
                     <Separator />
@@ -1217,8 +1218,8 @@ export function BookingDetailPageClient({
 
                 {/* Add Additional Services Button */}
                 {isProfessional &&
-                  (currentStatus === 'confirmed' ||
-                    currentStatus === 'upcoming') && (
+                  (appointmentData.computed_status === 'upcoming' ||
+                    appointmentData.status === 'upcoming') && (
                     <Button
                       onClick={() => setIsAddServicesModalOpen(true)}
                       variant="outline"
@@ -1254,7 +1255,7 @@ export function BookingDetailPageClient({
 
                 {/* No Show Button - Professional only, for completed appointments */}
                 {isProfessional &&
-                  currentStatus === 'completed' &&
+                  appointmentData.status === 'completed' &&
                   appointment.bookings.booking_payments?.payment_methods
                     ?.is_online && (
                     <Button
@@ -1282,12 +1283,28 @@ export function BookingDetailPageClient({
                 {/* Payment Amount and Status */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <Typography className="font-bold text-primary text-lg">
+                    <Typography className="font-medium text-primary text-lg">
                       {formatCurrency(
                         appointmentData.bookings.booking_payments?.amount || 0,
                       )}
                     </Typography>
                   </div>
+
+                  {appointment.bookings.booking_payments.tip_amount > 0 && (
+                    <div className="flex justify-between items-center">
+                      <Typography
+                        variant="small"
+                        className="text-muted-foreground"
+                      >
+                        Tip:
+                      </Typography>
+                      <Typography variant="small" className="font-medium">
+                        {formatCurrency(
+                          appointment.bookings.booking_payments.tip_amount,
+                        )}
+                      </Typography>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -1563,20 +1580,25 @@ export function BookingDetailPageClient({
                 )}
 
                 {/* Payment Timeline */}
-                <Separator />
-                <div>
-                  <Typography className="font-medium text-foreground mb-1">
-                    Payment Created
-                  </Typography>
-                  <Typography variant="muted">
-                    {format(
-                      new Date(
-                        appointment.bookings.booking_payments.created_at,
-                      ),
-                      'MMM d, yyyy h:mm a',
-                    )}
-                  </Typography>
-                </div>
+                {appointment.bookings.booking_payments.payment_methods
+                  ?.is_online && (
+                  <>
+                    <Separator />
+                    <div>
+                      <Typography className="font-medium text-foreground mb-1">
+                        Payment Created
+                      </Typography>
+                      <Typography variant="muted">
+                        {format(
+                          new Date(
+                            appointment.bookings.booking_payments.created_at,
+                          ),
+                          'MMM d, yyyy h:mm a',
+                        )}
+                      </Typography>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1621,18 +1643,6 @@ export function BookingDetailPageClient({
                 <Typography variant="muted">
                   {format(
                     new Date(appointment.created_at),
-                    'MMM d, yyyy h:mm a',
-                  )}
-                </Typography>
-              </div>
-              <Separator />
-              <div>
-                <Typography className="font-medium text-foreground">
-                  Last Updated
-                </Typography>
-                <Typography variant="muted">
-                  {format(
-                    new Date(appointment.updated_at),
                     'MMM d, yyyy h:mm a',
                   )}
                 </Typography>
