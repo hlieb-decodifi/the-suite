@@ -484,18 +484,6 @@ export function BookingDetailPageClient({
               >
                 Booking Details
               </Typography>
-              <div className="flex items-center gap-2">
-                <Typography>Booking ID: {appointment.id}</Typography>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopyBookingId}
-                  className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                >
-                  <CopyIcon className="h-3 w-3" />
-                  {copySuccess ? 'Copied!' : ''}
-                </Button>
-              </div>
             </div>
             <div className="flex items-center mt-2 sm:mt-0">
               <div className="scale-110">
@@ -1283,7 +1271,7 @@ export function BookingDetailPageClient({
                 {/* Payment Amount and Status */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <Typography className="font-medium text-primary text-lg">
+                    <Typography className="font-bold text-primary text-lg">
                       {formatCurrency(
                         appointmentData.bookings.booking_payments?.amount || 0,
                       )}
