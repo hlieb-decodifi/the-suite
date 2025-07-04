@@ -6,7 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Mail, Palette, CheckCircle } from 'lucide-react';
+import { Mail, Palette, CheckCircle, Send } from 'lucide-react';
+import { BrevoTemplateTester } from './brevo-template-tester';
 
 export default function DevPage() {
   return (
@@ -47,6 +48,42 @@ export default function DevPage() {
             </CardContent>
           </Card>
         </Link>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Send className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Brevo Template Tester</CardTitle>
+                <CardDescription>Test Brevo email templates</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  Send test emails using Brevo templates with dynamic variables
+                </p>
+                <p className="text-xs text-gray-500">
+                  Select a template and provide recipient email to test the
+                  email delivery
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-md">
+                <p className="text-xs text-gray-500 mb-2">
+                  Required Environment Variable:
+                </p>
+                <code className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
+                  BREVO_API_KEY
+                </code>
+              </div>
+              <BrevoTemplateTester />
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="opacity-50">
           <CardHeader>
