@@ -795,8 +795,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   client_email: string;
   client_name: string;
   professional_name: string;
-  appointment_date: string;
-  appointment_time: string;
+  start_time: string;
   total_amount: number;
   service_fee: number;
   deposit_amount: number | undefined;
@@ -809,18 +808,19 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   
   try {
     // Calculate the timestamp for 2 hours ago
-    const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
-    
+    const twoHoursAgo = new Date();
+    twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
+
     // Use a simpler approach: query each table separately and join in code
     // First get completed appointments
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
-      .select('booking_id, date, end_time')
+      .select('booking_id, start_time, end_time')
       .eq('status', 'completed')
       .limit(limit);
 
     if (appointmentsError) {
-      console.error('Error fetching appointments:', appointmentsError);
+      console.error('Error fetching completed appointments:', appointmentsError);
       return [];
     }
 
@@ -830,8 +830,8 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
 
     // Filter appointments that are >2 hours past end time
     const eligibleAppointments = appointments.filter(appointment => {
-      const appointmentEndDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
-      return appointmentEndDateTime <= twoHoursAgo;
+      const appointmentEndTime = new Date(appointment.end_time);
+      return appointmentEndTime <= twoHoursAgo;
     });
 
     if (eligibleAppointments.length === 0) {
@@ -942,8 +942,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         client_email: clientAuth?.email || '',
         client_name: `${clientUser.first_name} ${clientUser.last_name}`,
         professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        appointment_date: appointment.date,
-        appointment_time: appointment.end_time,
+        start_time: appointment.start_time,
         total_amount: payment.amount,
         service_fee: payment.service_fee,
         deposit_amount: payment.deposit_amount,
@@ -1055,7 +1054,6 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
         client_id,
         professional_profile_id,
         appointments!inner(
-          date,
           start_time,
           end_time
         ),
@@ -1114,8 +1112,8 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
         clientName: clientData ? `${clientData.first_name} ${clientData.last_name}` : 'Client',
         professionalEmail: professionalUser.user.email,
         professionalName: professionalData ? `${professionalData.first_name} ${professionalData.last_name}` : 'Professional',
-        appointmentDate: appointment.date,
-        appointmentTime: appointment.start_time,
+        appointmentDate: appointment?.start_time || '',
+        appointmentTime: appointment?.start_time || '',
         serviceName: service?.services?.name || 'Service',
         totalAmount: payment.amount,
         tipAmount: payment.tip_amount || 0,

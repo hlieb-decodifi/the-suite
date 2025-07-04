@@ -85,7 +85,6 @@ export type Database = {
         Row: {
           booking_id: string
           created_at: string
-          date: string
           end_time: string
           id: string
           start_time: string
@@ -95,17 +94,15 @@ export type Database = {
         Insert: {
           booking_id: string
           created_at?: string
-          date: string
           end_time: string
           id?: string
           start_time: string
-          status?: string
+          status: string
           updated_at?: string
         }
         Update: {
           booking_id?: string
           created_at?: string
-          date?: string
           end_time?: string
           id?: string
           start_time?: string
@@ -116,7 +113,7 @@ export type Database = {
           {
             foreignKeyName: "appointments_booking_id_fkey"
             columns: ["booking_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
@@ -1263,7 +1260,6 @@ export type Database = {
           booking_id: string | null
           computed_status: string | null
           created_at: string | null
-          date: string | null
           end_time: string | null
           id: string | null
           start_time: string | null
@@ -1274,7 +1270,6 @@ export type Database = {
           booking_id?: string | null
           computed_status?: never
           created_at?: string | null
-          date?: string | null
           end_time?: string | null
           id?: string | null
           start_time?: string | null
@@ -1285,7 +1280,6 @@ export type Database = {
           booking_id?: string | null
           computed_status?: never
           created_at?: string | null
-          date?: string | null
           end_time?: string | null
           id?: string | null
           start_time?: string | null
@@ -1296,7 +1290,7 @@ export type Database = {
           {
             foreignKeyName: "appointments_booking_id_fkey"
             columns: ["booking_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
@@ -1329,12 +1323,7 @@ export type Database = {
         Returns: string
       }
       get_appointment_computed_status: {
-        Args: {
-          p_date: string
-          p_start_time: string
-          p_end_time: string
-          p_status: string
-        }
+        Args: { p_start_time: string; p_end_time: string; p_status: string }
         Returns: string
       }
       get_appointment_status: {

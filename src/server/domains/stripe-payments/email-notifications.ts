@@ -85,7 +85,7 @@ export async function sendBookingConfirmationEmails(
     // Get appointment data
     const { data: appointment, error: appointmentError } = await adminSupabase
       .from('appointments')
-      .select('date, start_time')
+      .select('start_time')
       .eq('id', appointmentId)
       .single();
 
@@ -194,17 +194,17 @@ export async function sendBookingConfirmationEmails(
     const professionalAddress = formatAddress(professionalData.addresses);
 
     // Format appointment date and time
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
+    const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
 
-    const appointmentTime = new Date(`1970-01-01T${appointment.start_time}`).toLocaleTimeString('en-US', {
+    const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     });
 
     // Prepare services data with proper formatting

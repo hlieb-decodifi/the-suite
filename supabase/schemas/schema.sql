@@ -972,15 +972,14 @@ alter table bookings add constraint bookings_status_check
 
 /**
 * APPOINTMENTS
-* For tracking the actual appointment details
+* Individual appointment slots for bookings
 */
 create table appointments (
   id uuid primary key default uuid_generate_v4(),
-  booking_id uuid references bookings not null unique,
-  date date not null,
-  start_time time not null,
-  end_time time not null,
-  status text not null default 'active' check (status in ('active', 'cancelled')),
+  booking_id uuid references bookings not null,
+  start_time timestamptz not null,
+  end_time timestamptz not null,
+  status text not null check (status in ('active', 'completed', 'cancelled', 'ongoing')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -991,34 +990,28 @@ alter table appointments enable row level security;
 * Returns 'upcoming', 'ongoing', 'completed', or 'cancelled'
 */
 create or replace function get_appointment_computed_status(
-  p_date date,
-  p_start_time time,
-  p_end_time time,
+  p_start_time timestamptz,
+  p_end_time timestamptz,
   p_status text
 )
 returns text as $$
 declare
-  appointment_start_datetime timestamp with time zone;
-  appointment_end_datetime timestamp with time zone;
-  current_datetime timestamp with time zone;
+  current_datetime timestamptz;
 begin
   -- If appointment is cancelled, return cancelled
   if p_status = 'cancelled' then
     return 'cancelled';
   end if;
 
-  -- Convert appointment date and times to timestamps in UTC
-  appointment_start_datetime := (p_date || ' ' || p_start_time)::timestamp at time zone 'UTC';
-  appointment_end_datetime := (p_date || ' ' || p_end_time)::timestamp at time zone 'UTC';
-  current_datetime := now() at time zone 'UTC';
+  current_datetime := now();
 
   -- If appointment hasn't started yet, it's upcoming
-  if current_datetime < appointment_start_datetime then
+  if current_datetime < p_start_time then
     return 'upcoming';
   end if;
 
   -- If appointment has ended, it's completed
-  if current_datetime > appointment_end_datetime then
+  if current_datetime > p_end_time then
     return 'completed';
   end if;
 
@@ -1035,13 +1028,12 @@ create or replace view appointments_with_status as
 select 
   a.id,
   a.booking_id,
-  a.date,
   a.start_time,
   a.end_time,
   a.status,
   a.created_at,
   a.updated_at,
-  get_appointment_computed_status(a.date, a.start_time, a.end_time, a.status) as computed_status
+  get_appointment_computed_status(a.start_time, a.end_time, a.status) as computed_status
 from appointments a;
 
 -- Grant permissions to use the view
@@ -1136,9 +1128,8 @@ begin
     where b.professional_profile_id = (
       select professional_profile_id from bookings where id = new.booking_id
     )
-    and a.date = new.date
     and a.status != 'cancelled'
-    and b.status not in ('pending_payment', 'cancelled') -- Exclude pending payments and cancelled bookings
+    and b.status not in ('pending_payment', 'cancelled')
     and a.booking_id != new.booking_id
     and (
       (new.start_time < a.end_time and new.end_time > a.start_time) -- time slots overlap
@@ -1330,7 +1321,7 @@ create policy "Professionals can update payment amounts for ongoing appointments
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.id = booking_payments.booking_id
       and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.date, a.start_time, a.end_time, a.status) = 'ongoing'
+      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
     )
   )
   with check (
@@ -1341,7 +1332,7 @@ create policy "Professionals can update payment amounts for ongoing appointments
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.id = booking_payments.booking_id
       and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.date, a.start_time, a.end_time, a.status) = 'ongoing'
+      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
     )
   );
 

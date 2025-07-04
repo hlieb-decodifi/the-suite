@@ -6,6 +6,7 @@ import { Loader } from '@/components/common/Loader';
 import { Typography } from '@/components/ui/typography';
 import { ArrowLeftIcon } from 'lucide-react';
 import Link from 'next/link';
+import { format } from 'date-fns';
 
 type BalancePaymentPageProps = {
   params: Promise<{
@@ -40,7 +41,6 @@ export default async function BalancePaymentPage({
       professional_profile_id,
       appointments!inner(
         id,
-        date,
         start_time,
         end_time,
         status
@@ -100,7 +100,20 @@ export default async function BalancePaymentPage({
     redirect('/bookings/' + id);
   }
 
-  const appointment = booking.appointments;
+  // Transform appointment data to match expected format
+  const rawAppointment = booking.appointments[0];
+  if (!rawAppointment) {
+    redirect('/dashboard');
+  }
+  const startDate = new Date(rawAppointment.start_time);
+  const endDate = new Date(rawAppointment.end_time);
+
+  const appointment = {
+    date: format(startDate, 'yyyy-MM-dd'),
+    start_time: format(startDate, 'HH:mm:ss'),
+    end_time: format(endDate, 'HH:mm:ss'),
+  };
+
   const professional = booking.professional_profiles;
 
   return (

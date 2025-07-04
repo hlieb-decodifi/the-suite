@@ -22,7 +22,6 @@ export async function sendRefundRequestEmail(refundId: string): Promise<void> {
       original_amount,
       appointments!inner(
         id,
-        date,
         start_time,
         bookings!inner(
           id,
@@ -53,14 +52,14 @@ export async function sendRefundRequestEmail(refundId: string): Promise<void> {
   if (!professionalAuth.user?.email) return;
 
   // Format data
-  const appointmentDate = new Date(refund.appointments.date).toLocaleDateString('en-US', {
+  const appointmentDate = new Date(refund.appointments.start_time).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
 
-  const appointmentTime = new Date(`1970-01-01T${refund.appointments.start_time}`).toLocaleTimeString('en-US', {
+  const appointmentTime = new Date(refund.appointments.start_time).toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true

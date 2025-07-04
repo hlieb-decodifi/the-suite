@@ -26,9 +26,58 @@ function loadTemplate(templateName: string, type: 'hbs' | 'txt'): string {
   return fs.readFileSync(templatePath, 'utf-8');
 }
 
+function formatDate(date: string | Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function formatTime(date: string | Date): string {
+  const d = new Date(date);
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
 function compileTemplate(templateContent: string, data: TemplateData): string {
   let result = templateContent;
   
+  // Add date formatting helpers
+  const dateHelperRegex = /{{date\s+(\w+(?:\.\w+)*)\s*}}/g;
+  result = result.replace(dateHelperRegex, (match, datePath) => {
+    let value: unknown = data;
+    const pathParts = datePath.split('.');
+    for (const part of pathParts) {
+      if (value && typeof value === 'object') {
+        value = (value as Record<string, unknown>)[part];
+      } else {
+        value = undefined;
+        break;
+      }
+    }
+    return value ? formatDate(value as string) : '';
+  });
+
+  const timeHelperRegex = /{{time\s+(\w+(?:\.\w+)*)\s*}}/g;
+  result = result.replace(timeHelperRegex, (match, timePath) => {
+    let value: unknown = data;
+    const pathParts = timePath.split('.');
+    for (const part of pathParts) {
+      if (value && typeof value === 'object') {
+        value = (value as Record<string, unknown>)[part];
+      } else {
+        value = undefined;
+        break;
+      }
+    }
+    return value ? formatTime(value as string) : '';
+  });
+
   // Handle {{#each}} loops
   const eachMatches = result.match(/{{#each\s+(\w+)}}([\s\S]*?){{\/each}}/g);
   if (eachMatches) {
@@ -720,47 +769,58 @@ export function createRefundCompletionProfessionalEmail(
   };
 }
 
-/**
- * Booking cancellation notification to client
- */
+type BookingCancellationData = {
+  bookingId: string;
+  appointmentId: string;
+  appointmentDate: string;
+  professionalName: string;
+  cancellationReason?: string;
+  services: Array<{
+    name: string;
+    price: number;
+  }>;
+  payment?: {
+    method: {
+      name: string;
+      is_online: boolean;
+    };
+  } | undefined;
+  refundInfo?: {
+    originalAmount: number;
+    refundAmount?: number;
+    status: string;
+  } | undefined;
+}
+
+type BookingCancellationProfessionalData = {
+  clientName: string;
+  clientPhone?: string | undefined;
+  professionalName: string;
+} & Omit<BookingCancellationData, 'professionalName'>
+
 export function createBookingCancellationClientEmail(
   clientEmail: string,
   clientName: string,
-  data: {
-    bookingId: string;
-    appointmentId: string;
-    appointmentDate: string;
-    appointmentTime: string;
-    professionalName: string;
-    cancellationReason?: string;
-    services: Array<{
-      name: string;
-      price: number;
-    }>;
-    refundInfo?: {
-      originalAmount: number;
-      refundAmount?: number;
-      status: string;
-    };
-  }
+  data: BookingCancellationData
 ): EmailTemplate {
   const templateData: TemplateData = {
     clientName,
     professionalName: data.professionalName,
     appointmentDate: data.appointmentDate,
-    appointmentTime: data.appointmentTime,
     bookingId: data.bookingId,
+    appointmentId: data.appointmentId,
     cancellationReason: data.cancellationReason,
     services: data.services.map(service => ({
       ...service,
       price: service.price.toFixed(2)
     })),
+    payment: data.payment,
     refundInfo: data.refundInfo ? {
-      originalAmount: data.refundInfo.originalAmount.toFixed(2),
+      originalAmount: data.refundInfo.originalAmount?.toFixed(2),
       refundAmount: data.refundInfo.refundAmount?.toFixed(2),
       status: data.refundInfo.status
     } : undefined,
-    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.appointmentId}`,
+    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings`,
     websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
     supportEmail: process.env.BREVO_ADMIN_EMAIL!
   };
@@ -774,55 +834,36 @@ export function createBookingCancellationClientEmail(
 
   return {
     to: [{ email: clientEmail, name: clientName }],
-    subject: `Booking Cancelled - ${data.appointmentDate}`,
+    subject: `Booking Cancelled - ${formatDate(data.appointmentDate)}`,
     htmlContent,
     textContent
   };
 }
 
-/**
- * Booking cancellation notification to professional
- */
 export function createBookingCancellationProfessionalEmail(
   professionalEmail: string,
   professionalName: string,
-  data: {
-    bookingId: string;
-    appointmentId: string;
-    appointmentDate: string;
-    appointmentTime: string;
-    clientName: string;
-    clientPhone?: string;
-    cancellationReason?: string;
-    services: Array<{
-      name: string;
-      price: number;
-    }>;
-    refundInfo?: {
-      originalAmount: number;
-      refundAmount?: number;
-      status: string;
-    };
-  }
+  data: BookingCancellationProfessionalData
 ): EmailTemplate {
   const templateData: TemplateData = {
     professionalName,
     clientName: data.clientName,
-    clientPhone: data.clientPhone,
     appointmentDate: data.appointmentDate,
-    appointmentTime: data.appointmentTime,
     bookingId: data.bookingId,
+    appointmentId: data.appointmentId,
+    clientPhone: data.clientPhone,
     cancellationReason: data.cancellationReason,
     services: data.services.map(service => ({
       ...service,
       price: service.price.toFixed(2)
     })),
+    payment: data.payment,
     refundInfo: data.refundInfo ? {
-      originalAmount: data.refundInfo.originalAmount.toFixed(2),
+      originalAmount: data.refundInfo.originalAmount?.toFixed(2),
       refundAmount: data.refundInfo.refundAmount?.toFixed(2),
       status: data.refundInfo.status
     } : undefined,
-    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${data.appointmentId}`,
+    appointmentDetailsUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings`,
     websiteUrl: process.env.NEXT_PUBLIC_BASE_URL!,
     supportEmail: process.env.BREVO_ADMIN_EMAIL!
   };
@@ -836,7 +877,7 @@ export function createBookingCancellationProfessionalEmail(
 
   return {
     to: [{ email: professionalEmail, name: professionalName }],
-    subject: `Booking Cancelled - ${data.appointmentDate}`,
+    subject: `Booking Cancelled - ${formatDate(data.appointmentDate)}`,
     htmlContent,
     textContent
   };

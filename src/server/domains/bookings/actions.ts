@@ -32,6 +32,29 @@ function createSupabaseAdminClient() {
   return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
+type Appointment = {
+  id: string;
+  date: string;
+  status: string | null;
+  computed_status: string | null;
+  end_time: string;
+  booking_id: string;
+  created_at: string;
+  updated_at: string;
+  start_time: string;
+}
+
+type BookingPayment = {
+  amount: number;
+  tip_amount?: number;
+  payment_methods?: {
+    name: string;
+    is_online: boolean;
+  };
+  status: string;
+  stripe_payment_intent_id?: string;
+}
+
 /**
  * Cancel a booking
  */
@@ -285,19 +308,29 @@ export async function canCancelBookingAction(
 /**
  * Send cancellation email notifications
  */
- 
 async function sendCancellationEmails(booking: any, cancellationReason: string) {
   const adminSupabase = createSupabaseAdminClient();
 
   try {
-    const appointment = booking.appointments;
+    // Handle appointments array
+    const appointments = booking.appointments as Appointment[];
+    if (!appointments || appointments.length === 0) {
+      console.error('No appointments found for booking');
+      return;
+    }
+    const appointment = appointments[0];
+    if (!appointment) {
+      console.error('First appointment is undefined');
+      return;
+    }
+
     const professionalProfile = booking.professional_profiles;
      
     const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
     const clientProfile = clientUser.client_profiles;
     const bookingServices = booking.booking_services || [];
-    const payment = booking.booking_payments;
+    const payment = booking.booking_payments as BookingPayment | undefined;
 
     // Get user emails using admin client
     const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
@@ -308,22 +341,7 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
       return;
     }
 
-    // Format date and time
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const appointmentTime = new Date(`1970-01-01T${appointment.start_time}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-
     // Prepare services data
-     
     const servicesData = bookingServices.map((bs: any) => ({
       name: bs.services?.name || 'Service',
       price: bs.price || 0
@@ -334,7 +352,6 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
     const serviceAmount = bookingServices.reduce((sum: number, bs: any) => sum + bs.price, 0);
     
     // Note: Service fee is kept by platform and not refunded
-    
     const refundInfo = payment ? {
       originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment
       refundAmount: (payment.tip_amount || 0) + serviceAmount, // Tips (100%) + Service amount (100%) - Suite fee stays with platform
@@ -348,12 +365,17 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
       {
         bookingId: booking.id,
         appointmentId: appointment.id,
-        appointmentDate,
-        appointmentTime,
+        appointmentDate: appointment.date,
         professionalName: `${professionalUser.first_name} ${professionalUser.last_name}`,
         cancellationReason,
         services: servicesData,
-        ...(refundInfo && { refundInfo })
+        payment: payment ? {
+          method: {
+            name: payment.payment_methods?.name || 'Unknown',
+            is_online: payment.payment_methods?.is_online || false
+          }
+        } : undefined,
+        refundInfo
       }
     );
 
@@ -364,13 +386,19 @@ async function sendCancellationEmails(booking: any, cancellationReason: string) 
       {
         bookingId: booking.id,
         appointmentId: appointment.id,
-        appointmentDate,
-        appointmentTime,
+        appointmentDate: appointment.date,
+        professionalName: `${professionalUser.first_name} ${professionalUser.last_name}`,
         clientName: `${clientUser.first_name} ${clientUser.last_name}`,
         clientPhone: clientProfile?.phone_number,
         cancellationReason,
         services: servicesData,
-        ...(refundInfo && { refundInfo })
+        payment: payment ? {
+          method: {
+            name: payment.payment_methods?.name || 'Unknown',
+            is_online: payment.payment_methods?.is_online || false
+          }
+        } : undefined,
+        refundInfo
       }
     );
 
@@ -447,7 +475,7 @@ export async function markNoShowAction(
     }
 
     // Check if appointment is completed (past appointment time)
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const timeWindow = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -618,7 +646,7 @@ export async function cancelWithPolicyAction(
     }
 
     // Calculate charge based on time until appointment
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.start_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const hoursUntilAppointment = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -884,7 +912,7 @@ export async function canMarkNoShowAction(
     }
 
     // Check timing constraints
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const timeWindow = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -956,7 +984,7 @@ export async function getCancellationPolicyAction(
     }
 
     // Calculate time until appointment
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.start_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const hoursUntilAppointment = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -1101,7 +1129,7 @@ async function sendCancellationPolicyEmails(booking: any, reason: string, charge
     const serviceAmount = booking.booking_services.reduce((sum: number, bs: any) => sum + bs.price, 0);
     
     // Calculate time description
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.start_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const hoursUntil = Math.round((appointmentDateTime.getTime() - new Date().getTime()) / (1000 * 60 * 60));
     const timeDescription = hoursUntil < 24 ? 'Less than 24 hours' : 
                            hoursUntil < 48 ? 'Less than 48 hours' : 

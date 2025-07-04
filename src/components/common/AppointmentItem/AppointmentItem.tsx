@@ -10,8 +10,9 @@ import { formatCurrency } from '@/utils/formatCurrency';
 
 export type AppointmentType = {
   id: string;
-  start_time: string;
-  end_time: string;
+  booking_id: string;
+  start_time: string; // ISO string from timestamptz
+  end_time: string; // ISO string from timestamptz
   status: string;
   computed_status?: string;
   location?: string;

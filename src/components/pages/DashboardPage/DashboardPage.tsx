@@ -65,19 +65,11 @@ export async function DashboardPage({
     !!isProfessional,
     filterStartDate,
     filterEndDate,
-    'all', // Don't filter by status here
+    'upcoming', // Filter by upcoming status directly in the query
   );
 
-  // console.log('allAppointments', allAppointments.length);
-
-  // Filter for upcoming appointments using computed status
-  // Only apply status filtering if no date range is specified (default behavior)
-  const appointmentsForDashboard =
-    !startDate && !endDate
-      ? allAppointments.filter(
-          (appointment) => appointment.computed_status === 'upcoming',
-        )
-      : allAppointments;
+  // No need for additional filtering since we're getting upcoming appointments directly
+  const appointmentsForDashboard = allAppointments;
 
   // Get stats for the dashboard (always use all appointments for stats)
   const stats = await getDashboardStats(
@@ -255,8 +247,8 @@ export async function getDashboardRefunds(
       .select(
         `
         id,
-        date,
         start_time,
+        end_time,
         bookings!inner(
           id,
           booking_services(
@@ -299,18 +291,10 @@ export async function getDashboardRefunds(
         appointment?.bookings?.booking_services?.[0]?.services?.name ||
         'Service';
 
-      // Create appointment date/time
-      const appointmentDate = appointment
-        ? new Date(appointment.date)
+      // Create appointment date/time from start_time
+      const appointmentDate = appointment?.start_time
+        ? new Date(appointment.start_time)
         : new Date();
-      if (appointment?.start_time) {
-        const startTimeParts = appointment.start_time.split(':').map(Number);
-        appointmentDate.setHours(
-          startTimeParts[0] || 0,
-          startTimeParts[1] || 0,
-          0,
-        );
-      }
 
       return {
         id: refund.id,

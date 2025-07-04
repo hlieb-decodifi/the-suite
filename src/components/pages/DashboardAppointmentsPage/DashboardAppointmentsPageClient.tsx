@@ -20,8 +20,9 @@ import { formatCurrency } from '@/utils';
 // Define appointment type
 type AppointmentType = {
   id: string;
-  start_time: string;
-  end_time: string;
+  booking_id: string;
+  start_time: string; // ISO string from timestamptz
+  end_time: string; // ISO string from timestamptz
   status: string;
   computed_status?: string;
   location?: string;
@@ -75,6 +76,7 @@ type Appointment = {
   clientName?: string;
   professionalName?: string;
   status: 'upcoming' | 'completed' | 'cancelled' | 'pending';
+  computedStatus?: string;
   amount: number;
 };
 
@@ -155,7 +157,7 @@ function AppointmentStatusBadge({
   computedStatus,
 }: {
   status: string;
-  computedStatus?: string;
+  computedStatus?: string | undefined;
 }) {
   const displayStatus = computedStatus || status;
   switch (displayStatus) {
@@ -166,6 +168,15 @@ function AppointmentStatusBadge({
           className="bg-primary/10 text-primary border-primary/20"
         >
           Upcoming
+        </Badge>
+      );
+    case 'ongoing':
+      return (
+        <Badge
+          variant="outline"
+          className="bg-orange-500/10 text-orange-500 border-orange-500/20"
+        >
+          Ongoing
         </Badge>
       );
     case 'completed':
@@ -244,7 +255,10 @@ function AppointmentTableCard({
               {appointment.time}
             </div>
           </div>
-          <AppointmentStatusBadge status={appointment.status} />
+          <AppointmentStatusBadge
+            status={appointment.status}
+            computedStatus={appointment.computedStatus}
+          />
         </div>
 
         <div className="mt-3 pt-3 border-t flex justify-between items-center">
@@ -327,7 +341,10 @@ function DashboardTemplateAppointmentsTable({
                     : appointment.professionalName || 'Professional'}
                 </TableCell>
                 <TableCell>
-                  <AppointmentStatusBadge status={appointment.status} />
+                  <AppointmentStatusBadge
+                    status={appointment.status}
+                    computedStatus={appointment.computedStatus}
+                  />
                 </TableCell>
                 <TableCell className="text-right font-medium">
                   {formatCurrency(appointment.amount)}
@@ -424,6 +441,7 @@ export function DashboardAppointmentsPageClient({
         clientName,
         professionalName,
         status: formattedStatus,
+        computedStatus,
         amount,
       };
     },

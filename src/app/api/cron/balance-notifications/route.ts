@@ -38,14 +38,18 @@ export async function GET() {
         console.log(`[CRON] Sending balance notification for booking: ${appointment.booking_id}`);
 
         // Format appointment date and time for the email
-        const appointmentDate = new Date(appointment.appointment_date).toLocaleDateString('en-US', {
+        const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric'
         });
         
-        const appointmentTime = appointment.appointment_time;
+        const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
 
         // Calculate payment amounts (already in dollars from DB)
         const totalAmount = appointment.total_amount;

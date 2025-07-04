@@ -1,8 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
-import type { RefundRequest, RefundDecision } from '@/types/refunds';
+import { RefundRequest, RefundDecision } from '@/types/refunds';
 import { sendRefundRequestEmail, sendRefundDeclineEmail } from './email-utils';
 import { processStripeRefund } from './stripe-refund';
 
@@ -27,25 +26,22 @@ export async function createRefundRequest(
       };
     }
 
-    // Get appointment details with payment information
+    // Get appointment details to verify ownership and payment status
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
       .select(`
         id,
-        date,
         start_time,
-        status,
-        booking_id,
+        end_time,
         bookings!inner(
           id,
-          client_id,
-          professional_profile_id,
           booking_payments!inner(
             id,
             amount,
             tip_amount,
             status,
-            payment_methods!inner(
+            payment_methods(
+              name,
               is_online
             )
           ),
@@ -324,35 +320,21 @@ export async function getRefundForReview(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      redirect('/auth/signin');
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
     }
 
-    // Get refund details with all related information
+    // Get refund details with related data
     const { data: refund, error: refundError } = await supabase
       .from('refunds')
       .select(`
-        id,
-        appointment_id,
-        client_id,
-        professional_id,
-        booking_payment_id,
-        reason,
-        requested_amount,
-        original_amount,
-        transaction_fee,
-        refund_amount,
-        status,
-        professional_notes,
-        declined_reason,
-        processed_at,
-        created_at,
-        updated_at,
+        *,
         appointments!inner(
           id,
-          date,
           start_time,
           end_time,
-          booking_id,
           bookings!inner(
             id,
             notes,
@@ -365,7 +347,7 @@ export async function getRefundForReview(
                 description
               )
             ),
-            booking_payments!inner(
+            booking_payments(
               id,
               amount,
               tip_amount,
@@ -393,11 +375,11 @@ export async function getRefundForReview(
       };
     }
 
-    // Verify the user is the professional for this refund
-    if (refund.professional_id !== user.id) {
+    // Verify the user is either the client or professional for this refund
+    if (refund.client_id !== user.id && refund.professional_id !== user.id) {
       return {
         success: false,
-        error: 'Unauthorized access to this refund request',
+        error: 'Unauthorized',
       };
     }
 
@@ -406,7 +388,7 @@ export async function getRefundForReview(
       refund: refund as RefundWithDetails,
     };
   } catch (error) {
-    console.error('Error getting refund for review:', error);
+    console.error('Error getting refund details:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -433,10 +415,8 @@ type RefundWithDetails = {
   updated_at: string;
   appointments: {
     id: string;
-    date: string;
     start_time: string;
     end_time: string;
-    booking_id: string;
     bookings: {
       id: string;
       notes: string | null;
@@ -458,7 +438,7 @@ type RefundWithDetails = {
           name: string;
           is_online: boolean;
         };
-      };
+      } | null;
     };
   };
   clients: {

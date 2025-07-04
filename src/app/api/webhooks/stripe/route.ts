@@ -509,304 +509,92 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
   }
 }
 
-// Handle booking payment checkout (new logic)
+// Handle booking payment checkout
 async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
-  const userId = session.client_reference_id;
-  const bookingId = session.metadata?.booking_id;
-  
-  if (!userId || !bookingId) {
-    console.error('Missing user ID or booking ID in checkout session');
+  const supabase = createAdminClient();
+  const bookingId = session.metadata?.bookingId;
+  const isCardPayment = session.payment_method_types?.includes('card');
+
+  if (!bookingId) {
+    console.error('❌ No booking ID found in session metadata');
     return;
   }
-  
-  try {
-    const supabase = createAdminClient();
-    
-    // Save customer information if we have it
-    if (session.customer && typeof session.customer === 'string') {
-      console.log('Saving customer record...');
-      await saveOrUpdateCustomer(userId, session.customer);
-    }
-    
-    // Determine payment status
-    let paymentStatus = 'pending';
-    let paymentIntentId: string | undefined;
-    
-    console.log('🔍 Session payment_status:', session.payment_status);
-    console.log('🔍 Session payment_intent:', session.payment_intent);
-    console.log('🔍 Session payment_intent type:', typeof session.payment_intent);
-    
-    if (session.mode === 'payment') {
-      if (session.payment_status === 'paid') {
-        paymentStatus = 'completed';
-        if (session.payment_intent) {
-          paymentIntentId = typeof session.payment_intent === 'string' 
-            ? session.payment_intent 
-            : session.payment_intent.id;
-        }
-      } else if (session.payment_status === 'unpaid') {
-        // Check if this is an uncaptured payment that's actually authorized
-        if (session.payment_intent) {
-          paymentIntentId = typeof session.payment_intent === 'string' 
-            ? session.payment_intent 
-            : session.payment_intent.id;
-          
-          console.log('🔍 Payment intent ID:', paymentIntentId);
-          
-          // For uncaptured payments, we need to fetch the payment intent to check its status
-          try {
-            console.log('🔍 Fetching payment intent details...');
-            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-            console.log('🔍 Payment intent status:', paymentIntent.status);
-            
-            // For uncaptured payments, 'requires_capture' means authorized and successful
-            if (paymentIntent.status === 'requires_capture') {
-              paymentStatus = 'completed'; // Treat as successful
-              console.log('✅ Uncaptured payment authorized successfully');
-            } else if (paymentIntent.status === 'succeeded') {
-              paymentStatus = 'completed';
-              console.log('✅ Payment succeeded');
-            } else {
-              paymentStatus = 'failed';
-              console.log('❌ Payment intent failed with status:', paymentIntent.status);
-            }
-          } catch (error) {
-            console.error('❌ Error fetching payment intent:', error);
-            paymentStatus = 'failed';
-          }
-        } else {
-          paymentStatus = 'failed';
-          console.log('❌ No payment intent found');
-        }
-      } else if (session.payment_status === 'no_payment_required') {
-        // Handle case where no payment is required (e.g., free services)
-        paymentStatus = 'completed';
-        console.log('✅ No payment required');
-      }
-    } else if (session.mode === 'setup') {
-      // For setup mode, payment method is saved but no payment taken yet
-      if (session.setup_intent && typeof session.setup_intent === 'object') {
-        if (session.setup_intent.status === 'succeeded') {
-          paymentStatus = 'pending'; // Payment method saved, payment will be processed later
-        }
-      }
-    }
-    
-    console.log('Payment status determined:', paymentStatus);
-    
-    // Check if this is a split payment that needs special handling  
-    const paymentFlow = session.metadata?.payment_flow;
-    if (paymentFlow === 'split_service_fee_and_amount' && session.payment_intent && typeof session.payment_intent === 'object') {
-      // For split payments, the payment intent should be uncaptured (requires_capture status)
-      const paymentIntent = session.payment_intent;
-      if (paymentIntent.status === 'requires_capture') {
-        console.log('🔍 Processing split payment - partially capturing service fee, leaving service amount uncaptured');
-        await handleSplitPaymentPartialCapture(session, bookingId);
-      } else {
-        console.log('⚠️ Split payment intent has unexpected status:', paymentIntent.status);
-      }
-    }
-    
-    // Get payment method ID from payment intent (for any payment type)
-    let paymentMethodId: string | undefined;
-    if (session.mode === 'payment' && session.payment_intent) {
-      const paymentIntentId = typeof session.payment_intent === 'string' 
-        ? session.payment_intent 
-        : session.payment_intent.id;
-      
-      if (paymentIntentId) {
-        try {
-          // Retrieve the full payment intent to get payment method
-          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-          if (paymentIntent.payment_method) {
-            paymentMethodId = typeof paymentIntent.payment_method === 'string' 
-              ? paymentIntent.payment_method 
-              : paymentIntent.payment_method.id;
-            console.log('🔍 Extracted payment method ID from payment intent:', paymentMethodId);
-          }
-        } catch (error) {
-          console.error('Error retrieving payment intent for payment method:', error);
-        }
-      }
-    }
 
-    // Update booking payment status
-    const updateData: {
-      status: string;
-      stripe_payment_intent_id: string | null;
-      stripe_payment_method_id?: string;
-      updated_at: string;
-    } = {
-      status: paymentStatus,
-      stripe_payment_intent_id: paymentIntentId || null,
-      updated_at: new Date().toISOString()
-    };
-    
-    // Add payment method ID if we have one (for uncaptured payments)
-    if (paymentMethodId) {
-      updateData.stripe_payment_method_id = paymentMethodId;
-      console.log('🔍 Saving payment method ID to database:', paymentMethodId);
+  // Check if this is a split payment that needs special handling  
+  const paymentFlow = session.metadata?.payment_flow;
+  if (paymentFlow === 'split_service_fee_and_amount' && session.payment_intent && typeof session.payment_intent === 'object') {
+    // For split payments, the payment intent should be uncaptured (requires_capture status)
+    const paymentIntent = session.payment_intent;
+    if (paymentIntent.status === 'requires_capture') {
+      console.log('🔍 Processing split payment - partially capturing service fee, leaving service amount uncaptured');
+      await handleSplitPaymentPartialCapture(session, bookingId);
+    } else {
+      console.log('⚠️ Split payment intent has unexpected status:', paymentIntent.status);
     }
+  }
 
-    const { error: paymentUpdateError } = await supabase
+  if (isCardPayment) {
+    console.log('💳 Setting capture schedule for card payment...');
+    
+    // Get appointment details with all services to calculate total duration
+    const { data: appointmentDetails, error: appointmentError } = await supabase
+      .from('appointments')
+      .select(`
+        id,
+        start_time,
+        end_time,
+        status,
+        booking_id,
+        bookings (
+          id,
+          professional_profile_id,
+          client_id,
+          status,
+          booking_services (
+            duration
+          )
+        )
+      `)
+      .eq('booking_id', bookingId)
+      .single() as AppointmentResponse;
+    
+    if (appointmentError || !appointmentDetails) {
+      console.error('❌ Error fetching appointment details:', appointmentError);
+      return;
+    }
+    
+    // Import utility functions for appointment time calculations
+    const { calculateAppointmentTimes, calculateTotalDuration } = await import('@/utils/appointmentUtils');
+    
+    // Calculate total duration from all services
+    const allServices = appointmentDetails.bookings.booking_services;
+    const totalDurationMinutes = calculateTotalDuration(allServices);
+    
+    console.log('⏱️ Total duration minutes:', totalDurationMinutes);
+    
+    // Calculate appointment times
+    const { appointmentStart, appointmentEnd, captureScheduledFor } = calculateAppointmentTimes(
+      appointmentDetails.start_time,
+      totalDurationMinutes
+    );
+    
+    console.log('📅 Appointment start:', appointmentStart.toISOString());
+    console.log('📅 Appointment end:', appointmentEnd.toISOString());
+    
+    // Update the booking payment with capture schedule
+    const { error: captureUpdateError } = await supabase
       .from('booking_payments')
-      .update(updateData)
+      .update({
+        capture_scheduled_for: captureScheduledFor.toISOString(),
+        updated_at: new Date().toISOString()
+      })
       .eq('booking_id', bookingId);
     
-    if (paymentUpdateError) {
-      console.error('Failed to update booking payment status:', paymentUpdateError);
+    if (captureUpdateError) {
+      console.error('❌ Failed to update capture schedule:', captureUpdateError);
     } else {
-      console.log('Successfully updated booking payment status');
+      console.log('✅ Successfully set capture schedule for 12 hours after appointment end');
     }
-    
-    // Update booking status to confirmed if payment was successful
-    if (paymentStatus === 'completed') {
-      const { error: bookingUpdateError } = await supabase
-        .from('bookings')
-        .update({ 
-          status: 'confirmed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', bookingId);
-      
-      if (bookingUpdateError) {
-        console.error('Failed to update booking status:', bookingUpdateError);
-      } else {
-        console.log('Successfully confirmed booking');
-        
-        // Calculate and set capture_scheduled_for for card payments
-        try {
-          console.log('🔍 Getting payment method details for booking:', bookingId);
-          
-          // Get the payment method to check if it's a card payment
-          const { data: paymentDetails } = await supabase
-            .from('booking_payments')
-            .select(`
-              payment_method_id,
-              payment_methods!inner(is_online)
-            `)
-            .eq('booking_id', bookingId)
-            .single();
-          
-          const isCardPayment = paymentDetails?.payment_methods?.is_online === true;
-          console.log('🔍 Is card payment:', isCardPayment);
-          
-          if (isCardPayment) {
-            console.log('💳 Setting capture schedule for card payment...');
-            
-            // Get appointment details with all services to calculate total duration
-            const { data: appointmentDetails } = await supabase
-              .from('appointments')
-              .select(`
-                date,
-                start_time,
-                bookings!inner(
-                  booking_services(
-                    duration
-                  )
-                )
-              `)
-              .eq('booking_id', bookingId)
-              .single();
-            
-                         if (appointmentDetails) {
-               console.log('📅 Appointment details:', appointmentDetails);
-               
-               // Import utility functions for appointment time calculations
-               const { calculateAppointmentTimes, calculateTotalDuration } = await import('@/utils/appointmentUtils');
-               
-               // Calculate total duration from all services
-               const allServices = appointmentDetails.bookings.booking_services;
-               const totalDurationMinutes = calculateTotalDuration(allServices);
-               
-               console.log('⏱️ Total duration minutes:', totalDurationMinutes);
-               
-               // Calculate appointment times
-               const appointmentDate = appointmentDetails.date;
-               const startTime = appointmentDetails.start_time;
-               
-               const { appointmentStart, appointmentEnd, captureScheduledFor } = calculateAppointmentTimes(
-                 appointmentDate,
-                 startTime,
-                 totalDurationMinutes
-               );
-               
-               console.log('📅 Appointment start:', appointmentStart.toISOString());
-               console.log('📅 Appointment end:', appointmentEnd.toISOString());
-               console.log('📅 Capture scheduled for:', captureScheduledFor.toISOString());
-              
-              // Update the booking payment with capture schedule
-              const { error: captureUpdateError } = await supabase
-                .from('booking_payments')
-                .update({
-                  capture_scheduled_for: captureScheduledFor.toISOString(),
-                  updated_at: new Date().toISOString()
-                })
-                .eq('booking_id', bookingId);
-              
-              if (captureUpdateError) {
-                console.error('❌ Failed to update capture schedule:', captureUpdateError);
-              } else {
-                console.log('✅ Successfully set capture schedule for 12 hours after appointment end');
-              }
-            } else {
-              console.error('❌ Could not get appointment details for capture scheduling');
-            }
-          }
-        } catch (captureError) {
-          console.error('❌ Error setting capture schedule:', captureError);
-          // Don't fail the webhook if capture scheduling fails
-        }
-        
-        // Send booking confirmation emails
-        try {
-          console.log('🔍 Looking for appointment ID for booking:', bookingId);
-          // Get appointment ID for this booking
-          const { data: appointment } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('booking_id', bookingId)
-            .single();
-          
-          console.log('📋 Appointment found:', appointment);
-          
-          if (appointment?.id) {
-            console.log('📧 Importing email notification function...');
-            const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-            
-            // Check if payment is uncaptured by looking at payment intent status
-            const isUncaptured = session.payment_intent && 
-              typeof session.payment_intent === 'object' && 
-              session.payment_intent.status === 'requires_capture';
-            
-            console.log('🔍 Payment status - isUncaptured:', isUncaptured);
-            console.log('📬 Calling sendBookingConfirmationEmails with:', {
-              bookingId,
-              appointmentId: appointment.id,
-              isUncaptured: isUncaptured || false
-            });
-            
-            const emailResult = await sendBookingConfirmationEmails(bookingId, appointment.id, isUncaptured || false);
-            console.log('📨 Email sending result:', emailResult);
-            
-            if (emailResult.success) {
-              console.log('✅ Booking confirmation emails sent successfully');
-            } else {
-              console.error('❌ Failed to send booking confirmation emails:', emailResult.error);
-            }
-          } else {
-            console.error('❌ No appointment found for booking:', bookingId);
-          }
-        } catch (emailError) {
-          console.error('💥 Exception while sending booking confirmation emails:', emailError);
-          // Don't fail the webhook if email sending fails
-        }
-      }
-    }
-    
-    console.log(`Successfully processed booking payment for booking: ${bookingId}`);
-  } catch (error) {
-    console.error('Error processing booking payment checkout:', error);
   }
 }
 
@@ -1692,4 +1480,26 @@ async function handleSplitPaymentPartialCapture(session: Stripe.Checkout.Session
   } catch (error) {
     console.error('❌ Error processing split payment partial capture:', error);
   }
-} 
+}
+
+type AppointmentDetails = {
+  id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  booking_id: string;
+  bookings: {
+    id: string;
+    professional_profile_id: string;
+    client_id: string;
+    status: string;
+    booking_services: Array<{
+      duration: number;
+    }>;
+  };
+};
+
+type AppointmentResponse = {
+  data: AppointmentDetails | null;
+  error: Error | null;
+};

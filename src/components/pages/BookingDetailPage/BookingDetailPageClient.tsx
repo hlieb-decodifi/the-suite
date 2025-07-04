@@ -1,157 +1,55 @@
 'use client';
 
-import { useState } from 'react';
-import { Typography } from '@/components/ui/typography';
-import { Button } from '@/components/ui/button';
+import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
+import { LeafletMap } from '@/components/common/LeafletMap';
+import { AddAdditionalServicesModal, NoShowModal } from '@/components/modals';
+import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
+import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Typography } from '@/components/ui/typography';
+import { useToast } from '@/components/ui/use-toast';
+import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
-import { PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber';
+import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
+  ArrowLeftIcon,
   CalendarIcon,
   ClockIcon,
-  UserIcon,
-  CreditCardIcon,
-  FileTextIcon,
-  ArrowLeftIcon,
   CopyIcon,
-  Phone,
-  MessageCircleIcon,
+  CreditCardIcon,
   ExternalLinkIcon,
+  FileTextIcon,
   InfoIcon,
   MapPin,
+  MessageCircleIcon,
+  Phone,
   Plus,
   RefreshCw,
   Star,
+  UserIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/components/ui/use-toast';
-import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
-import { LeafletMap } from '@/components/common/LeafletMap';
-import { AddAdditionalServicesModal } from '@/components/modals';
-import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
-import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
-import { NoShowModal } from '@/components/modals';
-import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
-
-// Local types to avoid import issues
-type BookingPayment = {
-  id: string;
-  amount: number;
-  tip_amount: number;
-  status: string;
-  payment_method_id: string;
-  stripe_payment_method_id: string | null;
-  stripe_payment_intent_id: string | null;
-  pre_auth_scheduled_for: string | null;
-  capture_scheduled_for: string | null;
-  pre_auth_placed_at: string | null;
-  captured_at: string | null;
-  created_at: string;
-  service_fee: number;
-  // Refund tracking fields
-  refunded_amount: number;
-  refund_reason: string | null;
-  refunded_at: string | null;
-  refund_transaction_id: string | null;
-  payment_methods: {
-    id: string;
-    name: string;
-    is_online: boolean;
-  } | null;
-};
-
-type BookingService = {
-  id: string;
-  service_id: string;
-  price: number;
-  duration: number;
-  services: {
-    id: string;
-    name: string;
-    description?: string;
-  };
-};
-
-type DetailedAppointment = {
-  id: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  computed_status: string;
-  created_at: string;
-  updated_at: string;
-  booking_id: string;
-  bookings: {
-    id: string;
-    client_id: string;
-    professional_profile_id: string;
-    status: string;
-    notes?: string | null;
-    created_at: string;
-    updated_at: string;
-    clients: {
-      id: string;
-      first_name: string;
-      last_name: string;
-      client_profiles: {
-        id: string;
-        phone_number?: string | null;
-        location?: string | null;
-        addresses?: {
-          id: string;
-          street_address?: string | null;
-          city?: string | null;
-          state?: string | null;
-          country?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-        } | null;
-      } | null;
-    } | null;
-    professionals: {
-      id: string;
-      user_id: string;
-      description?: string | null;
-      profession?: string | null;
-      phone_number?: string | null;
-      location?: string | null;
-      addresses?: {
-        id: string;
-        street_address?: string | null;
-        city?: string | null;
-        state?: string | null;
-        country?: string | null;
-        latitude?: number | null;
-        longitude?: number | null;
-      } | null;
-      users: {
-        id: string;
-        first_name: string;
-        last_name: string;
-      };
-    } | null;
-    booking_services: BookingService[];
-    booking_payments: BookingPayment | null;
-  };
-};
+import { useState } from 'react';
+import { DetailedAppointmentType } from './BookingDetailPage';
 
 export type BookingDetailPageClientProps = {
-  appointment: DetailedAppointment;
+  appointment: DetailedAppointmentType;
+  isClient: boolean;
   isProfessional: boolean;
-  currentUserId: string;
+  userId: string;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -175,10 +73,34 @@ const formatPhoneNumber = (phone: string): string => {
   }
 };
 
+type AddressType =
+  | {
+      street_address: string | null;
+      city: string | null;
+      state: string | null;
+      country: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    }
+  | null
+  | undefined;
+
+function formatAddress(address: AddressType): string {
+  if (!address) return '';
+  const parts = [
+    address.street_address,
+    address.city,
+    address.state,
+    address.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : '';
+}
+
 export function BookingDetailPageClient({
   appointment,
+  isClient,
   isProfessional,
-  currentUserId,
+  userId,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -192,9 +114,9 @@ export function BookingDetailPageClient({
   const router = useRouter();
   const { toast } = useToast();
 
-  // Combine date and time for proper Date objects
-  const startDate = new Date(`${appointment.date}T${appointment.start_time}`);
-  const endDate = new Date(`${appointment.date}T${appointment.end_time}`);
+  // Get date from start_time
+  const startDateTime = new Date(appointment.start_time);
+  const endDateTime = new Date(appointment.end_time);
 
   const getInitials = (firstName?: string, lastName?: string) => {
     const first = firstName?.charAt(0) || '';
@@ -202,32 +124,8 @@ export function BookingDetailPageClient({
     return `${first}${last}`.toUpperCase() || '?';
   };
 
-  const getFullName = (firstName?: string, lastName?: string) => {
-    return `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown User';
-  };
-
-  const formatAddress = (
-    address?: {
-      street_address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      country?: string | null;
-    } | null,
-  ) => {
-    if (!address) return null;
-
-    const parts = [
-      address.street_address,
-      address.city,
-      address.state,
-      address.country,
-    ].filter(Boolean);
-
-    return parts.length > 0 ? parts.join(', ') : null;
-  };
-
   const getProfessionalTitle = (
-    professional: DetailedAppointment['bookings']['professionals'],
+    professional: DetailedAppointmentType['bookings']['professionals'],
   ) => {
     if (professional?.profession) {
       return professional.profession;
@@ -277,7 +175,7 @@ export function BookingDetailPageClient({
       const result = await updateAppointmentStatus(
         appointment.id,
         newStatus,
-        currentUserId,
+        userId,
         isProfessional,
       );
       if (result.success) {
@@ -432,37 +330,119 @@ export function BookingDetailPageClient({
 
   // Get professional or client name for cancellation modal
   const getOtherPartyName = () => {
-    if (isProfessional) {
-      const client = appointment.bookings.clients;
-      return getFullName(client?.first_name, client?.last_name);
-    } else {
-      const professional = appointment.bookings.professionals;
-      return getFullName(
-        professional?.users?.first_name,
-        professional?.users?.last_name,
+    if (isClient) {
+      return `${appointment.bookings.professionals?.users?.first_name || ''} ${
+        appointment.bookings.professionals?.users?.last_name || ''
+      }`;
+    }
+    const clientUser = appointment.bookings.clients;
+    return `${clientUser?.first_name || ''} ${clientUser?.last_name || ''}`;
+  };
+
+  const getOtherPartyInitials = () => {
+    if (isClient) {
+      return getInitials(
+        appointment.bookings.professionals?.users.first_name || '',
+        appointment.bookings.professionals?.users.last_name || '',
       );
+    }
+    return getInitials(
+      appointment.bookings.clients?.first_name || '',
+      appointment.bookings.clients?.last_name || '',
+    );
+  };
+
+  const getOtherPartyProfileData = () => {
+    if (isClient) {
+      const professional = appointment.bookings.professionals;
+      return {
+        name: `${professional?.users?.first_name || ''} ${
+          professional?.users?.last_name || ''
+        }`,
+        address: formatAddress(professional?.address),
+        phone: professional?.phone_number || null,
+      };
+    }
+    const clientUser = appointment.bookings.clients;
+    const clientProfile = clientUser?.client_profiles?.[0];
+    return {
+      name: `${clientUser?.first_name || ''} ${clientUser?.last_name || ''}`,
+      address: formatAddress(clientProfile?.address),
+      phone: clientProfile?.phone_number || null,
+    };
+  };
+
+  const getOtherPartyAddressObject = (): AddressType => {
+    if (isClient) {
+      return appointment.bookings.professionals?.address;
+    }
+    return appointment.bookings.clients?.client_profiles?.[0]?.address;
+  };
+
+  const getOtherPartyAddress = () => {
+    const addressObject = getOtherPartyAddressObject();
+    return formatAddress(addressObject);
+  };
+
+  const handleAddressClick = () => {
+    const address = getOtherPartyAddress();
+    if (address) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        address,
+      )}`;
+      window.open(url, '_blank');
     }
   };
 
+  const renderMap = () => {
+    const address = getOtherPartyAddress();
+    const addressObject = getOtherPartyAddressObject();
+
+    if (!addressObject?.latitude || !addressObject?.longitude) return null;
+
+    return (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <MapPin className="mr-2 h-5 w-5 text-gray-500" />
+            <span>Appointment Location</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative w-full cursor-pointer overflow-hidden rounded-lg">
+            <LeafletMap
+              latitude={addressObject.latitude}
+              longitude={addressObject.longitude}
+              address={address}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={handleAddressClick}>
+              <ExternalLinkIcon className="mr-2 h-4 w-4" />
+              Get Directions
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const handleCancellationSuccess = () => {
-    // Update local state to reflect cancellation
     setAppointmentData((prev) => ({
       ...prev,
       status: 'cancelled',
       computed_status: 'cancelled',
-      bookings: {
-        ...prev.bookings,
-        status: 'cancelled',
-      },
     }));
-
-    // Close the modal
     setIsCancellationModalOpen(false);
+  };
 
-    // Refresh the page to get updated data including refund information
-    setTimeout(() => {
-      router.refresh();
-    }, 1000);
+  const handleNoShowSuccess = () => {
+    // ... existing code ...
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getOtherPartyDescription = () => {
+    return `Location for appointment with ${getOtherPartyName()}`;
   };
 
   return (
@@ -805,10 +785,11 @@ export function BookingDetailPageClient({
                   Date & Time
                 </Typography>
                 <Typography variant="muted" className="mb-1">
-                  {format(startDate, 'EEEE, MMMM d, yyyy')}
+                  {format(startDateTime, 'EEEE, MMMM d, yyyy')}
                 </Typography>
                 <Typography variant="muted">
-                  {format(startDate, 'h:mm a')} - {format(endDate, 'h:mm a')}
+                  {format(startDateTime, 'h:mm a')} -{' '}
+                  {format(endDateTime, 'h:mm a')}
                 </Typography>
               </div>
               {appointment.bookings.notes && (
@@ -839,35 +820,29 @@ export function BookingDetailPageClient({
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
-                      {getInitials(
-                        appointment.bookings.clients.first_name,
-                        appointment.bookings.clients.last_name,
-                      )}
+                      {getOtherPartyInitials()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <Typography className="font-semibold text-foreground text-lg sm:text-xl mb-1">
-                      {getFullName(
-                        appointment.bookings.clients.first_name,
-                        appointment.bookings.clients.last_name,
-                      )}
+                      {getOtherPartyName()}
                     </Typography>
                     <div className="space-y-1">
                       <Typography variant="muted" className="text-sm">
                         Client
                       </Typography>
-                      {appointment.bookings.clients.client_profiles
-                        ?.phone_number && (
+                      {/* Phone number section */}
+                      {getOtherPartyProfileData().phone && (
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />
                           <a
-                            href={`tel:${appointment.bookings.clients.client_profiles.phone_number}`}
+                            href={`tel:${getOtherPartyProfileData().phone}`}
                             className="text-muted-foreground hover:text-primary transition-colors font-medium"
                           >
-                            {formatPhoneNumber(
-                              appointment.bookings.clients.client_profiles
-                                .phone_number,
-                            )}
+                            {getOtherPartyProfileData().phone &&
+                              formatPhoneNumber(
+                                getOtherPartyProfileData().phone!,
+                              )}
                           </a>
                         </div>
                       )}
@@ -889,72 +864,25 @@ export function BookingDetailPageClient({
                 </div>
 
                 {/* Additional Information - only show if there's location or address */}
-                {(appointment.bookings.clients.client_profiles?.location ||
-                  formatAddress(
-                    appointment.bookings.clients.client_profiles?.addresses,
-                  )) && (
+                {getOtherPartyAddressObject() && (
                   <>
                     <Separator />
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {appointment.bookings.clients.client_profiles
-                          ?.location && (
+                        {getOtherPartyAddressObject() && (
                           <div className="space-y-2">
                             <Typography className="text-sm font-medium text-muted-foreground">
-                              Location
+                              Address
                             </Typography>
                             <Typography variant="muted" className="font-medium">
-                              {
-                                appointment.bookings.clients.client_profiles
-                                  .location
-                              }
+                              {getOtherPartyAddress()}
                             </Typography>
                           </div>
                         )}
                       </div>
 
-                      {formatAddress(
-                        appointment.bookings.clients.client_profiles?.addresses,
-                      ) && (
-                        <div className="space-y-3">
-                          <Typography className="text-sm font-medium text-muted-foreground">
-                            Address
-                          </Typography>
-                          <Typography variant="muted" className="font-medium">
-                            {formatAddress(
-                              appointment.bookings.clients.client_profiles
-                                ?.addresses,
-                            )}
-                          </Typography>
-
-                          {/* Show map if coordinates are available */}
-                          {appointment.bookings.clients.client_profiles
-                            ?.addresses?.latitude &&
-                            appointment.bookings.clients.client_profiles
-                              ?.addresses?.longitude && (
-                              <div className="mt-3">
-                                <LeafletMap
-                                  latitude={
-                                    appointment.bookings.clients.client_profiles
-                                      .addresses.latitude
-                                  }
-                                  longitude={
-                                    appointment.bookings.clients.client_profiles
-                                      .addresses.longitude
-                                  }
-                                  address={
-                                    formatAddress(
-                                      appointment.bookings.clients
-                                        .client_profiles?.addresses,
-                                    ) || 'Client Location'
-                                  }
-                                  height="h-48"
-                                  className="border border-border rounded-md"
-                                />
-                              </div>
-                            )}
-                        </div>
-                      )}
+                      {/* Show map if coordinates are available */}
+                      {renderMap()}
                     </div>
                   </>
                 )}
@@ -977,18 +905,12 @@ export function BookingDetailPageClient({
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
-                      {getInitials(
-                        appointment.bookings.professionals.users.first_name,
-                        appointment.bookings.professionals.users.last_name,
-                      )}
+                      {getOtherPartyInitials()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <Typography className="font-semibold text-foreground text-lg sm:text-xl mb-1">
-                      {getFullName(
-                        appointment.bookings.professionals.users.first_name,
-                        appointment.bookings.professionals.users.last_name,
-                      )}
+                      {getOtherPartyName()}
                     </Typography>
                     <div className="space-y-1">
                       <Typography variant="muted" className="text-sm">
@@ -996,16 +918,18 @@ export function BookingDetailPageClient({
                           appointment.bookings.professionals,
                         )}
                       </Typography>
-                      {appointment.bookings.professionals.phone_number && (
+                      {/* Phone number section */}
+                      {getOtherPartyProfileData().phone && (
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />
                           <a
-                            href={`tel:${appointment.bookings.professionals.phone_number}`}
+                            href={`tel:${getOtherPartyProfileData().phone}`}
                             className="text-muted-foreground hover:text-primary transition-colors font-medium"
                           >
-                            {formatPhoneNumber(
-                              appointment.bookings.professionals.phone_number,
-                            )}
+                            {getOtherPartyProfileData().phone &&
+                              formatPhoneNumber(
+                                getOtherPartyProfileData().phone!,
+                              )}
                           </a>
                         </div>
                       )}
@@ -1060,72 +984,34 @@ export function BookingDetailPageClient({
                 {/* Location Information - always show section */}
                 <>
                   <Separator />
-                  <div className="space-y-4">
-                    <Typography className="text-sm font-medium text-muted-foreground">
+                  <div className="space-y-2">
+                    <Typography className="font-medium text-foreground mb-1">
                       Location Information
                     </Typography>
 
                     {/* Show if location or address exists */}
                     {appointment.bookings.professionals.location ||
-                    formatAddress(
-                      appointment.bookings.professionals.addresses,
-                    ) ? (
+                    getOtherPartyAddressObject() ? (
                       <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {appointment.bookings.professionals.location && (
-                            <div className="space-y-2">
-                              <Typography className="text-sm font-medium text-muted-foreground">
-                                Location
-                              </Typography>
-                              <Typography
-                                variant="muted"
-                                className="font-medium"
-                              >
-                                {appointment.bookings.professionals.location}
-                              </Typography>
-                            </div>
-                          )}
-                        </div>
-
-                        {formatAddress(
-                          appointment.bookings.professionals.addresses,
-                        ) && (
-                          <div className="space-y-3">
+                        {appointment.bookings.professionals.location && (
+                          <div className="space-y-2">
                             <Typography className="text-sm font-medium text-muted-foreground">
-                              Address
+                              Location
                             </Typography>
                             <Typography variant="muted" className="font-medium">
-                              {formatAddress(
-                                appointment.bookings.professionals.addresses,
-                              )}
+                              {appointment.bookings.professionals.location}
+                            </Typography>
+                          </div>
+                        )}
+
+                        {getOtherPartyAddressObject() && (
+                          <div className="space-y-3">
+                            <Typography variant="muted" className="font-medium">
+                              {getOtherPartyAddress()}
                             </Typography>
 
                             {/* Show map if coordinates are available */}
-                            {appointment.bookings.professionals.addresses
-                              ?.latitude &&
-                              appointment.bookings.professionals.addresses
-                                ?.longitude && (
-                                <div className="mt-3">
-                                  <LeafletMap
-                                    latitude={
-                                      appointment.bookings.professionals
-                                        .addresses.latitude
-                                    }
-                                    longitude={
-                                      appointment.bookings.professionals
-                                        .addresses.longitude
-                                    }
-                                    address={
-                                      formatAddress(
-                                        appointment.bookings.professionals
-                                          .addresses,
-                                      ) || 'Professional Location'
-                                    }
-                                    height="h-48"
-                                    className="border border-border rounded-md"
-                                  />
-                                </div>
-                              )}
+                            {renderMap()}
                           </div>
                         )}
                       </>
@@ -1664,7 +1550,7 @@ export function BookingDetailPageClient({
         onClose={() => setIsAddServicesModalOpen(false)}
         onSuccess={handleAddServicesSuccess}
         appointmentId={appointmentData.id}
-        professionalUserId={currentUserId}
+        professionalUserId={userId}
         currentServices={appointmentData.bookings.booking_services}
       />
 
@@ -1691,7 +1577,7 @@ export function BookingDetailPageClient({
         onClose={() => setIsCancellationModalOpen(false)}
         onSuccess={handleCancellationSuccess}
         bookingId={appointment.booking_id}
-        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        appointmentDate={format(startDateTime, 'EEEE, MMMM d, yyyy')}
         professionalName={getOtherPartyName()}
       />
 
@@ -1700,13 +1586,13 @@ export function BookingDetailPageClient({
         isOpen={isNoShowModalOpen}
         onClose={() => setIsNoShowModalOpen(false)}
         appointmentId={appointment.id}
-        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        appointmentDate={format(startDateTime, 'EEEE, MMMM d, yyyy')}
         clientName={getOtherPartyName()}
         serviceAmount={appointment.bookings.booking_services.reduce(
           (total, service) => total + service.price,
           0,
         )}
-        onSuccess={handleCancellationSuccess}
+        onSuccess={handleNoShowSuccess}
       />
     </div>
   );
