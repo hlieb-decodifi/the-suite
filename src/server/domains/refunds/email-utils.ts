@@ -1,11 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
-import { sendEmail } from '@/lib/email';
 import {
-  createRefundRequestNotificationEmail,
-  createRefundDeclineNotificationEmail,
-  createRefundCompletionClientEmail,
-  createRefundCompletionProfessionalEmail
-} from '@/lib/email/templates';
+  sendRefundRequestProfessional,
+  sendRefundDeclineClient,
+  sendRefundCompletionClient,
+  sendRefundCompletionProfessional
+} from '@/providers/brevo/templates';
 
 /**
  * Send refund request notification to professional with fetched data
@@ -68,22 +67,23 @@ export async function sendRefundRequestEmail(refundId: string): Promise<void> {
   const reviewUrl = `${process.env.NEXT_PUBLIC_APP_URL}/refunds/${refundId}/review`;
   const serviceName = refund.appointments.bookings.booking_services[0]?.services?.name || 'Service';
 
-  const email = createRefundRequestNotificationEmail(
-    professionalAuth.user.email,
-    refund.professionals.first_name,
+  await sendRefundRequestProfessional(
+    [{ email: professionalAuth.user.email, name: refund.professionals.first_name }],
     {
-      refundId: refund.id,
-      clientName: `${refund.clients.first_name} ${refund.clients.last_name}`,
-      serviceName,
-      appointmentDate,
-      appointmentTime,
-      originalAmount: refund.original_amount,
+      professional_name: refund.professionals.first_name,
+      client_name: `${refund.clients.first_name} ${refund.clients.last_name}`,
+      service_name: serviceName,
+      original_amount: refund.original_amount,
       reason: refund.reason,
-      reviewUrl
+      review_url: reviewUrl,
+      date: appointmentDate,
+      time: appointmentTime,
+      appointment_id: refund.appointments.id,
+      appointment_details_url: reviewUrl,
+      website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+      support_email: process.env.BREVO_ADMIN_EMAIL!
     }
   );
-
-  await sendEmail(email);
 }
 
 /**
@@ -101,7 +101,10 @@ export async function sendRefundDeclineEmail(refundId: string): Promise<void> {
       professional_notes,
       original_amount,
       appointments!inner(
+        id,
+        start_time,
         bookings!inner(
+          id,
           booking_services(
             services(
               name
@@ -128,21 +131,35 @@ export async function sendRefundDeclineEmail(refundId: string): Promise<void> {
   const { data: clientAuth } = await supabase.auth.admin.getUserById(refund.clients.id);
   if (!clientAuth.user?.email) return;
 
-  const serviceName = refund.appointments.bookings.booking_services[0]?.services?.name || 'Service';
+  const appointmentDate = new Date(refund.appointments.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
-  const email = createRefundDeclineNotificationEmail(
-    clientAuth.user.email,
-    refund.clients.first_name,
+  const appointmentTime = new Date(refund.appointments.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  await sendRefundDeclineClient(
+    [{ email: clientAuth.user.email, name: refund.clients.first_name }],
     {
-      professionalName: `${refund.professionals.first_name} ${refund.professionals.last_name}`,
-      serviceName,
-      originalAmount: refund.original_amount,
-      ...(refund.declined_reason && { declinedReason: refund.declined_reason }),
-      ...(refund.professional_notes && { professionalNotes: refund.professional_notes })
+      client_name: refund.clients.first_name,
+      professional_name: `${refund.professionals.first_name} ${refund.professionals.last_name}`,
+      original_amount: refund.original_amount,
+      decline_reason: refund.declined_reason || 'No reason provided',
+      booking_id: refund.appointments.bookings.id,
+      appointment_id: refund.appointments.id,
+      date: appointmentDate,
+      time: appointmentTime,
+      appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${refund.appointments.id}`,
+      website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+      support_email: process.env.BREVO_ADMIN_EMAIL!
     }
   );
-
-  await sendEmail(email);
 }
 
 /**
@@ -161,7 +178,10 @@ export async function sendRefundCompletionEmails(refundId: string): Promise<void
       original_amount,
       professional_notes,
       appointments!inner(
+        id,
+        start_time,
         bookings!inner(
+          id,
           booking_services(
             services(
               name
@@ -193,38 +213,58 @@ export async function sendRefundCompletionEmails(refundId: string): Promise<void
 
   if (!clientAuth.user?.email || !professionalAuth.user?.email) return;
 
-  const serviceName = refund.appointments.bookings.booking_services[0]?.services?.name || 'Service';
   const clientName = `${refund.clients.first_name} ${refund.clients.last_name}`;
   const professionalName = `${refund.professionals.first_name} ${refund.professionals.last_name}`;
+  const appointmentDate = new Date(refund.appointments.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
-  // Create both emails
-  const clientEmail = createRefundCompletionClientEmail(
-    clientAuth.user.email,
-    refund.clients.first_name,
-    {
-      professionalName,
-      serviceName,
-      originalAmount: refund.original_amount,
-      refundAmount: refund.refund_amount || 0,
-      ...(refund.professional_notes && { professionalNotes: refund.professional_notes })
-    }
-  );
-
-  const professionalEmail = createRefundCompletionProfessionalEmail(
-    professionalAuth.user.email,
-    refund.professionals.first_name,
-    {
-      clientName,
-      serviceName,
-      originalAmount: refund.original_amount,
-      refundAmount: refund.refund_amount || 0,
-      transactionFee: refund.transaction_fee
-    }
-  );
+  const appointmentTime = new Date(refund.appointments.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
   // Send both emails
   await Promise.all([
-    sendEmail(clientEmail),
-    sendEmail(professionalEmail)
+    sendRefundCompletionClient(
+      [{ email: clientAuth.user.email, name: refund.clients.first_name }],
+      {
+        client_name: refund.clients.first_name,
+        professional_name: professionalName,
+        original_amount: refund.original_amount,
+        refund_amount: refund.refund_amount || 0,
+        reason: refund.professional_notes || 'Refund processed',
+        booking_id: refund.appointments.bookings.id,
+        appointment_id: refund.appointments.id,
+        date: appointmentDate,
+        time: appointmentTime,
+        appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${refund.appointments.id}`,
+        website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+        support_email: process.env.BREVO_ADMIN_EMAIL!
+      }
+    ),
+    sendRefundCompletionProfessional(
+      [{ email: professionalAuth.user.email, name: refund.professionals.first_name }],
+      {
+        client_name: clientName,
+        professional_name: refund.professionals.first_name,
+        original_amount: refund.original_amount,
+        refund_amount: refund.refund_amount || 0,
+        platform_fee: refund.transaction_fee,
+        net_refund: (refund.refund_amount || 0) - refund.transaction_fee,
+        reason: refund.professional_notes || 'Refund processed',
+        booking_id: refund.appointments.bookings.id,
+        appointment_id: refund.appointments.id,
+        date: appointmentDate,
+        time: appointmentTime,
+        appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${refund.appointments.id}`,
+        website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+        support_email: process.env.BREVO_ADMIN_EMAIL!
+      }
+    )
   ]);
 } 

@@ -86,14 +86,16 @@ export async function submitReview(
     }
 
     // Check if appointment exists and is completed
-    if (!booking.appointments_with_status || !booking.appointments_with_status.id) {
+    const appointment = Array.isArray(booking.appointments_with_status) 
+      ? booking.appointments_with_status[0] 
+      : booking.appointments_with_status;
+    
+    if (!appointment || !appointment.id) {
       return {
         success: false,
         error: 'No appointment found for this booking'
       };
     }
-
-    const appointment = booking.appointments_with_status;
     const appointmentId = appointment.id;
     
     if (!appointmentId) {
@@ -235,7 +237,10 @@ export async function getReviewStatus(
       };
     }
 
-    const appointment = booking.appointments_with_status;
+    const appointment = Array.isArray(booking.appointments_with_status) 
+      ? booking.appointments_with_status[0] 
+      : booking.appointments_with_status;
+    
     if (!appointment) {
       return {
         success: false,

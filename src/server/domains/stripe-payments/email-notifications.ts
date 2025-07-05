@@ -1,11 +1,11 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
-import { createBookingConfirmationProfessionalEmail, createBookingConfirmationClientEmail } from '@/lib/email/templates';
-import { sendEmail } from '@/lib/email';
 import { 
-  createPaymentConfirmationClientEmail,
-  createPaymentConfirmationProfessionalEmail
-} from '@/lib/email/templates';
+  sendBookingConfirmationClient,
+  sendBookingConfirmationProfessional,
+  sendPaymentConfirmationClient,
+  sendPaymentConfirmationProfessional
+} from '@/providers/brevo/templates';
 import { getBookingDetailsForConfirmation } from './db';
 
 // Create admin client for operations that need elevated permissions
@@ -164,35 +164,6 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Missing required booking data' };
     }
 
-    // Helper function to format address
-    const formatAddress = (addresses: {
-      street_address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      country?: string | null;
-    }[] | {
-      street_address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      country?: string | null;
-    } | null | undefined): string | null => {
-      if (!addresses) return null;
-      
-      const addr = Array.isArray(addresses) ? addresses[0] : addresses;
-      if (!addr) return null;
-      
-      const parts = [];
-      if (addr.street_address) parts.push(addr.street_address);
-      if (addr.city) parts.push(addr.city);
-      if (addr.state) parts.push(addr.state);
-      if (addr.country) parts.push(addr.country);
-      
-      return parts.length > 0 ? parts.join(', ') : null;
-    };
-
-    // Format professional address
-    const professionalAddress = formatAddress(professionalData.addresses);
-
     // Format appointment date and time
     const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -206,14 +177,6 @@ export async function sendBookingConfirmationEmails(
       minute: '2-digit',
       hour12: true,
     });
-
-    // Prepare services data with proper formatting
-    const servicesData = services.map((bs) => ({
-      name: bs.services?.name || 'Service',
-      description: bs.services?.description || '',
-      duration: bs.duration,
-      price: bs.price
-    }));
 
     // Calculate totals
     const subtotal = services.reduce((sum: number, bs) => sum + (bs.price || 0), 0);
@@ -230,176 +193,184 @@ export async function sendBookingConfirmationEmails(
 
     // Send professional email
     try {
-      const professionalEmailData: Parameters<typeof createBookingConfirmationProfessionalEmail>[2] = {
-        bookingId,
-        appointmentId,
-        appointmentDate,
-        appointmentTime,
-        clientName: `${clientData.first_name} ${clientData.last_name}`,
-        services: servicesData,
-        subtotal,
-        tipAmount,
-        professionalTotal,
-        isUncaptured,
-        ...(clientProfile?.phone_number && { clientPhone: clientProfile.phone_number }),
-        ...(bookingData.notes && { notes: bookingData.notes })
-      };
-
-      const professionalEmail = createBookingConfirmationProfessionalEmail(
-        professionalAuth.user.email,
-        `${professional.first_name} ${professional.last_name}`,
-        professionalEmailData
+      const result = await sendBookingConfirmationProfessional(
+        [{ email: professionalAuth.user.email, name: `${professional.first_name} ${professional.last_name}` }],
+        {
+          client_name: `${clientData.first_name} ${clientData.last_name}`,
+          client_phone: clientProfile?.phone_number || undefined,
+          professional_name: `${professional.first_name} ${professional.last_name}`,
+          subtotal,
+          tip_amount: tipAmount,
+          professional_total: professionalTotal,
+          booking_id: bookingId,
+          appointment_id: appointmentId,
+          date: appointmentDate,
+          time: appointmentTime,
+          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
+          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          support_email: process.env.BREVO_ADMIN_EMAIL!
+        }
       );
 
-      await sendEmail(professionalEmail);
-      console.log('Professional confirmation email sent successfully');
-      emailsSentSuccessfully++;
+      if (result.success) {
+        emailsSentSuccessfully++;
+        console.log('✅ Professional confirmation email sent:', result.messageId);
+      } else {
+        console.error('❌ Failed to send professional confirmation email:', result.error);
+      }
     } catch (error) {
-      console.error('Failed to send professional confirmation email:', error);
-      // Continue to try sending client email even if professional email fails
+      console.error('❌ Error sending professional confirmation email:', error);
     }
+
+    console.log('🚀 sendBookingConfirmationEmails called with:', {
+      bookingId,
+      appointmentId,
+      isUncaptured
+    });
 
     // Send client email
     try {
-      const clientEmailData: Parameters<typeof createBookingConfirmationClientEmail>[2] = {
-        bookingId,
-        appointmentId,
-        appointmentDate,
-        appointmentTime,
-        professionalName: `${professional.first_name} ${professional.last_name}`,
-        services: servicesData,
-        subtotal,
-        serviceFee,
-        tipAmount,
-        totalPaid,
-        isUncaptured,
-        ...(professionalData.phone_number && { professionalPhone: professionalData.phone_number }),
-        ...(professionalAddress && { professionalAddress }),
-        ...(bookingData.notes && { notes: bookingData.notes })
-      };
-
-      const clientEmail = createBookingConfirmationClientEmail(
-        clientAuth.user.email,
-        `${clientData.first_name} ${clientData.last_name}`,
-        clientEmailData
+      const result = await sendBookingConfirmationClient(
+        [{ email: clientAuth.user.email, name: `${clientData.first_name} ${clientData.last_name}` }],
+        {
+          client_name: `${clientData.first_name} ${clientData.last_name}`,
+          professional_name: `${professional.first_name} ${professional.last_name}`,
+          subtotal,
+          tip_amount: tipAmount,
+          total: totalPaid,
+          payment_method: 'Credit Card',
+          deposit_amount: isUncaptured ? totalPaid : 0,
+          balance_due: isUncaptured ? subtotal + serviceFee - totalPaid : 0,
+          balance_due_date: isUncaptured ? new Date(appointment.start_time).toISOString() : '',
+          booking_id: bookingId,
+          appointment_id: appointmentId,
+          date: appointmentDate,
+          time: appointmentTime,
+          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
+          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          support_email: process.env.BREVO_ADMIN_EMAIL!
+        }
       );
 
-      await sendEmail(clientEmail);
-      console.log('Client confirmation email sent successfully');
-      emailsSentSuccessfully++;
+      if (result.success) {
+        emailsSentSuccessfully++;
+        console.log('✅ Client confirmation email sent:', result.messageId);
+      } else {
+        console.error('❌ Failed to send client confirmation email:', result.error);
+      }
     } catch (error) {
-      console.error('Failed to send client confirmation email:', error);
+      console.error('❌ Error sending client confirmation email:', error);
     }
 
-    // Mark emails as sent in memory to prevent duplicates in this session
-    if (emailsSentSuccessfully > 0) {
+    // Add booking to sent tracker if both emails were sent successfully
+    if (emailsSentSuccessfully === 2) {
       emailsSentTracker.add(bookingId);
-      console.log('Marked confirmation emails as sent for booking:', bookingId);
     }
 
-    return { success: true };
+    return { success: emailsSentSuccessfully > 0 };
 
   } catch (error) {
-    console.error('Error sending booking confirmation emails:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
+    console.error('❌ Error in sendBookingConfirmationEmails:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 /**
- * Send payment confirmation emails after payment capture
+ * Send payment confirmation emails to both client and professional
  */
 export async function sendPaymentConfirmationEmails(
   bookingId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(`[EMAIL] Starting payment confirmation emails for booking: ${bookingId}`);
+    // Get booking details
+    const { booking, error: bookingError } = await getBookingDetailsForConfirmation(bookingId);
 
-    // Get booking details for confirmation emails
-    const bookingDetailsResult = await getBookingDetailsForConfirmation(bookingId);
-    
-    if (!bookingDetailsResult.success || !bookingDetailsResult.booking) {
-      console.error(`[EMAIL] Failed to get booking details: ${bookingDetailsResult.error}`);
-      return { 
-        success: false, 
-        error: bookingDetailsResult.error || 'Failed to get booking details' 
-      };
+    if (bookingError || !booking) {
+      console.error('Failed to fetch booking data for payment confirmation:', bookingError);
+      return { success: false, error: 'Failed to fetch booking data' };
     }
 
-    const booking = bookingDetailsResult.booking;
+    const {
+      clientEmail,
+      clientName,
+      professionalEmail,
+      professionalName,
+      appointmentDate,
+      appointmentTime,
+      totalAmount: subtotal,
+      tipAmount,
+      capturedAmount: totalPaid,
+    } = booking;
 
-    // Create client payment confirmation email
-    const clientEmail = createPaymentConfirmationClientEmail(
-      booking.clientEmail,
-      booking.clientName,
-      {
-        bookingId,
-        professionalName: booking.professionalName,
-        appointmentDate: booking.appointmentDate,
-        appointmentTime: booking.appointmentTime,
-        serviceName: booking.serviceName,
-        totalAmount: booking.totalAmount,
-        tipAmount: booking.tipAmount,
-        capturedAmount: booking.capturedAmount
+    const professionalTotal = subtotal + (tipAmount || 0);
+    let emailsSentSuccessfully = 0;
+
+    // Send client email
+    try {
+      const result = await sendPaymentConfirmationClient(
+        [{ email: clientEmail, name: clientName }],
+        {
+          client_name: clientName,
+          professional_name: professionalName,
+          payment_method: 'Credit Card',
+          subtotal,
+          tip_amount: tipAmount || 0,
+          total: totalPaid,
+          booking_id: bookingId,
+          appointment_id: bookingId,
+          date: appointmentDate,
+          time: appointmentTime,
+          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${bookingId}`,
+          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          support_email: process.env.BREVO_ADMIN_EMAIL!
+        }
+      );
+
+      if (result.success) {
+        emailsSentSuccessfully++;
+        console.log('✅ Client payment confirmation email sent:', result.messageId);
+      } else {
+        console.error('❌ Failed to send client payment confirmation email:', result.error);
       }
-    );
+    } catch (error) {
+      console.error('❌ Error sending client payment confirmation email:', error);
+    }
 
-    // Create professional payment notification email
-    const professionalEmail = createPaymentConfirmationProfessionalEmail(
-      booking.professionalEmail,
-      booking.professionalName,
-      {
-        bookingId,
-        clientName: booking.clientName,
-        appointmentDate: booking.appointmentDate,
-        appointmentTime: booking.appointmentTime,
-        serviceName: booking.serviceName,
-        totalAmount: booking.totalAmount,
-        tipAmount: booking.tipAmount,
-        capturedAmount: booking.capturedAmount
+    // Send professional email
+    try {
+      const result = await sendPaymentConfirmationProfessional(
+        [{ email: professionalEmail, name: professionalName }],
+        {
+          client_name: clientName,
+          professional_name: professionalName,
+          payment_method: 'Credit Card',
+          subtotal,
+          tip_amount: tipAmount || 0,
+          professional_total: professionalTotal,
+          booking_id: bookingId,
+          appointment_id: bookingId,
+          date: appointmentDate,
+          time: appointmentTime,
+          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${bookingId}`,
+          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          support_email: process.env.BREVO_ADMIN_EMAIL!
+        }
+      );
+
+      if (result.success) {
+        emailsSentSuccessfully++;
+        console.log('✅ Professional payment confirmation email sent:', result.messageId);
+      } else {
+        console.error('❌ Failed to send professional payment confirmation email:', result.error);
       }
-    );
-
-    // Send emails using the existing sendEmail function
-    const [clientEmailResult, professionalEmailResult] = await Promise.allSettled([
-      sendEmail(clientEmail),
-      sendEmail(professionalEmail)
-    ]);
-
-    // Check results
-    const errors: string[] = [];
-    
-    if (clientEmailResult.status === 'rejected') {
-      console.error(`[EMAIL] Failed to send client payment confirmation:`, clientEmailResult.reason);
-      errors.push(`Client email failed: ${clientEmailResult.reason}`);
-    } else {
-      console.log(`[EMAIL] ✅ Client payment confirmation sent to: ${booking.clientEmail}`);
+    } catch (error) {
+      console.error('❌ Error sending professional payment confirmation email:', error);
     }
 
-    if (professionalEmailResult.status === 'rejected') {
-      console.error(`[EMAIL] Failed to send professional payment notification:`, professionalEmailResult.reason);
-      errors.push(`Professional email failed: ${professionalEmailResult.reason}`);
-    } else {
-      console.log(`[EMAIL] ✅ Professional payment notification sent to: ${booking.professionalEmail}`);
-    }
-
-    if (errors.length > 0) {
-      return { 
-        success: false, 
-        error: `Some emails failed: ${errors.join(', ')}` 
-      };
-    }
-
-    console.log(`[EMAIL] ✅ All payment confirmation emails sent successfully for booking: ${bookingId}`);
-    return { success: true };
+    return { success: emailsSentSuccessfully > 0 };
 
   } catch (error) {
-    console.error(`[EMAIL] Error sending payment confirmation emails for booking ${bookingId}:`, error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
+    console.error('❌ Error in sendPaymentConfirmationEmails:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 } 

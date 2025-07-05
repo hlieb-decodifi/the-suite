@@ -69,6 +69,10 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
       sendSmtpEmail.templateId = templateId;
       sendSmtpEmail.to = to;
       sendSmtpEmail.params = params;
+      sendSmtpEmail.sender = { 
+        email: process.env.BREVO_SENDER_EMAIL || 'support@the-suite.com',
+        name: 'The Suite Team'
+      };
 
       await apiInstance.sendTransacEmail(sendSmtpEmail);
       
@@ -91,6 +95,7 @@ export async function sendBookingCancellationClient(
   to: EmailRecipient[],
   params: BookingCancellationClientParams
 ): Promise<EmailResult> {
+  console.log('CANCELLATION CLIENT', {to, params});
   return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT, to, params);
 }
 
@@ -98,6 +103,7 @@ export async function sendBookingCancellationProfessional(
   to: EmailRecipient[],
   params: BookingCancellationProfessionalParams
 ): Promise<EmailResult> {
+  console.log('CANCELLATION PROFESSIONAL', {to, params});
   return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL, to, params);
 }
 

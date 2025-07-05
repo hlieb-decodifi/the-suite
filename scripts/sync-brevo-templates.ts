@@ -73,6 +73,10 @@ async function syncTemplateToBrevo(template: EmailTemplate) {
       (t) => t.tag === template.tag
     );
 
+    // if (template.tag === 'BookingConfirmationClient') {
+    //   console.log(template.html_content);
+    // }
+
     const templateData = {
       sender: {
         name: template.sender_name,
@@ -80,7 +84,7 @@ async function syncTemplateToBrevo(template: EmailTemplate) {
       },
       templateName: template.name,
       subject: template.subject,
-      htmlContent: template.html_content,
+      htmlContent: template.html_content.trim(),
       replyTo: template.reply_to,
       toField: template.to_field,
       tag: template.tag,
@@ -102,10 +106,12 @@ async function syncTemplateToBrevo(template: EmailTemplate) {
         }
       );
 
+      const responseText = await updateResponse.text();
+      console.log(`Update response for ${template.name} (Status ${updateResponse.status}):`, responseText);
+      
       if (!updateResponse.ok) {
-        const errorData = await updateResponse.json().catch(() => ({}));
         throw new Error(
-          `Failed to update template: ${template.name}. Status: ${updateResponse.status}. Error: ${JSON.stringify(errorData)}`
+          `Failed to update template: ${template.name}. Status: ${updateResponse.status}. Response: ${responseText}`
         );
       }
 
@@ -208,5 +214,4 @@ async function main() {
   }
 }
 
-main(); 
-main(); 
+main();

@@ -1,22 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
 import { stripe } from '@/lib/stripe/server';
-import { revalidatePath } from 'next/cache';
-import { sendEmail } from '@/lib/email';
+import { createClient } from '@/lib/supabase/server';
 import {
-  createBookingCancellationClientEmail,
-  createBookingCancellationProfessionalEmail,
-  createNoShowNotificationClientEmail,
-  createNoShowNotificationProfessionalEmail,
-  createCancellationPolicyChargeClientEmail,
-  createCancellationPolicyChargeProfessionalEmail,
-} from '@/lib/email/templates';
+  sendBookingCancellationClient,
+  sendBookingCancellationProfessional,
+  sendCancellationPolicyChargeClient,
+  sendCancellationPolicyChargeProfessional,
+  sendNoShowNotificationClient,
+  sendNoShowNotificationProfessional,
+} from '@/providers/brevo/templates';
+import { revalidatePath } from 'next/cache';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { Database } from '@supabase/types';
 
-// Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
@@ -32,27 +30,105 @@ function createSupabaseAdminClient() {
   return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
-type Appointment = {
+// Database types
+type AppointmentBase = {
   id: string;
-  date: string;
-  status: string | null;
-  computed_status: string | null;
-  end_time: string;
   booking_id: string;
+  status: 'active' | 'completed' | 'cancelled' | 'ongoing';
+  start_time: string;
+  end_time: string;
   created_at: string;
   updated_at: string;
-  start_time: string;
+  computed_status?: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+}
+
+type ProfessionalProfile = {
+  id: string;
+  user_id: string;
+  cancellation_policy_enabled: boolean;
+  stripe_account_id?: string;
+  cancellation_24h_charge_percentage: number;
+  cancellation_48h_charge_percentage: number;
+  users: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+}
+
+type BookingService = {
+  id: string;
+  price: number;
+  services?: {
+    name: string;
+  };
 }
 
 type BookingPayment = {
+  id: string;
   amount: number;
-  tip_amount?: number;
+  tip_amount: number;
+  service_fee?: number;
+  status: 'incomplete' | 'pending' | 'completed' | 'failed' | 'refunded' | 'partially_refunded' | 'deposit_paid' | 'awaiting_balance' | 'authorized' | 'pre_auth_scheduled';
+  stripe_payment_intent_id?: string;
+  stripe_payment_method_id?: string;
   payment_methods?: {
     name: string;
     is_online: boolean;
   };
-  status: string;
-  stripe_payment_intent_id?: string;
+}
+
+// Query result types
+type BookingQueryResult = {
+  id: string;
+  status: 'pending_payment' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  client_id: string;
+  professional_profile_id: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  appointments: AppointmentBase[];
+  appointments_with_status?: AppointmentBase[];
+  professional_profiles: ProfessionalProfile;
+  clients: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  booking_services: BookingService[];
+  booking_payments?: BookingPayment[];
+}
+
+type AppointmentQueryResult = AppointmentBase & {
+  bookings: {
+    id: string;
+    status: 'pending_payment' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
+    client_id: string;
+    professional_profile_id: string;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+    professional_profiles: {
+      id: string;
+      user_id: string;
+      users: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        email: string;
+      };
+    };
+    clients: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+    };
+    booking_services: BookingService[];
+    booking_payments?: BookingPayment[];
+  };
 }
 
 /**
@@ -76,7 +152,11 @@ export async function cancelBookingAction(
       .from('bookings')
       .select(`
         *,
-        appointments!inner(*),
+        appointments!inner(
+          id,
+          status,
+          start_time
+        ),
         professional_profiles!inner(
           cancellation_policy_enabled,
           users!inner(id, first_name, last_name)
@@ -104,12 +184,16 @@ export async function cancelBookingAction(
       return { success: false, error: 'Booking not found' };
     }
 
-    const appointment = booking.appointments;
+    // Get the first appointment since we queried with !inner
+    const appointment = booking.appointments[0];
+    if (!appointment) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
-     
     const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
-    const payment = booking.booking_payments;
+    const payment = Array.isArray(booking.booking_payments) && booking.booking_payments.length > 0 ? booking.booking_payments[0] : undefined;
 
     // Check authorization
     const isProfessional = user.id === professionalUser.id;
@@ -216,8 +300,10 @@ export async function cancelBookingAction(
       }
     }
 
+    console.log('Sending cancellation emails', booking); 
+
     // Send email notifications
-    await sendCancellationEmails(booking, cancellationReason);
+    await sendCancellationEmails(booking as any, cancellationReason);
 
     // Revalidate the booking detail page to ensure fresh data
     revalidatePath(`/bookings/${appointment.id}`);
@@ -266,7 +352,14 @@ export async function canCancelBookingAction(
       return { canCancel: false, reason: 'Booking not found' };
     }
 
-    const appointment = booking.appointments_with_status;
+    const appointment = Array.isArray(booking.appointments_with_status) 
+      ? booking.appointments_with_status[0] 
+      : booking.appointments_with_status;
+
+    if (!appointment) {
+      return { canCancel: false, reason: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
      
     const professionalUser = professionalProfile.users;
@@ -308,111 +401,69 @@ export async function canCancelBookingAction(
 /**
  * Send cancellation email notifications
  */
-async function sendCancellationEmails(booking: any, cancellationReason: string) {
-  const adminSupabase = createSupabaseAdminClient();
+async function sendCancellationEmails(booking: BookingQueryResult, cancellationReason: string): Promise<void> {
+  const adminSupabase = createSupabaseAdminClient(); 
 
-  try {
-    // Handle appointments array
-    const appointments = booking.appointments as Appointment[];
-    if (!appointments || appointments.length === 0) {
-      console.error('No appointments found for booking');
-      return;
-    }
-    const appointment = appointments[0];
-    if (!appointment) {
-      console.error('First appointment is undefined');
-      return;
-    }
+  const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(booking.clients.id);     
+  const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(booking.professional_profiles.users.id);
 
-    const professionalProfile = booking.professional_profiles;
-     
-    const professionalUser = professionalProfile.users;
-    const clientUser = booking.clients;
-    const clientProfile = clientUser.client_profiles;
-    const bookingServices = booking.booking_services || [];
-    const payment = booking.booking_payments as BookingPayment | undefined;
+  const appointment = booking.appointments[0];
+  if (!appointment) throw new Error('Appointment not found');
+  
+  const professionalUser = booking.professional_profiles.users;
+  const clientUser = booking.clients;
 
-    // Get user emails using admin client
-    const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
-    const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(professionalUser.id);
+  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
-    if (!clientAuth.user?.email || !professionalAuth.user?.email) {
-      console.error('Failed to get user emails for cancellation notifications');
-      return;
-    }
+  const baseParams = {
+    booking_id: booking.id,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
 
-    // Prepare services data
-    const servicesData = bookingServices.map((bs: any) => ({
-      name: bs.services?.name || 'Service',
-      price: bs.price || 0
-    }));
+  console.log('APPOINTMENT', baseParams.appointment_details_url);
 
-    // Prepare refund info if payment exists
-    // For regular cancellations: Tips (100%) + Service amount (100%) - Suite fee NOT refunded (platform keeps configured service fee)
-    const serviceAmount = bookingServices.reduce((sum: number, bs: any) => sum + bs.price, 0);
-    
-    // Note: Service fee is kept by platform and not refunded
-    const refundInfo = payment ? {
-      originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment
-      refundAmount: (payment.tip_amount || 0) + serviceAmount, // Tips (100%) + Service amount (100%) - Suite fee stays with platform
-      status: 'Processing'
-    } : undefined;
-
-    // Send client email
-    const clientEmail = createBookingCancellationClientEmail(
-      clientAuth.user.email,
-      `${clientUser.first_name} ${clientUser.last_name}`,
+  // Send cancellation emails to both client and professional
+  await Promise.all([
+    sendBookingCancellationClient(
+      [{ 
+        email: clientAuth.user?.email || '', 
+        name: `${clientUser.first_name} ${clientUser.last_name}` 
+      }],
       {
-        bookingId: booking.id,
-        appointmentId: appointment.id,
-        appointmentDate: appointment.date,
-        professionalName: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        cancellationReason,
-        services: servicesData,
-        payment: payment ? {
-          method: {
-            name: payment.payment_methods?.name || 'Unknown',
-            is_online: payment.payment_methods?.is_online || false
-          }
-        } : undefined,
-        refundInfo
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        cancellation_reason: cancellationReason,
+        ...baseParams
       }
-    );
-
-    // Send professional email
-    const professionalEmail = createBookingCancellationProfessionalEmail(
-      professionalAuth.user.email,
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
+    ),
+    sendBookingCancellationProfessional(
+      [{ 
+        email: professionalAuth.user?.email || '', 
+        name: `${professionalUser.first_name} ${professionalUser.last_name}` 
+      }],
       {
-        bookingId: booking.id,
-        appointmentId: appointment.id,
-        appointmentDate: appointment.date,
-        professionalName: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        clientName: `${clientUser.first_name} ${clientUser.last_name}`,
-        clientPhone: clientProfile?.phone_number,
-        cancellationReason,
-        services: servicesData,
-        payment: payment ? {
-          method: {
-            name: payment.payment_methods?.name || 'Unknown',
-            is_online: payment.payment_methods?.is_online || false
-          }
-        } : undefined,
-        refundInfo
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        cancellation_reason: cancellationReason,
+        ...baseParams
       }
-    );
-
-    // Send emails - these functions return EmailTemplate objects
-    await Promise.allSettled([
-      sendEmail(clientEmail),
-      sendEmail(professionalEmail)
-    ]);
-
-    console.log('Cancellation notification emails sent successfully');
-
-  } catch (error) {
-    console.error('Error sending cancellation notifications:', error);
-  }
+    )
+  ]);
 }
 
 /**
@@ -432,7 +483,7 @@ export async function markNoShowAction(
     }
 
     // Get appointment with booking and professional data
-    const { data: appointment, error } = await supabase
+    const { data: appointmentData, error } = await supabase
       .from('appointments')
       .select(`
         *,
@@ -461,16 +512,19 @@ export async function markNoShowAction(
       .eq('id', appointmentId)
       .single();
 
-    if (error || !appointment) {
+    if (error || !appointmentData) {
       return { success: false, error: 'Appointment not found' };
     }
 
+    const appointment = appointmentData;
     const booking = appointment.bookings;
     const professionalProfile = booking.professional_profiles;
-    const payment = booking.booking_payments;
+    const payment = Array.isArray(booking.booking_payments) 
+      ? booking.booking_payments[0] 
+      : booking.booking_payments;
 
     // Only professionals can mark no-show
-    if (user.id !== professionalProfile.users.id) {
+    if (user.id !== professionalProfile.user_id) {
       return { success: false, error: 'Only the professional can mark appointments as no-show' };
     }
 
@@ -548,7 +602,7 @@ export async function markNoShowAction(
     }
 
     // Send notification emails
-    await sendNoShowEmails(appointment, chargeAmount, chargePercentage);
+    await sendNoShowEmails(appointment as any, chargeAmount);
 
     // Revalidate the booking detail page
     revalidatePath(`/bookings/${appointmentId}`);
@@ -594,41 +648,30 @@ export async function cancelWithPolicyAction(
         appointments!inner(*),
         professional_profiles!inner(
           cancellation_policy_enabled,
+          stripe_account_id,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
-          stripe_account_id,
           users!inner(id, first_name, last_name)
         ),
-        clients:users!client_id(id, first_name, last_name, client_profiles(*)),
-        booking_services(
-          id,
-          price,
-          services(name)
-        ),
-        booking_payments(
-          id,
-          amount,
-          tip_amount,
-          service_fee,
-          status,
-          stripe_payment_intent_id,
-          stripe_payment_method_id,
-          payment_methods(name, is_online)
-        )
+        clients:users!client_id(id, first_name, last_name),
+        booking_services(price)
       `)
       .eq('id', bookingId)
-      .single();
+      .single() as { data: BookingQueryResult | null; error: any };
 
     if (error || !booking) {
       return { success: false, error: 'Booking not found' };
     }
 
-    const appointment = booking.appointments;
+    const appointments = Array.isArray(booking.appointments) ? booking.appointments : [booking.appointments];
+    const appointment = appointments[0];
+    if (!appointment) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
-    const payment = booking.booking_payments;
+    const payment = booking.booking_payments?.[0];
 
     // Only clients can use cancellation policy
     if (user.id !== clientUser.id) {
@@ -846,7 +889,10 @@ export async function cancelWithPolicyAction(
     await sendCancellationPolicyEmails(booking, cancellationReason, chargeAmount, chargePercentage);
 
     // Revalidate the booking detail page
-    revalidatePath(`/bookings/${appointment.id}`);
+    const firstAppointment = Array.isArray(booking.appointments) ? booking.appointments[0] : booking.appointments;
+    if (firstAppointment) {
+      revalidatePath(`/bookings/${firstAppointment.id}`);
+    }
 
     return { 
       success: true, 
@@ -976,8 +1022,12 @@ export async function getCancellationPolicyAction(
       return { hasPolicy: false, error: 'Booking not found' };
     }
 
+    const appointment = booking.appointments[0] as AppointmentQueryResult;
+    if (!appointment) {
+      return { hasPolicy: false, error: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
-    const appointment = booking.appointments;
 
     if (!professionalProfile.cancellation_policy_enabled) {
       return { hasPolicy: false };
@@ -1015,187 +1065,122 @@ export async function getCancellationPolicyAction(
   }
 }
 
-// Email sending functions
- 
-async function sendNoShowEmails(appointment: any, chargeAmount: number, chargePercentage: number) {
-  try {
-     
-    const booking = appointment.bookings as any;
-     
-    const professionalProfile = booking.professional_profiles as any;
-     
-    const professionalUser = professionalProfile.users as any;
-     
-    const clientUser = booking.clients as any;
-    
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    const appointmentTime = `${appointment.start_time} - ${appointment.end_time}`;
-    
-    const services = booking.booking_services.map((bs: any) => ({
-      name: bs.services.name,
-      price: bs.price
-    }));
-    
-    const chargeInfo = chargeAmount > 0 ? {
-      amount: chargeAmount,
-      percentage: chargePercentage,
-      originalAmount: booking.booking_services.reduce((sum: number, bs: any) => sum + bs.price, 0)
-    } : undefined;
-    
-    // Send client notification
-    const clientEmail = await createNoShowNotificationClientEmail(
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      appointmentDate,
-      appointmentTime,
-      appointment.id,
-      services,
-      chargeInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || '',
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
-      subject: clientEmail.subject,
-      htmlContent: clientEmail.html,
-      textContent: clientEmail.text,
-    });
-    
-    // Send professional notification
-    const professionalEmail = await createNoShowNotificationProfessionalEmail(
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      clientUser.client_profiles?.phone,
-      appointmentDate,
-      appointmentTime,
-      appointment.id,
-      services,
-      chargeInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
-      subject: professionalEmail.subject,
-      htmlContent: professionalEmail.html,
-      textContent: professionalEmail.text,
-    });
-    
-    console.log('No-show notification emails sent successfully');
-  } catch (error) {
-    console.error('Error sending no-show notification emails:', error);
-  }
+/**
+ * Send no-show notification emails to both client and professional
+ */
+async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmount: number): Promise<void> {
+  const booking = appointment.bookings;
+  if (!booking) throw new Error('Booking not found');
+
+  const professionalUser = booking.professional_profiles.users;
+  const clientUser = booking.clients;
+
+  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const baseParams = {
+    booking_id: booking.id,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  await Promise.all([
+    sendNoShowNotificationClient(
+      [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        no_show_fee: chargeAmount,
+        ...baseParams
+      }
+    ),
+    sendNoShowNotificationProfessional(
+      [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        no_show_fee: chargeAmount,
+        ...baseParams
+      }
+    )
+  ]);
 }
 
-async function sendCancellationPolicyEmails(booking: any, reason: string, chargeAmount: number, chargePercentage: number) {
-  const adminSupabase = createSupabaseAdminClient();
+/**
+ * Send cancellation policy charge emails to both client and professional
+ */
+async function sendCancellationPolicyEmails(
+  booking: BookingQueryResult,
+  reason: string,
+  chargeAmount: number,
+  chargePercentage: number
+): Promise<void> {
+  const appointment = booking.appointments[0];
+  if (!appointment) throw new Error('Appointment not found');
   
-  try {
-    const appointment = booking.appointments as any;
-    const professionalProfile = booking.professional_profiles as any;
-    const professionalUser = professionalProfile.users as any;
-    const clientUser = booking.clients as any;
-    
-    // Get user emails using admin client
-    const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
-    const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(professionalUser.id);
+  const professionalUser = booking.professional_profiles.users;
+  const clientUser = booking.clients;
+  const serviceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
+  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
-    if (!clientAuth.user?.email || !professionalAuth.user?.email) {
-      console.error('Failed to get user emails for cancellation policy notifications');
-      return;
-    }
-    
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    const appointmentTime = `${appointment.start_time} - ${appointment.end_time}`;
-    
-    const services = booking.booking_services.map((bs: any) => ({
-      name: bs.services.name,
-      price: bs.price
-    }));
-    
-    const serviceAmount = booking.booking_services.reduce((sum: number, bs: any) => sum + bs.price, 0);
-    
-    // Calculate time description
-    const appointmentDateTime = new Date(appointment.end_time);
-    const hoursUntil = Math.round((appointmentDateTime.getTime() - new Date().getTime()) / (1000 * 60 * 60));
-    const timeDescription = hoursUntil < 24 ? 'Less than 24 hours' : 
-                           hoursUntil < 48 ? 'Less than 48 hours' : 
-                           'More than 48 hours';
-    
-    const policyInfo = {
-      chargeAmount,
-      chargePercentage,
-      serviceAmount,
-      timeDescription
-    };
-    
-    const payment = booking.booking_payments as any;
-    
-    // Note: Service fee is kept by platform and not included in refund calculation
-    
-    const refundInfo = payment ? {
-      originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment  
-      refundAmount: (payment.tip_amount || 0) + (serviceAmount - chargeAmount), // Tips (100%) + Service amount after cancellation fee (Suite fee NOT refunded)
-      status: 'Processing'
-    } : undefined;
-    
-    // Send client notification
-    const clientEmail = await createCancellationPolicyChargeClientEmail(
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      appointmentDate,
-      appointmentTime,
-      booking.id,
-      reason,
-      services,
-      policyInfo,
-      refundInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: clientAuth.user.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
-      subject: clientEmail.subject,
-      htmlContent: clientEmail.html,
-      textContent: clientEmail.text,
-    });
-    
-    // Send professional notification
-    const professionalEmail = await createCancellationPolicyChargeProfessionalEmail(
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      clientUser.client_profiles?.phone,
-      appointmentDate,
-      appointmentTime,
-      booking.id,
-      reason,
-      services,
-      policyInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: professionalAuth.user.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
-      subject: professionalEmail.subject,
-      htmlContent: professionalEmail.html,
-      textContent: professionalEmail.text,
-    });
-    
-    console.log('Cancellation policy notification emails sent successfully');
-  } catch (error) {
-    console.error('Error sending cancellation policy notification emails:', error);
-  }
+  const baseParams = {
+    booking_id: booking.id,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  const policyInfo = {
+    charge_amount: chargeAmount,
+    charge_percentage: chargePercentage,
+    service_amount: serviceAmount,
+    time_description: 'Less than 24 hours' // TODO: Calculate this based on appointment time
+  };
+
+  await Promise.all([
+    sendCancellationPolicyChargeClient(
+      [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        policy_info: policyInfo,
+        ...baseParams
+      }
+    ),
+    sendCancellationPolicyChargeProfessional(
+      [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        policy_info: policyInfo,
+        ...baseParams
+      }
+    )
+  ]);
 } 

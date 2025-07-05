@@ -35,7 +35,12 @@ export async function createBookingWithStripePayment(
       .single();
     
     // First, create the booking using the existing flow
-    const bookingResult = await createBooking(formData, professionalProfileId);
+    // Add dateWithTime property required by createBooking
+    const [hours, minutes] = formData.timeSlot.split(':');
+    const dateWithTime = new Date(formData.date);
+    dateWithTime.setHours(parseInt(hours || '0', 10), parseInt(minutes || '0', 10), 0, 0);
+    
+    const bookingResult = await createBooking({ ...formData, dateWithTime }, professionalProfileId);
     
     if (!bookingResult.bookingId) {
       return {
