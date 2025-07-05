@@ -2,12 +2,10 @@
 
 import { 
   EmailRecipient,
-  BookingCancellationParams,
-  BookingConfirmationParams,
-  PaymentConfirmationParams,
-  sendBookingCancellation,
-  sendBookingConfirmation,
-  sendPaymentConfirmation
+  BookingCancellationClientParams,
+  BookingCancellationProfessionalParams,
+  sendBookingCancellationClient,
+  sendBookingCancellationProfessional,
 } from '@/providers/brevo';
 import { TEMPLATE_IDS } from '@/providers/brevo/constants';
 
@@ -38,57 +36,51 @@ export async function sendTemplateTest(
 
     let result;
 
+    const baseParams = {
+      booking_id: 'b-123xyz',
+      date: 'August 15, 2024',
+      time: '2:30 PM',
+      appointment_id: 'appt-123',
+      appointment_details_url: 'https://example.com/bookings',
+      website_url: 'https://example.com',
+      support_email: 'support@example.com',
+      cancellation_reason: 'Unexpected scheduling conflict',
+      payment: {
+        method: {
+          name: 'Credit Card',
+          is_online: true,
+        },
+      },
+      refund_info: {
+        original_amount: 110.00,
+        refund_amount: 110.00,
+        status: 'Processed',
+      },
+      services: [
+        { name: 'Haircut & Style', price: 85 },
+        { name: 'Beard Trim', price: 25 },
+      ],
+    };
+
     switch (templateId) {
-      case TEMPLATE_IDS.BOOKING_CANCELLATION: {
-        const params: BookingCancellationParams = {
+      case TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT: {
+        const params: BookingCancellationClientParams = {
+          ...baseParams,
+          client_name: 'John Doe',
           professional_name: 'Alex Starr',
-          link: 'https://example.com/booking/123',
-          date: 'August 15, 2024',
-          time: '2:30 PM',
-          booking_id: 'b-123xyz',
-          payment_method: 'Credit Card (Online)',
-          services: [
-            { name: 'Haircut & Style', price: '85.00' },
-            { name: 'Beard Trim', price: '25.00' },
-            { name: 'Hot Towel Shave', price: '45.00' },
-          ],
-          cancellation_reason: 'Unexpected scheduling conflict'
         };
-        result = await sendBookingCancellation([recipient], params);
+        result = await sendBookingCancellationClient([recipient], params);
         break;
       }
 
-      case TEMPLATE_IDS.BOOKING_CONFIRMATION: {
-        const params: BookingConfirmationParams = {
-          professional_name: 'Alex Starr',
+      case TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL: {
+        const params: BookingCancellationProfessionalParams = {
+          ...baseParams,
           client_name: 'John Doe',
-          date: 'August 15, 2024',
-          time: '2:30 PM',
-          booking_id: 'b-123xyz',
-          services: [
-            { name: 'Haircut & Style', price: '85.00', duration: '60' }
-          ],
-          total_amount: '85.00',
-          deposit_amount: '25.00',
-          balance_due: '60.00',
-          appointment_link: 'https://example.com/booking/123'
-        };
-        result = await sendBookingConfirmation([recipient], params);
-        break;
-      }
-
-      case TEMPLATE_IDS.PAYMENT_CONFIRMATION: {
-        const params: PaymentConfirmationParams = {
+          client_phone: '+1 234 567 8900',
           professional_name: 'Alex Starr',
-          client_name: 'John Doe',
-          date: 'August 15, 2024',
-          time: '2:30 PM',
-          booking_id: 'b-123xyz',
-          amount: '85.00',
-          payment_method: 'Credit Card',
-          receipt_link: 'https://example.com/receipt/123'
         };
-        result = await sendPaymentConfirmation([recipient], params);
+        result = await sendBookingCancellationProfessional([recipient], params);
         break;
       }
 

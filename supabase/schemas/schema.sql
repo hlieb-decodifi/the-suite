@@ -2485,5 +2485,54 @@ create trigger handle_updated_at before update on appointments
 * RLS policies for appointments
 */
 
+/**
+* EMAIL TEMPLATES
+* Stores email template configurations for various system notifications
+*/
+create table email_templates (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  tag text not null,
+  sender_name text not null,
+  sender_email text not null,
+  reply_to text,
+  subject text not null,
+  html_content text not null,
+  to_field text not null,
+  is_active boolean default true not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure unique template names and tags
+  constraint unique_template_name unique (name),
+  constraint unique_template_tag unique (tag)
+);
+alter table email_templates enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_email_templates_tag on email_templates(tag);
+create index if not exists idx_email_templates_is_active on email_templates(is_active);
+
+-- RLS policies for email templates
+create policy "Anyone can view active email templates"
+  on email_templates for select
+  using (is_active = true);
+
+-- Only admins can manage email templates
+create policy "Admins can manage email templates"
+  on email_templates for all
+  using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+-- Add trigger for updated_at
+create trigger handle_updated_at before update on email_templates
+  for each row execute procedure moddatetime (updated_at);
+
 
 

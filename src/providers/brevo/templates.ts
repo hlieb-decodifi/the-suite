@@ -4,9 +4,24 @@ import { initEmailSender, getEmailMethod, getTemplateContent } from './config';
 import { 
   EmailRecipient,
   EmailResult,
-  BookingCancellationParams,
-  BookingConfirmationParams,
-  PaymentConfirmationParams
+  BookingCancellationClientParams,
+  BookingCancellationProfessionalParams,
+  BookingConfirmationClientParams,
+  BookingConfirmationProfessionalParams,
+  PaymentConfirmationClientParams,
+  PaymentConfirmationProfessionalParams,
+  BalanceNotificationParams,
+  RefundRequestProfessionalParams,
+  RefundCompletionClientParams,
+  RefundCompletionProfessionalParams,
+  RefundDeclineClientParams,
+  ReviewTipNotificationParams,
+  ContactInquiryAdminParams,
+  ContactInquiryConfirmationParams,
+  CancellationPolicyChargeClientParams,
+  CancellationPolicyChargeProfessionalParams,
+  NoShowNotificationClientParams,
+  NoShowNotificationProfessionalParams,
 } from './types';
 import { TEMPLATE_IDS } from './constants';
 
@@ -71,23 +86,135 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
   }
 }
 
-export async function sendBookingCancellation(
+// Booking Related
+export async function sendBookingCancellationClient(
   to: EmailRecipient[],
-  params: BookingCancellationParams
+  params: BookingCancellationClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION, to, params);
+  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT, to, params);
 }
 
-export async function sendBookingConfirmation(
+export async function sendBookingCancellationProfessional(
   to: EmailRecipient[],
-  params: BookingConfirmationParams
+  params: BookingCancellationProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CONFIRMATION, to, params);
+  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL, to, params);
 }
 
-export async function sendPaymentConfirmation(
+export async function sendBookingConfirmationClient(
   to: EmailRecipient[],
-  params: PaymentConfirmationParams
+  params: BookingConfirmationClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.PAYMENT_CONFIRMATION, to, params);
-} 
+  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT, to, params);
+}
+
+export async function sendBookingConfirmationProfessional(
+  to: EmailRecipient[],
+  params: BookingConfirmationProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CONFIRMATION_PROFESSIONAL, to, params);
+}
+
+// Payment Related
+export async function sendPaymentConfirmationClient(
+  to: EmailRecipient[],
+  params: PaymentConfirmationClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.PAYMENT_CONFIRMATION_CLIENT, to, params);
+}
+
+export async function sendPaymentConfirmationProfessional(
+  to: EmailRecipient[],
+  params: PaymentConfirmationProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.PAYMENT_CONFIRMATION_PROFESSIONAL, to, params);
+}
+
+export async function sendBalanceNotification(
+  to: EmailRecipient[],
+  params: BalanceNotificationParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.BALANCE_NOTIFICATION, to, params);
+}
+
+// Refund Related
+export async function sendRefundRequestProfessional(
+  to: EmailRecipient[],
+  params: RefundRequestProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.REFUND_REQUEST_PROFESSIONAL, to, params);
+}
+
+export async function sendRefundCompletionClient(
+  to: EmailRecipient[],
+  params: RefundCompletionClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.REFUND_COMPLETION_CLIENT, to, params);
+}
+
+export async function sendRefundCompletionProfessional(
+  to: EmailRecipient[],
+  params: RefundCompletionProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.REFUND_COMPLETION_PROFESSIONAL, to, params);
+}
+
+export async function sendRefundDeclineClient(
+  to: EmailRecipient[],
+  params: RefundDeclineClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.REFUND_DECLINE_CLIENT, to, params);
+}
+
+// Review Related
+export async function sendReviewTipNotification(
+  to: EmailRecipient[],
+  params: ReviewTipNotificationParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.REVIEW_TIP_NOTIFICATION, to, params);
+}
+
+// Contact Related
+export async function sendContactInquiryAdmin(
+  to: EmailRecipient[],
+  params: ContactInquiryAdminParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.CONTACT_INQUIRY_ADMIN, to, params);
+}
+
+export async function sendContactInquiryConfirmation(
+  to: EmailRecipient[],
+  params: ContactInquiryConfirmationParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.CONTACT_INQUIRY_CONFIRMATION, to, params);
+}
+
+// Policy Related
+export async function sendCancellationPolicyChargeClient(
+  to: EmailRecipient[],
+  params: CancellationPolicyChargeClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.CANCELLATION_POLICY_CHARGE_CLIENT, to, params);
+}
+
+export async function sendCancellationPolicyChargeProfessional(
+  to: EmailRecipient[],
+  params: CancellationPolicyChargeProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.CANCELLATION_POLICY_CHARGE_PROFESSIONAL, to, params);
+}
+
+// Incident Related
+export async function sendNoShowNotificationClient(
+  to: EmailRecipient[],
+  params: NoShowNotificationClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.NO_SHOW_NOTIFICATION_CLIENT, to, params);
+}
+
+export async function sendNoShowNotificationProfessional(
+  to: EmailRecipient[],
+  params: NoShowNotificationProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(TEMPLATE_IDS.NO_SHOW_NOTIFICATION_PROFESSIONAL, to, params);
+}

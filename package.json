@@ -21,7 +21,8 @@
     "stripe:events": "stripe listen --forward-to localhost:3000/api/webhooks/stripe --events payment_intent.succeeded,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_succeeded,invoice.payment_failed",
     "stripe:secret": "stripe listen --print-secret",
     "mailpit:start": "docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit || docker start mailpit",
-    "mailpit:stop": "docker stop mailpit"
+    "mailpit:stop": "docker stop mailpit",
+    "sync-brevo-templates": "ts-node scripts/sync-brevo-templates.ts"
   },
   "dependencies": {
     "@getbrevo/brevo": "^2.5.0",

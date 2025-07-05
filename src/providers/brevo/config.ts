@@ -1,126 +1,92 @@
 import * as Brevo from '@getbrevo/brevo';
 import nodemailer from 'nodemailer';
 
-export type EmailMethod = 'api' | 'smtp' | 'local';
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const EMAIL_METHOD = process.env.EMAIL_METHOD || 'api';
+const SMTP_HOST = process.env.SMTP_HOST || 'localhost';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '1025', 10);
 
-export function getEmailMethod(): EmailMethod {
-  const method = process.env.EMAIL_METHOD as EmailMethod;
-  return method || (process.env.NODE_ENV === 'development' ? 'local' : 'api');
+type TemplateContent = {
+  subject: string;
+  html: string;
+};
+
+export function getEmailMethod(): 'api' | 'local' {
+  return EMAIL_METHOD === 'local' ? 'local' : 'api';
 }
 
-export type EmailSender = Brevo.TransactionalEmailsApi | nodemailer.Transporter;
-
-function replaceTemplateVariables(content: string, params: Record<string, unknown>): string {
-  let result = content;
-
-  // Handle for loops in the template
-  const forLoopRegex = /{%\s*for\s+(\w+)\s+in\s+params\.(\w+)\s*%}([\s\S]*?){%\s*endfor\s*%}/g;
-  result = result.replace(forLoopRegex, (match, itemVar: string, arrayName: string, loopContent: string) => {
-    const arrayValue = params[arrayName];
-    if (!Array.isArray(arrayValue)) {
-      return match; // Keep original if not an array
-    }
-
-    return arrayValue.map(item => {
-      const itemContent = loopContent;
-      // Replace item variables within the loop
-      const itemVarRegex = new RegExp(`{{\\s*${itemVar}\\.([\\w.]+)\\s*}}`, 'g');
-      return itemContent.replace(itemVarRegex, (_: string, prop: string) => {
-        return String((item as Record<string, unknown>)[prop] || '');
-      });
-    }).join('\n');
-  });
-
-  // Handle regular variables
-  function processValue(key: string, value: unknown): void {
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      // Replace {{ params.key }} format
-      result = result.replace(
-        new RegExp(`{{\\s*params.${key}\\s*}}`, 'g'),
-        String(value)
-      );
-      // Also try {{ key }} format
-      result = result.replace(
-        new RegExp(`{{\\s*${key}\\s*}}`, 'g'),
-        String(value)
-      );
-    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // Handle nested objects
-      Object.entries(value as Record<string, unknown>).forEach(([nestedKey, nestedValue]) => {
-        processValue(`${key}.${nestedKey}`, nestedValue);
-      });
-    }
-    // Arrays are now handled by the for loop replacement above
+export function initEmailSender(): Brevo.TransactionalEmailsApi | nodemailer.Transporter {
+  if (getEmailMethod() === 'local') {
+    return nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: false,
+    });
+  } else {
+    const apiInstance = new Brevo.TransactionalEmailsApi();
+    apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, BREVO_API_KEY);
+    return apiInstance;
   }
-
-  // Process all parameters
-  Object.entries(params).forEach(([key, value]) => {
-    processValue(key, value);
-  });
-
-  return result;
 }
 
-export async function getTemplateContent(templateId: number, params: Record<string, unknown>): Promise<{ html: string; subject: string } | null> {
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) {
-    console.log('BREVO_API_KEY not found, template preview will not be available');
-    return null;
-  }
-
+async function getBrevoTemplatePreview(templateId: number, params: Record<string, unknown>): Promise<TemplateContent | null> {
   try {
-    const response = await fetch('https://api.brevo.com/v3/smtp/templates/' + templateId, {
+    const apiInstance = new Brevo.TransactionalEmailsApi();
+    apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, BREVO_API_KEY);
+    
+    const templateResponse = await apiInstance.getSmtpTemplate(templateId);
+    const template = templateResponse.body;
+    
+    if (!template) {
+      console.error(`Template ${templateId} not found`);
+      return null;
+    }
+
+    // Get template preview with variables
+    const previewResponse = await fetch('https://api.brevo.com/v3/smtp/template/preview', {
+      method: 'POST',
       headers: {
-        'Accept': 'application/json',
-        'api-key': apiKey
-      }
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ templateId, params }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch template: ${response.statusText}`);
+    if (!previewResponse.ok) {
+      throw new Error(`Failed to get template preview: ${previewResponse.statusText}`);
     }
 
-    const template = await response.json();
-    
-    // Replace variables in both subject and body
-    const htmlContent = replaceTemplateVariables(template.htmlContent, params);
-    const subject = replaceTemplateVariables(template.subject, params);
+    const preview = await previewResponse.json();
+
+    console.log(preview);
 
     return {
-      html: htmlContent,
-      subject
+      subject: preview.subject || template.name || '',
+      html: preview.html || template.htmlContent || '',
     };
   } catch (error) {
-    console.error('Error fetching template:', error);
+    console.error('Error getting template preview:', error);
     return null;
   }
 }
 
-export function initEmailSender(): EmailSender {
-  const method = getEmailMethod();
-
-  if (method === 'local') {
-    // Configure for local SMTP (Mailpit)
-    const host = process.env.SMTP_HOST || 'localhost';
-    const port = parseInt(process.env.SMTP_PORT || '1025', 10);
-    
-    return nodemailer.createTransport({
-      host,
-      port,
-      secure: false,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+export async function getTemplateContent(
+  templateId: number,
+  params: Record<string, unknown>
+): Promise<TemplateContent | null> {
+  // Always try to get the preview from Brevo first
+  const preview = await getBrevoTemplatePreview(templateId, params);
+  if (preview) {
+    return preview;
   }
 
-  // Configure for Brevo API
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) {
-    throw new Error('BREVO_API_KEY environment variable is required for API mode');
-  }
-
-  const apiInstance = new Brevo.TransactionalEmailsApi();
-  apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
-  return apiInstance;
+  // Fallback to a basic template if preview fails
+  return {
+    subject: `Test Email - Template ${templateId}`,
+    html: `
+      <h1>Test Email - Template ${templateId}</h1>
+      <pre>${JSON.stringify(params, null, 2)}</pre>
+    `,
+  };
 } 

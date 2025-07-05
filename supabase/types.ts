@@ -484,6 +484,54 @@ export type Database = {
           },
         ]
       }
+      email_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          html_content: string
+          id: string
+          is_active: boolean
+          name: string
+          reply_to: string | null
+          sender_email: string
+          sender_name: string
+          subject: string
+          tag: string
+          to_field: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          html_content: string
+          id?: string
+          is_active?: boolean
+          name: string
+          reply_to?: string | null
+          sender_email: string
+          sender_name: string
+          subject: string
+          tag: string
+          to_field: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          html_content?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          reply_to?: string | null
+          sender_email?: string
+          sender_name?: string
+          subject?: string
+          tag?: string
+          to_field?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       legal_documents: {
         Row: {
           content: string
