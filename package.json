@@ -22,7 +22,12 @@
     "stripe:secret": "stripe listen --print-secret",
     "mailpit:start": "docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit || docker start mailpit",
     "mailpit:stop": "docker stop mailpit",
-    "sync-brevo-templates": "ts-node scripts/sync-brevo-templates.ts"
+    "sync-brevo-templates": "ts-node scripts/sync-brevo-templates.ts",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:codegen": "playwright codegen"
   },
   "dependencies": {
     "@getbrevo/brevo": "^2.5.0",
@@ -88,8 +93,9 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.53.2",
     "@shadcn/ui": "^0.0.4",
-    "@types/node": "^22.15.21",
+    "@types/node": "^24.0.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@typescript-eslint/eslint-plugin": "^8",
