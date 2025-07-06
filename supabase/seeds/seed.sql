@@ -350,6 +350,10 @@ insert into storage.buckets (id, name, public)
 insert into storage.buckets (id, name, public)
   values ('portfolio-photos', 'Portfolio Photos', true);
 
+-- Create message-attachments bucket (not public)
+insert into storage.buckets (id, name, public)
+  values ('message-attachments', 'Message Attachments', true);
+
 -- Policies for profile-photos bucket
 create policy "Allow authenticated uploads to profile-photos"
   on storage.objects for insert to authenticated
@@ -416,4 +420,25 @@ create policy "Allow viewing portfolio photos of published professionals"
       where professional_profiles.user_id::text = (storage.foldername(name))[1]
       and professional_profiles.is_published = true
     )
+  );
+
+-- Policies for message-attachments bucket
+create policy "Allow authenticated uploads to message-attachments bucket"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'message-attachments' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow users to delete their own message attachments from bucket"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'message-attachments' and
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Allow users to view message attachments in bucket"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'message-attachments'
   );
