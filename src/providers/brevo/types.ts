@@ -67,9 +67,11 @@ export type BookingConfirmationClientParams = {
   client_name: string;
   professional_name: string;
   subtotal: number;
+  service_fee: number;
   tip_amount?: number;
   total: number;
   payment_method: string;
+  is_card_payment: boolean;
   deposit_amount?: number;
   balance_due?: number;
   balance_due_date?: string;

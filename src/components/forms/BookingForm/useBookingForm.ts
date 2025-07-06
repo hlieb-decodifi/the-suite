@@ -37,8 +37,6 @@ export function useBookingForm({
     defaultValues: formDefaultValues,
   });
 
-  console.log('form', form.getValues());
-
   // Form submission handler
   const handleSubmit = useCallback(
     async (data: BookingFormValues) => {

@@ -1347,11 +1347,7 @@ export type Database = {
     }
     Functions: {
       calculate_payment_schedule: {
-        Args: {
-          appointment_date: string
-          appointment_time: string
-          duration_minutes?: number
-        }
+        Args: { appointment_start_time: string; appointment_end_time: string }
         Returns: {
           pre_auth_date: string
           capture_date: string

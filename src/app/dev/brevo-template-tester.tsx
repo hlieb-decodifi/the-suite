@@ -79,12 +79,13 @@ const TEMPLATE_EXAMPLES = {
       'Booking ID: b-123xyz',
       'Services: Haircut & Style ($85), Beard Trim ($25)',
       'Subtotal: $110.00',
+      'Service Fee: $2.75 (paid by card)',
       'Tip: $22.00',
-      'Total: $132.00',
-      'Payment Method: Credit Card',
-      'Deposit: $25.00',
-      'Balance Due: $107.00',
-      'Balance Due Date: August 15, 2024',
+      'Total: $134.75',
+      'Payment Method: Cash',
+      'Deposit: $2.75 (service fee, paid by card)',
+      'Amount to pay in cash: $110.00',
+      'Due Date: August 15, 2024',
     ],
   },
   [TEMPLATE_IDS.BOOKING_CONFIRMATION_PROFESSIONAL]: {
@@ -290,6 +291,8 @@ export function BrevoTemplateTester() {
 
   const selectedTemplate =
     TEMPLATE_EXAMPLES[parseInt(templateId) as keyof typeof TEMPLATE_EXAMPLES];
+
+  console.log(selectedTemplate);
 
   return (
     <form action={formAction} ref={formRef} className="space-y-4">

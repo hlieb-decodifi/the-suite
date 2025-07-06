@@ -1874,30 +1874,25 @@ create policy "Clients can create appointments for their bookings"
     )
   );
 
--- Function to calculate pre-auth and capture times based on appointment date and duration
-create or replace function calculate_payment_schedule(appointment_date date, appointment_time time, duration_minutes integer default 60)
+-- Function to calculate pre-auth and capture times based on appointment start and end time
+create or replace function calculate_payment_schedule(
+  appointment_start_time timestamptz,
+  appointment_end_time timestamptz
+)
 returns table(
   pre_auth_date timestamp with time zone,
   capture_date timestamp with time zone,
   should_pre_auth_now boolean
 ) as $$
 declare
-  appointment_start_datetime timestamp with time zone;
-  appointment_end_datetime timestamp with time zone;
   six_days_before timestamp with time zone;
   twelve_hours_after_end timestamp with time zone;
 begin
-  -- Combine date and time into full timestamp for start
-  appointment_start_datetime := (appointment_date || ' ' || appointment_time)::timestamp with time zone;
-  
-  -- Calculate appointment end time by adding duration
-  appointment_end_datetime := appointment_start_datetime + (duration_minutes || ' minutes')::interval;
-  
   -- Calculate 6 days before appointment start (for pre-auth)
-  six_days_before := appointment_start_datetime - interval '6 days';
+  six_days_before := appointment_start_time - interval '6 days';
   
   -- Calculate 12 hours after appointment END (for capture)
-  twelve_hours_after_end := appointment_end_datetime + interval '12 hours';
+  twelve_hours_after_end := appointment_end_time + interval '12 hours';
   
   -- Determine if we should place pre-auth now (if appointment is within 6 days)
   return query select 

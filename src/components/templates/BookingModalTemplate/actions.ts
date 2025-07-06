@@ -2,7 +2,7 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { parseWorkingHoursFromDB, getAvailableDaysWithTimezoneConversion, convertTimeToClientTimezone } from '@/utils/timezone';
+import { convertTimeToClientTimezone, getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
 
 /**
  * Calculate the total price for a booking
@@ -241,15 +241,15 @@ export async function createBooking(
       }
       
       // For cash payments, send confirmation emails immediately
-      if (!paymentMethod?.is_online) {
-        try {
-          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-          await sendBookingConfirmationEmails(booking.id, appointment.id, false);
-        } catch (emailError) {
-          console.error('Failed to send booking confirmation emails:', emailError);
-          // Don't fail the booking creation if email sending fails
-        }
-      }
+      // if (!paymentMethod?.is_online) {
+      //   try {
+      //     const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+      //     await sendBookingConfirmationEmails(booking.id, appointment.id, false);
+      //   } catch (emailError) {
+      //     console.error('Failed to send booking confirmation emails:', emailError);
+      //     // Don't fail the booking creation if email sending fails
+      //   }
+      // }
       
       // Return the booking details
       return { bookingId: booking.id, totalPrice };
@@ -301,13 +301,6 @@ export async function getAvailableTimeSlots(
   const supabase = await createClient();
 
   try {
-    console.log('Fetching time slots for:', {
-      professionalProfileId,
-      date,
-      professionalTimezone,
-      clientTimezone
-    });
-
     // Create date objects for the start and end of the day in professional's timezone
     const professionalDate = new Date(date);
     
@@ -330,13 +323,6 @@ export async function getAvailableTimeSlots(
     // Convert to UTC for database query
     const queryStartTime = new Date(startOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
     const queryEndTime = new Date(endOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
-
-    console.log('Query time range:', {
-      localDate: date,
-      queryStartTime: queryStartTime.toISOString(),
-      queryEndTime: queryEndTime.toISOString(),
-      professionalOffsetMinutes
-    });
 
     // Get working hours
     const { data: workingHoursData, error: workingHoursError } = await supabase
@@ -389,14 +375,6 @@ export async function getAvailableTimeSlots(
       console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
-
-    console.log('Existing appointments:', appointments?.map(apt => ({
-      start: apt.start_time,
-      end: apt.end_time,
-      localStart: new Date(apt.start_time).toLocaleString(),
-      localEnd: new Date(apt.end_time).toLocaleString()
-    })));
-
     // Convert working hours to minutes for easier comparison
     const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
     const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
@@ -416,24 +394,11 @@ export async function getAvailableTimeSlots(
       const slotStartTime = new Date(slotDate.getTime());
       const slotEndTime = new Date(slotDate.getTime() + (30 * 60 * 1000));
 
-      console.log('Checking slot:', {
-        slotStartTime: slotStartTime,
-        slotEndTime: slotEndTime,
-        localSlot: timeString,
-        utcStart: slotStartTime.toISOString(),
-        utcEnd: slotEndTime.toISOString(),
-        localStartTime: slotStartTime.toLocaleString(),
-        localEndTime: slotEndTime.toLocaleString()
-      });
-
       // Check if this slot overlaps with any existing appointments
       let isAvailable = true;
 
       for (const appointment of appointments || []) {
         if (!appointment.start_time || !appointment.end_time) continue;
-
-        const appointmentStart = new Date(appointment.start_time);
-        const appointmentEnd = new Date(appointment.end_time);
 
         if (isSlotOverlapping(
           slotStartTime.toISOString(),
@@ -442,17 +407,6 @@ export async function getAvailableTimeSlots(
           appointment.end_time
         )) {
           isAvailable = false;
-          console.log('Slot overlaps with appointment:', {
-            slot: timeString,
-            slotStart: slotStartTime.toISOString(),
-            slotEnd: slotEndTime.toISOString(),
-            slotLocalStart: slotStartTime.toLocaleString(),
-            slotLocalEnd: slotEndTime.toLocaleString(),
-            appointmentStart: appointment.start_time,
-            appointmentEnd: appointment.end_time,
-            appointmentLocalStart: appointmentStart.toLocaleString(),
-            appointmentLocalEnd: appointmentEnd.toLocaleString()
-          });
           break;
         }
       }
@@ -462,8 +416,6 @@ export async function getAvailableTimeSlots(
       }
     }
 
-    console.log('Available slots before timezone conversion:', slots);
-
     // Convert slots to client timezone
     const targetDate = new Date(date);
     const convertedSlots = slots.map(slot => {
@@ -471,7 +423,6 @@ export async function getAvailableTimeSlots(
       return time;
     });
 
-    console.log('Final available slots after timezone conversion:', convertedSlots);
     return convertedSlots;
   } catch (error) {
     console.error('Error in getAvailableTimeSlots:', error);

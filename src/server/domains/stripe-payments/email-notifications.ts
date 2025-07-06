@@ -228,6 +228,24 @@ export async function sendBookingConfirmationEmails(
       isUncaptured
     });
 
+    // Get payment details including payment method
+    const { data: paymentData, error: paymentError } = await adminSupabase
+      .from('booking_payments')
+      .select(`
+        *,
+        payment_method:payment_methods(
+          name,
+          is_online
+        )
+      `)
+      .eq('booking_id', bookingId)
+      .single();
+
+    if (paymentError) {
+      console.error('Error fetching payment details:', paymentError);
+      throw new Error('Failed to fetch payment details');
+    }
+
     // Send client email
     try {
       const result = await sendBookingConfirmationClient(
@@ -236,12 +254,14 @@ export async function sendBookingConfirmationEmails(
           client_name: `${clientData.first_name} ${clientData.last_name}`,
           professional_name: `${professional.first_name} ${professional.last_name}`,
           subtotal,
+          service_fee: serviceFee,
           tip_amount: tipAmount,
           total: totalPaid,
-          payment_method: 'Credit Card',
-          deposit_amount: isUncaptured ? totalPaid : 0,
-          balance_due: isUncaptured ? subtotal + serviceFee - totalPaid : 0,
-          balance_due_date: isUncaptured ? new Date(appointment.start_time).toISOString() : '',
+          payment_method: paymentData.payment_method.name,
+          is_card_payment: paymentData.payment_method.is_online,
+          deposit_amount: payment.deposit_amount || 0,
+          balance_due: paymentData.payment_method.name.toLowerCase() === 'cash' ? subtotal : 0,
+          balance_due_date: appointmentDate,
           booking_id: bookingId,
           appointment_id: appointmentId,
           date: appointmentDate,

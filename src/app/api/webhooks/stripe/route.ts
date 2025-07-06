@@ -178,6 +178,10 @@ export async function POST(req: Request) {
         console.log(`Ignoring ${event.type} - handled synchronously by our app`);
         break;
         
+      case 'payment_intent.amount_capturable_updated':
+        await handlePaymentIntentCapturableUpdated(event.data.object as Stripe.PaymentIntent);
+        break;
+        
       // Add more event handlers as needed
       
       default:
@@ -512,16 +516,17 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
 // Handle booking payment checkout
 async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
   const supabase = createAdminClient();
-  const bookingId = session.metadata?.bookingId;
-  const isCardPayment = session.payment_method_types?.includes('card');
-
+  const bookingId = session.metadata?.booking_id;
+  
   if (!bookingId) {
     console.error('❌ No booking ID found in session metadata');
     return;
   }
 
-  // Check if this is a split payment that needs special handling  
+  // Check payment flow type
   const paymentFlow = session.metadata?.payment_flow;
+  
+  // Handle split payment flow
   if (paymentFlow === 'split_service_fee_and_amount' && session.payment_intent && typeof session.payment_intent === 'object') {
     // For split payments, the payment intent should be uncaptured (requires_capture status)
     const paymentIntent = session.payment_intent;
@@ -532,68 +537,66 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
       console.log('⚠️ Split payment intent has unexpected status:', paymentIntent.status);
     }
   }
+  
+  // Handle immediate service fee only flow (cash payments)
+  if (paymentFlow === 'immediate_service_fee_only') {
+    console.log('🔍 Processing immediate service fee only payment for cash booking');
+    
+    try {
+      // Get appointment timing
+      const { data: appointmentData, error: appointmentError } = await supabase
+        .from('appointments')
+        .select('start_time, end_time')
+        .eq('booking_id', bookingId)
+        .single();
 
-  if (isCardPayment) {
-    console.log('💳 Setting capture schedule for card payment...');
-    
-    // Get appointment details with all services to calculate total duration
-    const { data: appointmentDetails, error: appointmentError } = await supabase
-      .from('appointments')
-      .select(`
-        id,
-        start_time,
-        end_time,
-        status,
-        booking_id,
-        bookings (
-          id,
-          professional_profile_id,
-          client_id,
-          status,
-          booking_services (
-            duration
-          )
-        )
-      `)
-      .eq('booking_id', bookingId)
-      .single() as AppointmentResponse;
-    
-    if (appointmentError || !appointmentDetails) {
-      console.error('❌ Error fetching appointment details:', appointmentError);
-      return;
-    }
-    
-    // Import utility functions for appointment time calculations
-    const { calculateAppointmentTimes, calculateTotalDuration } = await import('@/utils/appointmentUtils');
-    
-    // Calculate total duration from all services
-    const allServices = appointmentDetails.bookings.booking_services;
-    const totalDurationMinutes = calculateTotalDuration(allServices);
-    
-    console.log('⏱️ Total duration minutes:', totalDurationMinutes);
-    
-    // Calculate appointment times
-    const { appointmentStart, appointmentEnd, captureScheduledFor } = calculateAppointmentTimes(
-      appointmentDetails.start_time,
-      totalDurationMinutes
-    );
-    
-    console.log('📅 Appointment start:', appointmentStart.toISOString());
-    console.log('📅 Appointment end:', appointmentEnd.toISOString());
-    
-    // Update the booking payment with capture schedule
-    const { error: captureUpdateError } = await supabase
-      .from('booking_payments')
-      .update({
-        capture_scheduled_for: captureScheduledFor.toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('booking_id', bookingId);
-    
-    if (captureUpdateError) {
-      console.error('❌ Failed to update capture schedule:', captureUpdateError);
-    } else {
-      console.log('✅ Successfully set capture schedule for 12 hours after appointment end');
+      if (appointmentError || !appointmentData) {
+        console.error('❌ Error fetching appointment data:', appointmentError);
+        return;
+      }
+
+      // Calculate payment schedule
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .rpc('calculate_payment_schedule', {
+          appointment_start_time: appointmentData.start_time,
+          appointment_end_time: appointmentData.end_time
+        });
+
+      if (scheduleError || !scheduleData || !Array.isArray(scheduleData) || scheduleData.length === 0) {
+        console.error('❌ Error calculating payment schedule:', scheduleError);
+        return;
+      }
+
+      const captureDate = scheduleData[0]?.capture_date;
+      if (!captureDate) {
+        console.error('❌ No capture date returned in schedule data');
+        return;
+      }
+
+      console.log('📅 Payment schedule calculated:', scheduleData);
+
+      // Update booking payment with schedule
+      const { error: updateError } = await supabase
+        .from('booking_payments')
+        .update({
+          capture_scheduled_for: captureDate,
+          pre_auth_placed_at: new Date().toISOString(),
+          authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+          status: 'authorized'
+        })
+        .eq('booking_id', bookingId);
+
+      if (updateError) {
+        console.error('❌ Error updating booking payment schedule:', updateError);
+        return;
+      }
+
+      console.log('✅ Updated booking payment with schedule:', {
+        bookingId,
+        captureScheduledFor: captureDate
+      });
+    } catch (error) {
+      console.error('❌ Error processing immediate service fee only payment:', error);
     }
   }
 }
@@ -1482,24 +1485,49 @@ async function handleSplitPaymentPartialCapture(session: Stripe.Checkout.Session
   }
 }
 
-type AppointmentDetails = {
-  id: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  booking_id: string;
-  bookings: {
-    id: string;
-    professional_profile_id: string;
-    client_id: string;
-    status: string;
-    booking_services: Array<{
-      duration: number;
-    }>;
-  };
-};
+// Handle payment_intent.amount_capturable_updated event
+async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.PaymentIntent) {
+  try {
+    if (paymentIntent.status !== 'requires_capture') {
+      console.log('Payment intent not in requires_capture state:', paymentIntent.status);
+      return;
+    }
 
-type AppointmentResponse = {
-  data: AppointmentDetails | null;
-  error: Error | null;
-};
+    const bookingId = paymentIntent.metadata.booking_id;
+    if (!bookingId) {
+      console.error('❌ No booking ID found in payment intent metadata');
+      return;
+    }
+
+    console.log(`💳 Payment authorized for booking ${bookingId}`);
+
+    const supabase = createAdminClient();
+
+    // Get appointment details
+    const { data: appointmentData, error: appointmentError } = await supabase
+      .from('appointments')
+      .select('id, booking_id')
+      .eq('booking_id', bookingId)
+      .single();
+
+    if (appointmentError || !appointmentData) {
+      console.error('❌ Error fetching appointment:', appointmentError);
+      return;
+    }
+
+    // Send booking confirmation emails
+    try {
+      const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+      await sendBookingConfirmationEmails(bookingId, appointmentData.id, true); // true = uncaptured payment
+      console.log(`✅ Booking confirmation emails sent for booking ${bookingId}`);
+    } catch (emailError) {
+      console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
+      // Don't fail the webhook for email errors
+    }
+  } catch (error) {
+    console.error('Error handling payment_intent.amount_capturable_updated:', error);
+  }
+}
+
+
+

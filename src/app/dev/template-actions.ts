@@ -4,8 +4,10 @@ import {
   EmailRecipient,
   BookingCancellationClientParams,
   BookingCancellationProfessionalParams,
+  BookingConfirmationClientParams,
   sendBookingCancellationClient,
   sendBookingCancellationProfessional,
+  sendBookingConfirmationClient,
 } from '@/providers/brevo';
 import { TEMPLATE_IDS } from '@/providers/brevo/constants';
 
@@ -81,6 +83,39 @@ export async function sendTemplateTest(
           professional_name: 'Alex Starr',
         };
         result = await sendBookingCancellationProfessional([recipient], params);
+        break;
+      }
+
+      case TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT: {
+        // Example for cash payment with deposit
+        const subtotal = 110.00;
+        const serviceFee = 2.75;
+        const depositAmount = subtotal * 0.2; // 20% deposit
+        const tipAmount = 22.00;
+        const total = subtotal + serviceFee + tipAmount;
+
+        const params: BookingConfirmationClientParams = {
+          ...baseParams,
+          client_name: 'John Doe',
+          professional_name: 'Alex Starr',
+          subtotal,
+          service_fee: serviceFee,
+          tip_amount: tipAmount,
+          total,
+          payment_method: 'Cash',
+          is_card_payment: false,
+          deposit_amount: depositAmount, // 20% deposit paid by card
+          balance_due: subtotal - depositAmount, // Remaining amount to be paid in cash
+          balance_due_date: 'August 15, 2024',
+          booking_id: 'b-123xyz',
+          appointment_id: 'appt-123',
+          date: 'August 15, 2024',
+          time: '2:30 PM',
+          appointment_details_url: 'https://example.com/bookings',
+          website_url: 'https://example.com',
+          support_email: 'support@example.com'
+        };
+        result = await sendBookingConfirmationClient([recipient], params);
         break;
       }
 

@@ -1127,4 +1127,37 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
       error: error instanceof Error ? error.message : 'Unknown error' 
     };
   }
+}
+
+/**
+ * Update the payment amount for a booking (used for cash payments to store correct Stripe amount)
+ */
+export async function updateBookingPaymentAmount(
+  bookingId: string,
+  amount: number
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSupabaseAdminClient();
+  
+  try {
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        amount: amount, // Amount in dollars
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating booking payment amount:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateBookingPaymentAmount:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
 } 
