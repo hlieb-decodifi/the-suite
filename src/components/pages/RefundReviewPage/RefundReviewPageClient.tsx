@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,8 +48,10 @@ type RefundData = {
   updated_at: string;
   appointments: {
     id: string;
+    date: string;
     start_time: string;
     end_time: string;
+    booking_id: string;
     bookings: {
       id: string;
       notes: string | null;
@@ -70,7 +73,7 @@ type RefundData = {
           name: string;
           is_online: boolean;
         };
-      } | null;
+      };
     };
   };
   clients: {
@@ -103,9 +106,9 @@ export function RefundReviewPageClient({
   const { toast } = useToast();
 
   // Format appointment details
-  const appointmentDate = new Date(refund.appointments.start_time);
-  const startTime = new Date(refund.appointments.start_time);
-  const endTime = new Date(refund.appointments.end_time);
+  const appointmentDate = new Date(refund.appointments.date);
+  const startTime = new Date(`1970-01-01T${refund.appointments.start_time}`);
+  const endTime = new Date(`1970-01-01T${refund.appointments.end_time}`);
   const clientName = `${refund.clients.first_name} ${refund.clients.last_name}`;
   const serviceName = refund.appointments.bookings.booking_services
     .map((bs) => bs.services.name)
@@ -212,283 +215,465 @@ export function RefundReviewPageClient({
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch (status) {
       case 'pending':
         return (
-          <Badge variant="outline" className="bg-yellow-50">
-            <AlertTriangle className="mr-1 h-3 w-3 text-yellow-500" />
-            Pending
+          <Badge
+            variant="outline"
+            className="text-orange-600 border-orange-600"
+          >
+            Pending Review
           </Badge>
         );
       case 'approved':
         return (
-          <Badge variant="outline" className="bg-green-50">
-            <CheckCircle className="mr-1 h-3 w-3 text-green-500" />
+          <Badge variant="outline" className="text-green-600 border-green-600">
             Approved
           </Badge>
         );
       case 'declined':
         return (
-          <Badge variant="outline" className="bg-red-50">
-            <XCircle className="mr-1 h-3 w-3 text-red-500" />
+          <Badge variant="outline" className="text-red-600 border-red-600">
             Declined
+          </Badge>
+        );
+      case 'processing':
+        return (
+          <Badge variant="outline" className="text-blue-600 border-blue-600">
+            Processing
           </Badge>
         );
       case 'completed':
         return (
-          <Badge variant="outline" className="bg-blue-50">
-            <CheckCircle className="mr-1 h-3 w-3 text-blue-500" />
+          <Badge variant="outline" className="text-green-600 border-green-600">
             Completed
           </Badge>
         );
-      default:
+      case 'failed':
         return (
-          <Badge variant="outline">
-            <AlertTriangle className="mr-1 h-3 w-3" />
-            {status}
+          <Badge variant="outline" className="text-red-600 border-red-600">
+            Failed
           </Badge>
         );
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
           <Button
             variant="ghost"
-            size="icon"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.back()}
+            className="flex items-center gap-2"
           >
             <ArrowLeftIcon className="h-4 w-4" />
+            Back
           </Button>
-          <Typography variant="h4">Refund Request</Typography>
+          <div className="flex-1">
+            <Typography className="text-2xl font-bold text-foreground">
+              Refund Request Review
+            </Typography>
+            <Typography variant="muted" className="mt-1">
+              Review and respond to this refund request from your client
+            </Typography>
+          </div>
+          {getStatusBadge(refund.status)}
         </div>
-        {getStatusBadge(refund.status)}
-      </div>
 
-      {/* Main Content */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Left Column - Appointment Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Appointment Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Date & Time */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                <Typography>
-                  {format(appointmentDate, 'EEEE, MMMM d, yyyy')}
-                </Typography>
-              </div>
-              <div className="flex items-center gap-2">
-                <ClockIcon className="h-4 w-4 text-muted-foreground" />
-                <Typography>
-                  {format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}
-                </Typography>
-              </div>
-            </div>
+        {/* Alert for already processed refunds */}
+        {refund.status !== 'pending' && (
+          <Alert className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              This refund request has already been processed and cannot be
+              modified.
+            </AlertDescription>
+          </Alert>
+        )}
 
-            {/* Client */}
-            <div className="flex items-center gap-2">
-              <UserIcon className="h-4 w-4 text-muted-foreground" />
-              <Typography>{clientName}</Typography>
-            </div>
-
-            {/* Service */}
-            <div className="flex items-center gap-2">
-              <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-              <Typography>{serviceName}</Typography>
-            </div>
-
-            {/* Payment Method */}
-            <div className="flex items-center gap-2">
-              <CreditCardIcon className="h-4 w-4 text-muted-foreground" />
-              <Typography>
-                {refund.appointments.bookings.booking_payments?.payment_methods
-                  .name || 'Unknown'}
-              </Typography>
-            </div>
-
-            {/* Original Amount */}
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-              <Typography>
-                Original Payment:{' '}
-                {formatCurrency(
-                  (refund.appointments.bookings.booking_payments?.amount || 0) +
-                    (refund.appointments.bookings.booking_payments
-                      ?.tip_amount || 0),
-                )}
-              </Typography>
-            </div>
-
-            {/* View Appointment Link */}
-            <div className="pt-2">
-              <Link
-                href={`/bookings/${refund.appointments.id}`}
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                View Appointment
-                <ExternalLinkIcon className="h-3 w-3" />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Right Column - Refund Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Refund Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Refund Reason */}
-            <div className="space-y-2">
-              <Label>Reason for Refund</Label>
-              <Alert>
-                <AlertDescription>{refund.reason}</AlertDescription>
-              </Alert>
-            </div>
-
-            {/* Original Payment */}
-            <div className="space-y-2">
-              <Label>Original Payment</Label>
-              <Typography>
-                {formatCurrency(
-                  (refund.appointments.bookings.booking_payments?.amount || 0) +
-                    (refund.appointments.bookings.booking_payments
-                      ?.tip_amount || 0),
-                )}
-              </Typography>
-            </div>
-
-            {/* Professional Notes */}
-            {isProfessional && refund.status === 'pending' && (
-              <div className="space-y-2">
-                <Label htmlFor="professionalNotes">Notes (Optional)</Label>
-                <Textarea
-                  id="professionalNotes"
-                  value={professionalNotes}
-                  onChange={(e) => setProfessionalNotes(e.target.value)}
-                  placeholder="Add any notes about this refund..."
-                  rows={3}
-                />
-              </div>
-            )}
-
-            {/* Refund Amount Input */}
-            {isProfessional &&
-              refund.status === 'pending' &&
-              !showDeclineForm && (
-                <div className="space-y-2">
-                  <Label htmlFor="refundAmount">Refund Amount</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="refundAmount"
-                      type="number"
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
-                      className="pl-8"
-                      step="0.01"
-                      min="0"
-                      max={refund.original_amount}
-                    />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Refund Request Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileTextIcon className="h-5 w-5 text-muted-foreground" />
+                  Refund Request Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Typography className="font-medium text-foreground mb-2">
+                    Client's Reason for Refund
+                  </Typography>
+                  <div className="bg-muted/50 rounded-lg p-4">
+                    <Typography className="text-foreground">
+                      "{refund.reason}"
+                    </Typography>
                   </div>
-                  <Typography variant="small" className="text-muted-foreground">
-                    Est. transaction fee: {formatCurrency(estimatedFee)}
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Typography className="font-medium text-foreground">
+                      Request Date
+                    </Typography>
+                    <Typography variant="muted">
+                      {format(
+                        new Date(refund.created_at),
+                        'MMM d, yyyy h:mm a',
+                      )}
+                    </Typography>
+                  </div>
+                  <div>
+                    <Typography className="font-medium text-foreground">
+                      Original Amount
+                    </Typography>
+                    <Typography variant="muted" className="font-semibold">
+                      {formatCurrency(refund.original_amount)}
+                    </Typography>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Decision Form - Only show if pending and user is a professional */}
+            {refund.status === 'pending' && isProfessional && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                    Your Decision
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {!showDeclineForm ? (
+                    <>
+                      {/* Approve Form */}
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="refundAmount">
+                            Refund Amount{' '}
+                            <span className="text-destructive">*</span>
+                          </Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                                $
+                              </span>
+                              <Input
+                                id="refundAmount"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                max={refund.original_amount}
+                                value={refundAmount}
+                                onChange={(e) =>
+                                  setRefundAmount(e.target.value)
+                                }
+                                className="pl-6"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setRefundAmount(
+                                  refund.original_amount.toString(),
+                                )
+                              }
+                            >
+                              Full Amount
+                            </Button>
+                          </div>
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground mt-1"
+                          >
+                            Maximum: {formatCurrency(refund.original_amount)}
+                          </Typography>
+                        </div>
+
+                        <Alert>
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            <strong>Transaction Fee Notice:</strong> You will be
+                            responsible for the estimated transaction fee of ~$
+                            {estimatedFee.toFixed(2)} for this refund.
+                          </AlertDescription>
+                        </Alert>
+
+                        <div>
+                          <Label htmlFor="professionalNotes">
+                            Notes (Optional)
+                          </Label>
+                          <Textarea
+                            id="professionalNotes"
+                            placeholder="Add any notes for the client..."
+                            value={professionalNotes}
+                            onChange={(e) =>
+                              setProfessionalNotes(e.target.value)
+                            }
+                            rows={3}
+                            maxLength={500}
+                          />
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground text-right mt-1"
+                          >
+                            {professionalNotes.length}/500 characters
+                          </Typography>
+                        </div>
+
+                        <div className="flex gap-3">
+                          <Button
+                            onClick={handleApprove}
+                            disabled={isApproving || isDeclining}
+                            className="flex-1"
+                          >
+                            {isApproving ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-2 animate-spin" />
+                                Approving...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Approve Refund
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="destructiveOutline"
+                            onClick={() => setShowDeclineForm(true)}
+                            disabled={isApproving || isDeclining}
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Decline
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Decline Form */}
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="declineReason">
+                            Reason for Declining{' '}
+                            <span className="text-destructive">*</span>
+                          </Label>
+                          <Textarea
+                            id="declineReason"
+                            placeholder="Please explain why you are declining this refund request..."
+                            value={declineReason}
+                            onChange={(e) => setDeclineReason(e.target.value)}
+                            rows={4}
+                            maxLength={500}
+                            required
+                          />
+                          <Typography
+                            variant="small"
+                            className="text-muted-foreground text-right mt-1"
+                          >
+                            {declineReason.length}/500 characters
+                          </Typography>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="professionalNotesDecline">
+                            Additional Notes (Optional)
+                          </Label>
+                          <Textarea
+                            id="professionalNotesDecline"
+                            placeholder="Add any additional notes for the client..."
+                            value={professionalNotes}
+                            onChange={(e) =>
+                              setProfessionalNotes(e.target.value)
+                            }
+                            rows={3}
+                            maxLength={500}
+                          />
+                        </div>
+
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowDeclineForm(false)}
+                            disabled={isApproving || isDeclining}
+                            className="flex-1"
+                          >
+                            Back to Approve
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={handleDecline}
+                            disabled={
+                              isApproving ||
+                              isDeclining ||
+                              !declineReason.trim()
+                            }
+                            className="flex-1"
+                          >
+                            {isDeclining ? (
+                              <>
+                                <XCircle className="h-4 w-4 mr-2 animate-spin" />
+                                Declining...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Confirm Decline
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Appointment Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+                  Appointment Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Typography className="font-medium text-foreground">
+                    Service
+                  </Typography>
+                  <Typography variant="muted">{serviceName}</Typography>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <Typography className="font-medium text-foreground">
+                    Date & Time
+                  </Typography>
+                  <div className="space-y-1">
+                    <Typography variant="muted">
+                      {format(appointmentDate, 'EEEE, MMMM d, yyyy')}
+                    </Typography>
+                    <Typography
+                      variant="muted"
+                      className="flex items-center gap-1"
+                    >
+                      <ClockIcon className="h-3 w-3" />
+                      {format(startTime, 'h:mm a')} -{' '}
+                      {format(endTime, 'h:mm a')}
+                    </Typography>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <Typography className="font-medium text-foreground">
+                    Client
+                  </Typography>
+                  <Typography
+                    variant="muted"
+                    className="flex items-center gap-1"
+                  >
+                    <UserIcon className="h-3 w-3" />
+                    {clientName}
                   </Typography>
                 </div>
-              )}
 
-            {/* Decline Form */}
-            {isProfessional &&
-              refund.status === 'pending' &&
-              showDeclineForm && (
-                <div className="space-y-2">
-                  <Label htmlFor="declineReason">Reason for Declining</Label>
-                  <Textarea
-                    id="declineReason"
-                    value={declineReason}
-                    onChange={(e) => setDeclineReason(e.target.value)}
-                    placeholder="Please provide a reason for declining this refund request..."
-                    rows={3}
-                  />
+                <Separator />
+
+                <div className="pt-2">
+                  <Button variant="outline" asChild className="w-full">
+                    <Link href={`/bookings/${refund.appointment_id}`}>
+                      <ExternalLinkIcon className="h-4 w-4 mr-2" />
+                      View Booking Details
+                    </Link>
+                  </Button>
                 </div>
-              )}
+              </CardContent>
+            </Card>
 
-            {/* Action Buttons */}
-            {isProfessional && refund.status === 'pending' && (
-              <div className="flex gap-2 pt-4">
-                {showDeclineForm ? (
-                  <>
-                    <Button
-                      variant="destructive"
-                      onClick={handleDecline}
-                      disabled={isDeclining}
-                    >
-                      {isDeclining ? 'Declining...' : 'Confirm Decline'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDeclineForm(false)}
-                      disabled={isDeclining}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      onClick={handleApprove}
-                      disabled={isApproving}
-                      className="flex-1"
-                    >
-                      {isApproving ? 'Approving...' : 'Approve Refund'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDeclineForm(true)}
-                      disabled={isApproving}
-                    >
-                      Decline
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Status Information */}
-            {refund.status !== 'pending' && (
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(refund.status)}
-                  <Typography className="text-muted-foreground">
-                    {format(new Date(refund.updated_at), 'MMM d, yyyy h:mm a')}
+            {/* Payment Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCardIcon className="h-5 w-5 text-muted-foreground" />
+                  Payment Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <Typography className="font-medium text-foreground">
+                    Service Amount:
+                  </Typography>
+                  <Typography variant="muted">
+                    {formatCurrency(
+                      refund.appointments.bookings.booking_payments.amount,
+                    )}
                   </Typography>
                 </div>
-                {refund.professional_notes && (
-                  <Alert>
-                    <AlertDescription>
-                      {refund.professional_notes}
-                    </AlertDescription>
-                  </Alert>
+
+                {refund.appointments.bookings.booking_payments.tip_amount >
+                  0 && (
+                  <div className="flex justify-between items-center">
+                    <Typography className="font-medium text-foreground">
+                      Tip:
+                    </Typography>
+                    <Typography variant="muted">
+                      {formatCurrency(
+                        refund.appointments.bookings.booking_payments
+                          .tip_amount,
+                      )}
+                    </Typography>
+                  </div>
                 )}
-                {refund.declined_reason && (
-                  <Alert>
-                    <AlertDescription>
-                      {refund.declined_reason}
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+
+                <Separator />
+
+                <div className="flex justify-between items-center">
+                  <Typography className="font-semibold text-foreground">
+                    Total Paid:
+                  </Typography>
+                  <Typography className="font-semibold text-primary">
+                    {formatCurrency(refund.original_amount)}
+                  </Typography>
+                </div>
+
+                <div>
+                  <Typography className="font-medium text-foreground">
+                    Payment Method
+                  </Typography>
+                  <Typography variant="muted">
+                    {
+                      refund.appointments.bookings.booking_payments
+                        .payment_methods.name
+                    }
+                    {refund.appointments.bookings.booking_payments
+                      .payment_methods.is_online && ' (Online)'}
+                  </Typography>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

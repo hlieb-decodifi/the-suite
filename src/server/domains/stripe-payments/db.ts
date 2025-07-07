@@ -68,7 +68,7 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
  * Enhanced payment calculation with deposit validation
  */
 export function calculatePaymentAmounts(
-  totalAmount: number, // in cents
+  totalAmount: number,
   professionalProfile: ProfessionalProfileForPayment
 ): PaymentCalculation {
   const {
@@ -76,12 +76,6 @@ export function calculatePaymentAmounts(
     deposit_type,
     deposit_value
   } = professionalProfile;
-
-  // Get service fee from config
-  const serviceFee = 100; // $1 in cents, TODO: get from config
-
-  // Separate service amount from total
-  const serviceAmount = totalAmount - serviceFee;
 
   if (!requires_deposit || !deposit_value) {
     // No deposit required - full payment
@@ -98,17 +92,24 @@ export function calculatePaymentAmounts(
   let depositAmount: number;
   
   if (deposit_type === 'percentage') {
-    // Calculate deposit based on service amount only (excluding fee)
-    depositAmount = Math.round(serviceAmount * (deposit_value / 100));
+    depositAmount = Math.round(totalAmount * (deposit_value / 100));
   } else {
-    // Fixed amount deposit - if it's bigger than service amount, cap it
-    depositAmount = Math.min(
-      Math.round(deposit_value * 100), // Convert to cents
-      serviceAmount // Cap at service amount
-    );
+    // Fixed amount deposit
+    depositAmount = Math.round(deposit_value * 100); // Convert to cents
   }
 
-  // Service fee is always charged with the remaining balance
+  // VALIDATION: If deposit >= total amount, charge full amount as deposit
+  if (depositAmount >= totalAmount) {
+    return {
+      totalAmount,
+      depositAmount: totalAmount,
+      balanceAmount: 0,
+      requiresDeposit: true,
+      requiresBalancePayment: false,
+      isFullPayment: true
+    };
+  }
+
   const balanceAmount = totalAmount - depositAmount;
 
   return {
@@ -117,7 +118,7 @@ export function calculatePaymentAmounts(
     balanceAmount,
     requiresDeposit: true,
     requiresBalancePayment: balanceAmount > 0,
-    isFullPayment: depositAmount >= serviceAmount // Only compare with service amount
+    isFullPayment: false
   };
 }
 
@@ -794,7 +795,8 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   client_email: string;
   client_name: string;
   professional_name: string;
-  start_time: string;
+  appointment_date: string;
+  appointment_time: string;
   total_amount: number;
   service_fee: number;
   deposit_amount: number | undefined;
@@ -807,19 +809,18 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   
   try {
     // Calculate the timestamp for 2 hours ago
-    const twoHoursAgo = new Date();
-    twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
-
+    const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
+    
     // Use a simpler approach: query each table separately and join in code
     // First get completed appointments
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
-      .select('booking_id, start_time, end_time')
+      .select('booking_id, date, end_time')
       .eq('status', 'completed')
       .limit(limit);
 
     if (appointmentsError) {
-      console.error('Error fetching completed appointments:', appointmentsError);
+      console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
 
@@ -829,8 +830,8 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
 
     // Filter appointments that are >2 hours past end time
     const eligibleAppointments = appointments.filter(appointment => {
-      const appointmentEndTime = new Date(appointment.end_time);
-      return appointmentEndTime <= twoHoursAgo;
+      const appointmentEndDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
+      return appointmentEndDateTime <= twoHoursAgo;
     });
 
     if (eligibleAppointments.length === 0) {
@@ -941,7 +942,8 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         client_email: clientAuth?.email || '',
         client_name: `${clientUser.first_name} ${clientUser.last_name}`,
         professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        start_time: appointment.start_time,
+        appointment_date: appointment.date,
+        appointment_time: appointment.end_time,
         total_amount: payment.amount,
         service_fee: payment.service_fee,
         deposit_amount: payment.deposit_amount,
@@ -1053,6 +1055,7 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
         client_id,
         professional_profile_id,
         appointments!inner(
+          date,
           start_time,
           end_time
         ),
@@ -1111,8 +1114,8 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
         clientName: clientData ? `${clientData.first_name} ${clientData.last_name}` : 'Client',
         professionalEmail: professionalUser.user.email,
         professionalName: professionalData ? `${professionalData.first_name} ${professionalData.last_name}` : 'Professional',
-        appointmentDate: appointment?.start_time || '',
-        appointmentTime: appointment?.start_time || '',
+        appointmentDate: appointment.date,
+        appointmentTime: appointment.start_time,
         serviceName: service?.services?.name || 'Service',
         totalAmount: payment.amount,
         tipAmount: payment.tip_amount || 0,
@@ -1121,39 +1124,6 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
     };
   } catch (error) {
     console.error('Error in getBookingDetailsForConfirmation:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
-
-/**
- * Update the payment amount for a booking (used for cash payments to store correct Stripe amount)
- */
-export async function updateBookingPaymentAmount(
-  bookingId: string,
-  amount: number
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
-  
-  try {
-    const { error } = await supabase
-      .from('booking_payments')
-      .update({
-        amount: amount, // Amount in dollars
-        updated_at: new Date().toISOString()
-      })
-      .eq('booking_id', bookingId);
-
-    if (error) {
-      console.error('Error updating booking payment amount:', error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error in updateBookingPaymentAmount:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 

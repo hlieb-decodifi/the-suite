@@ -61,10 +61,9 @@ export async function submitReview(
         id,
         client_id,
         professional_profile_id,
-        appointments_with_status (
+        appointments (
           id,
-          status,
-          computed_status
+          status
         )
       `)
       .eq('id', bookingId)
@@ -86,26 +85,16 @@ export async function submitReview(
     }
 
     // Check if appointment exists and is completed
-    const appointment = Array.isArray(booking.appointments_with_status) 
-      ? booking.appointments_with_status[0] 
-      : booking.appointments_with_status;
-    
-    if (!appointment || !appointment.id) {
+    if (!booking.appointments) {
       return {
         success: false,
         error: 'No appointment found for this booking'
       };
     }
-    const appointmentId = appointment.id;
+
+    const appointment = booking.appointments;
     
-    if (!appointmentId) {
-      return {
-        success: false,
-        error: 'Invalid appointment ID'
-      };
-    }
-    
-    if (appointment.computed_status !== 'completed') {
+    if (appointment.status !== 'completed') {
       return {
         success: false,
         error: 'Appointment must be completed to leave a review'
@@ -130,7 +119,7 @@ export async function submitReview(
     const { data: existingReview } = await supabase
       .from('reviews')
       .select('id')
-      .eq('appointment_id', appointmentId)
+      .eq('appointment_id', appointment.id)
       .single();
 
     if (existingReview) {
@@ -140,10 +129,11 @@ export async function submitReview(
       };
     }
 
+    // Create the review
     const { data: review, error: reviewError } = await supabase
       .from('reviews')
       .insert({
-        appointment_id: appointmentId,
+        appointment_id: appointment.id,
         client_id: user.id,
         professional_id: professionalProfile.user_id,
         score,
@@ -207,10 +197,9 @@ export async function getReviewStatus(
       .select(`
         id,
         client_id,
-        appointments_with_status (
+        appointments (
           id,
           status,
-          computed_status,
           reviews (
             id,
             score,
@@ -237,10 +226,7 @@ export async function getReviewStatus(
       };
     }
 
-    const appointment = Array.isArray(booking.appointments_with_status) 
-      ? booking.appointments_with_status[0] 
-      : booking.appointments_with_status;
-    
+    const appointment = booking.appointments;
     if (!appointment) {
       return {
         success: false,
@@ -251,7 +237,7 @@ export async function getReviewStatus(
     const existingReview = appointment.reviews;
 
     const reviewStatus: ReviewStatus = {
-      canReview: appointment.computed_status === 'completed' && !existingReview,
+      canReview: appointment.status === 'completed' && !existingReview,
       hasReview: !!existingReview,
       review: existingReview ? {
         id: existingReview.id,

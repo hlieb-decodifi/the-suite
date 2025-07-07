@@ -2,10 +2,7 @@
 
 import { CalendarClock } from 'lucide-react';
 import { DashboardTemplateCard } from '../DashboardTemplateCard/DashboardTemplateCard';
-import {
-  Appointment,
-  AppointmentStatusBadge,
-} from '../DashboardTemplateAppointmentsTable/DashboardTemplateAppointmentsTable';
+import { Appointment } from '../DashboardTemplateAppointmentsTable/DashboardTemplateAppointmentsTable';
 import { cn, formatCurrency } from '@/utils';
 import { Typography } from '@/components/ui/typography';
 import { DashboardTemplateWidget } from '../DashboardTemplateWidget';
@@ -34,12 +31,9 @@ function AppointmentPreview({ appointment }: { appointment: Appointment }) {
             showIcons={true}
           />
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <Typography className="font-medium">
-            {formatCurrency(appointment.amount)}
-          </Typography>
-          <AppointmentStatusBadge status={appointment.status} />
-        </div>
+        <Typography className="font-medium">
+          {formatCurrency(appointment.amount)}
+        </Typography>
       </div>
     </div>
   );
@@ -85,7 +79,7 @@ export function DashboardTemplateAppointmentsWidget({
   onViewAllClick,
 }: DashboardTemplateAppointmentsWidgetProps) {
   const upcomingAppointments = appointments.filter(
-    (a) => a.status === 'upcoming' || a.status === 'ongoing',
+    (a) => a.status === 'upcoming',
   );
 
   return (

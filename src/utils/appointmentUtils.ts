@@ -4,11 +4,13 @@
 
 /**
  * Calculate the appointment end time based on start time and total duration
- * @param startTime - The appointment start time (ISO string)
+ * @param appointmentDate - The appointment date (YYYY-MM-DD format)
+ * @param startTime - The appointment start time (HH:MM format)
  * @param totalDurationMinutes - Total duration of all services in minutes
  * @returns Object with start datetime, end datetime, and capture schedule
  */
 export function calculateAppointmentTimes(
+  appointmentDate: string,
   startTime: string,
   totalDurationMinutes: number
 ): {
@@ -16,8 +18,8 @@ export function calculateAppointmentTimes(
   appointmentEnd: Date;
   captureScheduledFor: Date;
 } {
-  // Parse the ISO string to Date
-  const appointmentStart = new Date(startTime);
+  // Create appointment start datetime
+  const appointmentStart = new Date(`${appointmentDate}T${startTime}`);
   
   // Add total duration to get end time
   const appointmentEnd = new Date(appointmentStart.getTime() + (totalDurationMinutes * 60 * 1000));

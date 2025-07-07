@@ -24,19 +24,17 @@ function FilterButtons({
   upcomingCount,
   completedCount,
   cancelledCount,
-  ongoingCount,
 }: {
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
   upcomingCount: number;
   completedCount: number;
   cancelledCount: number;
-  ongoingCount: number;
 }) {
   return (
-    <div className="flex flex-wrap gap-2 mb-4">
+    <div className="inline-flex items-center mb-4 bg-muted/30 p-1 rounded-full">
       <button
-        className={`px-4 py-1.5 rounded-full text-sm font-medium hover:bg-muted ${
+        className={`px-4 py-1.5 rounded-full text-sm font-medium ${
           activeFilter === 'all'
             ? 'bg-white shadow-sm'
             : 'text-muted-foreground'
@@ -56,18 +54,6 @@ function FilterButtons({
         onClick={() => setActiveFilter('upcoming')}
       >
         Upcoming
-      </button>
-      <button
-        className={`px-4 py-1.5 rounded-full text-sm font-medium ${
-          ongoingCount > 0 ? 'hover:bg-muted' : ''
-        } ${
-          activeFilter === 'ongoing'
-            ? 'bg-white shadow-sm'
-            : 'text-muted-foreground'
-        }`}
-        onClick={() => setActiveFilter('ongoing')}
-      >
-        Ongoing
       </button>
       <button
         className={`px-4 py-1.5 rounded-full text-sm font-medium ${
@@ -115,9 +101,6 @@ export function DashboardTemplateAppointmentsFilters({
   const cancelledCount = pastAppointments.filter(
     (a) => a.status === 'cancelled',
   ).length;
-  const ongoingCount = pastAppointments.filter(
-    (a) => a.status === 'ongoing',
-  ).length;
   const upcomingCount = upcomingAppointments.length;
 
   return (
@@ -138,7 +121,6 @@ export function DashboardTemplateAppointmentsFilters({
           upcomingCount={upcomingCount}
           completedCount={completedCount}
           cancelledCount={cancelledCount}
-          ongoingCount={ongoingCount}
         />
 
         <DashboardTemplateAppointmentsTable

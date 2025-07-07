@@ -19,8 +19,7 @@ export type Appointment = {
   serviceName: string;
   clientName?: string;
   professionalName?: string;
-  status: 'upcoming' | 'completed' | 'cancelled' | 'ongoing';
-  computed_status?: string;
+  status: 'upcoming' | 'completed' | 'cancelled';
   amount: number;
 };
 
@@ -31,11 +30,7 @@ export type DashboardTemplateAppointmentsTableProps = {
 };
 
 // Helper component to render the status badge
-export function AppointmentStatusBadge({
-  status,
-}: {
-  status: Appointment['status'];
-}) {
+function AppointmentStatusBadge({ status }: { status: Appointment['status'] }) {
   switch (status) {
     case 'upcoming':
       return (
@@ -44,15 +39,6 @@ export function AppointmentStatusBadge({
           className="bg-primary/10 text-primary border-primary/20"
         >
           Upcoming
-        </Badge>
-      );
-    case 'ongoing':
-      return (
-        <Badge
-          variant="outline"
-          className="bg-orange-500/10 text-orange-500 border-orange-500/20"
-        >
-          Ongoing
         </Badge>
       );
     case 'completed':

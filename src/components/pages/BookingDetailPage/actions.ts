@@ -134,12 +134,6 @@ export async function addAdditionalServices({
   professionalUserId,
 }: AddAdditionalServicesParams): Promise<AddAdditionalServicesResult> {
   try {
-    console.log('[addAdditionalServices] Starting with params:', {
-      appointmentId,
-      additionalServiceIds,
-      professionalUserId,
-    });
-
     const supabase = await createClient();
 
     // First, verify the appointment belongs to this professional
@@ -173,22 +167,14 @@ export async function addAdditionalServices({
       .single();
 
     if (appointmentError || !appointment) {
-      console.error('[addAdditionalServices] Appointment fetch error:', appointmentError);
       return {
         success: false,
         error: 'Appointment not found',
       };
     }
 
-    console.log('[addAdditionalServices] Fetched appointment data:', {
-      appointmentId: appointment.id,
-      bookingId: appointment.booking_id,
-      bookingPayments: appointment.bookings?.booking_payments,
-    });
-
     const booking = appointment.bookings;
     if (!booking || !booking.professionals) {
-      console.error('[addAdditionalServices] Invalid booking data:', { booking });
       return {
         success: false,
         error: 'Invalid appointment data',
@@ -197,10 +183,6 @@ export async function addAdditionalServices({
 
     // Verify professional ownership
     if (booking.professionals.user_id !== professionalUserId) {
-      console.error('[addAdditionalServices] Authorization failed:', {
-        expectedUserId: booking.professionals.user_id,
-        actualUserId: professionalUserId,
-      });
       return {
         success: false,
         error: 'Not authorized to modify this appointment',
@@ -215,27 +197,15 @@ export async function addAdditionalServices({
       .eq('professional_profile_id', booking.professionals.id);
 
     if (servicesError || !services || services.length !== additionalServiceIds.length) {
-      console.error('[addAdditionalServices] Services fetch error:', {
-        error: servicesError,
-        servicesFound: services?.length,
-        servicesRequested: additionalServiceIds.length,
-      });
       return {
         success: false,
         error: 'Some services not found or not owned by professional',
       };
     }
 
-    console.log('[addAdditionalServices] Retrieved services:', services);
-
     // Calculate additional amount
     const additionalAmount = services.reduce((total, service) => total + service.price, 0);
     const additionalAmountCents = Math.round(additionalAmount * 100);
-
-    console.log('[addAdditionalServices] Calculated amounts:', {
-      additionalAmount,
-      additionalAmountCents,
-    });
 
     // Add services to booking_services using service role client to bypass RLS
     const bookingServicesData = services.map(service => ({
@@ -250,18 +220,15 @@ export async function addAdditionalServices({
       .insert(bookingServicesData);
 
     if (insertError) {
-      console.error('[addAdditionalServices] Insert error:', insertError);
+      console.error('Insert error details:', insertError);
       return {
         success: false,
         error: `Failed to add services to booking: ${insertError.message}`,
       };
     }
 
-    console.log('[addAdditionalServices] Successfully inserted booking services:', bookingServicesData);
-
     const bookingPayment = booking.booking_payments;
     if (!bookingPayment) {
-      console.error('[addAdditionalServices] No booking payment found for booking:', booking.id);
       return {
         success: false,
         error: 'No payment found for this booking',
@@ -272,16 +239,8 @@ export async function addAdditionalServices({
     const newTotalCents = currentAmountCents + additionalAmountCents;
     const newTotalDollars = newTotalCents / 100;
 
-    console.log('[addAdditionalServices] Payment amount calculations:', {
-      currentAmount: bookingPayment.amount,
-      currentAmountCents,
-      additionalAmountCents,
-      newTotalCents,
-      newTotalDollars,
-    });
-
     // Update the booking payment amount
-    const { error: updatePaymentError, data: updatedPayment } = await supabase
+    const { error: updatePaymentError } = await supabase
       .from('booking_payments')
       .update({
         amount: newTotalDollars,
@@ -289,31 +248,18 @@ export async function addAdditionalServices({
       })
       .eq('id', bookingPayment.id);
 
-    console.log('[addAdditionalServices] Updated payment:', updatedPayment);
-
     if (updatePaymentError) {
-      console.error('[addAdditionalServices] Payment update error:', updatePaymentError);
       return {
         success: false,
         error: 'Failed to update payment amount',
       };
     }
 
-    console.log('[addAdditionalServices] Successfully updated booking payment:', {
-      paymentId: bookingPayment.id,
-      newAmount: newTotalDollars,
-    });
-
     // Handle Stripe payment updates
     const paymentMethod = bookingPayment.payment_methods;
     const isCardPayment = paymentMethod?.is_online === true;
 
     if (isCardPayment && bookingPayment.stripe_payment_intent_id) {
-      console.log('[addAdditionalServices] Updating Stripe payment intent:', {
-        paymentIntentId: bookingPayment.stripe_payment_intent_id,
-        newAmount: newTotalCents,
-      });
-
       // For card payments, update the existing uncaptured payment intent
       try {
         await stripe.paymentIntents.update(bookingPayment.stripe_payment_intent_id, {
@@ -323,10 +269,8 @@ export async function addAdditionalServices({
             additional_amount: additionalAmountCents.toString(),
           },
         });
-
-        console.log('[addAdditionalServices] Successfully updated Stripe payment intent');
       } catch (stripeError) {
-        console.error('[addAdditionalServices] Stripe payment intent update error:', stripeError);
+        console.error('Error updating Stripe payment intent:', stripeError);
         return {
           success: false,
           error: 'Failed to update payment intent',
@@ -334,15 +278,9 @@ export async function addAdditionalServices({
       }
     } else {
       // For cash payments, we just update the database
-      console.log('[addAdditionalServices] Cash payment - additional amount to be collected:', {
-        additionalAmount: additionalAmountCents / 100,
-      });
+      // The additional amount will be collected in cash
+      console.log('Cash payment - additional amount to be collected in cash:', additionalAmountCents / 100);
     }
-
-    console.log('[addAdditionalServices] Operation completed successfully:', {
-      newTotal: newTotalDollars,
-      servicesAdded: services.length,
-    });
 
     return {
       success: true,
@@ -356,7 +294,7 @@ export async function addAdditionalServices({
     };
 
   } catch (error) {
-    console.error('[addAdditionalServices] Unexpected error:', error);
+    console.error('Error in addAdditionalServices:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',

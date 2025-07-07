@@ -212,23 +212,10 @@ export async function updateContactInquiryStatus(
  */
 async function sendAdminNotificationEmail(inquiryId: string, formData: ContactFormData) {
   try {
-    const { sendContactInquiryAdmin } = await import('@/providers/brevo/templates');
+    const { sendEmail, createAdminNotificationEmail } = await import('@/lib/email');
     
-    const result = await sendContactInquiryAdmin(
-      [{ email: process.env.BREVO_ADMIN_EMAIL! }],
-      {
-        inquiry_id: inquiryId,
-        urgency: 'medium',
-        urgency_color: '#f59e0b', // medium urgency color
-        subject: formData.subject,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        message: formData.message,
-        submitted_at: new Date().toLocaleString(),
-        dashboard_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`
-      }
-    );
+    const emailTemplate = createAdminNotificationEmail(inquiryId, formData);
+    const result = await sendEmail(emailTemplate);
     
     if (!result.success) {
       console.error('Failed to send admin notification email:', result.error);
@@ -248,18 +235,10 @@ async function sendAdminNotificationEmail(inquiryId: string, formData: ContactFo
  */
 async function sendUserConfirmationEmail(email: string, name: string, inquiryId: string) {
   try {
-    const { sendContactInquiryConfirmation } = await import('@/providers/brevo/templates');
+    const { sendEmail, createUserConfirmationEmail } = await import('@/lib/email');
     
-    const result = await sendContactInquiryConfirmation(
-      [{ email, name }],
-      {
-        name,
-        email,
-        subject: 'Contact Form Submission',
-        message: 'Thank you for contacting us. We will get back to you soon.',
-        inquiry_id: inquiryId
-      }
-    );
+    const emailTemplate = createUserConfirmationEmail(email, name, inquiryId);
+    const result = await sendEmail(emailTemplate);
     
     if (!result.success) {
       console.error('Failed to send user confirmation email:', result.error);

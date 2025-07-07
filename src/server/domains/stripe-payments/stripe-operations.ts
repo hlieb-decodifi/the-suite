@@ -1,17 +1,9 @@
 import { stripe } from '@/lib/stripe/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import type { Stripe } from 'stripe';
+import type Stripe from 'stripe';
 import type {
   StripeCheckoutParams,
   StripeCheckoutResult
 } from './types';
-
-function createSupabaseAdminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 /**
  * Create a Stripe checkout session for booking payment
@@ -300,8 +292,8 @@ export async function createUncapturedPaymentIntent(
  */
 export async function schedulePaymentAuthorization(
   bookingId: string,
-  appointmentStartTime: Date,
-  appointmentEndTime: Date
+  appointmentDate: Date,
+  appointmentTime: string
 ): Promise<{ 
   success: boolean; 
   preAuthDate?: Date; 
@@ -310,15 +302,31 @@ export async function schedulePaymentAuthorization(
   error?: string; 
 }> {
   try {
+    // Import the calculate payment schedule function
     const { createClient } = await import('@/lib/supabase/server');
     const supabase = await createClient();
     
-    console.log(`[Payment Schedule] Booking ${bookingId}: Calculating schedule for appointment ${appointmentStartTime.toISOString()} - ${appointmentEndTime.toISOString()}`);
+    // Get total duration from booking services
+    const { data: bookingServices, error: servicesError } = await supabase
+      .from('booking_services')
+      .select('duration')
+      .eq('booking_id', bookingId);
+
+    if (servicesError) {
+      console.error('Error fetching booking services:', servicesError);
+      return { success: false, error: servicesError.message };
+    }
+
+    // Calculate total duration in minutes
+    const totalDurationMinutes = bookingServices?.reduce((sum, service) => sum + service.duration, 0) || 60;
+    
+    console.log(`[Payment Schedule] Booking ${bookingId}: Total duration ${totalDurationMinutes} minutes`);
     
     const { data, error } = await supabase
       .rpc('calculate_payment_schedule', {
-        appointment_start_time: appointmentStartTime.toISOString(),
-        appointment_end_time: appointmentEndTime.toISOString()
+        appointment_date: appointmentDate.toISOString().split('T')[0] || '',
+        appointment_time: appointmentTime || '00:00:00',
+        duration_minutes: totalDurationMinutes
       })
       .single();
 
@@ -546,6 +554,7 @@ export async function createEnhancedCheckoutSession(
   params: StripeCheckoutParams & { 
     customerEmail?: string;
     useUncapturedPayment?: boolean;
+    isServiceFeeOnly?: boolean;
   }
 ): Promise<StripeCheckoutResult> {
   try {
@@ -560,7 +569,8 @@ export async function createEnhancedCheckoutSession(
       requiresBalancePayment,
       metadata,
       customerEmail,
-      useUncapturedPayment = false
+      useUncapturedPayment = false,
+      isServiceFeeOnly = false
     } = params;
 
     if (!process.env.NEXT_PUBLIC_BASE_URL) {
@@ -576,6 +586,56 @@ export async function createEnhancedCheckoutSession(
     if (!customerResult.success || !customerResult.customerId) {
       console.error('Failed to get/create Stripe customer:', customerResult.error);
       throw new Error('Failed to create customer account');
+    }
+
+    // For service fee only payments
+    if (isServiceFeeOnly) {
+      const serviceFeeResult = await createServiceFeePaymentIntent(
+        customerResult.customerId,
+        metadata
+      );
+      
+      if (!serviceFeeResult.success) {
+        throw new Error(serviceFeeResult.error || 'Failed to create service fee payment');
+      }
+
+      // Create checkout session for service fee
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        client_reference_id: clientId,
+        customer: customerResult.customerId,
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Service Fee',
+                description: `Processing fee for cash payment appointment`
+              },
+              unit_amount: await getServiceFeeFromConfig()
+            },
+            quantity: 1
+          }
+        ],
+        success_url: `${baseUrl}/booking/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${bookingId}`,
+        cancel_url: `${baseUrl}/booking/cancel?booking_id=${bookingId}`,
+        metadata: {
+          ...metadata,
+          payment_type: 'service_fee_only',
+          booking_id: bookingId
+        }
+      });
+
+      if (!session.url) {
+        throw new Error('Failed to create checkout session URL');
+      }
+
+      return {
+        success: true,
+        checkoutUrl: session.url,
+        sessionId: session.id
+      };
     }
 
     // For regular payments, use corrected fee structure
@@ -601,22 +661,10 @@ export async function createEnhancedCheckoutSession(
         on_behalf_of: professionalStripeAccountId
       };
       
-      // Get payment method type from metadata to customize message
-      const isServiceFeeAndDepositOnly = metadata.is_service_fee_and_deposit_only === 'true';
-      
-      let customMessage: string;
-      if (isServiceFeeAndDepositOnly) {
-        // Cash payment - only service fee and deposit will be charged
-        customMessage = `Save your payment method for your upcoming appointment. Service fee and deposit: $${(amount / 100).toFixed(2)} will be charged 6 days before your appointment. The remaining balance will be paid in cash at the appointment. No payment will be taken today.`;
-      } else {
-        // Card payment - full amount will be charged
-        customMessage = `Save your payment method for your upcoming appointment. Total service cost: $${(amount / 100).toFixed(2)}. Payment will be authorized 6 days before your appointment and charged after service completion. No payment will be taken today.`;
-      }
-      
       // Add custom text to explain the setup intent process and show the amount
       sessionConfig.custom_text = {
         submit: {
-          message: customMessage
+          message: `Save your payment method for your upcoming appointment. Total service cost: $${(amount / 100).toFixed(2)}. Payment will be authorized 6 days before your appointment and charged after service completion. No payment will be taken today.`
         }
       };
     } else {
@@ -627,11 +675,7 @@ export async function createEnhancedCheckoutSession(
       }
 
       const serviceFee = await getServiceFeeFromConfig();
-      
-      // For deposit payments, don't include service fee
-      const serviceAmount = paymentType === 'deposit' 
-        ? chargeAmount // Deposit amount is already calculated correctly
-        : chargeAmount - serviceFee; // For full payments, subtract fee
+      const serviceAmount = chargeAmount - serviceFee; // Professional gets this amount minus Stripe fees
       
       sessionConfig.mode = 'payment';
       sessionConfig.payment_method_types = ['card'];
@@ -651,23 +695,17 @@ export async function createEnhancedCheckoutSession(
         }
       ];
 
-      // Only include transfer data if this is not a service fee only payment
-      const isServiceFeeOnly = metadata?.payment_flow === 'immediate_service_fee_only';
-      
       // Use direct charge to professional's account with correct fee structure
       sessionConfig.payment_intent_data = {
-        metadata: sessionConfig.metadata || {},
-      };
-
-      // Add transfer data only if this is not a service fee only payment
-      if (!isServiceFeeOnly && serviceAmount > 0) {
-        sessionConfig.payment_intent_data.transfer_data = {
-          amount: serviceAmount, // For deposits, transfer the full deposit. For full payments, subtract fee
+        // Professional receives service amount minus Stripe processing fees
+        transfer_data: {
+          amount: serviceAmount, // Only transfer the service amount (total - suite fee)
           destination: professionalStripeAccountId
-        };
+        },
+        metadata: sessionConfig.metadata || {},
         // The remaining amount (suite fee) stays in the platform account
-        sessionConfig.payment_intent_data.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
-      }
+        on_behalf_of: professionalStripeAccountId // Professional pays the processing fees
+      };
 
       // Add uncaptured payment configuration
       if (useUncapturedPayment) {
@@ -981,151 +1019,4 @@ export async function createSplitPaymentCheckoutSession(
       error: error instanceof Error ? error.message : 'Unknown error creating split payment session'
     };
   }
-}
-
-export async function createUncapturedPayment(
-  bookingId: string,
-  amount: number,
-  paymentMethodId: string,
-  customerId: string,
-  appointmentStartTime: string,
-  appointmentEndTime: string
-): Promise<Stripe.PaymentIntent> {
-  const adminSupabase = createSupabaseAdminClient();
-
-  console.log('Creating uncaptured payment for booking:', bookingId);
-  console.log('Appointment times:', { start: appointmentStartTime, end: appointmentEndTime });
-
-  // Calculate payment schedule
-  const { data: scheduleData, error: scheduleError } = await adminSupabase
-    .rpc('calculate_payment_schedule', {
-      appointment_start_time: appointmentStartTime,
-      appointment_end_time: appointmentEndTime
-    });
-
-  if (scheduleError) {
-    console.error('Error calculating payment schedule:', scheduleError);
-    throw new Error('Failed to calculate payment schedule');
-  }
-
-  console.log('Payment schedule calculated:', scheduleData);
-
-  if (!scheduleData || scheduleData.length === 0) {
-    console.error('No schedule data returned from calculate_payment_schedule');
-    throw new Error('No schedule data returned');
-  }
-
-  // Create payment intent with manual capture
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amount * 100),
-    currency: 'usd',
-    customer: customerId,
-    payment_method: paymentMethodId,
-    capture_method: 'manual',
-    metadata: {
-      booking_id: bookingId
-    }
-  });
-
-  console.log('Created Stripe payment intent:', paymentIntent.id);
-
-  // Update booking_payments with capture schedule
-  const { error: updateError } = await adminSupabase
-    .from('booking_payments')
-    .update({
-      capture_method: 'manual',
-      capture_scheduled_for: scheduleData[0].capture_date,
-      pre_auth_placed_at: new Date().toISOString(),
-      authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-      stripe_payment_intent_id: paymentIntent.id,
-      status: 'authorized'
-    })
-    .eq('booking_id', bookingId);
-
-  if (updateError) {
-    console.error('Error updating booking payment schedule:', updateError);
-    throw new Error('Failed to update booking payment schedule');
-  }
-
-  console.log('Updated booking payment with schedule:', {
-    bookingId,
-    captureScheduledFor: scheduleData[0].capture_date,
-    paymentIntentId: paymentIntent.id
-  });
-
-  return paymentIntent;
-}
-
-// Update the existing payment creation function to use createUncapturedPayment
-export async function createPaymentForBooking(
-  bookingId: string,
-  amount: number,
-  paymentMethodId: string,
-  customerId: string,
-  appointmentStartTime: string,
-  appointmentEndTime: string
-): Promise<Stripe.PaymentIntent> {
-  const adminSupabase = createSupabaseAdminClient();
-
-  console.log('Creating payment for booking:', bookingId);
-  console.log('Appointment times:', { start: appointmentStartTime, end: appointmentEndTime });
-
-  // Calculate if we need to use uncaptured payment
-  const { data: scheduleData, error: scheduleError } = await adminSupabase
-    .rpc('calculate_payment_schedule', {
-      appointment_start_time: appointmentStartTime,
-      appointment_end_time: appointmentEndTime
-    });
-
-  if (scheduleError) {
-    console.error('Error calculating payment schedule:', scheduleError);
-    throw new Error('Failed to calculate payment schedule');
-  }
-
-  console.log('Payment schedule calculated:', scheduleData);
-
-  if (!scheduleData || scheduleData.length === 0) {
-    console.error('No schedule data returned from calculate_payment_schedule');
-    throw new Error('No schedule data returned');
-  }
-
-  // If should_pre_auth_now is true, use uncaptured payment
-  if (scheduleData[0].should_pre_auth_now) {
-    console.log('Appointment is within 6 days, creating uncaptured payment');
-    return createUncapturedPayment(
-      bookingId,
-      amount,
-      paymentMethodId,
-      customerId,
-      appointmentStartTime,
-      appointmentEndTime
-    );
-  }
-
-  console.log('Creating normal payment intent');
-  // Otherwise, create normal payment intent
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amount * 100),
-    currency: 'usd',
-    customer: customerId,
-    payment_method: paymentMethodId,
-    metadata: {
-      booking_id: bookingId
-    }
-  });
-
-  // Update booking_payments with payment intent ID
-  const { error: updateError } = await adminSupabase
-    .from('booking_payments')
-    .update({
-      stripe_payment_intent_id: paymentIntent.id
-    })
-    .eq('booking_id', bookingId);
-
-  if (updateError) {
-    console.error('Error updating booking payment:', updateError);
-    throw new Error('Failed to update booking payment');
-  }
-
-  return paymentIntent;
 } 

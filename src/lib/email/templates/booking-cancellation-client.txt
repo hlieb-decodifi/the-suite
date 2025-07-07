@@ -6,14 +6,11 @@ We're sorry to inform you that your appointment with {{professionalName}} has be
 
 CANCELLED APPOINTMENT DETAILS
 Professional: {{professionalName}}
-Date: {{date appointmentDate}}
-Time: {{time appointmentDate}}
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
 Booking ID: {{bookingId}}
-{{#if payment}}
-Payment Method: {{payment.method.name}}
-{{/if}}
 {{#if services}}
-Services: {{#each services}}{{name}} (${{price}}){{#unless @last}}, {{/unless}}{{/each}}
+Services: {{#each services}}{{name}}{{#unless @last}}, {{/unless}}{{/each}}
 {{/if}}
 
 {{#if cancellationReason}}
@@ -21,8 +18,6 @@ CANCELLATION REASON
 "{{cancellationReason}}"
 {{/if}}
 
-{{#if payment}}
-{{#if payment.method.is_online}}
 {{#if refundInfo}}
 REFUND INFORMATION
 Original Amount: ${{refundInfo.originalAmount}}
@@ -31,11 +26,9 @@ Refund Amount: ${{refundInfo.refundAmount}}
 {{/if}}
 Refund Status: {{refundInfo.status}}
 {{/if}}
-{{/if}}
-{{/if}}
 
 VIEW BOOKING DETAILS
-{{appointmentDetailsUrl}}/{{appointmentId}}
+{{appointmentDetailsUrl}}
 
 If you have any questions about this cancellation, please don't hesitate to contact us or reach out to the professional directly.
 

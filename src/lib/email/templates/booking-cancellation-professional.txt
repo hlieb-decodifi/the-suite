@@ -9,12 +9,9 @@ Client: {{clientName}}
 {{#if clientPhone}}
 Client Phone: {{clientPhone}}
 {{/if}}
-Date: {{date appointmentDate}}
-Time: {{time appointmentDate}}
+Date: {{appointmentDate}}
+Time: {{appointmentTime}}
 Booking ID: {{bookingId}}
-{{#if payment}}
-Payment Method: {{payment.method.name}}
-{{/if}}
 {{#if services}}
 Services: {{#each services}}{{name}} (${{price}}){{#unless @last}}, {{/unless}}{{/each}}
 {{/if}}
@@ -24,8 +21,6 @@ CANCELLATION REASON
 "{{cancellationReason}}"
 {{/if}}
 
-{{#if payment}}
-{{#if payment.method.is_online}}
 {{#if refundInfo}}
 REFUND INFORMATION
 Original Amount: ${{refundInfo.originalAmount}}
@@ -34,11 +29,9 @@ Refund Amount: ${{refundInfo.refundAmount}}
 {{/if}}
 Refund Status: {{refundInfo.status}}
 {{/if}}
-{{/if}}
-{{/if}}
 
 VIEW BOOKING DETAILS
-{{appointmentDetailsUrl}}/{{appointmentId}}
+{{appointmentDetailsUrl}}
 
 This time slot is now available for new bookings. If you have any questions about this cancellation, please feel free to contact our support team.
 

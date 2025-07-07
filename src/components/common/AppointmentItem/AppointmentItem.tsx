@@ -10,11 +10,9 @@ import { formatCurrency } from '@/utils/formatCurrency';
 
 export type AppointmentType = {
   id: string;
-  booking_id: string;
-  start_time: string; // ISO string from timestamptz
-  end_time: string; // ISO string from timestamptz
+  start_time: string;
+  end_time: string;
   status: string;
-  computed_status?: string;
   location?: string;
   services?: {
     id: string;
@@ -88,12 +86,18 @@ export function AppointmentItem({
   };
 
   const getStatusBadge = () => {
-    const displayStatus = appointment.computed_status || appointment.status;
-    switch (displayStatus) {
+    switch (appointment.status) {
       case 'upcoming':
+      case 'confirmed':
         return (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            Upcoming
+            Confirmed
+          </Badge>
+        );
+      case 'pending':
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+            Pending
           </Badge>
         );
       case 'cancelled':
@@ -109,7 +113,7 @@ export function AppointmentItem({
           </Badge>
         );
       default:
-        return <Badge variant="outline">{displayStatus}</Badge>;
+        return <Badge variant="outline">{appointment.status}</Badge>;
     }
   };
 

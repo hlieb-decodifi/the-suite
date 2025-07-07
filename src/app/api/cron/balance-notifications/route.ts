@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAppointmentsNeedingBalanceNotification, markBalanceNotificationSent } from '@/server/domains/stripe-payments/db';
-import { sendBalanceNotification, sendReviewTipNotification } from '@/providers/brevo/templates';
-import { EmailRecipient } from '@/providers/brevo/types';
+import { createBalanceNotificationEmail, sendEmail } from '@/lib/email';
 
 export const runtime = 'nodejs';
 
@@ -39,18 +38,14 @@ export async function GET() {
         console.log(`[CRON] Sending balance notification for booking: ${appointment.booking_id}`);
 
         // Format appointment date and time for the email
-        const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+        const appointmentDate = new Date(appointment.appointment_date).toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric'
         });
         
-        const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
+        const appointmentTime = appointment.appointment_time;
 
         // Calculate payment amounts (already in dollars from DB)
         const totalAmount = appointment.total_amount;
@@ -59,48 +54,47 @@ export async function GET() {
         const currentTip = appointment.tip_amount || 0;
         const totalDue = balanceAmount + currentTip;
 
-        // Create recipient object
-        const recipient: EmailRecipient = {
-          email: appointment.client_email,
-          name: appointment.client_name
-        };
-
         if (appointment.is_cash_payment) {
           // For cash payments: send review + tip notification (no balance due)
-          await sendReviewTipNotification([recipient], {
-            client_name: appointment.client_name,
-            professional_name: appointment.professional_name,
-            payment_method: appointment.payment_method_name,
-            service_amount: totalAmount,
-            service_fee: appointment.service_fee,
-            total_amount: totalAmount,
-            review_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}/review`,
-            appointment_id: appointment.booking_id,
-            appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-            date: appointmentDate,
-            time: appointmentTime,
-            website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-            support_email: process.env.SUPPORT_EMAIL || ''
-          });
+          const { createReviewTipNotificationEmail } = await import('@/lib/email/templates');
+          const email = createReviewTipNotificationEmail(
+            appointment.client_email,
+            appointment.client_name,
+            {
+              bookingId: appointment.booking_id,
+              professionalName: appointment.professional_name,
+              appointmentDate,
+              appointmentTime,
+              paymentMethod: appointment.payment_method_name,
+              totalAmount,
+              serviceFee: appointment.service_fee
+            }
+          );
+
+          // Send the email using Brevo
+          await sendEmail(email);
           
           console.log(`[CRON] Successfully sent review/tip notification for cash payment booking: ${appointment.booking_id}`);
         } else {
           // For card payments: send balance notification
-          await sendBalanceNotification([recipient], {
-            professional_name: appointment.professional_name,
-            total_amount: totalAmount,
-            ...(depositPaid ? { deposit_paid: depositPaid } : {}),
-            balance_amount: balanceAmount,
-            ...(currentTip > 0 ? { current_tip: currentTip } : {}),
-            total_due: totalDue,
-            balance_payment_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}/payment`,
-            appointment_id: appointment.booking_id,
-            appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-            date: appointmentDate,
-            time: appointmentTime,
-            website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-            support_email: process.env.SUPPORT_EMAIL || ''
-          });
+          const email = createBalanceNotificationEmail(
+            appointment.client_email,
+            appointment.client_name,
+            {
+              bookingId: appointment.booking_id,
+              professionalName: appointment.professional_name,
+              appointmentDate,
+              appointmentTime,
+              totalAmount,
+              ...(depositPaid && { depositPaid }),
+              balanceAmount,
+              ...(currentTip > 0 && { currentTip }),
+              totalDue
+            }
+          );
+
+          // Send the email using Brevo
+          await sendEmail(email);
           
           console.log(`[CRON] Successfully sent balance notification for card payment booking: ${appointment.booking_id}`);
         }

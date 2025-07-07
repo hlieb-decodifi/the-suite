@@ -972,72 +972,19 @@ alter table bookings add constraint bookings_status_check
 
 /**
 * APPOINTMENTS
-* Individual appointment slots for bookings
+* For tracking the actual appointment details
 */
 create table appointments (
   id uuid primary key default uuid_generate_v4(),
-  booking_id uuid references bookings not null,
-  start_time timestamptz not null,
-  end_time timestamptz not null,
-  status text not null check (status in ('active', 'completed', 'cancelled', 'ongoing')),
+  booking_id uuid references bookings not null unique,
+  date date not null,
+  start_time time not null,
+  end_time time not null,
+  status text not null check (status in ('upcoming', 'completed', 'cancelled')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table appointments enable row level security;
-
-/**
-* Function to compute appointment status based on time
-* Returns 'upcoming', 'ongoing', 'completed', or 'cancelled'
-*/
-create or replace function get_appointment_computed_status(
-  p_start_time timestamptz,
-  p_end_time timestamptz,
-  p_status text
-)
-returns text as $$
-declare
-  current_datetime timestamptz;
-begin
-  -- If appointment is cancelled, return cancelled
-  if p_status = 'cancelled' then
-    return 'cancelled';
-  end if;
-
-  current_datetime := now();
-
-  -- If appointment hasn't started yet, it's upcoming
-  if current_datetime < p_start_time then
-    return 'upcoming';
-  end if;
-
-  -- If appointment has ended, it's completed
-  if current_datetime > p_end_time then
-    return 'completed';
-  end if;
-
-  -- If we're between start and end time, it's ongoing
-  return 'ongoing';
-end;
-$$ language plpgsql;
-
-/**
-* View that combines appointments with their computed status
-* Note: Views in Postgres inherit the relationships of their base tables
-*/
-create or replace view appointments_with_status as
-select 
-  a.id,
-  a.booking_id,
-  a.start_time,
-  a.end_time,
-  a.status,
-  a.created_at,
-  a.updated_at,
-  get_appointment_computed_status(a.start_time, a.end_time, a.status) as computed_status
-from appointments a;
-
--- Grant permissions to use the view
-grant select on appointments_with_status to authenticated;
 
 /**
 * BOOKING_SERVICES
@@ -1128,8 +1075,9 @@ begin
     where b.professional_profile_id = (
       select professional_profile_id from bookings where id = new.booking_id
     )
+    and a.date = new.date
     and a.status != 'cancelled'
-    and b.status not in ('pending_payment', 'cancelled')
+    and b.status not in ('pending_payment', 'cancelled') -- Exclude pending payments and cancelled bookings
     and a.booking_id != new.booking_id
     and (
       (new.start_time < a.end_time and new.end_time > a.start_time) -- time slots overlap
@@ -1307,32 +1255,6 @@ create policy "Professionals can view user data for clients with shared appointm
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.client_id = users.id
       and pp.user_id = auth.uid()
-    )
-  );
-
--- Add policy for professionals to update booking payments during ongoing appointments
-create policy "Professionals can update payment amounts for ongoing appointments"
-  on booking_payments for update
-  using (
-    exists (
-      select 1 
-      from bookings b
-      join appointments a on a.booking_id = b.id
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = booking_payments.booking_id
-      and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
-    )
-  )
-  with check (
-    exists (
-      select 1 
-      from bookings b
-      join appointments a on a.booking_id = b.id
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = booking_payments.booking_id
-      and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
     )
   );
 
@@ -1874,25 +1796,30 @@ create policy "Clients can create appointments for their bookings"
     )
   );
 
--- Function to calculate pre-auth and capture times based on appointment start and end time
-create or replace function calculate_payment_schedule(
-  appointment_start_time timestamptz,
-  appointment_end_time timestamptz
-)
+-- Function to calculate pre-auth and capture times based on appointment date and duration
+create or replace function calculate_payment_schedule(appointment_date date, appointment_time time, duration_minutes integer default 60)
 returns table(
   pre_auth_date timestamp with time zone,
   capture_date timestamp with time zone,
   should_pre_auth_now boolean
 ) as $$
 declare
+  appointment_start_datetime timestamp with time zone;
+  appointment_end_datetime timestamp with time zone;
   six_days_before timestamp with time zone;
   twelve_hours_after_end timestamp with time zone;
 begin
+  -- Combine date and time into full timestamp for start
+  appointment_start_datetime := (appointment_date || ' ' || appointment_time)::timestamp with time zone;
+  
+  -- Calculate appointment end time by adding duration
+  appointment_end_datetime := appointment_start_datetime + (duration_minutes || ' minutes')::interval;
+  
   -- Calculate 6 days before appointment start (for pre-auth)
-  six_days_before := appointment_start_time - interval '6 days';
+  six_days_before := appointment_start_datetime - interval '6 days';
   
   -- Calculate 12 hours after appointment END (for capture)
-  twelve_hours_after_end := appointment_end_time + interval '12 hours';
+  twelve_hours_after_end := appointment_end_datetime + interval '12 hours';
   
   -- Determine if we should place pre-auth now (if appointment is within 6 days)
   return query select 
@@ -2108,25 +2035,25 @@ create index if not exists idx_reviews_created_at on reviews(created_at);
 create or replace function can_create_review(p_appointment_id uuid, p_client_id uuid)
 returns boolean as $$
 declare
-  appointment_computed_status text;
+  appointment_status text;
   appointment_client_id uuid;
   appointment_professional_id uuid;
   existing_review_count integer;
 begin
   -- Get appointment details
-  select a.computed_status, b.client_id, pp.user_id into appointment_computed_status, appointment_client_id, appointment_professional_id
-  from appointments_with_status a
+  select a.status, b.client_id, pp.user_id into appointment_status, appointment_client_id, appointment_professional_id
+  from appointments a
   join bookings b on a.booking_id = b.id
   join professional_profiles pp on b.professional_profile_id = pp.id
   where a.id = p_appointment_id;
   
   -- Check if appointment exists
-  if appointment_computed_status is null then
+  if appointment_status is null then
     return false;
   end if;
   
   -- Check if appointment is completed
-  if appointment_computed_status != 'completed' then
+  if appointment_status != 'completed' then
     return false;
   end if;
   
@@ -2431,103 +2358,6 @@ $$;
 
 -- Grant execute permission to authenticated users
 grant execute on function insert_address_and_return_id to authenticated;
-
-/**
-* Function to determine if an appointment is upcoming or completed based on its date and time
-*/
-create or replace function get_appointment_status(
-  p_date date,
-  p_start_time time,
-  p_end_time time,
-  p_status text
-)
-returns text as $$
-declare
-  appointment_start_datetime timestamp with time zone;
-  appointment_end_datetime timestamp with time zone;
-  current_datetime timestamp with time zone;
-begin
-  -- If appointment is cancelled, return cancelled
-  if p_status = 'cancelled' then
-    return 'cancelled';
-  end if;
-
-  -- Convert appointment date and times to timestamps
-  appointment_start_datetime := (p_date || ' ' || p_start_time)::timestamp with time zone;
-  appointment_end_datetime := (p_date || ' ' || p_end_time)::timestamp with time zone;
-  current_datetime := timezone('utc'::text, now());
-
-  -- If appointment hasn't started yet, it's upcoming
-  if current_datetime < appointment_start_datetime then
-    return 'upcoming';
-  end if;
-
-  -- If appointment has ended, it's completed
-  if current_datetime > appointment_end_datetime then
-    return 'completed';
-  end if;
-
-  -- If we're between start and end time, it's in progress (treat as upcoming)
-  return 'upcoming';
-end;
-$$ language plpgsql;
-
--- Add trigger for updated_at on appointments
-create trigger handle_updated_at before update on appointments
-  for each row execute procedure moddatetime (updated_at);
-
-/**
-* RLS policies for appointments
-*/
-
-/**
-* EMAIL TEMPLATES
-* Stores email template configurations for various system notifications
-*/
-create table email_templates (
-  id uuid primary key default uuid_generate_v4(),
-  name text not null,
-  description text,
-  tag text not null,
-  sender_name text not null,
-  sender_email text not null,
-  reply_to text,
-  subject text not null,
-  html_content text not null,
-  to_field text not null,
-  is_active boolean default true not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  -- Ensure unique template names and tags
-  constraint unique_template_name unique (name),
-  constraint unique_template_tag unique (tag)
-);
-alter table email_templates enable row level security;
-
--- Create indexes for better performance
-create index if not exists idx_email_templates_tag on email_templates(tag);
-create index if not exists idx_email_templates_is_active on email_templates(is_active);
-
--- RLS policies for email templates
-create policy "Anyone can view active email templates"
-  on email_templates for select
-  using (is_active = true);
-
--- Only admins can manage email templates
-create policy "Admins can manage email templates"
-  on email_templates for all
-  using (
-    exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
-    )
-  );
-
--- Add trigger for updated_at
-create trigger handle_updated_at before update on email_templates
-  for each row execute procedure moddatetime (updated_at);
 
 
 

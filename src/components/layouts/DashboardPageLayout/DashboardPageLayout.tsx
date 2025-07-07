@@ -127,55 +127,7 @@ export async function getUserDashboardData(
   }
 }
 
-type BookingPayment = {
-  amount: number;
-  tip_amount: number | null;
-  service_fee: number | null;
-};
-
-type BookingService = {
-  id: string;
-  service_id: string;
-  price: number;
-  duration: number;
-  services: {
-    name: string;
-    description: string | null;
-  } | null;
-};
-
-type AppointmentQueryResult = {
-  id: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  computed_status: string;
-  bookings: {
-    id: string;
-    client_id: string;
-    professional_profile_id: string;
-    notes: string | null;
-    created_at: string;
-    updated_at: string;
-    booking_services: BookingService[] | BookingService | null;
-    booking_payments: BookingPayment[] | BookingPayment | null;
-    professionals: {
-      id: string;
-      user_id: string;
-      users: {
-        id: string;
-        first_name: string | null;
-        last_name: string | null;
-      } | null;
-    };
-    clients: {
-      id: string;
-      first_name: string | null;
-      last_name: string | null;
-    } | null;
-  };
-};
-
+// Get appointments for the dashboard
 export async function getDashboardAppointments(
   userId: string,
   isProfessional: boolean,
@@ -183,168 +135,280 @@ export async function getDashboardAppointments(
   endDateIso?: string,
   status?: string,
 ) {
+  console.log('status', status);
   try {
     const supabase = await createClient();
 
-    // Start building the query using appointments_with_status view
-    let query = supabase.from('appointments_with_status').select(
-      `
+    // First, verify the user exists in our users table and check auth status
+    const { data: dbUser, error: dbUserError } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, role_id, roles(name)')
+      .eq('id', userId)
+      .single();
+
+    if (dbUserError || !dbUser) {
+      console.error(
+        'User not found in database or error fetching user:',
+        dbUserError,
+      );
+      return [];
+    }
+
+    // Get professional profile ID if user is a professional
+    let professionalProfileId: string | null = null;
+    if (isProfessional) {
+      const { data: profile, error: profileError } = await supabase
+        .from('professional_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      if (profileError) {
+        console.error(
+          'Error fetching professional profile for appointments:',
+          profileError,
+        );
+        // If profile doesn't exist but user is professional, try to create it
+        if (profileError.code === 'PGRST116') {
+          console.log(
+            'Professional profile not found, attempting to create one for user:',
+            userId,
+          );
+
+          const { data: newProfile, error: createError } = await supabase
+            .from('professional_profiles')
+            .insert({ user_id: userId })
+            .select('id')
+            .single();
+
+          if (createError) {
+            console.error('Error creating professional profile:', createError);
+            return []; // Return empty array if we can't create profile
+          }
+
+          if (newProfile) {
+            professionalProfileId = newProfile.id;
+            console.log(
+              'Created new professional profile with ID:',
+              newProfile.id,
+            );
+          }
+        } else {
+          return []; // Return empty array for other errors
+        }
+      } else {
+        professionalProfileId = profile?.id || null;
+      }
+    }
+
+    // First, get the bookings that belong to this user
+    let bookingsQuery = supabase.from('bookings').select('id');
+
+    // Filter based on user role
+    if (isProfessional && professionalProfileId) {
+      bookingsQuery = bookingsQuery.eq(
+        'professional_profile_id',
+        professionalProfileId,
+      );
+    } else {
+      // For clients, ensure they have a client profile
+      const { error: clientError } = await supabase
+        .from('client_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      if (clientError) {
+        console.error(
+          'Error fetching client profile for appointments:',
+          clientError,
+        );
+        // If profile doesn't exist but user is client, try to create it
+        if (clientError.code === 'PGRST116') {
+          console.log(
+            'Client profile not found, attempting to create one for user:',
+            userId,
+          );
+
+          const { error: createClientError } = await supabase
+            .from('client_profiles')
+            .insert({ user_id: userId })
+            .select('id')
+            .single();
+
+          if (createClientError) {
+            console.error('Error creating client profile:', createClientError);
+            return []; // Return empty array if we can't create profile
+          }
+
+          console.log('Created new client profile for user:', userId);
+        } else {
+          return []; // Return empty array for other errors
+        }
+      }
+
+      bookingsQuery = bookingsQuery.eq('client_id', userId);
+    }
+
+    // Apply status filter if provided
+    if (status && status !== 'all') {
+      bookingsQuery = bookingsQuery.eq('status', status);
+    }
+
+    const { data: bookingsData, error: bookingsError } = await bookingsQuery;
+
+    if (bookingsError !== null) {
+      console.error('Error fetching bookings:', bookingsError);
+      return [];
+    }
+
+    // If no bookings, return empty array
+    if (!bookingsData || bookingsData.length === 0) {
+      return [];
+    }
+
+    // Get all booking IDs
+    const bookingIds = bookingsData.map((booking) => booking.id);
+
+    // Now fetch appointments with related data
+    const { data: appointmentsData, error: appointmentsError } = await supabase
+      .from('appointments')
+      .select(
+        `
         id,
+        booking_id,
+        date,
         start_time,
         end_time,
         status,
-        computed_status,
-        bookings!inner(
+        created_at,
+        updated_at,
+        bookings!appointments_booking_id_fkey(
           id,
           client_id,
           professional_profile_id,
+          status,
           notes,
           created_at,
           updated_at,
           booking_services(
-            id,
+            id, 
             service_id,
             price,
             duration,
             services(
+              id,
               name,
               description
             )
           ),
           booking_payments(
+            id,
             amount,
             tip_amount,
-            service_fee
+            service_fee,
+            status
           ),
-          professionals:professional_profiles!inner(
+          clients:client_id(
+            id,
+            first_name,
+            last_name
+          ),
+          professionals:professional_profile_id(
             id,
             user_id,
-            users(
+            users:user_id(
               id,
               first_name,
               last_name
             )
-          ),
-          clients:users!client_id(
-            id,
-            first_name,
-            last_name
           )
         )
       `,
-    );
+      )
+      .in('booking_id', bookingIds);
 
-    // Add filters based on user role
-    if (isProfessional) {
-      query = query.eq('bookings.professional_profiles.user_id', userId);
-    } else {
-      query = query.eq('bookings.client_id', userId);
-    }
-
-    // Add date range filters if provided
-    if (startDateIso) {
-      const startDate = new Date(startDateIso);
-      startDate.setUTCHours(0, 0, 0, 0);
-      query = query.gte('start_time', startDate.toISOString());
-    }
-
-    if (endDateIso) {
-      const endDate = new Date(endDateIso);
-      endDate.setUTCHours(23, 59, 59, 999);
-      query = query.lte('start_time', endDate.toISOString());
-    }
-
-    // Add status filter if provided - use computed_status instead of status
-    if (status) {
-      query = query.eq('computed_status', status);
-    }
-
-    // Execute the query
-    const { data: appointmentsData, error } = await query;
-
-    if (error || !appointmentsData) {
-      console.error('Error fetching appointments:', error);
+    if (appointmentsError) {
+      console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
 
-    // Create a Map for quick booking lookups
-    const bookingsMap = new Map(
-      (appointmentsData as AppointmentQueryResult[]).map((appointment) => [
-        appointment.bookings.id,
-        appointment.bookings,
-      ]),
-    );
-
     // Transform the data to match the expected format for the UI
-    const transformedAppointments = (
-      appointmentsData as AppointmentQueryResult[]
-    )
+    const transformedAppointments = appointmentsData
       .map((appointment) => {
-        const booking = bookingsMap.get(appointment.bookings.id);
+        const booking = appointment.bookings;
         if (!booking) return null;
 
-        // Get all booking services
-        const bookingServices = Array.isArray(booking.booking_services)
-          ? booking.booking_services
-          : booking.booking_services
-            ? [booking.booking_services]
-            : [];
+        // Combine date and time into ISO strings for start_time and end_time
+        const startDate = new Date(appointment.date);
+        const endDate = new Date(appointment.date);
 
-        // Get booking payment
-        const bookingPayment = Array.isArray(booking.booking_payments)
-          ? booking.booking_payments[0]
-          : booking.booking_payments;
+        // Parse time strings (HH:MM:SS) and set hours/minutes
+        const startTimeParts = appointment.start_time.split(':').map(Number);
+        const endTimeParts = appointment.end_time.split(':').map(Number);
 
-        // Calculate total amount from booking_services
-        const servicesTotal = bookingServices.reduce(
-          (sum, service) => sum + (service?.price || 0),
+        const startHours = startTimeParts[0] || 0;
+        const startMinutes = startTimeParts[1] || 0;
+        const endHours = endTimeParts[0] || 0;
+        const endMinutes = endTimeParts[1] || 0;
+
+        startDate.setHours(startHours, startMinutes, 0);
+        endDate.setHours(endHours, endMinutes, 0);
+
+        // Get all services information and calculate totals
+        const bookingServices = booking.booking_services || [];
+        const mainService = bookingServices[0]; // First service is the main one
+        const additionalServices = bookingServices.slice(1);
+
+        // Calculate totals
+        const totalServicePrice = bookingServices.reduce(
+          (sum, bs) => sum + (bs.price || 0),
+          0,
+        );
+        const totalDuration = bookingServices.reduce(
+          (sum, bs) => sum + (bs.duration || 0),
           0,
         );
 
-        // Get service fee and tip from booking_payments
-        const serviceFee = bookingPayment?.service_fee || 0;
-        const tipAmount = bookingPayment?.tip_amount || 0;
+        // Get the actual payment amount from booking_payments
+        const bookingPayment = booking.booking_payments;
+        const actualPaymentAmount = bookingPayment?.amount || 0;
+        const paymentServiceFee = bookingPayment?.service_fee || 0;
 
-        // Calculate total amount
-        const totalAmount = servicesTotal + serviceFee + tipAmount;
+        // For backward compatibility, still calculate service fee fallback
+        const serviceFeeDisplay = paymentServiceFee || 1.0; // Fallback value for display
+        const totalWithServiceFeeCalculated =
+          totalServicePrice + serviceFeeDisplay;
 
-        // Get the first service details
-        const firstService = bookingServices[0];
-
-        const service = firstService
+        // Create service object with main service info plus totals
+        const service = mainService?.services
           ? {
-              id: firstService.service_id,
-              name: firstService.services?.name || 'Unnamed Service',
-              description: firstService.services?.description,
-              price: servicesTotal, // Use total of all services
-              duration: firstService.duration,
-              totalPrice: servicesTotal,
-              totalDuration: bookingServices.reduce(
-                (sum, bs) => sum + (bs.duration || 0),
-                0,
-              ),
-              totalWithServiceFee: totalAmount,
-              hasAdditionalServices: bookingServices.length > 1,
-              additionalServicesCount: bookingServices.length - 1,
+              ...mainService.services,
+              price: mainService.price, // Main service price
+              duration: mainService.duration, // Main service duration
+              // Add additional fields for UI
+              totalPrice: totalServicePrice, // Total of all services
+              totalDuration: totalDuration, // Total duration
+              totalWithServiceFee:
+                actualPaymentAmount || totalWithServiceFeeCalculated, // Use actual payment amount or fallback
+              actualPaymentAmount: actualPaymentAmount, // Add the actual payment amount for display
+              hasAdditionalServices: additionalServices.length > 0,
+              additionalServicesCount: additionalServices.length,
               allServices: bookingServices.map((bs) => ({
-                id: bs.service_id,
-                name: bs.services?.name || 'Unnamed Service',
-                description: bs.services?.description || '',
+                ...bs.services,
                 price: bs.price,
                 duration: bs.duration,
               })),
-              actualPaymentAmount: totalAmount,
             }
           : null;
 
         return {
           id: appointment.id,
           booking_id: booking.id,
-          start_time: appointment.start_time,
-          end_time: appointment.end_time,
-          status: appointment.computed_status,
-          computed_status: appointment.computed_status,
-          location: 'Location not specified',
+          start_time: startDate.toISOString(),
+          end_time: endDate.toISOString(),
+          status: appointment.status,
+          location: 'Location not specified', // Add actual location if available
           notes: booking.notes,
           created_at: booking.created_at,
           updated_at: booking.updated_at,
@@ -366,16 +430,33 @@ export async function getDashboardAppointments(
           appointment !== null,
       );
 
+    // Apply date range filters (if provided) on the transformed data
+    let filteredAppointments = transformedAppointments;
+
+    if (startDateIso) {
+      const startDate = new Date(startDateIso);
+      filteredAppointments = filteredAppointments.filter(
+        (appointment) => new Date(appointment.start_time) >= startDate,
+      );
+    }
+
+    if (endDateIso) {
+      const endDate = new Date(endDateIso);
+      filteredAppointments = filteredAppointments.filter(
+        (appointment) => new Date(appointment.start_time) <= endDate,
+      );
+    }
+
     // Sort by start time (descending - most recent first)
-    transformedAppointments.sort(
+    filteredAppointments.sort(
       (a, b) =>
         new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
     );
 
-    return transformedAppointments;
+    return filteredAppointments;
   } catch (error) {
     console.error('Error in getDashboardAppointments:', error);
-    return [];
+    return []; // Return empty array instead of throwing
   }
 }
 

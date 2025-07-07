@@ -1,14 +1,11 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
-import { submitReview } from '@/server/domains/reviews/actions';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Star } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 type ReviewSectionProps = {
   bookingId: string;
@@ -34,12 +31,10 @@ export function ReviewSection({
 }: ReviewSectionProps) {
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [rating, setRating] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [score, setScore] = useState(0);
   const [message, setMessage] = useState('');
   const [hoveredStar, setHoveredStar] = useState(0);
-  const { toast } = useToast();
-  const router = useRouter();
 
   // Fetch review status
   useEffect(() => {
@@ -53,7 +48,7 @@ export function ReviewSection({
         if (result.success && result.reviewStatus) {
           setReviewStatus(result.reviewStatus);
           if (result.reviewStatus.review) {
-            setRating(result.reviewStatus.review.score);
+            setScore(result.reviewStatus.review.score);
             setMessage(result.reviewStatus.review.message);
           }
         }
@@ -67,51 +62,37 @@ export function ReviewSection({
     fetchReviewStatus();
   }, [bookingId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleSubmitReview = async () => {
+    if (!score || !message.trim()) {
+      alert('Please provide both a rating and a review message.');
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
-      const result = await submitReview(bookingId, rating, message);
-      if (!result.success || !result.review) {
+      const { submitReview } = await import('@/server/domains/reviews/actions');
+      const result = await submitReview(bookingId, score, message.trim());
+
+      if (!result.success) {
         throw new Error(result.error || 'Failed to submit review');
       }
 
-      toast({
-        title: 'Review submitted',
-        description: 'Thank you for your feedback!',
-        variant: 'default',
-      });
-
-      // Update the review status to immediately show the review
+      // Update the review status to reflect the new review
       setReviewStatus({
         canReview: false,
         hasReview: true,
-        review: {
-          id: result.review.id,
-          score: rating,
-          message: message,
-          createdAt: new Date().toISOString(),
-        },
+        review: result.review || null,
       });
 
-      setRating(0);
-      setMessage('');
-
-      // Revalidate the page to show the new review
-      router.refresh();
+      alert('Thank you for your review!');
     } catch (error) {
       console.error('Error submitting review:', error);
-      toast({
-        title: 'Error',
-        description:
-          error instanceof Error
-            ? error.message
-            : 'Failed to submit review. Please try again.',
-        variant: 'destructive',
-      });
+      alert(
+        `Failed to submit review: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
@@ -176,23 +157,23 @@ export function ReviewSection({
               <button
                 key={star}
                 type="button"
-                onClick={() => setRating(star)}
+                onClick={() => setScore(star)}
                 onMouseEnter={() => setHoveredStar(star)}
                 onMouseLeave={() => setHoveredStar(0)}
                 className="focus:outline-none focus:ring-2 focus:ring-primary rounded"
               >
                 <Star
                   className={`w-6 h-6 transition-colors ${
-                    star <= (hoveredStar || rating)
+                    star <= (hoveredStar || score)
                       ? 'text-yellow-400 fill-yellow-400'
                       : 'text-muted-foreground/30'
                   }`}
                 />
               </button>
             ))}
-            {rating > 0 && (
+            {score > 0 && (
               <span className="ml-2 text-sm text-muted-foreground">
-                {rating} star{rating !== 1 ? 's' : ''}
+                {score} star{score !== 1 ? 's' : ''}
               </span>
             )}
           </div>
@@ -213,11 +194,11 @@ export function ReviewSection({
 
         {/* Submit Button */}
         <Button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !rating || !message.trim()}
+          onClick={handleSubmitReview}
+          disabled={submitting || !score || !message.trim()}
           className="w-full"
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Review'}
+          {submitting ? 'Submitting...' : 'Submit Review'}
         </Button>
       </div>
     );

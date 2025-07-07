@@ -193,55 +193,21 @@ export async function handleStripeRefundWebhook(
   refund: Stripe.Refund
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(`[WEBHOOK] 💰 Processing refund webhook:`, {
-      refundId: refund.id,
-      status: refund.status,
-      amount: refund.amount,
-      currency: refund.currency,
-      paymentIntent: refund.payment_intent,
-      reason: refund.reason,
-      metadata: refund.metadata
-    });
+    console.log(`[WEBHOOK] Processing refund webhook for Stripe refund: ${refund.id}`);
 
     const adminSupabase = createSupabaseAdminClient();
 
     // Find the refund record by Stripe refund ID
     const { data: refundRecord, error: findError } = await adminSupabase
       .from('refunds')
-      .select(`
-        id, 
-        status, 
-        appointment_id,
-        original_amount,
-        refund_amount,
-        transaction_fee,
-        booking_payment_id
-      `)
+      .select('id, status, appointment_id')
       .eq('stripe_refund_id', refund.id)
       .single();
 
-    if (findError) {
-      console.log(`[WEBHOOK] ❌ Error finding refund record:`, findError);
-      return { 
-        success: false,
-        error: 'Failed to find refund record'
-      };
+    if (findError || !refundRecord) {
+      console.log(`No refund record found for Stripe refund ${refund.id}`);
+      return { success: true }; // Not an error, might be a refund from dashboard
     }
-
-    if (!refundRecord) {
-      console.log(`[WEBHOOK] ℹ️ No refund record found for Stripe refund ${refund.id} - likely a manual refund from dashboard`);
-      return { success: true };
-    }
-
-    console.log(`[WEBHOOK] 📝 Found refund record:`, {
-      refundId: refundRecord.id,
-      currentStatus: refundRecord.status,
-      appointmentId: refundRecord.appointment_id,
-      originalAmount: refundRecord.original_amount,
-      refundAmount: refundRecord.refund_amount,
-      transactionFee: refundRecord.transaction_fee,
-      bookingPaymentId: refundRecord.booking_payment_id
-    });
 
     // Update refund status based on Stripe refund status
     let newStatus: string;
@@ -251,22 +217,18 @@ export async function handleStripeRefundWebhook(
       case 'succeeded':
         newStatus = 'completed';
         processedAt = new Date().toISOString();
-        console.log(`[WEBHOOK] ✅ Refund succeeded - updating to completed`);
         break;
       case 'failed':
         newStatus = 'failed';
-        console.log(`[WEBHOOK] ❌ Refund failed - updating status`);
         break;
       case 'pending':
         newStatus = 'processing';
-        console.log(`[WEBHOOK] ⏳ Refund pending - updating to processing`);
         break;
       case 'canceled':
         newStatus = 'failed';
-        console.log(`[WEBHOOK] 🚫 Refund cancelled - marking as failed`);
         break;
       default:
-        console.log(`[WEBHOOK] ⚠️ Unknown refund status: ${refund.status}`);
+        console.log(`Unknown refund status: ${refund.status}`);
         return { success: true };
     }
 
@@ -276,55 +238,33 @@ export async function handleStripeRefundWebhook(
       updateData.processed_at = processedAt;
     }
 
-    console.log(`[WEBHOOK] 🔄 Updating refund record:`, {
-      refundId: refundRecord.id,
-      newStatus,
-      processedAt,
-      updateData
-    });
-
     const { error: updateError } = await adminSupabase
       .from('refunds')
       .update(updateData)
       .eq('id', refundRecord.id);
 
     if (updateError) {
-      console.error('[WEBHOOK] ❌ Error updating refund status:', updateError);
+      console.error('Error updating refund from webhook:', updateError);
       return {
         success: false,
         error: 'Failed to update refund status'
       };
     }
 
-    console.log(`[WEBHOOK] ✅ Successfully updated refund status to ${newStatus}`);
-
     // If refund succeeded, update appointment status and send notifications
     if (refund.status === 'succeeded') {
-      console.log(`[WEBHOOK] 🔄 Updating appointment status for succeeded refund`);
-      
       // Update appointment status to refunded
-      const { error: appointmentError } = await adminSupabase
+      await adminSupabase
         .from('appointments')
-        .update({ 
-          status: 'refunded',
-          updated_at: new Date().toISOString()
-        })
+        .update({ status: 'refunded' })
         .eq('id', refundRecord.appointment_id);
-
-      if (appointmentError) {
-        console.error('[WEBHOOK] ❌ Error updating appointment status:', appointmentError);
-      } else {
-        console.log(`[WEBHOOK] ✅ Updated appointment ${refundRecord.appointment_id} status to refunded`);
-      }
 
       // Send completion notifications if not already sent
       try {
-        console.log(`[WEBHOOK] 📧 Sending refund completion notifications`);
         const { sendRefundCompletionEmails } = await import('./email-utils');
         await sendRefundCompletionEmails(refundRecord.id);
-        console.log(`[WEBHOOK] ✅ Sent refund completion notifications`);
       } catch (emailError) {
-        console.error('[WEBHOOK] ❌ Error sending refund completion notifications:', emailError);
+        console.error('Error sending refund completion notifications from webhook:', emailError);
         // Don't fail webhook for email errors
       }
     }
@@ -333,11 +273,7 @@ export async function handleStripeRefundWebhook(
     return { success: true };
 
   } catch (error) {
-    console.error(`[WEBHOOK] ❌ Error processing refund webhook:`, {
-      refundId: refund.id,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    console.error(`[WEBHOOK] Error processing refund webhook for ${refund.id}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

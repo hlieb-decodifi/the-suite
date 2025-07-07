@@ -4,7 +4,6 @@ import { Typography } from '@/components/ui/typography';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { CheckCircle } from 'lucide-react';
 import { BookingCompletedProps } from '../../utils';
-import { formatDate } from '@/utils';
 
 // Components
 const BookingSummary = ({
@@ -32,11 +31,9 @@ const BookingSummary = ({
         <Typography variant="small" className="text-muted-foreground">
           Date:
         </Typography>
-        {date && (
-          <Typography variant="small" className="font-medium">
-            {formatDate(date)}
-          </Typography>
-        )}
+        <Typography variant="small" className="font-medium">
+          {date?.toLocaleDateString()}
+        </Typography>
       </div>
       <div className="flex justify-between">
         <Typography variant="small" className="text-muted-foreground">

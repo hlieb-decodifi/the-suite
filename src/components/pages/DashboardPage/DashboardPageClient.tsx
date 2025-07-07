@@ -125,10 +125,13 @@ export function DashboardPageClient({
   // Calculate total amount of upcoming appointments
   const upcomingAppointmentsTotal = upcomingAppointments.reduce(
     (total, appointment) => {
-      // Get the total amount from services.actualPaymentAmount which is already calculated
-      // in the server-side query including booking_services and booking_payments
-      const amount = appointment.services?.actualPaymentAmount || 0;
-      return total + amount;
+      // Use actual payment amount first, then fallback to calculated amounts
+      const price =
+        appointment.services?.actualPaymentAmount ||
+        appointment.services?.totalWithServiceFee ||
+        (appointment.services?.totalPrice || appointment.services?.price || 0) +
+          1.0;
+      return total + price;
     },
     0,
   );
