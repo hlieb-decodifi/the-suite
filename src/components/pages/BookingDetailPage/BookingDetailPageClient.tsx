@@ -1,153 +1,55 @@
 'use client';
 
-import { useState } from 'react';
-import { Typography } from '@/components/ui/typography';
-import { Button } from '@/components/ui/button';
+import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
+import { LeafletMap } from '@/components/common/LeafletMap';
+import { AddAdditionalServicesModal, NoShowModal } from '@/components/modals';
+import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
+import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Typography } from '@/components/ui/typography';
+import { useToast } from '@/components/ui/use-toast';
+import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
-import { PhoneNumberUtil, PhoneNumberFormat } from 'google-libphonenumber';
+import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
+  ArrowLeftIcon,
   CalendarIcon,
   ClockIcon,
-  UserIcon,
-  CreditCardIcon,
-  FileTextIcon,
-  ArrowLeftIcon,
   CopyIcon,
-  Phone,
-  MessageCircleIcon,
+  CreditCardIcon,
   ExternalLinkIcon,
+  FileTextIcon,
   InfoIcon,
   MapPin,
+  MessageCircleIcon,
+  Phone,
   Plus,
   RefreshCw,
+  Star,
+  UserIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/components/ui/use-toast';
-import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
-import { LeafletMap } from '@/components/common/LeafletMap';
-import { AddAdditionalServicesModal } from '@/components/modals';
-import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
-import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
-import { NoShowModal } from '@/components/modals';
-
-// Local types to avoid import issues
-type BookingPayment = {
-  id: string;
-  amount: number;
-  tip_amount: number;
-  status: string;
-  payment_method_id: string;
-  stripe_payment_method_id: string | null;
-  stripe_payment_intent_id: string | null;
-  pre_auth_scheduled_for: string | null;
-  capture_scheduled_for: string | null;
-  pre_auth_placed_at: string | null;
-  captured_at: string | null;
-  created_at: string;
-  // Refund tracking fields
-  refunded_amount: number;
-  refund_reason: string | null;
-  refunded_at: string | null;
-  refund_transaction_id: string | null;
-  payment_methods: {
-    id: string;
-    name: string;
-    is_online: boolean;
-  } | null;
-};
-
-type BookingService = {
-  id: string;
-  service_id: string;
-  price: number;
-  duration: number;
-  services: {
-    id: string;
-    name: string;
-    description?: string;
-  };
-};
-
-type DetailedAppointment = {
-  id: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  booking_id: string;
-  bookings: {
-    id: string;
-    client_id: string;
-    professional_profile_id: string;
-    status: string;
-    notes?: string | null;
-    created_at: string;
-    updated_at: string;
-    clients: {
-      id: string;
-      first_name: string;
-      last_name: string;
-      client_profiles: {
-        id: string;
-        phone_number?: string | null;
-        location?: string | null;
-        addresses?: {
-          id: string;
-          street_address?: string | null;
-          city?: string | null;
-          state?: string | null;
-          country?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-        } | null;
-      } | null;
-    } | null;
-    professionals: {
-      id: string;
-      user_id: string;
-      description?: string | null;
-      profession?: string | null;
-      phone_number?: string | null;
-      location?: string | null;
-      addresses?: {
-        id: string;
-        street_address?: string | null;
-        city?: string | null;
-        state?: string | null;
-        country?: string | null;
-        latitude?: number | null;
-        longitude?: number | null;
-      } | null;
-      users: {
-        id: string;
-        first_name: string;
-        last_name: string;
-      };
-    } | null;
-    booking_services: BookingService[];
-    booking_payments: BookingPayment | null;
-  };
-};
+import { useState } from 'react';
+import { DetailedAppointmentType } from './BookingDetailPage';
 
 export type BookingDetailPageClientProps = {
-  appointment: DetailedAppointment;
+  appointment: DetailedAppointmentType;
+  isClient: boolean;
   isProfessional: boolean;
-  currentUserId: string;
+  userId: string;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -171,13 +73,36 @@ const formatPhoneNumber = (phone: string): string => {
   }
 };
 
+type AddressType =
+  | {
+      street_address: string | null;
+      city: string | null;
+      state: string | null;
+      country: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    }
+  | null
+  | undefined;
+
+function formatAddress(address: AddressType): string {
+  if (!address) return '';
+  const parts = [
+    address.street_address,
+    address.city,
+    address.state,
+    address.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : '';
+}
+
 export function BookingDetailPageClient({
   appointment,
+  isClient,
   isProfessional,
-  currentUserId,
+  userId,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState(appointment.status);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isMessageLoading, setIsMessageLoading] = useState(false);
   const [isAddServicesModalOpen, setIsAddServicesModalOpen] = useState(false);
@@ -189,9 +114,9 @@ export function BookingDetailPageClient({
   const router = useRouter();
   const { toast } = useToast();
 
-  // Combine date and time for proper Date objects
-  const startDate = new Date(`${appointment.date}T${appointment.start_time}`);
-  const endDate = new Date(`${appointment.date}T${appointment.end_time}`);
+  // Get date from start_time
+  const startDateTime = new Date(appointment.start_time);
+  const endDateTime = new Date(appointment.end_time);
 
   const getInitials = (firstName?: string, lastName?: string) => {
     const first = firstName?.charAt(0) || '';
@@ -199,32 +124,8 @@ export function BookingDetailPageClient({
     return `${first}${last}`.toUpperCase() || '?';
   };
 
-  const getFullName = (firstName?: string, lastName?: string) => {
-    return `${firstName || ''} ${lastName || ''}`.trim() || 'Unknown User';
-  };
-
-  const formatAddress = (
-    address?: {
-      street_address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      country?: string | null;
-    } | null,
-  ) => {
-    if (!address) return null;
-
-    const parts = [
-      address.street_address,
-      address.city,
-      address.state,
-      address.country,
-    ].filter(Boolean);
-
-    return parts.length > 0 ? parts.join(', ') : null;
-  };
-
   const getProfessionalTitle = (
-    professional: DetailedAppointment['bookings']['professionals'],
+    professional: DetailedAppointmentType['bookings']['professionals'],
   ) => {
     if (professional?.profession) {
       return professional.profession;
@@ -235,22 +136,12 @@ export function BookingDetailPageClient({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'upcoming':
-      case 'confirmed':
         return (
           <Badge
             variant="outline"
             className="bg-primary/10 text-primary border-primary/20"
           >
             Upcoming
-          </Badge>
-        );
-      case 'pending':
-        return (
-          <Badge
-            variant="outline"
-            className="bg-amber-500/10 text-amber-800 border-amber-200"
-          >
-            Pending
           </Badge>
         );
       case 'cancelled':
@@ -284,11 +175,15 @@ export function BookingDetailPageClient({
       const result = await updateAppointmentStatus(
         appointment.id,
         newStatus,
-        currentUserId,
+        userId,
         isProfessional,
       );
       if (result.success) {
-        setCurrentStatus(newStatus);
+        setAppointmentData((prev) => ({
+          ...prev,
+          status: newStatus,
+          computed_status: newStatus,
+        }));
       } else {
         alert(result.error || 'Failed to update appointment status');
       }
@@ -301,33 +196,28 @@ export function BookingDetailPageClient({
   };
 
   const canUpdateStatus = () => {
-    // Professionals can update status for confirmed/pending appointments
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
+
+    // Professionals can update status for upcoming appointments
     if (isProfessional) {
-      return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
+      return computedStatus === 'upcoming';
     }
 
-    // Clients can cancel confirmed/pending appointments or request refunds for completed appointments
-    return (
-      ['pending', 'confirmed', 'upcoming'].includes(currentStatus) ||
-      canRequestRefund()
-    );
+    // Clients can cancel upcoming appointments or request refunds for completed appointments
+    return computedStatus === 'upcoming' || canRequestRefund();
   };
 
   const getAvailableStatuses = () => {
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
+
     if (isProfessional) {
-      switch (currentStatus) {
-        case 'pending':
-          return [{ value: 'confirmed', label: 'Confirm Appointment' }];
-        case 'confirmed':
-        case 'upcoming':
-          return [{ value: 'completed', label: 'Mark as Completed' }];
-        default:
-          return [];
+      if (computedStatus === 'upcoming') {
+        return [{ value: 'completed', label: 'Mark as Completed' }];
       }
-    } else {
-      // Clients have no status update options (cancellation is handled separately)
-      return [];
     }
+    return [];
   };
 
   const handleCopyBookingId = async () => {
@@ -372,18 +262,21 @@ export function BookingDetailPageClient({
 
   // Check if refund request is available
   const canRequestRefund = () => {
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
+
     // Only clients can request refunds
     if (isProfessional) return false;
 
     // Only for completed appointments
-    if (currentStatus !== 'completed') return false;
+    if (computedStatus !== 'completed') return false;
 
     // Only for card payments
-    const payment = appointment.bookings.booking_payments;
+    const payment = appointmentData.bookings.booking_payments;
     if (!payment || !payment.payment_methods?.is_online) return false;
 
-    // Only for completed payments
-    if (payment.status !== 'completed') return false;
+    // Only if not already refunded
+    if (payment.refunded_amount > 0 || payment.refunded_at) return false;
 
     return true;
   };
@@ -425,45 +318,145 @@ export function BookingDetailPageClient({
 
   // Check if booking can be cancelled
   const canCancelBooking = () => {
-    // Cannot cancel if already cancelled or completed
-    if (['cancelled', 'completed'].includes(currentStatus)) return false;
+    const computedStatus =
+      appointmentData.computed_status || appointmentData.status;
 
-    // Both professionals and clients can cancel if status allows
-    return ['pending', 'confirmed', 'upcoming'].includes(currentStatus);
+    // Cannot cancel if already cancelled or completed
+    if (['cancelled', 'completed'].includes(computedStatus)) return false;
+
+    // Both professionals and clients can cancel upcoming appointments
+    return computedStatus === 'upcoming';
   };
 
   // Get professional or client name for cancellation modal
   const getOtherPartyName = () => {
-    if (isProfessional) {
-      const client = appointment.bookings.clients;
-      return getFullName(client?.first_name, client?.last_name);
-    } else {
-      const professional = appointment.bookings.professionals;
-      return getFullName(
-        professional?.users?.first_name,
-        professional?.users?.last_name,
+    if (isClient) {
+      return `${appointment.bookings.professionals?.users?.first_name || ''} ${
+        appointment.bookings.professionals?.users?.last_name || ''
+      }`;
+    }
+    const clientUser = appointment.bookings.clients;
+    return `${clientUser?.first_name || ''} ${clientUser?.last_name || ''}`;
+  };
+
+  const getOtherPartyInitials = () => {
+    if (isClient) {
+      return getInitials(
+        appointment.bookings.professionals?.users.first_name || '',
+        appointment.bookings.professionals?.users.last_name || '',
       );
+    }
+    return getInitials(
+      appointment.bookings.clients?.first_name || '',
+      appointment.bookings.clients?.last_name || '',
+    );
+  };
+
+  const getOtherPartyProfileData = () => {
+    if (isClient) {
+      const professional = appointment.bookings.professionals;
+      return {
+        name: `${professional?.users?.first_name || ''} ${
+          professional?.users?.last_name || ''
+        }`,
+        address: formatAddress(professional?.address),
+        phone: professional?.phone_number || null,
+      };
+    }
+    const clientUser = appointment.bookings.clients;
+    const clientProfile = clientUser?.client_profiles?.[0];
+    return {
+      name: `${clientUser?.first_name || ''} ${clientUser?.last_name || ''}`,
+      address: formatAddress(clientProfile?.address),
+      phone: clientProfile?.phone_number || null,
+    };
+  };
+
+  const getOtherPartyAddressObject = (): AddressType => {
+    if (isClient) {
+      return appointment.bookings.professionals?.address;
+    }
+    return appointment.bookings.clients?.client_profiles?.[0]?.address;
+  };
+
+  const getOtherPartyAddress = () => {
+    const addressObject = getOtherPartyAddressObject();
+    return formatAddress(addressObject);
+  };
+
+  const handleAddressClick = () => {
+    const address = getOtherPartyAddress();
+    if (address) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        address,
+      )}`;
+      window.open(url, '_blank');
     }
   };
 
+  const renderMap = () => {
+    const address = getOtherPartyAddress();
+    const addressObject = getOtherPartyAddressObject();
+
+    if (!addressObject?.latitude || !addressObject?.longitude) return null;
+
+    return (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <MapPin className="mr-2 h-5 w-5 text-gray-500" />
+            <span>Appointment Location</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative w-full cursor-pointer overflow-hidden rounded-lg">
+            <LeafletMap
+              latitude={addressObject.latitude}
+              longitude={addressObject.longitude}
+              address={address}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={handleAddressClick}>
+              <ExternalLinkIcon className="mr-2 h-4 w-4" />
+              Get Directions
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const handleCancellationSuccess = () => {
-    // Update local state to reflect cancellation
-    setCurrentStatus('cancelled');
     setAppointmentData((prev) => ({
       ...prev,
       status: 'cancelled',
-      bookings: {
-        ...prev.bookings,
-        status: 'cancelled',
-      },
+      computed_status: 'cancelled',
     }));
-
-    // Refresh the page to get updated data including refund information
-    // The backend revalidatePath should have refreshed the data
-    setTimeout(() => {
-      router.refresh();
-    }, 1000); // Small delay to allow backend processing to complete
+    setIsCancellationModalOpen(false);
   };
+
+  const handleNoShowSuccess = () => {
+    // ... existing code ...
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getOtherPartyDescription = () => {
+    return `Location for appointment with ${getOtherPartyName()}`;
+  };
+
+  const services = appointment.bookings.booking_services;
+  const payment = appointment.bookings.booking_payments;
+
+  // Calculate total services amount
+  const servicesTotal = services.reduce(
+    (sum, service) => sum + service.price,
+    0,
+  );
+
+  const subtotal = servicesTotal;
+  const serviceFee = payment?.service_fee ?? 0;
+  const totalTips = payment?.tip_amount ?? 0;
 
   return (
     <div className="w-full">
@@ -487,21 +480,13 @@ export function BookingDetailPageClient({
               >
                 Booking Details
               </Typography>
-              <div className="flex items-center gap-2">
-                <Typography>Booking ID: {appointment.id}</Typography>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopyBookingId}
-                  className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                >
-                  <CopyIcon className="h-3 w-3" />
-                  {copySuccess ? 'Copied!' : ''}
-                </Button>
-              </div>
             </div>
             <div className="flex items-center mt-2 sm:mt-0">
-              <div className="scale-110">{getStatusBadge(currentStatus)}</div>
+              <div className="scale-110">
+                {getStatusBadge(
+                  appointmentData.computed_status || appointmentData.status,
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -511,9 +496,8 @@ export function BookingDetailPageClient({
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Cancellation Information - Show when booking is cancelled */}
-          {(currentStatus === 'cancelled' ||
-            appointmentData.status === 'cancelled' ||
-            appointmentData.bookings.status === 'cancelled') && (
+          {(appointmentData.computed_status === 'cancelled' ||
+            appointmentData.status === 'cancelled') && (
             <Card className="shadow-sm border-red-200 bg-red-50">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2 text-red-700">
@@ -627,41 +611,25 @@ export function BookingDetailPageClient({
             </CardHeader>
             <CardContent className="space-y-6">
               {(() => {
-                const services = appointment.bookings.booking_services || [];
-                const payment = appointment.bookings.booking_payments;
-                const mainService = services[0]; // First service is typically the main one
-                const additionalServices = services.slice(1);
                 const totalDuration = services.reduce(
                   (sum, service) => sum + service.duration,
                   0,
                 );
-                const subtotal = services.reduce(
-                  (sum, service) => sum + service.price,
-                  0,
-                );
-                // Get actual payment data including tips
-                const totalAmount = payment?.amount || 0;
-                const totalTips = payment?.tip_amount || 0;
-                const serviceFee = Math.max(
-                  0,
-                  totalAmount - subtotal - totalTips,
-                ); // Calculate service fee from actual data
-                const total = totalAmount;
 
                 return (
                   <>
                     {/* Main Service */}
-                    {mainService && (
+                    {services[0] && (
                       <div>
                         <Typography variant="large" className="mb-2">
-                          {mainService.services.name}
+                          {services[0].services.name}
                         </Typography>
-                        {mainService.services.description && (
+                        {services[0].services.description && (
                           <Typography
                             variant="p"
                             className="mb-4 text-muted-foreground"
                           >
-                            {mainService.services.description}
+                            {services[0].services.description}
                           </Typography>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -671,7 +639,7 @@ export function BookingDetailPageClient({
                               Duration:
                             </Typography>
                             <Typography className="font-medium">
-                              {formatDuration(mainService.duration)}
+                              {formatDuration(services[0].duration)}
                             </Typography>
                           </div>
                           <div className="flex items-center justify-end gap-2">
@@ -680,7 +648,7 @@ export function BookingDetailPageClient({
                               Price:
                             </Typography>
                             <Typography className="font-medium">
-                              {formatCurrency(mainService.price)}
+                              {formatCurrency(services[0].price)}
                             </Typography>
                           </div>
                         </div>
@@ -688,7 +656,7 @@ export function BookingDetailPageClient({
                     )}
 
                     {/* Additional Services */}
-                    {additionalServices.length > 0 && (
+                    {services.slice(1).length > 0 && (
                       <>
                         <Separator />
                         <div>
@@ -696,7 +664,7 @@ export function BookingDetailPageClient({
                             Additional Services
                           </Typography>
                           <div className="space-y-4">
-                            {additionalServices.map((bookingService) => (
+                            {services.slice(1).map((bookingService) => (
                               <div
                                 key={bookingService.id}
                                 className="flex justify-between items-start"
@@ -786,13 +754,53 @@ export function BookingDetailPageClient({
                             </Typography>
                           </div>
                         )}
+                        {(appointment.bookings.booking_payments
+                          ?.deposit_amount ?? 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Deposit Paid:
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-green-600"
+                            >
+                              {formatCurrency(
+                                appointment.bookings.booking_payments
+                                  ?.deposit_amount ?? 0,
+                              )}
+                            </Typography>
+                          </div>
+                        )}
+                        {(appointment.bookings.booking_payments
+                          ?.balance_amount ?? 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Balance Due
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-amber-600"
+                            >
+                              {formatCurrency(
+                                appointment.bookings.booking_payments
+                                  ?.balance_amount ?? 0,
+                              )}
+                            </Typography>
+                          </div>
+                        )}
                         <Separator />
                         <div className="flex justify-between items-center">
                           <Typography className="font-semibold">
-                            Total{totalTips > 0 ? ' (including tips)' : ''}:
+                            Total:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
-                            {formatCurrency(total)}
+                            {formatCurrency(subtotal + serviceFee + totalTips)}
                           </Typography>
                         </div>
                       </div>
@@ -817,10 +825,11 @@ export function BookingDetailPageClient({
                   Date & Time
                 </Typography>
                 <Typography variant="muted" className="mb-1">
-                  {format(startDate, 'EEEE, MMMM d, yyyy')}
+                  {format(startDateTime, 'EEEE, MMMM d, yyyy')}
                 </Typography>
                 <Typography variant="muted">
-                  {format(startDate, 'h:mm a')} - {format(endDate, 'h:mm a')}
+                  {format(startDateTime, 'h:mm a')} -{' '}
+                  {format(endDateTime, 'h:mm a')}
                 </Typography>
               </div>
               {appointment.bookings.notes && (
@@ -851,35 +860,29 @@ export function BookingDetailPageClient({
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
-                      {getInitials(
-                        appointment.bookings.clients.first_name,
-                        appointment.bookings.clients.last_name,
-                      )}
+                      {getOtherPartyInitials()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <Typography className="font-semibold text-foreground text-lg sm:text-xl mb-1">
-                      {getFullName(
-                        appointment.bookings.clients.first_name,
-                        appointment.bookings.clients.last_name,
-                      )}
+                      {getOtherPartyName()}
                     </Typography>
                     <div className="space-y-1">
                       <Typography variant="muted" className="text-sm">
                         Client
                       </Typography>
-                      {appointment.bookings.clients.client_profiles
-                        ?.phone_number && (
+                      {/* Phone number section */}
+                      {getOtherPartyProfileData().phone && (
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />
                           <a
-                            href={`tel:${appointment.bookings.clients.client_profiles.phone_number}`}
+                            href={`tel:${getOtherPartyProfileData().phone}`}
                             className="text-muted-foreground hover:text-primary transition-colors font-medium"
                           >
-                            {formatPhoneNumber(
-                              appointment.bookings.clients.client_profiles
-                                .phone_number,
-                            )}
+                            {getOtherPartyProfileData().phone &&
+                              formatPhoneNumber(
+                                getOtherPartyProfileData().phone!,
+                              )}
                           </a>
                         </div>
                       )}
@@ -901,72 +904,25 @@ export function BookingDetailPageClient({
                 </div>
 
                 {/* Additional Information - only show if there's location or address */}
-                {(appointment.bookings.clients.client_profiles?.location ||
-                  formatAddress(
-                    appointment.bookings.clients.client_profiles?.addresses,
-                  )) && (
+                {getOtherPartyAddressObject() && (
                   <>
                     <Separator />
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {appointment.bookings.clients.client_profiles
-                          ?.location && (
+                        {getOtherPartyAddressObject() && (
                           <div className="space-y-2">
                             <Typography className="text-sm font-medium text-muted-foreground">
-                              Location
+                              Address
                             </Typography>
                             <Typography variant="muted" className="font-medium">
-                              {
-                                appointment.bookings.clients.client_profiles
-                                  .location
-                              }
+                              {getOtherPartyAddress()}
                             </Typography>
                           </div>
                         )}
                       </div>
 
-                      {formatAddress(
-                        appointment.bookings.clients.client_profiles?.addresses,
-                      ) && (
-                        <div className="space-y-3">
-                          <Typography className="text-sm font-medium text-muted-foreground">
-                            Address
-                          </Typography>
-                          <Typography variant="muted" className="font-medium">
-                            {formatAddress(
-                              appointment.bookings.clients.client_profiles
-                                ?.addresses,
-                            )}
-                          </Typography>
-
-                          {/* Show map if coordinates are available */}
-                          {appointment.bookings.clients.client_profiles
-                            ?.addresses?.latitude &&
-                            appointment.bookings.clients.client_profiles
-                              ?.addresses?.longitude && (
-                              <div className="mt-3">
-                                <LeafletMap
-                                  latitude={
-                                    appointment.bookings.clients.client_profiles
-                                      .addresses.latitude
-                                  }
-                                  longitude={
-                                    appointment.bookings.clients.client_profiles
-                                      .addresses.longitude
-                                  }
-                                  address={
-                                    formatAddress(
-                                      appointment.bookings.clients
-                                        .client_profiles?.addresses,
-                                    ) || 'Client Location'
-                                  }
-                                  height="h-48"
-                                  className="border border-border rounded-md"
-                                />
-                              </div>
-                            )}
-                        </div>
-                      )}
+                      {/* Show map if coordinates are available */}
+                      {renderMap()}
                     </div>
                   </>
                 )}
@@ -989,18 +945,12 @@ export function BookingDetailPageClient({
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
-                      {getInitials(
-                        appointment.bookings.professionals.users.first_name,
-                        appointment.bookings.professionals.users.last_name,
-                      )}
+                      {getOtherPartyInitials()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <Typography className="font-semibold text-foreground text-lg sm:text-xl mb-1">
-                      {getFullName(
-                        appointment.bookings.professionals.users.first_name,
-                        appointment.bookings.professionals.users.last_name,
-                      )}
+                      {getOtherPartyName()}
                     </Typography>
                     <div className="space-y-1">
                       <Typography variant="muted" className="text-sm">
@@ -1008,16 +958,18 @@ export function BookingDetailPageClient({
                           appointment.bookings.professionals,
                         )}
                       </Typography>
-                      {appointment.bookings.professionals.phone_number && (
+                      {/* Phone number section */}
+                      {getOtherPartyProfileData().phone && (
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />
                           <a
-                            href={`tel:${appointment.bookings.professionals.phone_number}`}
+                            href={`tel:${getOtherPartyProfileData().phone}`}
                             className="text-muted-foreground hover:text-primary transition-colors font-medium"
                           >
-                            {formatPhoneNumber(
-                              appointment.bookings.professionals.phone_number,
-                            )}
+                            {getOtherPartyProfileData().phone &&
+                              formatPhoneNumber(
+                                getOtherPartyProfileData().phone!,
+                              )}
                           </a>
                         </div>
                       )}
@@ -1054,6 +1006,7 @@ export function BookingDetailPageClient({
                   </div>
                 </div>
 
+                {/* Professional Description */}
                 {appointment.bookings.professionals.description && (
                   <>
                     <Separator />
@@ -1071,72 +1024,34 @@ export function BookingDetailPageClient({
                 {/* Location Information - always show section */}
                 <>
                   <Separator />
-                  <div className="space-y-4">
-                    <Typography className="text-sm font-medium text-muted-foreground">
+                  <div className="space-y-2">
+                    <Typography className="font-medium text-foreground mb-1">
                       Location Information
                     </Typography>
 
                     {/* Show if location or address exists */}
                     {appointment.bookings.professionals.location ||
-                    formatAddress(
-                      appointment.bookings.professionals.addresses,
-                    ) ? (
+                    getOtherPartyAddressObject() ? (
                       <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {appointment.bookings.professionals.location && (
-                            <div className="space-y-2">
-                              <Typography className="text-sm font-medium text-muted-foreground">
-                                Location
-                              </Typography>
-                              <Typography
-                                variant="muted"
-                                className="font-medium"
-                              >
-                                {appointment.bookings.professionals.location}
-                              </Typography>
-                            </div>
-                          )}
-                        </div>
-
-                        {formatAddress(
-                          appointment.bookings.professionals.addresses,
-                        ) && (
-                          <div className="space-y-3">
+                        {appointment.bookings.professionals.location && (
+                          <div className="space-y-2">
                             <Typography className="text-sm font-medium text-muted-foreground">
-                              Address
+                              Location
                             </Typography>
                             <Typography variant="muted" className="font-medium">
-                              {formatAddress(
-                                appointment.bookings.professionals.addresses,
-                              )}
+                              {appointment.bookings.professionals.location}
+                            </Typography>
+                          </div>
+                        )}
+
+                        {getOtherPartyAddressObject() && (
+                          <div className="space-y-3">
+                            <Typography variant="muted" className="font-medium">
+                              {getOtherPartyAddress()}
                             </Typography>
 
                             {/* Show map if coordinates are available */}
-                            {appointment.bookings.professionals.addresses
-                              ?.latitude &&
-                              appointment.bookings.professionals.addresses
-                                ?.longitude && (
-                                <div className="mt-3">
-                                  <LeafletMap
-                                    latitude={
-                                      appointment.bookings.professionals
-                                        .addresses.latitude
-                                    }
-                                    longitude={
-                                      appointment.bookings.professionals
-                                        .addresses.longitude
-                                    }
-                                    address={
-                                      formatAddress(
-                                        appointment.bookings.professionals
-                                          .addresses,
-                                      ) || 'Professional Location'
-                                    }
-                                    height="h-48"
-                                    className="border border-border rounded-md"
-                                  />
-                                </div>
-                              )}
+                            {renderMap()}
                           </div>
                         )}
                       </>
@@ -1217,8 +1132,7 @@ export function BookingDetailPageClient({
 
                 {/* Add Additional Services Button */}
                 {isProfessional &&
-                  (currentStatus === 'confirmed' ||
-                    currentStatus === 'upcoming') && (
+                  appointmentData.computed_status === 'ongoing' && (
                     <Button
                       onClick={() => setIsAddServicesModalOpen(true)}
                       variant="outline"
@@ -1254,7 +1168,7 @@ export function BookingDetailPageClient({
 
                 {/* No Show Button - Professional only, for completed appointments */}
                 {isProfessional &&
-                  currentStatus === 'completed' &&
+                  appointmentData.status === 'completed' &&
                   appointment.bookings.booking_payments?.payment_methods
                     ?.is_online && (
                     <Button
@@ -1280,14 +1194,28 @@ export function BookingDetailPageClient({
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Payment Amount and Status */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Typography className="font-bold text-primary text-lg">
-                      {formatCurrency(
-                        appointmentData.bookings.booking_payments?.amount || 0,
-                      )}
-                    </Typography>
-                  </div>
+                <div className="space-y-2">
+                  {/* Show total amount for professionals */}
+                  {isProfessional ? (
+                    <div className="flex justify-between items-center">
+                      <Typography className="font-bold text-primary text-lg">
+                        {formatCurrency(servicesTotal)}
+                      </Typography>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <Typography className="font-semibold">
+                          Total:
+                        </Typography>
+                        <Typography className="font-bold text-primary text-lg">
+                          {formatCurrency(
+                            servicesTotal + serviceFee + totalTips,
+                          )}
+                        </Typography>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <Separator />
@@ -1312,274 +1240,38 @@ export function BookingDetailPageClient({
                   <Typography variant="muted">
                     {appointment.bookings.booking_payments.payment_methods
                       ?.name || 'Unknown Method'}
-                    {appointment.bookings.booking_payments.payment_methods
-                      ?.is_online && ' (Online)'}
-                  </Typography>
-                </div>
-
-                {/* Pre-Authorization Details */}
-                {(appointment.bookings.booking_payments
-                  .pre_auth_scheduled_for ||
-                  appointment.bookings.booking_payments.pre_auth_placed_at) && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <TooltipProvider>
-                        <div className="flex items-center gap-2">
-                          <Typography className="font-medium text-foreground">
-                            Pre-Authorization
-                          </Typography>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                For bookings more than 6 days away, payment is
-                                pre-authorized 6 days before the appointment
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
-
-                      {appointment.bookings.booking_payments
-                        .pre_auth_scheduled_for && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Scheduled for:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.pre_auth_scheduled_for,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
+                    {!appointment.bookings.booking_payments.payment_methods
+                      ?.is_online &&
+                      isClient && (
+                        <span className="text-muted-foreground">
+                          {' '}
+                          (Service fee will be charged to your card)
+                        </span>
                       )}
-
-                      {appointment.bookings.booking_payments
-                        .pre_auth_placed_at && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Pre-authorized on:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-medium text-green-600"
-                          >
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.pre_auth_placed_at,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Payment Capture Details */}
-                {(appointment.bookings.booking_payments.capture_scheduled_for ||
-                  appointment.bookings.booking_payments.captured_at) && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <TooltipProvider>
-                        <div className="flex items-center gap-2">
-                          <Typography className="font-medium text-foreground">
-                            Payment Capture
-                          </Typography>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                Payment is automatically captured 12 hours after
-                                the appointment ends
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
-
-                      {appointment.bookings.booking_payments
-                        .capture_scheduled_for &&
-                        !appointment.bookings.booking_payments.captured_at && (
-                          <div className="flex justify-between items-center">
-                            <Typography
-                              variant="small"
-                              className="text-muted-foreground"
-                            >
-                              Scheduled for:
-                            </Typography>
-                            <Typography variant="small" className="font-medium">
-                              {format(
-                                new Date(
-                                  appointment.bookings.booking_payments.capture_scheduled_for,
-                                ),
-                                'MMM d, yyyy h:mm a',
-                              )}
-                            </Typography>
-                          </div>
-                        )}
-
-                      {appointment.bookings.booking_payments.captured_at && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Captured on:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-medium text-green-600"
-                          >
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.captured_at,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Refund Information */}
-                {appointment.bookings.booking_payments.refunded_amount > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <TooltipProvider>
-                        <div className="flex items-center gap-2">
-                          <Typography className="font-medium text-foreground">
-                            Refund Information
-                          </Typography>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Amount refunded due to booking cancellation</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
-
-                      <div className="flex justify-between items-center">
-                        <Typography
-                          variant="small"
-                          className="text-muted-foreground"
-                        >
-                          Refunded Amount:
-                        </Typography>
-                        <Typography
-                          variant="small"
-                          className="font-medium text-green-600"
-                        >
-                          {formatCurrency(
-                            appointment.bookings.booking_payments
-                              .refunded_amount,
-                          )}
-                        </Typography>
-                      </div>
-
-                      {appointment.bookings.booking_payments.refund_reason && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Reason:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {
-                              appointment.bookings.booking_payments
-                                .refund_reason
-                            }
-                          </Typography>
-                        </div>
-                      )}
-
-                      {appointment.bookings.booking_payments.refunded_at && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Refunded on:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-medium text-green-600"
-                          >
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.refunded_at,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-
-                      {appointment.bookings.booking_payments
-                        .refund_transaction_id && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Transaction ID:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-mono text-xs"
-                          >
-                            {
-                              appointment.bookings.booking_payments
-                                .refund_transaction_id
-                            }
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Payment Timeline */}
-                <Separator />
-                <div>
-                  <Typography className="font-medium text-foreground mb-1">
-                    Payment Created
-                  </Typography>
-                  <Typography variant="muted">
-                    {format(
-                      new Date(
-                        appointment.bookings.booking_payments.created_at,
-                      ),
-                      'MMM d, yyyy h:mm a',
-                    )}
                   </Typography>
                 </div>
               </CardContent>
             </Card>
           )}
+
+          {/* Review Section - Show for completed appointments when user is client */}
+          {!isProfessional &&
+            appointmentData.computed_status === 'completed' && (
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Star className="h-5 w-5 text-muted-foreground" />
+                    Review
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ReviewSection
+                    bookingId={appointment.booking_id}
+                    professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                  />
+                </CardContent>
+              </Card>
+            )}
 
           {/* Booking Details */}
           <Card className="shadow-sm">
@@ -1625,18 +1317,6 @@ export function BookingDetailPageClient({
                   )}
                 </Typography>
               </div>
-              <Separator />
-              <div>
-                <Typography className="font-medium text-foreground">
-                  Last Updated
-                </Typography>
-                <Typography variant="muted">
-                  {format(
-                    new Date(appointment.updated_at),
-                    'MMM d, yyyy h:mm a',
-                  )}
-                </Typography>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -1648,7 +1328,7 @@ export function BookingDetailPageClient({
         onClose={() => setIsAddServicesModalOpen(false)}
         onSuccess={handleAddServicesSuccess}
         appointmentId={appointmentData.id}
-        professionalUserId={currentUserId}
+        professionalUserId={userId}
         currentServices={appointmentData.bookings.booking_services}
       />
 
@@ -1675,7 +1355,7 @@ export function BookingDetailPageClient({
         onClose={() => setIsCancellationModalOpen(false)}
         onSuccess={handleCancellationSuccess}
         bookingId={appointment.booking_id}
-        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        appointmentDate={format(startDateTime, 'EEEE, MMMM d, yyyy')}
         professionalName={getOtherPartyName()}
       />
 
@@ -1684,13 +1364,13 @@ export function BookingDetailPageClient({
         isOpen={isNoShowModalOpen}
         onClose={() => setIsNoShowModalOpen(false)}
         appointmentId={appointment.id}
-        appointmentDate={format(startDate, 'EEEE, MMMM d, yyyy')}
+        appointmentDate={format(startDateTime, 'EEEE, MMMM d, yyyy')}
         clientName={getOtherPartyName()}
         serviceAmount={appointment.bookings.booking_services.reduce(
           (total, service) => total + service.price,
           0,
         )}
-        onSuccess={handleCancellationSuccess}
+        onSuccess={handleNoShowSuccess}
       />
     </div>
   );

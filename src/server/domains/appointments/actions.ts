@@ -66,10 +66,10 @@ export async function getAppointmentsCountByStatus(userId: string) {
     // Get all booking IDs
     const bookingIds = bookingsData.map(booking => booking.id);
     
-    // Now fetch appointments with their status
+    // Now fetch appointments with their computed status
     const { data: appointmentsData, error: appointmentsError } = await supabase
-      .from('appointments')
-      .select('id, status')
+      .from('appointments_with_status')
+      .select('id, computed_status')
       .in('booking_id', bookingIds);
     
     if (appointmentsError) {
@@ -82,17 +82,17 @@ export async function getAppointmentsCountByStatus(userId: string) {
       };
     }
     
-    // Count appointments by status
+    // Count appointments by computed status
     const upcomingCount = appointmentsData.filter(app => 
-      app.status === 'upcoming' || app.status === 'confirmed' || app.status === 'pending'
+      app.computed_status === 'upcoming'
     ).length;
     
     const completedCount = appointmentsData.filter(app => 
-      app.status === 'completed'
+      app.computed_status === 'completed'
     ).length;
     
     const cancelledCount = appointmentsData.filter(app => 
-      app.status === 'cancelled'
+      app.computed_status === 'cancelled'
     ).length;
     
     return {
@@ -244,8 +244,15 @@ export async function addServicesToAppointment(
         booking_id,
         status,
         bookings!inner(
+          id,
           professional_profile_id,
           status,
+          booking_payments(
+            id,
+            amount,
+            tip_amount,
+            service_fee
+          ),
           professional_profiles!inner(
             user_id
           )
@@ -350,10 +357,41 @@ export async function addServicesToAppointment(
 
     if (totalError) {
       console.error('Error calculating new total:', totalError);
-      // Don't fail the request, just don't return the total
+      return {
+        success: false,
+        error: 'Failed to calculate new total'
+      };
     }
 
-    const newTotal = allBookingServices?.reduce((sum, service) => sum + service.price, 0) || 0;
+    const newTotal = allBookingServices.reduce((sum, service) => sum + service.price, 0);
+
+    // Update the booking payment amount
+    const booking = appointment.bookings as {
+      booking_payments: {
+        id: string;
+        amount: number;
+        tip_amount: number;
+        service_fee: number;
+      } | null;
+    };
+
+    if (booking.booking_payments) {
+      const payment = booking.booking_payments;
+      const { error: updatePaymentError } = await supabase
+        .from('booking_payments')
+        .update({
+          amount: newTotal + (payment.service_fee || 0),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id);
+
+      if (updatePaymentError) {
+        return {
+          success: false,
+          error: 'Failed to update payment amount'
+        };
+      }
+    }
 
     // Revalidate relevant paths
     revalidatePath(`/bookings/${appointmentId}`);

@@ -4,13 +4,13 @@ import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import { BookingDetailPageClient } from './BookingDetailPageClient';
 
-// Full appointment type with all related data
+// Type for detailed appointment data
 export type DetailedAppointmentType = {
   id: string;
-  date: string;
   start_time: string;
   end_time: string;
   status: string;
+  computed_status: string;
   created_at: string;
   updated_at: string;
   booking_id: string;
@@ -18,51 +18,6 @@ export type DetailedAppointmentType = {
     id: string;
     client_id: string;
     professional_profile_id: string;
-    status: string;
-    notes?: string | null;
-    created_at: string;
-    updated_at: string;
-    clients: {
-      id: string;
-      first_name: string;
-      last_name: string;
-      client_profiles: {
-        id: string;
-        phone_number?: string | null;
-        location?: string | null;
-        addresses?: {
-          id: string;
-          street_address?: string | null;
-          city?: string | null;
-          state?: string | null;
-          country?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-        } | null;
-      } | null;
-    } | null;
-    professionals: {
-      id: string;
-      user_id: string;
-      description?: string | null;
-      profession?: string | null;
-      phone_number?: string | null;
-      location?: string | null;
-      addresses?: {
-        id: string;
-        street_address?: string | null;
-        city?: string | null;
-        state?: string | null;
-        country?: string | null;
-        latitude?: number | null;
-        longitude?: number | null;
-      } | null;
-      users: {
-        id: string;
-        first_name: string;
-        last_name: string;
-      };
-    } | null;
     booking_services: Array<{
       id: string;
       service_id: string;
@@ -71,95 +26,113 @@ export type DetailedAppointmentType = {
       services: {
         id: string;
         name: string;
-        description?: string;
+        description: string | null;
       };
     }>;
     booking_payments: {
       id: string;
       amount: number;
       tip_amount: number;
+      service_fee: number;
       status: string;
       payment_method_id: string;
-      stripe_payment_method_id: string | null;
-      stripe_payment_intent_id: string | null;
-      pre_auth_scheduled_for: string | null;
-      capture_scheduled_for: string | null;
-      pre_auth_placed_at: string | null;
-      captured_at: string | null;
       created_at: string;
-      // Refund tracking fields
+      updated_at: string;
       refunded_amount: number;
-      refund_reason: string | null;
       refunded_at: string | null;
-      refund_transaction_id: string | null;
+      refund_reason?: string | null;
+      stripe_payment_intent_id?: string | null;
+      stripe_payment_method_id?: string | null;
+      stripe_checkout_session_id?: string | null;
+      deposit_amount: number;
+      balance_amount: number;
+      payment_type: 'full' | 'deposit' | 'balance';
+      requires_balance_payment: boolean;
+      capture_method: 'automatic' | 'manual';
+      authorization_expires_at?: string | null;
+      pre_auth_scheduled_for?: string | null;
+      capture_scheduled_for?: string | null;
+      captured_at?: string | null;
+      pre_auth_placed_at?: string | null;
+      balance_notification_sent_at?: string | null;
+      refund_transaction_id?: string | null;
       payment_methods: {
         id: string;
         name: string;
         is_online: boolean;
       } | null;
     } | null;
+    professionals: {
+      id: string;
+      user_id: string;
+      profession: string | null;
+      phone_number?: string | null;
+      description?: string | null;
+      location?: string | null;
+      address?: {
+        street_address: string | null;
+        city: string | null;
+        state: string | null;
+        country: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+      } | null;
+      users: {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+      };
+    } | null;
+    clients: {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      client_profiles: Array<{
+        id: string;
+        phone_number?: string | null;
+        location?: string | null;
+        address?: {
+          street_address: string | null;
+          city: string | null;
+          state: string | null;
+          country: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } | null;
+      }>;
+    };
+    notes?: string | null;
   };
 };
 
 export async function BookingDetailPage({ id }: { id: string }) {
   const supabase = await createClient();
-
-  // Get the current user
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/');
+    redirect('/auth/sign-in');
   }
 
-  // Check if user is professional
-  const { data: isProfessional } = await supabase.rpc('is_professional', {
-    user_uuid: user.id,
-  });
+  const appointment = await getAppointmentById(id);
 
-  // Get appointment details
-  try {
-    // const appointment = await getAppointmentById(id);
+  const isProfessional =
+    appointment.bookings.professionals?.user_id === user.id;
+  const isClient = appointment.bookings.client_id === user.id;
 
-    const supabase = await createClient();
-
-    // First, check if the appointment exists
-    const { error: checkError } = await supabase
-      .from('appointments')
-      .select('id, booking_id')
-      .eq('id', id)
-      .single();
-
-    if (checkError) {
-      console.error('Error checking appointment:', checkError);
-      throw new Error(`Appointment not found: ${checkError.message}`);
-    }
-
-    const appointment = await getAppointmentById(id);
-
-    // Check if user has permission to view this appointment
-    // const hasPermission = checkAppointmentPermission(
-    //   appointment,
-    //   user.id,
-    //   !!isProfessional,
-    // );
-
-    // if (!hasPermission) {
-    //   return notFound();
-    // }
-
-    return (
-      <BookingDetailPageClient
-        appointment={appointment}
-        isProfessional={!!isProfessional}
-        currentUserId={user.id}
-      />
-    );
-  } catch (error) {
-    console.error('Error fetching appointment:', error);
-    return notFound();
+  if (!isProfessional && !isClient) {
+    notFound();
   }
+
+  return (
+    <BookingDetailPageClient
+      appointment={appointment}
+      isProfessional={isProfessional}
+      isClient={isClient}
+      userId={user.id}
+    />
+  );
 }
 
 // Get appointment details by ID with enhanced data
@@ -169,84 +142,26 @@ export async function getAppointmentById(
   try {
     const supabase = await createClient();
 
-    // First, check if the appointment exists
-    const { data: appointmentCheck, error: checkError } = await supabase
-      .from('appointments')
-      .select('id, booking_id')
-      .eq('id', appointmentId)
-      .single();
-
-    if (checkError) {
-      console.error('Error checking appointment:', checkError);
-      throw new Error(`Appointment not found: ${checkError.message}`);
-    }
-
-    if (!appointmentCheck) {
-      throw new Error('Appointment not found');
-    }
-
-    // Now get the full appointment data with all related info
+    // Fetch the appointment with all related data
     const { data, error } = await supabase
-      .from('appointments')
+      .from('appointments_with_status')
       .select(
         `
         id,
-        date,
         start_time,
         end_time,
         status,
+        computed_status,
         created_at,
         updated_at,
         booking_id,
-        bookings!booking_id(
+        bookings!inner(
           id,
           client_id,
           professional_profile_id,
-          status,
           notes,
           created_at,
           updated_at,
-          clients:client_id(
-            id,
-            first_name,
-            last_name,
-            client_profiles(
-              id,
-              phone_number,
-              location,
-              addresses:address_id(
-                id,
-                street_address,
-                city,
-                state,
-                country,
-                latitude,
-                longitude
-              )
-            )
-          ),
-          professionals:professional_profile_id(
-            id,
-            user_id,
-            description,
-            profession,
-            phone_number,
-            location,
-            addresses:address_id(
-              id,
-              street_address,
-              city,
-              state,
-              country,
-              latitude,
-              longitude
-            ),
-            users:user_id(
-              id,
-              first_name,
-              last_name
-            )
-          ),
           booking_services(
             id,
             service_id,
@@ -261,24 +176,73 @@ export async function getAppointmentById(
           booking_payments(
             id,
             amount,
-            tip_amount,
             status,
             payment_method_id,
-            stripe_payment_method_id,
-            stripe_payment_intent_id,
+            created_at,
+            updated_at,
+            refunded_amount,
+            refunded_at,
+            refund_reason,
+            tip_amount,
+            service_fee,
+            deposit_amount,
+            balance_amount,
+            payment_type,
+            requires_balance_payment,
+            capture_method,
+            authorization_expires_at,
             pre_auth_scheduled_for,
             capture_scheduled_for,
-            pre_auth_placed_at,
             captured_at,
-            created_at,
-            refunded_amount,
-            refund_reason,
-            refunded_at,
+            pre_auth_placed_at,
+            balance_notification_sent_at,
             refund_transaction_id,
-            payment_methods:payment_method_id(
+            stripe_payment_intent_id,
+            stripe_payment_method_id,
+            stripe_checkout_session_id,
+            payment_methods(
               id,
               name,
               is_online
+            )
+          ),
+          professionals:professional_profiles!inner(
+            id,
+            user_id,
+            profession,
+            phone_number,
+            description,
+            location,
+            address:address_id(
+              street_address,
+              city,
+              state,
+              country,
+              latitude,
+              longitude
+            ),
+            users(
+              id,
+              first_name,
+              last_name
+            )
+          ),
+          clients:users!client_id(
+            id,
+            first_name,
+            last_name,
+            client_profiles(
+              id,
+              phone_number,
+              location,
+              address:address_id(
+                street_address,
+                city,
+                state,
+                country,
+                latitude,
+                longitude
+              )
             )
           )
         )
@@ -288,40 +252,156 @@ export async function getAppointmentById(
       .single();
 
     if (error) {
-      console.error('Error fetching appointment details:', error);
-      throw new Error(`Failed to fetch appointment details: ${error.message}`);
+      console.error('Error fetching appointment:', error);
+      notFound();
     }
 
     if (!data) {
-      throw new Error('Appointment details not found');
+      notFound();
     }
 
-    return data as unknown as DetailedAppointmentType;
+    // Transform the data to match the expected format
+    const transformedData: DetailedAppointmentType = {
+      id: data.id ?? '',
+      start_time: data.start_time ?? '',
+      end_time: data.end_time ?? '',
+      status: data.status ?? '',
+      computed_status: data.computed_status ?? '',
+      created_at: data.created_at ?? '',
+      updated_at: data.updated_at ?? '',
+      booking_id: data.booking_id ?? '',
+      bookings: {
+        id: data.bookings.id,
+        client_id: data.bookings.client_id,
+        professional_profile_id: data.bookings.professional_profile_id,
+        booking_services: data.bookings.booking_services,
+        booking_payments: data.bookings.booking_payments
+          ? {
+              ...data.bookings.booking_payments,
+              payment_type: data.bookings.booking_payments.payment_type as
+                | 'full'
+                | 'deposit'
+                | 'balance',
+              capture_method: data.bookings.booking_payments.capture_method as
+                | 'automatic'
+                | 'manual',
+              refunded_at: data.bookings.booking_payments.refunded_at ?? null,
+              refund_reason:
+                data.bookings.booking_payments.refund_reason ?? null,
+              stripe_payment_intent_id:
+                data.bookings.booking_payments.stripe_payment_intent_id ?? null,
+              stripe_payment_method_id:
+                data.bookings.booking_payments.stripe_payment_method_id ?? null,
+              stripe_checkout_session_id:
+                data.bookings.booking_payments.stripe_checkout_session_id ??
+                null,
+              authorization_expires_at:
+                data.bookings.booking_payments.authorization_expires_at ?? null,
+              pre_auth_scheduled_for:
+                data.bookings.booking_payments.pre_auth_scheduled_for ?? null,
+              capture_scheduled_for:
+                data.bookings.booking_payments.capture_scheduled_for ?? null,
+              captured_at: data.bookings.booking_payments.captured_at ?? null,
+              pre_auth_placed_at:
+                data.bookings.booking_payments.pre_auth_placed_at ?? null,
+              balance_notification_sent_at:
+                data.bookings.booking_payments.balance_notification_sent_at ??
+                null,
+              refund_transaction_id:
+                data.bookings.booking_payments.refund_transaction_id ?? null,
+            }
+          : null,
+        professionals: data.bookings.professionals
+          ? {
+              ...data.bookings.professionals,
+              profession: data.bookings.professionals.profession ?? null,
+              phone_number: data.bookings.professionals.phone_number ?? null,
+              description: data.bookings.professionals.description ?? null,
+              location: data.bookings.professionals.location ?? null,
+              address: data.bookings.professionals.address
+                ? {
+                    ...data.bookings.professionals.address,
+                    street_address:
+                      data.bookings.professionals.address.street_address ??
+                      null,
+                    city: data.bookings.professionals.address.city ?? null,
+                    state: data.bookings.professionals.address.state ?? null,
+                    country:
+                      data.bookings.professionals.address.country ?? null,
+                    latitude:
+                      data.bookings.professionals.address.latitude ?? null,
+                    longitude:
+                      data.bookings.professionals.address.longitude ?? null,
+                  }
+                : null,
+              users: {
+                ...data.bookings.professionals.users,
+                first_name:
+                  data.bookings.professionals.users.first_name ?? null,
+                last_name: data.bookings.professionals.users.last_name ?? null,
+              },
+            }
+          : null,
+        clients: {
+          ...data.bookings.clients,
+          first_name: data.bookings.clients.first_name ?? null,
+          last_name: data.bookings.clients.last_name ?? null,
+          client_profiles: Array.isArray(data.bookings.clients.client_profiles)
+            ? data.bookings.clients.client_profiles.map((profile) => ({
+                ...profile,
+                phone_number: profile.phone_number ?? null,
+                location: profile.location ?? null,
+                address: profile.address
+                  ? {
+                      ...profile.address,
+                      street_address: profile.address.street_address ?? null,
+                      city: profile.address.city ?? null,
+                      state: profile.address.state ?? null,
+                      country: profile.address.country ?? null,
+                      latitude: profile.address.latitude ?? null,
+                      longitude: profile.address.longitude ?? null,
+                    }
+                  : null,
+              }))
+            : [],
+        },
+        notes: data.bookings.notes ?? null,
+      },
+    };
+
+    console.log('Fetched appointment:', {
+      id: transformedData.id,
+      status: transformedData.status,
+      computed_status: transformedData.computed_status,
+      raw: data,
+    });
+
+    return transformedData;
   } catch (error) {
     console.error('Error in getAppointmentById:', error);
     throw new Error('Failed to get appointment details');
   }
 }
 
-// Check if user has permission to view this appointment (simplified for now)
+// Check if user has permission to view this appointment
 function checkAppointmentPermission(
   appointment: DetailedAppointmentType,
   userId: string,
   isProfessional: boolean,
 ): boolean {
-  // For now, just check if client matches for non-professionals
-  if (!isProfessional && appointment.bookings.client_id === userId) {
-    return true;
-  }
-
-  // For professionals, we need to check if they own this appointment
-  // We'll need to add a separate query for this later
   if (isProfessional) {
-    // TODO: Add professional check after we get basic query working
-    return true; // Allow all professionals for now
+    // Professional can only view their own appointments
+    return (
+      appointment.bookings.professionals?.user_id === userId ||
+      appointment.bookings.professionals?.users.id === userId
+    );
+  } else {
+    // Client can only view their own appointments
+    return (
+      appointment.bookings.client_id === userId ||
+      appointment.bookings.clients?.id === userId
+    );
   }
-
-  return false;
 }
 
 // Update appointment status

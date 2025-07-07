@@ -63,13 +63,14 @@ export async function getAppointmentById(appointmentId: string) {
     const supabase = await createClient();
 
     const { data, error } = await supabase
-      .from('appointments')
+      .from('appointments_with_status')
       .select(
         `
         id,
         start_time,
         end_time,
         status,
+        computed_status,
         notes,
         created_at,
         updated_at,

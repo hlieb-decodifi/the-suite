@@ -11,9 +11,11 @@ import Link from 'next/link';
 // Define type for appointment
 type AppointmentType = {
   id: string;
-  start_time: string;
-  end_time: string;
+  booking_id: string;
+  start_time: string; // ISO string from timestamptz
+  end_time: string; // ISO string from timestamptz
   status: string;
+  computed_status?: string;
   location?: string;
   services?: {
     id: string;
@@ -75,14 +77,14 @@ export function AppointmentCard({
 
   // Status color mapping
   const statusColorMap: Record<string, string> = {
-    confirmed: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-    completed: 'bg-blue-100 text-blue-800',
-    pending: 'bg-yellow-100 text-yellow-800',
+    upcoming: 'bg-primary/10 text-primary border-primary/20',
+    completed: 'bg-green-500/10 text-green-500 border-green-500/20',
+    cancelled: 'bg-destructive/10 text-destructive border-destructive/20',
   };
 
   const statusClass =
-    statusColorMap[appointment.status] || 'bg-gray-100 text-gray-800';
+    statusColorMap[appointment.computed_status || appointment.status] ||
+    'bg-gray-100 text-gray-800';
 
   return (
     <Card className="overflow-hidden transition-all hover:shadow-md">
@@ -101,7 +103,7 @@ export function AppointmentCard({
               </div>
             </div>
             <Badge className={`${statusClass} capitalize`}>
-              {appointment.status || 'Unknown'}
+              {appointment.computed_status || appointment.status || 'Unknown'}
             </Badge>
           </div>
 

@@ -1,4 +1,4 @@
-import { DashboardAppointmentsPage } from '@/components/pages/DashboardAppointmentsPage/DashboardAppointmentsPage';
+import { DashboardAppointmentsPage } from '@/components/pages/DashboardAppointmentsPage';
 
 type SearchParams = {
   start_date?: string;
