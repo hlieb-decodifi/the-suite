@@ -222,7 +222,9 @@ export function DashboardMessagesPageClient({
         const { getConversations } = await import(
           '@/server/domains/messages/actions'
         );
-        const result = await getConversations();
+        // Get conversationId from URL
+        const conversationId = searchParams.get('conversation') || undefined;
+        const result = await getConversations(conversationId);
         if (result.success && result.conversations) {
           setConversations(result.conversations);
         }
@@ -247,7 +249,7 @@ export function DashboardMessagesPageClient({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(conversationInterval);
     };
-  }, []);
+  }, [searchParams]);
 
   // Enhanced polling for messages with user interaction awareness
   useEffect(() => {
