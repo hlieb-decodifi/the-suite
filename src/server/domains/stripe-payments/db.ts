@@ -68,7 +68,7 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
  * Enhanced payment calculation with deposit validation
  */
 export function calculatePaymentAmounts(
-  totalAmount: number,
+  totalAmount: number, // in cents
   professionalProfile: ProfessionalProfileForPayment
 ): PaymentCalculation {
   const {
@@ -76,6 +76,12 @@ export function calculatePaymentAmounts(
     deposit_type,
     deposit_value
   } = professionalProfile;
+
+  // Get service fee from config
+  const serviceFee = 100; // $1 in cents, TODO: get from config
+
+  // Separate service amount from total
+  const serviceAmount = totalAmount - serviceFee;
 
   if (!requires_deposit || !deposit_value) {
     // No deposit required - full payment
@@ -92,24 +98,17 @@ export function calculatePaymentAmounts(
   let depositAmount: number;
   
   if (deposit_type === 'percentage') {
-    depositAmount = Math.round(totalAmount * (deposit_value / 100));
+    // Calculate deposit based on service amount only (excluding fee)
+    depositAmount = Math.round(serviceAmount * (deposit_value / 100));
   } else {
-    // Fixed amount deposit
-    depositAmount = Math.round(deposit_value * 100); // Convert to cents
+    // Fixed amount deposit - if it's bigger than service amount, cap it
+    depositAmount = Math.min(
+      Math.round(deposit_value * 100), // Convert to cents
+      serviceAmount // Cap at service amount
+    );
   }
 
-  // VALIDATION: If deposit >= total amount, charge full amount as deposit
-  if (depositAmount >= totalAmount) {
-    return {
-      totalAmount,
-      depositAmount: totalAmount,
-      balanceAmount: 0,
-      requiresDeposit: true,
-      requiresBalancePayment: false,
-      isFullPayment: true
-    };
-  }
-
+  // Service fee is always charged with the remaining balance
   const balanceAmount = totalAmount - depositAmount;
 
   return {
@@ -118,7 +117,7 @@ export function calculatePaymentAmounts(
     balanceAmount,
     requiresDeposit: true,
     requiresBalancePayment: balanceAmount > 0,
-    isFullPayment: false
+    isFullPayment: depositAmount >= serviceAmount // Only compare with service amount
   };
 }
 

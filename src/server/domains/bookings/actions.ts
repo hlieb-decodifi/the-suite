@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use server';
 
-import { stripe } from '@/lib/stripe/server';
 import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { stripe } from '@/lib/stripe/server';
 import {
   sendBookingCancellationClient,
   sendBookingCancellationProfessional,
@@ -11,9 +12,9 @@ import {
   sendNoShowNotificationClient,
   sendNoShowNotificationProfessional,
 } from '@/providers/brevo/templates';
-import { revalidatePath } from 'next/cache';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { Database } from '@supabase/types';
+
 
 function createSupabaseAdminClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -140,12 +141,17 @@ export async function cancelBookingAction(
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number; message?: string }> {
   const supabase = await createClient();
 
+  console.log('[Cancellation] Starting cancellation process for booking:', bookingId);
+
   try {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      console.log('[Cancellation] ❌ Unauthorized - no user found');
       return { success: false, error: 'Unauthorized' };
     }
+
+    console.log('[Cancellation] 👤 User authenticated:', user.id);
 
     // Get booking with all related data
     const { data: booking, error } = await supabase
@@ -159,6 +165,7 @@ export async function cancelBookingAction(
         ),
         professional_profiles!inner(
           cancellation_policy_enabled,
+          stripe_account_id,
           users!inner(id, first_name, last_name)
         ),
         clients:users!client_id(id, first_name, last_name, client_profiles(*)),
@@ -167,44 +174,75 @@ export async function cancelBookingAction(
           price,
           services(name)
         ),
-        booking_payments(
+        booking_payments!inner(
           id,
           amount,
           tip_amount,
           service_fee,
+          deposit_amount,
           status,
           stripe_payment_intent_id,
-          stripe_payment_method_id
+          stripe_payment_method_id,
+          payment_methods!inner(is_online)
         )
       `)
       .eq('id', bookingId)
       .single();
 
     if (error || !booking) {
+      console.log('[Cancellation] ❌ Booking not found:', { error });
       return { success: false, error: 'Booking not found' };
     }
+
+    console.log('[Cancellation] 📋 Booking details:', {
+      bookingId: booking.id,
+      status: booking.status,
+      appointmentCount: booking.appointments.length,
+      hasPayment: !!booking.booking_payments
+    });
 
     // Get the first appointment since we queried with !inner
     const appointment = booking.appointments[0];
     if (!appointment) {
+      console.log('[Cancellation] ❌ No appointment found for booking');
       return { success: false, error: 'Appointment not found' };
     }
 
     const professionalProfile = booking.professional_profiles;
     const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
-    const payment = Array.isArray(booking.booking_payments) && booking.booking_payments.length > 0 ? booking.booking_payments[0] : undefined;
+    const payment = booking.booking_payments;
+
+    console.log('[Cancellation] 💳 Payment details:', {
+      paymentId: payment?.id,
+      paymentStatus: payment?.status,
+      paymentAmount: payment?.amount,
+      depositAmount: payment?.deposit_amount,
+      serviceFee: payment?.service_fee,
+      paymentIntentId: payment?.stripe_payment_intent_id,
+      isOnlinePayment: payment?.payment_methods?.is_online
+    });
 
     // Check authorization
     const isProfessional = user.id === professionalUser.id;
     const isClient = user.id === clientUser.id;
 
     if (!isProfessional && !isClient) {
+      console.log('[Cancellation] ❌ Unauthorized - user is neither professional nor client');
       return { success: false, error: 'Unauthorized' };
     }
 
+    console.log('[Cancellation] 🔐 Authorization:', {
+      userId: user.id,
+      isProfessional,
+      isClient,
+      professionalId: professionalUser.id,
+      clientId: clientUser.id
+    });
+
     // Check if already cancelled
     if (booking.status === 'cancelled' || appointment.status === 'cancelled') {
+      console.log('[Cancellation] ❌ Booking already cancelled');
       return { success: false, error: 'Booking already cancelled' };
     }
 
@@ -218,8 +256,11 @@ export async function cancelBookingAction(
       .eq('id', bookingId);
 
     if (updateBookingError) {
+      console.log('[Cancellation] ❌ Failed to update booking status:', updateBookingError);
       return { success: false, error: 'Failed to update booking status' };
     }
+
+    console.log('[Cancellation] ✅ Updated booking status to cancelled');
 
     const { error: updateAppointmentError } = await supabase
       .from('appointments')
@@ -230,88 +271,190 @@ export async function cancelBookingAction(
       .eq('booking_id', bookingId);
 
     if (updateAppointmentError) {
+      console.log('[Cancellation] ❌ Failed to update appointment status:', updateAppointmentError);
       return { success: false, error: 'Failed to update appointment status' };
     }
 
-    // Update payment status and clear scheduled jobs if payment exists
-    if (payment) {
-      // Handle uncaptured payment intent for cancellations without policy
-      if (payment.stripe_payment_intent_id) {
-        try {
-          const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+    console.log('[Cancellation] ✅ Updated appointment status to cancelled');
+
+    // Handle payment and refund if there's a payment record
+    if (payment && payment.stripe_payment_intent_id) {
+
+      try {
+        console.log(`[Payment Intent] 🔍 Retrieving payment intent ${payment.stripe_payment_intent_id}`);
+        const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+        console.log(`[Payment Intent] Status: ${paymentIntent.status}`, {
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          captureMethod: paymentIntent.capture_method,
+          paymentStatus: paymentIntent.status
+        });
+
+        // Handle different payment intent statuses
+        if (paymentIntent.status === 'requires_capture') {
+          console.log(`[Payment Intent] 💰 Payment requires capture`);
+          const customerId = paymentIntent.customer as string;
+          console.log(`[Payment Intent] Customer ID: ${customerId}`);
           
-          if (paymentIntent.status === 'requires_capture') {
-            // Get customer ID for partial capture
-            const customerId = paymentIntent.customer as string;
-            const paymentMethodId = payment.stripe_payment_method_id;
-            
-            console.log(`[Debug] Customer ID: ${customerId}, Payment Method ID: ${paymentMethodId}`);
-              
-            if (customerId) {
-              // For split payment architecture with no-policy cancellations:
-              // Service fee was already captured ($1.00 for platform)
-              // We just need to cancel the remaining uncaptured service amount (full refund to customer)
-              console.log(`[Split Payment Cancellation] Regular cancellation - no policy`);
-              console.log(`[Split Payment Cancellation] Service fee already captured: $1.00 (platform)`);
-              console.log(`[Split Payment Cancellation] Cancelling remaining uncaptured amount for full customer refund`);
-              
-              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-              console.log(`✅ Split payment cancellation completed:`);
-              console.log(`   - Service fee already captured: $1.00 (platform)`);
-              console.log(`   - Uncaptured service amount cancelled and refunded to customer`);
+          if (customerId && professionalProfile.stripe_account_id) {
+            console.log(`[Payment Intent] Professional stripe account: ${professionalProfile.stripe_account_id}`);
+            // Different refund logic based on who is cancelling
+            if (isProfessional) {
+              // Professional cancelling: Full refund including deposit, professional pays fees
+              const refundAmount = payment.amount + (payment.deposit_amount || 0);
+              console.log(`[Professional Cancel] 💸 Refunding full amount:`, {
+                baseAmount: payment.amount,
+                depositAmount: payment.deposit_amount,
+                totalRefund: refundAmount
+              });
+
+              const refund = await stripe.refunds.create({
+                payment_intent: payment.stripe_payment_intent_id,
+                amount: refundAmount,
+                metadata: {
+                  reason: 'Professional cancelled - full refund including deposit'
+                }
+              });
+
+              console.log(`[Professional Cancel] ✅ Full refund processed:`, {
+                refundId: refund.id,
+                refundStatus: refund.status,
+                refundAmount: refund.amount
+              });
             } else {
-              // Missing customer ID, cannot do partial capture
-              console.error(`Missing customer ID for payment intent ${payment.stripe_payment_intent_id}. Customer: ${customerId}`);
-              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-              console.log(`Fallback: Cancelled entire payment intent due to missing customer ID: ${payment.stripe_payment_intent_id}`);
+              // Client cancelling: Check cancellation policy
+              if (!professionalProfile.cancellation_policy_enabled) {
+                console.log(`[Client Cancel] No cancellation policy - processing refund`);
+                console.log(`[Client Cancel] Payment details:`, {
+                  amount: payment.amount,
+                  depositAmount: payment.deposit_amount,
+                  serviceFee: payment.service_fee,
+                  paymentIntentId: payment.stripe_payment_intent_id,
+                  paymentStatus: payment.status
+                });
+
+                // No policy - full refund including deposit, minus service fee
+                const refundAmount = payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0);
+                console.log(`[Client Cancel] 💰 Refund calculation:`, {
+                  paymentAmount: payment.amount,
+                  depositAmount: payment.deposit_amount || 0,
+                  serviceFee: payment.service_fee || 0,
+                  totalRefund: refundAmount
+                });
+
+                try {
+                  const refund = await stripe.refunds.create({
+                    payment_intent: payment.stripe_payment_intent_id,
+                    amount: refundAmount,
+                    metadata: {
+                      reason: 'Client cancelled - no cancellation policy, full refund minus service fee'
+                    }
+                  });
+                  console.log(`[Client Cancel] ✅ Refund created successfully:`, {
+                    refundId: refund.id,
+                    status: refund.status,
+                    amount: refund.amount
+                  });
+                } catch (refundError) {
+                  console.error('[Client Cancel] ❌ Failed to create refund:', refundError);
+                  throw refundError;
+                }
+              } else {
+                // Policy exists - handle in cancelWithPolicyAction
+                console.log(`[Client Cancel] ⚠️ Cancellation policy enabled - redirecting to policy flow`);
+                return { 
+                  success: false, 
+                  error: 'Please use cancellation policy flow',
+                  message: 'This booking requires cancellation through the policy flow.'
+                };
+              }
             }
-          } else if (paymentIntent.status === 'requires_confirmation') {
-            await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-            console.log(`Cancelled Stripe payment intent: ${payment.stripe_payment_intent_id}`);
           } else {
-            console.log(`Payment intent ${payment.stripe_payment_intent_id} is in status ${paymentIntent.status}, cannot cancel`);
+            // Missing customer ID or professional stripe account, cancel entire payment
+            console.log(`[Payment Intent] ⚠️ Missing customer ID or professional stripe account - cancelling entire payment`);
+            await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+            console.log(`[Payment Intent] ✅ Payment cancelled`);
           }
-        } catch (stripeError) {
-          console.error('Failed to handle payment intent during cancellation:', stripeError);
-          // Don't fail the entire cancellation for Stripe errors
+        } else if (paymentIntent.status === 'succeeded') {
+          console.log(`[Payment Intent] Payment already succeeded - processing refund`);
+          // Handle refund for already succeeded payment
+          const refundAmount = isProfessional 
+            ? payment.amount + (payment.deposit_amount || 0)  // Professional pays fees
+            : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0); // Client pays service fee
+          
+          console.log(`[Payment Intent] 💰 Refund calculation for succeeded payment:`, {
+            paymentAmount: payment.amount,
+            depositAmount: payment.deposit_amount || 0,
+            serviceFee: payment.service_fee || 0,
+            isProfessionalCancelling: isProfessional,
+            totalRefund: refundAmount
+          });
+
+          try {
+            const refund = await stripe.refunds.create({
+              payment_intent: payment.stripe_payment_intent_id,
+              amount: refundAmount,
+              metadata: {
+                reason: isProfessional 
+                  ? 'Professional cancelled - full refund including deposit'
+                  : 'Client cancelled - full refund minus service fee'
+              }
+            });
+            console.log(`[Payment Intent] ✅ Refund processed for succeeded payment:`, {
+              refundId: refund.id,
+              status: refund.status,
+              amount: refund.amount
+            });
+          } catch (refundError) {
+            console.error('[Payment Intent] ❌ Failed to process refund:', refundError);
+            throw refundError;
+          }
         }
+
+        // Update payment record
+        const { error: updatePaymentError } = await supabase
+          .from('booking_payments')
+          .update({
+            status: 'refunded',
+            pre_auth_scheduled_for: null,
+            capture_scheduled_for: null,
+            refunded_amount: isProfessional ? payment.amount + (payment.deposit_amount || 0) : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0),
+            refund_reason: `${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
+            refunded_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', payment.id);
+
+        if (updatePaymentError) {
+          console.error('[Payment Record] ❌ Failed to update payment status:', updatePaymentError);
+        } else {
+          console.log('[Payment Record] ✅ Payment record updated successfully');
+        }
+      } catch (stripeError) {
+        console.error('[Stripe Error] ❌ Failed to handle payment intent during cancellation:', stripeError);
       }
-
-      // Calculate refund amount for regular cancellation (full refund minus service fee)
-      const originalAmount = payment.amount + payment.tip_amount;
-      const serviceFee = payment.service_fee || 1.00; // Default to $1 if not set
-      const refundAmount = originalAmount - serviceFee; // Customer gets everything back except suite service fee
-
-      const { error: updatePaymentError } = await supabase
-        .from('booking_payments')
-        .update({
-          status: 'refunded',
-          pre_auth_scheduled_for: null,
-          capture_scheduled_for: null,
-          refunded_amount: refundAmount,
-          refund_reason: `Regular cancellation: ${cancellationReason}`,
-          refunded_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', payment.id);
-
-      if (updatePaymentError) {
-        console.error('Failed to update payment status:', updatePaymentError);
-      }
+    } else {
+      console.log('[Cancellation] ℹ️ No payment record or payment intent to process');
     }
 
-    console.log('Sending cancellation emails', booking); 
-
     // Send email notifications
+    console.log('[Cancellation] 📧 Sending cancellation emails');
     await sendCancellationEmails(booking as any, cancellationReason);
+    console.log('[Cancellation] ✅ Cancellation emails sent');
 
-    // Revalidate the booking detail page to ensure fresh data
+    // Revalidate the booking detail page
     revalidatePath(`/bookings/${appointment.id}`);
+    console.log('[Cancellation] 🔄 Revalidated booking page');
 
-    return { success: true };
+    return { 
+      success: true,
+      message: isProfessional 
+        ? 'Booking cancelled. Full refund including deposit will be processed.'
+        : 'Booking cancelled. Refund will be processed according to cancellation policy.'
+    };
 
   } catch (error) {
-    console.error('Error cancelling booking:', error);
+    console.error('[Cancellation] ❌ Error cancelling booking:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'

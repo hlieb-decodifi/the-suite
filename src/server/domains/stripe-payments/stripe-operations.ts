@@ -627,7 +627,11 @@ export async function createEnhancedCheckoutSession(
       }
 
       const serviceFee = await getServiceFeeFromConfig();
-      const serviceAmount = chargeAmount - serviceFee; // Professional gets this amount minus Stripe fees
+      
+      // For deposit payments, don't include service fee
+      const serviceAmount = paymentType === 'deposit' 
+        ? chargeAmount // Deposit amount is already calculated correctly
+        : chargeAmount - serviceFee; // For full payments, subtract fee
       
       sessionConfig.mode = 'payment';
       sessionConfig.payment_method_types = ['card'];
@@ -658,7 +662,7 @@ export async function createEnhancedCheckoutSession(
       // Add transfer data only if this is not a service fee only payment
       if (!isServiceFeeOnly && serviceAmount > 0) {
         sessionConfig.payment_intent_data.transfer_data = {
-          amount: serviceAmount, // Only transfer the service amount (total - suite fee)
+          amount: serviceAmount, // For deposits, transfer the full deposit. For full payments, subtract fee
           destination: professionalStripeAccountId
         };
         // The remaining amount (suite fee) stays in the platform account

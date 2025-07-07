@@ -445,6 +445,19 @@ export function BookingDetailPageClient({
     return `Location for appointment with ${getOtherPartyName()}`;
   };
 
+  const services = appointment.bookings.booking_services;
+  const payment = appointment.bookings.booking_payments;
+
+  // Calculate total services amount
+  const servicesTotal = services.reduce(
+    (sum, service) => sum + service.price,
+    0,
+  );
+
+  const subtotal = servicesTotal;
+  const serviceFee = payment?.service_fee ?? 0;
+  const totalTips = payment?.tip_amount ?? 0;
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -598,38 +611,25 @@ export function BookingDetailPageClient({
             </CardHeader>
             <CardContent className="space-y-6">
               {(() => {
-                const services = appointment.bookings.booking_services || [];
-                const payment = appointment.bookings.booking_payments;
-                const mainService = services[0]; // First service is typically the main one
-                const additionalServices = services.slice(1);
                 const totalDuration = services.reduce(
                   (sum, service) => sum + service.duration,
                   0,
                 );
-                const subtotal = services.reduce(
-                  (sum, service) => sum + service.price,
-                  0,
-                );
-                // Get actual payment data including tips
-                const totalAmount = payment?.amount || 0;
-                const totalTips = payment?.tip_amount || 0;
-                const serviceFee = payment?.service_fee || 0;
-                const total = totalAmount + totalTips;
 
                 return (
                   <>
                     {/* Main Service */}
-                    {mainService && (
+                    {services[0] && (
                       <div>
                         <Typography variant="large" className="mb-2">
-                          {mainService.services.name}
+                          {services[0].services.name}
                         </Typography>
-                        {mainService.services.description && (
+                        {services[0].services.description && (
                           <Typography
                             variant="p"
                             className="mb-4 text-muted-foreground"
                           >
-                            {mainService.services.description}
+                            {services[0].services.description}
                           </Typography>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -639,7 +639,7 @@ export function BookingDetailPageClient({
                               Duration:
                             </Typography>
                             <Typography className="font-medium">
-                              {formatDuration(mainService.duration)}
+                              {formatDuration(services[0].duration)}
                             </Typography>
                           </div>
                           <div className="flex items-center justify-end gap-2">
@@ -648,7 +648,7 @@ export function BookingDetailPageClient({
                               Price:
                             </Typography>
                             <Typography className="font-medium">
-                              {formatCurrency(mainService.price)}
+                              {formatCurrency(services[0].price)}
                             </Typography>
                           </div>
                         </div>
@@ -656,7 +656,7 @@ export function BookingDetailPageClient({
                     )}
 
                     {/* Additional Services */}
-                    {additionalServices.length > 0 && (
+                    {services.slice(1).length > 0 && (
                       <>
                         <Separator />
                         <div>
@@ -664,7 +664,7 @@ export function BookingDetailPageClient({
                             Additional Services
                           </Typography>
                           <div className="space-y-4">
-                            {additionalServices.map((bookingService) => (
+                            {services.slice(1).map((bookingService) => (
                               <div
                                 key={bookingService.id}
                                 className="flex justify-between items-start"
@@ -754,13 +754,53 @@ export function BookingDetailPageClient({
                             </Typography>
                           </div>
                         )}
+                        {(appointment.bookings.booking_payments
+                          ?.deposit_amount ?? 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Deposit Paid:
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-green-600"
+                            >
+                              {formatCurrency(
+                                appointment.bookings.booking_payments
+                                  ?.deposit_amount ?? 0,
+                              )}
+                            </Typography>
+                          </div>
+                        )}
+                        {(appointment.bookings.booking_payments
+                          ?.balance_amount ?? 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Balance Due
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-amber-600"
+                            >
+                              {formatCurrency(
+                                appointment.bookings.booking_payments
+                                  ?.balance_amount ?? 0,
+                              )}
+                            </Typography>
+                          </div>
+                        )}
                         <Separator />
                         <div className="flex justify-between items-center">
                           <Typography className="font-semibold">
-                            Total{totalTips > 0 ? ' (including tips)' : ''}:
+                            Total:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
-                            {formatCurrency(total)}
+                            {formatCurrency(subtotal + serviceFee + totalTips)}
                           </Typography>
                         </div>
                       </div>
@@ -1154,29 +1194,27 @@ export function BookingDetailPageClient({
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Payment Amount and Status */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Typography className="font-bold text-primary text-lg">
-                      {formatCurrency(
-                        appointmentData.bookings.booking_payments?.amount || 0,
-                      )}
-                    </Typography>
-                  </div>
-
-                  {appointment.bookings.booking_payments.tip_amount > 0 && (
+                <div className="space-y-2">
+                  {/* Show total amount for professionals */}
+                  {isProfessional ? (
                     <div className="flex justify-between items-center">
-                      <Typography
-                        variant="small"
-                        className="text-muted-foreground"
-                      >
-                        Tip:
-                      </Typography>
-                      <Typography variant="small" className="font-medium">
-                        {formatCurrency(
-                          appointment.bookings.booking_payments.tip_amount,
-                        )}
+                      <Typography className="font-bold text-primary text-lg">
+                        {formatCurrency(servicesTotal)}
                       </Typography>
                     </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <Typography className="font-semibold">
+                          Total:
+                        </Typography>
+                        <Typography className="font-bold text-primary text-lg">
+                          {formatCurrency(
+                            servicesTotal + serviceFee + totalTips,
+                          )}
+                        </Typography>
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -1202,276 +1240,16 @@ export function BookingDetailPageClient({
                   <Typography variant="muted">
                     {appointment.bookings.booking_payments.payment_methods
                       ?.name || 'Unknown Method'}
-                    {appointment.bookings.booking_payments.payment_methods
-                      ?.is_online && ' (Online)'}
+                    {!appointment.bookings.booking_payments.payment_methods
+                      ?.is_online &&
+                      isClient && (
+                        <span className="text-muted-foreground">
+                          {' '}
+                          (Service fee will be charged to your card)
+                        </span>
+                      )}
                   </Typography>
                 </div>
-
-                {/* Pre-Authorization Details */}
-                {(appointment.bookings.booking_payments
-                  .pre_auth_scheduled_for ||
-                  appointment.bookings.booking_payments.pre_auth_placed_at) && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <TooltipProvider>
-                        <div className="flex items-center gap-2">
-                          <Typography className="font-medium text-foreground">
-                            Pre-Authorization
-                          </Typography>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                For bookings more than 6 days away, payment is
-                                pre-authorized 6 days before the appointment
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
-
-                      {appointment.bookings.booking_payments
-                        .pre_auth_scheduled_for && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Scheduled for:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.pre_auth_scheduled_for,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-
-                      {appointment.bookings.booking_payments
-                        .pre_auth_placed_at && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Pre-authorized on:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-medium text-green-600"
-                          >
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.pre_auth_placed_at,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Payment Capture Details */}
-                {(appointment.bookings.booking_payments.capture_scheduled_for ||
-                  appointment.bookings.booking_payments.captured_at) && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <TooltipProvider>
-                        <div className="flex items-center gap-2">
-                          <Typography className="font-medium text-foreground">
-                            Payment Capture
-                          </Typography>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                Payment is automatically captured 12 hours after
-                                the appointment ends
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
-
-                      {appointment.bookings.booking_payments
-                        .capture_scheduled_for &&
-                        !appointment.bookings.booking_payments.captured_at && (
-                          <div className="flex justify-between items-center">
-                            <Typography
-                              variant="small"
-                              className="text-muted-foreground"
-                            >
-                              Scheduled for:
-                            </Typography>
-                            <Typography variant="small" className="font-medium">
-                              {format(
-                                new Date(
-                                  appointment.bookings.booking_payments.capture_scheduled_for,
-                                ),
-                                'MMM d, yyyy h:mm a',
-                              )}
-                            </Typography>
-                          </div>
-                        )}
-
-                      {appointment.bookings.booking_payments.captured_at && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Captured on:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-medium text-green-600"
-                          >
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.captured_at,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Refund Information */}
-                {appointment.bookings.booking_payments.refunded_amount > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <TooltipProvider>
-                        <div className="flex items-center gap-2">
-                          <Typography className="font-medium text-foreground">
-                            Refund Information
-                          </Typography>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <InfoIcon className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Amount refunded due to booking cancellation</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </TooltipProvider>
-
-                      <div className="flex justify-between items-center">
-                        <Typography
-                          variant="small"
-                          className="text-muted-foreground"
-                        >
-                          Refunded Amount:
-                        </Typography>
-                        <Typography
-                          variant="small"
-                          className="font-medium text-green-600"
-                        >
-                          {formatCurrency(
-                            appointment.bookings.booking_payments
-                              .refunded_amount,
-                          )}
-                        </Typography>
-                      </div>
-
-                      {appointment.bookings.booking_payments.refund_reason && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Reason:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {
-                              appointment.bookings.booking_payments
-                                .refund_reason
-                            }
-                          </Typography>
-                        </div>
-                      )}
-
-                      {appointment.bookings.booking_payments.refunded_at && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Refunded on:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-medium text-green-600"
-                          >
-                            {format(
-                              new Date(
-                                appointment.bookings.booking_payments.refunded_at,
-                              ),
-                              'MMM d, yyyy h:mm a',
-                            )}
-                          </Typography>
-                        </div>
-                      )}
-
-                      {appointment.bookings.booking_payments
-                        .refund_transaction_id && (
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Transaction ID:
-                          </Typography>
-                          <Typography
-                            variant="small"
-                            className="font-mono text-xs"
-                          >
-                            {
-                              appointment.bookings.booking_payments
-                                .refund_transaction_id
-                            }
-                          </Typography>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Payment Timeline */}
-                {appointment.bookings.booking_payments.payment_methods
-                  ?.is_online && (
-                  <>
-                    <Separator />
-                    <div>
-                      <Typography className="font-medium text-foreground mb-1">
-                        Payment Created
-                      </Typography>
-                      <Typography variant="muted">
-                        {format(
-                          new Date(
-                            appointment.bookings.booking_payments.created_at,
-                          ),
-                          'MMM d, yyyy h:mm a',
-                        )}
-                      </Typography>
-                    </div>
-                  </>
-                )}
               </CardContent>
             </Card>
           )}

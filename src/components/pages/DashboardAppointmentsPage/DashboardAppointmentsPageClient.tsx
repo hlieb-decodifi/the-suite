@@ -80,6 +80,25 @@ type Appointment = {
   amount: number;
 };
 
+type BookingService = {
+  id: string;
+  price: number;
+};
+
+type BookingPayment = {
+  service_fee: number;
+  tip_amount: number;
+};
+
+type Booking = {
+  booking_services: BookingService[];
+  booking_payments: BookingPayment;
+};
+
+type AppointmentWithBooking = AppointmentType & {
+  booking?: Booking;
+};
+
 type DashboardAppointmentsPageClientProps = {
   isProfessional: boolean;
   appointments: AppointmentType[]; // Specify the correct type instead of any[]
@@ -391,61 +410,56 @@ export function DashboardAppointmentsPageClient({
     : [];
 
   // Transform appointments into the format needed for the table
-  const transformedAppointments: Appointment[] = validAppointments.map(
-    (appointment) => {
-      const startTime = new Date(appointment.start_time);
+  const transformedAppointments: Appointment[] = (
+    validAppointments as AppointmentWithBooking[]
+  ).map((appointment: AppointmentWithBooking) => {
+    const startTime = new Date(appointment.start_time);
 
-      // Get service name with additional services indicator
-      const serviceName = appointment.services?.hasAdditionalServices
-        ? `${appointment.services.name} + ${appointment.services.additionalServicesCount} more`
-        : appointment.services?.name || 'Service';
+    // Get service name with additional services indicator
+    const serviceName = appointment.services?.name || 'Service';
 
-      // Get client name
-      const clientName = appointment.clients?.users
-        ? `${appointment.clients.users.first_name || ''} ${appointment.clients.users.last_name || ''}`.trim()
-        : 'Client';
+    // Get client name
+    const clientName = appointment.clients?.users
+      ? `${appointment.clients.users.first_name || ''} ${appointment.clients.users.last_name || ''}`.trim()
+      : 'Client';
 
-      // Get professional name
-      const professionalName = appointment.professionals?.users
-        ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
-        : 'Professional';
+    // Get professional name
+    const professionalName = appointment.professionals?.users
+      ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
+      : 'Professional';
 
-      // Get amount including service fee for both professionals and clients
-      const amount =
-        appointment.services?.actualPaymentAmount ||
-        appointment.services?.totalWithServiceFee ||
-        (appointment.services?.totalPrice || appointment.services?.price || 0) +
-          1.0;
+    // Get the total amount from services.actualPaymentAmount which is already calculated
+    // in the server-side query including booking_services and booking_payments
+    const amount = appointment.services?.actualPaymentAmount || 0;
 
-      // Map status to expected format
-      let formattedStatus: Appointment['status'] = 'upcoming';
-      const computedStatus = appointment.computed_status || appointment.status;
-      switch (computedStatus) {
-        case 'completed':
-          formattedStatus = 'completed';
-          break;
-        case 'cancelled':
-          formattedStatus = 'cancelled';
-          break;
-        case 'upcoming':
-        default:
-          formattedStatus = 'upcoming';
-          break;
-      }
+    // Map status to expected format
+    let formattedStatus: Appointment['status'] = 'upcoming';
+    const computedStatus = appointment.computed_status || appointment.status;
+    switch (computedStatus) {
+      case 'completed':
+        formattedStatus = 'completed';
+        break;
+      case 'cancelled':
+        formattedStatus = 'cancelled';
+        break;
+      case 'upcoming':
+      default:
+        formattedStatus = 'upcoming';
+        break;
+    }
 
-      return {
-        id: appointment.id,
-        date: startTime,
-        time: format(startTime, 'h:mm a'),
-        serviceName,
-        clientName,
-        professionalName,
-        status: formattedStatus,
-        computedStatus,
-        amount,
-      };
-    },
-  );
+    return {
+      id: appointment.id,
+      date: startTime,
+      time: format(startTime, 'h:mm a'),
+      serviceName,
+      clientName,
+      professionalName,
+      status: formattedStatus,
+      computedStatus,
+      amount,
+    };
+  });
 
   // Filter appointments based on selected filters
   const filteredAppointments = transformedAppointments.filter((appointment) => {

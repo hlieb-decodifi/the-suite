@@ -283,64 +283,56 @@ export async function getDashboardAppointments(
         const booking = bookingsMap.get(appointment.bookings.id);
         if (!booking) return null;
 
-        // Calculate total amount from booking payments
-        const totalAmount = Array.isArray(booking.booking_payments)
-          ? booking.booking_payments.reduce(
-              (sum, payment) => sum + (payment?.amount || 0),
-              0,
-            )
-          : booking.booking_payments?.amount || 0;
+        // Get all booking services
+        const bookingServices = Array.isArray(booking.booking_services)
+          ? booking.booking_services
+          : booking.booking_services
+            ? [booking.booking_services]
+            : [];
+
+        // Get booking payment
+        const bookingPayment = Array.isArray(booking.booking_payments)
+          ? booking.booking_payments[0]
+          : booking.booking_payments;
+
+        // Calculate total amount from booking_services
+        const servicesTotal = bookingServices.reduce(
+          (sum, service) => sum + (service?.price || 0),
+          0,
+        );
+
+        // Get service fee and tip from booking_payments
+        const serviceFee = bookingPayment?.service_fee || 0;
+        const tipAmount = bookingPayment?.tip_amount || 0;
+
+        // Calculate total amount
+        const totalAmount = servicesTotal + serviceFee + tipAmount;
 
         // Get the first service details
-        const firstService = Array.isArray(booking.booking_services)
-          ? booking.booking_services[0]
-          : booking.booking_services;
+        const firstService = bookingServices[0];
 
         const service = firstService
           ? {
               id: firstService.service_id,
               name: firstService.services?.name || 'Unnamed Service',
               description: firstService.services?.description,
-              price: firstService.price,
+              price: servicesTotal, // Use total of all services
               duration: firstService.duration,
-              totalPrice: totalAmount,
-              totalDuration: Array.isArray(booking.booking_services)
-                ? booking.booking_services.reduce(
-                    (sum, bs) => sum + (bs.duration || 0),
-                    0,
-                  )
-                : firstService.duration || 0,
-              totalWithServiceFee:
-                totalAmount +
-                (Array.isArray(booking.booking_payments)
-                  ? booking.booking_payments.reduce(
-                      (sum, payment) => sum + (payment?.service_fee || 0),
-                      0,
-                    )
-                  : booking.booking_payments?.service_fee || 0),
-              hasAdditionalServices: Array.isArray(booking.booking_services)
-                ? booking.booking_services.length > 1
-                : false,
-              additionalServicesCount: Array.isArray(booking.booking_services)
-                ? booking.booking_services.length - 1
-                : 0,
-              allServices: Array.isArray(booking.booking_services)
-                ? booking.booking_services.map((bs) => ({
-                    id: bs.service_id,
-                    name: bs.services?.name || 'Unnamed Service',
-                    description: bs.services?.description || '',
-                    price: bs.price,
-                    duration: bs.duration,
-                  }))
-                : [
-                    {
-                      id: firstService.service_id,
-                      name: firstService.services?.name || 'Unnamed Service',
-                      description: firstService.services?.description || '',
-                      price: firstService.price,
-                      duration: firstService.duration,
-                    },
-                  ],
+              totalPrice: servicesTotal,
+              totalDuration: bookingServices.reduce(
+                (sum, bs) => sum + (bs.duration || 0),
+                0,
+              ),
+              totalWithServiceFee: totalAmount,
+              hasAdditionalServices: bookingServices.length > 1,
+              additionalServicesCount: bookingServices.length - 1,
+              allServices: bookingServices.map((bs) => ({
+                id: bs.service_id,
+                name: bs.services?.name || 'Unnamed Service',
+                description: bs.services?.description || '',
+                price: bs.price,
+                duration: bs.duration,
+              })),
               actualPaymentAmount: totalAmount,
             }
           : null;
@@ -350,9 +342,9 @@ export async function getDashboardAppointments(
           booking_id: booking.id,
           start_time: appointment.start_time,
           end_time: appointment.end_time,
-          status: appointment.computed_status, // Use computed_status instead of raw status
+          status: appointment.computed_status,
           computed_status: appointment.computed_status,
-          location: 'Location not specified', // Add actual location if available
+          location: 'Location not specified',
           notes: booking.notes,
           created_at: booking.created_at,
           updated_at: booking.updated_at,
@@ -383,7 +375,7 @@ export async function getDashboardAppointments(
     return transformedAppointments;
   } catch (error) {
     console.error('Error in getDashboardAppointments:', error);
-    return []; // Return empty array instead of throwing
+    return [];
   }
 }
 
