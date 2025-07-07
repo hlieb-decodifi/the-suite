@@ -26,7 +26,14 @@ export function DetailsForm({
     saveSuccess,
     onSubmit: handleSubmit,
   } = useDetailsForm({
-    onSubmit,
+    onSubmit: async (data) => {
+      // If phone is just a country code, treat as undefined
+      let phone = data.phone;
+      if (phone && /^\+\d{1,4}$/.test(phone.trim())) {
+        phone = undefined;
+      }
+      await onSubmit({ ...data, phone });
+    },
     user,
     initialData,
   });
