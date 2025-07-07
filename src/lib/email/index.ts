@@ -1,12 +1,13 @@
 // Export template functions
 export { 
-  createAdminNotificationEmail, 
-  createUserConfirmationEmail,
-  createBalanceNotificationEmail,
-  createBookingConfirmationProfessionalEmail,
-  createBookingConfirmationClientEmail,
-  type EmailTemplate 
-} from './templates';
+  sendContactInquiryAdmin,
+  sendContactInquiryConfirmation,
+  sendBalanceNotification,
+  sendBookingConfirmationProfessional,
+  sendBookingConfirmationClient,
+  type EmailRecipient,
+  type EmailResult
+} from '@/providers/brevo';
 
-// Export the email provider (currently Brevo, but can be swapped)
-export { sendEmail } from './providers/brevo'; 
+// Export the email provider (currently Brevo)
+export { initEmailSender as sendEmail } from '@/providers/brevo'; 

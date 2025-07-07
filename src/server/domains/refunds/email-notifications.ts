@@ -1,10 +1,9 @@
-import { sendEmail } from '@/lib/email';
 import {
-  createRefundRequestNotificationEmail,
-  createRefundDeclineNotificationEmail,
-  createRefundCompletionClientEmail,
-  createRefundCompletionProfessionalEmail
-} from '@/lib/email/templates';
+  sendRefundRequestProfessional,
+  sendRefundDeclineClient,
+  sendRefundCompletionClient,
+  sendRefundCompletionProfessional
+} from '@/providers/brevo/templates';
 
 /**
  * Send refund request notification to professional
@@ -23,13 +22,23 @@ export async function sendRefundRequestNotification(
     reviewUrl: string;
   }
 ) {
-  const email = createRefundRequestNotificationEmail(
-    professionalEmail,
-    professionalName,
-    refundData
+  return sendRefundRequestProfessional(
+    [{ email: professionalEmail, name: professionalName }],
+    {
+      professional_name: professionalName,
+      client_name: refundData.clientName,
+      service_name: refundData.serviceName,
+      original_amount: refundData.originalAmount,
+      reason: refundData.reason,
+      review_url: refundData.reviewUrl,
+      date: refundData.appointmentDate,
+      time: refundData.appointmentTime,
+      appointment_id: refundData.refundId,
+      appointment_details_url: refundData.reviewUrl,
+      website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+      support_email: process.env.BREVO_ADMIN_EMAIL!
+    }
   );
-
-  return sendEmail(email);
 }
 
 /**
@@ -46,13 +55,22 @@ export async function sendRefundDeclineNotification(
     professionalNotes?: string;
   }
 ) {
-  const email = createRefundDeclineNotificationEmail(
-    clientEmail,
-    clientName,
-    data
+  return sendRefundDeclineClient(
+    [{ email: clientEmail, name: clientName }],
+    {
+      client_name: clientName,
+      professional_name: data.professionalName,
+      original_amount: data.originalAmount,
+      decline_reason: data.declinedReason || 'No reason provided',
+      booking_id: 'N/A', // Required by type but not used in this context
+      appointment_id: 'N/A', // Required by type but not used in this context
+      date: new Date().toISOString(), // Required by type but not used in this context
+      time: new Date().toLocaleTimeString(), // Required by type but not used in this context
+      appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings`,
+      website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+      support_email: process.env.BREVO_ADMIN_EMAIL!
+    }
   );
-
-  return sendEmail(email);
 }
 
 /**
@@ -72,34 +90,45 @@ export async function sendRefundCompletionNotifications(
   }
 ) {
   // Send confirmation to client
-  const clientEmail_ = createRefundCompletionClientEmail(
-    clientEmail,
-    clientName,
+  const clientEmailPromise = sendRefundCompletionClient(
+    [{ email: clientEmail, name: clientName }],
     {
-      professionalName,
-      serviceName: data.serviceName,
-      originalAmount: data.originalAmount,
-      refundAmount: data.refundAmount,
-      ...(data.professionalNotes && { professionalNotes: data.professionalNotes })
+      client_name: clientName,
+      professional_name: professionalName,
+      original_amount: data.originalAmount,
+      refund_amount: data.refundAmount,
+      reason: data.professionalNotes || 'Refund processed',
+      booking_id: 'N/A', // Required by type but not used in this context
+      appointment_id: 'N/A', // Required by type but not used in this context
+      date: new Date().toISOString(), // Required by type but not used in this context
+      time: new Date().toLocaleTimeString(), // Required by type but not used in this context
+      appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings`,
+      website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+      support_email: process.env.BREVO_ADMIN_EMAIL!
     }
   );
 
   // Send notification to professional
-  const professionalEmail_ = createRefundCompletionProfessionalEmail(
-    professionalEmail,
-    professionalName,
+  const professionalEmailPromise = sendRefundCompletionProfessional(
+    [{ email: professionalEmail, name: professionalName }],
     {
-      clientName,
-      serviceName: data.serviceName,
-      originalAmount: data.originalAmount,
-      refundAmount: data.refundAmount,
-      transactionFee: data.transactionFee
+      client_name: clientName,
+      professional_name: professionalName,
+      original_amount: data.originalAmount,
+      refund_amount: data.refundAmount,
+      platform_fee: data.transactionFee,
+      net_refund: data.refundAmount - data.transactionFee,
+      reason: data.professionalNotes || 'Refund processed',
+      booking_id: 'N/A', // Required by type but not used in this context
+      appointment_id: 'N/A', // Required by type but not used in this context
+      date: new Date().toISOString(), // Required by type but not used in this context
+      time: new Date().toLocaleTimeString(), // Required by type but not used in this context
+      appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings`,
+      website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+      support_email: process.env.BREVO_ADMIN_EMAIL!
     }
   );
 
   // Send both emails
-  await Promise.all([
-    sendEmail(clientEmail_),
-    sendEmail(professionalEmail_)
-  ]);
+  await Promise.all([clientEmailPromise, professionalEmailPromise]);
 } 

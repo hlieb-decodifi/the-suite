@@ -2,21 +2,20 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
-import { stripe } from '@/lib/stripe/server';
 import { revalidatePath } from 'next/cache';
-import { sendEmail } from '@/lib/email';
+import { stripe } from '@/lib/stripe/server';
 import {
-  createBookingCancellationClientEmail,
-  createBookingCancellationProfessionalEmail,
-  createNoShowNotificationClientEmail,
-  createNoShowNotificationProfessionalEmail,
-  createCancellationPolicyChargeClientEmail,
-  createCancellationPolicyChargeProfessionalEmail,
-} from '@/lib/email/templates';
+  sendBookingCancellationClient,
+  sendBookingCancellationProfessional,
+  sendCancellationPolicyChargeClient,
+  sendCancellationPolicyChargeProfessional,
+  sendNoShowNotificationClient,
+  sendNoShowNotificationProfessional,
+} from '@/providers/brevo/templates';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { Database } from '@supabase/types';
 
-// Create admin client for operations that need elevated permissions
+
 function createSupabaseAdminClient() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
@@ -32,6 +31,107 @@ function createSupabaseAdminClient() {
   return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
+// Database types
+type AppointmentBase = {
+  id: string;
+  booking_id: string;
+  status: 'active' | 'completed' | 'cancelled' | 'ongoing';
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+  computed_status?: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+}
+
+type ProfessionalProfile = {
+  id: string;
+  user_id: string;
+  cancellation_policy_enabled: boolean;
+  stripe_account_id?: string;
+  cancellation_24h_charge_percentage: number;
+  cancellation_48h_charge_percentage: number;
+  users: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+}
+
+type BookingService = {
+  id: string;
+  price: number;
+  services?: {
+    name: string;
+  };
+}
+
+type BookingPayment = {
+  id: string;
+  amount: number;
+  tip_amount: number;
+  service_fee?: number;
+  status: 'incomplete' | 'pending' | 'completed' | 'failed' | 'refunded' | 'partially_refunded' | 'deposit_paid' | 'awaiting_balance' | 'authorized' | 'pre_auth_scheduled';
+  stripe_payment_intent_id?: string;
+  stripe_payment_method_id?: string;
+  payment_methods?: {
+    name: string;
+    is_online: boolean;
+  };
+}
+
+// Query result types
+type BookingQueryResult = {
+  id: string;
+  status: 'pending_payment' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  client_id: string;
+  professional_profile_id: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  appointments: AppointmentBase[];
+  appointments_with_status?: AppointmentBase[];
+  professional_profiles: ProfessionalProfile;
+  clients: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  booking_services: BookingService[];
+  booking_payments?: BookingPayment[];
+}
+
+type AppointmentQueryResult = AppointmentBase & {
+  bookings: {
+    id: string;
+    status: 'pending_payment' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
+    client_id: string;
+    professional_profile_id: string;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+    professional_profiles: {
+      id: string;
+      user_id: string;
+      users: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        email: string;
+      };
+    };
+    clients: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+    };
+    booking_services: BookingService[];
+    booking_payments?: BookingPayment[];
+  };
+}
+
 /**
  * Cancel a booking
  */
@@ -41,21 +141,31 @@ export async function cancelBookingAction(
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number; message?: string }> {
   const supabase = await createClient();
 
+  console.log('[Cancellation] Starting cancellation process for booking:', bookingId);
+
   try {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      console.log('[Cancellation] ❌ Unauthorized - no user found');
       return { success: false, error: 'Unauthorized' };
     }
+
+    console.log('[Cancellation] 👤 User authenticated:', user.id);
 
     // Get booking with all related data
     const { data: booking, error } = await supabase
       .from('bookings')
       .select(`
         *,
-        appointments!inner(*),
+        appointments!inner(
+          id,
+          status,
+          start_time
+        ),
         professional_profiles!inner(
           cancellation_policy_enabled,
+          stripe_account_id,
           users!inner(id, first_name, last_name)
         ),
         clients:users!client_id(id, first_name, last_name, client_profiles(*)),
@@ -64,40 +174,75 @@ export async function cancelBookingAction(
           price,
           services(name)
         ),
-        booking_payments(
+        booking_payments!inner(
           id,
           amount,
           tip_amount,
           service_fee,
+          deposit_amount,
           status,
           stripe_payment_intent_id,
-          stripe_payment_method_id
+          stripe_payment_method_id,
+          payment_methods!inner(is_online)
         )
       `)
       .eq('id', bookingId)
       .single();
 
     if (error || !booking) {
+      console.log('[Cancellation] ❌ Booking not found:', { error });
       return { success: false, error: 'Booking not found' };
     }
 
-    const appointment = booking.appointments;
+    console.log('[Cancellation] 📋 Booking details:', {
+      bookingId: booking.id,
+      status: booking.status,
+      appointmentCount: booking.appointments.length,
+      hasPayment: !!booking.booking_payments
+    });
+
+    // Get the first appointment since we queried with !inner
+    const appointment = booking.appointments[0];
+    if (!appointment) {
+      console.log('[Cancellation] ❌ No appointment found for booking');
+      return { success: false, error: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
-     
     const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
     const payment = booking.booking_payments;
+
+    console.log('[Cancellation] 💳 Payment details:', {
+      paymentId: payment?.id,
+      paymentStatus: payment?.status,
+      paymentAmount: payment?.amount,
+      depositAmount: payment?.deposit_amount,
+      serviceFee: payment?.service_fee,
+      paymentIntentId: payment?.stripe_payment_intent_id,
+      isOnlinePayment: payment?.payment_methods?.is_online
+    });
 
     // Check authorization
     const isProfessional = user.id === professionalUser.id;
     const isClient = user.id === clientUser.id;
 
     if (!isProfessional && !isClient) {
+      console.log('[Cancellation] ❌ Unauthorized - user is neither professional nor client');
       return { success: false, error: 'Unauthorized' };
     }
 
+    console.log('[Cancellation] 🔐 Authorization:', {
+      userId: user.id,
+      isProfessional,
+      isClient,
+      professionalId: professionalUser.id,
+      clientId: clientUser.id
+    });
+
     // Check if already cancelled
     if (booking.status === 'cancelled' || appointment.status === 'cancelled') {
+      console.log('[Cancellation] ❌ Booking already cancelled');
       return { success: false, error: 'Booking already cancelled' };
     }
 
@@ -111,8 +256,11 @@ export async function cancelBookingAction(
       .eq('id', bookingId);
 
     if (updateBookingError) {
+      console.log('[Cancellation] ❌ Failed to update booking status:', updateBookingError);
       return { success: false, error: 'Failed to update booking status' };
     }
+
+    console.log('[Cancellation] ✅ Updated booking status to cancelled');
 
     const { error: updateAppointmentError } = await supabase
       .from('appointments')
@@ -123,86 +271,190 @@ export async function cancelBookingAction(
       .eq('booking_id', bookingId);
 
     if (updateAppointmentError) {
+      console.log('[Cancellation] ❌ Failed to update appointment status:', updateAppointmentError);
       return { success: false, error: 'Failed to update appointment status' };
     }
 
-    // Update payment status and clear scheduled jobs if payment exists
-    if (payment) {
-      // Handle uncaptured payment intent for cancellations without policy
-      if (payment.stripe_payment_intent_id) {
-        try {
-          const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+    console.log('[Cancellation] ✅ Updated appointment status to cancelled');
+
+    // Handle payment and refund if there's a payment record
+    if (payment && payment.stripe_payment_intent_id) {
+
+      try {
+        console.log(`[Payment Intent] 🔍 Retrieving payment intent ${payment.stripe_payment_intent_id}`);
+        const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+        console.log(`[Payment Intent] Status: ${paymentIntent.status}`, {
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          captureMethod: paymentIntent.capture_method,
+          paymentStatus: paymentIntent.status
+        });
+
+        // Handle different payment intent statuses
+        if (paymentIntent.status === 'requires_capture') {
+          console.log(`[Payment Intent] 💰 Payment requires capture`);
+          const customerId = paymentIntent.customer as string;
+          console.log(`[Payment Intent] Customer ID: ${customerId}`);
           
-          if (paymentIntent.status === 'requires_capture') {
-            // Get customer ID for partial capture
-            const customerId = paymentIntent.customer as string;
-            const paymentMethodId = payment.stripe_payment_method_id;
-            
-            console.log(`[Debug] Customer ID: ${customerId}, Payment Method ID: ${paymentMethodId}`);
-              
-            if (customerId) {
-              // For split payment architecture with no-policy cancellations:
-              // Service fee was already captured ($1.00 for platform)
-              // We just need to cancel the remaining uncaptured service amount (full refund to customer)
-              console.log(`[Split Payment Cancellation] Regular cancellation - no policy`);
-              console.log(`[Split Payment Cancellation] Service fee already captured: $1.00 (platform)`);
-              console.log(`[Split Payment Cancellation] Cancelling remaining uncaptured amount for full customer refund`);
-              
-              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-              console.log(`✅ Split payment cancellation completed:`);
-              console.log(`   - Service fee already captured: $1.00 (platform)`);
-              console.log(`   - Uncaptured service amount cancelled and refunded to customer`);
+          if (customerId && professionalProfile.stripe_account_id) {
+            console.log(`[Payment Intent] Professional stripe account: ${professionalProfile.stripe_account_id}`);
+            // Different refund logic based on who is cancelling
+            if (isProfessional) {
+              // Professional cancelling: Full refund including deposit, professional pays fees
+              const refundAmount = payment.amount + (payment.deposit_amount || 0);
+              console.log(`[Professional Cancel] 💸 Refunding full amount:`, {
+                baseAmount: payment.amount,
+                depositAmount: payment.deposit_amount,
+                totalRefund: refundAmount
+              });
+
+              const refund = await stripe.refunds.create({
+                payment_intent: payment.stripe_payment_intent_id,
+                amount: refundAmount,
+                metadata: {
+                  reason: 'Professional cancelled - full refund including deposit'
+                }
+              });
+
+              console.log(`[Professional Cancel] ✅ Full refund processed:`, {
+                refundId: refund.id,
+                refundStatus: refund.status,
+                refundAmount: refund.amount
+              });
             } else {
-              // Missing customer ID, cannot do partial capture
-              console.error(`Missing customer ID for payment intent ${payment.stripe_payment_intent_id}. Customer: ${customerId}`);
-              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-              console.log(`Fallback: Cancelled entire payment intent due to missing customer ID: ${payment.stripe_payment_intent_id}`);
+              // Client cancelling: Check cancellation policy
+              if (!professionalProfile.cancellation_policy_enabled) {
+                console.log(`[Client Cancel] No cancellation policy - processing refund`);
+                console.log(`[Client Cancel] Payment details:`, {
+                  amount: payment.amount,
+                  depositAmount: payment.deposit_amount,
+                  serviceFee: payment.service_fee,
+                  paymentIntentId: payment.stripe_payment_intent_id,
+                  paymentStatus: payment.status
+                });
+
+                // No policy - full refund including deposit, minus service fee
+                const refundAmount = payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0);
+                console.log(`[Client Cancel] 💰 Refund calculation:`, {
+                  paymentAmount: payment.amount,
+                  depositAmount: payment.deposit_amount || 0,
+                  serviceFee: payment.service_fee || 0,
+                  totalRefund: refundAmount
+                });
+
+                try {
+                  const refund = await stripe.refunds.create({
+                    payment_intent: payment.stripe_payment_intent_id,
+                    amount: refundAmount,
+                    metadata: {
+                      reason: 'Client cancelled - no cancellation policy, full refund minus service fee'
+                    }
+                  });
+                  console.log(`[Client Cancel] ✅ Refund created successfully:`, {
+                    refundId: refund.id,
+                    status: refund.status,
+                    amount: refund.amount
+                  });
+                } catch (refundError) {
+                  console.error('[Client Cancel] ❌ Failed to create refund:', refundError);
+                  throw refundError;
+                }
+              } else {
+                // Policy exists - handle in cancelWithPolicyAction
+                console.log(`[Client Cancel] ⚠️ Cancellation policy enabled - redirecting to policy flow`);
+                return { 
+                  success: false, 
+                  error: 'Please use cancellation policy flow',
+                  message: 'This booking requires cancellation through the policy flow.'
+                };
+              }
             }
-          } else if (paymentIntent.status === 'requires_confirmation') {
-            await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-            console.log(`Cancelled Stripe payment intent: ${payment.stripe_payment_intent_id}`);
           } else {
-            console.log(`Payment intent ${payment.stripe_payment_intent_id} is in status ${paymentIntent.status}, cannot cancel`);
+            // Missing customer ID or professional stripe account, cancel entire payment
+            console.log(`[Payment Intent] ⚠️ Missing customer ID or professional stripe account - cancelling entire payment`);
+            await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+            console.log(`[Payment Intent] ✅ Payment cancelled`);
           }
-        } catch (stripeError) {
-          console.error('Failed to handle payment intent during cancellation:', stripeError);
-          // Don't fail the entire cancellation for Stripe errors
+        } else if (paymentIntent.status === 'succeeded') {
+          console.log(`[Payment Intent] Payment already succeeded - processing refund`);
+          // Handle refund for already succeeded payment
+          const refundAmount = isProfessional 
+            ? payment.amount + (payment.deposit_amount || 0)  // Professional pays fees
+            : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0); // Client pays service fee
+          
+          console.log(`[Payment Intent] 💰 Refund calculation for succeeded payment:`, {
+            paymentAmount: payment.amount,
+            depositAmount: payment.deposit_amount || 0,
+            serviceFee: payment.service_fee || 0,
+            isProfessionalCancelling: isProfessional,
+            totalRefund: refundAmount
+          });
+
+          try {
+            const refund = await stripe.refunds.create({
+              payment_intent: payment.stripe_payment_intent_id,
+              amount: refundAmount,
+              metadata: {
+                reason: isProfessional 
+                  ? 'Professional cancelled - full refund including deposit'
+                  : 'Client cancelled - full refund minus service fee'
+              }
+            });
+            console.log(`[Payment Intent] ✅ Refund processed for succeeded payment:`, {
+              refundId: refund.id,
+              status: refund.status,
+              amount: refund.amount
+            });
+          } catch (refundError) {
+            console.error('[Payment Intent] ❌ Failed to process refund:', refundError);
+            throw refundError;
+          }
         }
+
+        // Update payment record
+        const { error: updatePaymentError } = await supabase
+          .from('booking_payments')
+          .update({
+            status: 'refunded',
+            pre_auth_scheduled_for: null,
+            capture_scheduled_for: null,
+            refunded_amount: isProfessional ? payment.amount + (payment.deposit_amount || 0) : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0),
+            refund_reason: `${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
+            refunded_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', payment.id);
+
+        if (updatePaymentError) {
+          console.error('[Payment Record] ❌ Failed to update payment status:', updatePaymentError);
+        } else {
+          console.log('[Payment Record] ✅ Payment record updated successfully');
+        }
+      } catch (stripeError) {
+        console.error('[Stripe Error] ❌ Failed to handle payment intent during cancellation:', stripeError);
       }
-
-      // Calculate refund amount for regular cancellation (full refund minus service fee)
-      const originalAmount = payment.amount + payment.tip_amount;
-      const serviceFee = payment.service_fee || 1.00; // Default to $1 if not set
-      const refundAmount = originalAmount - serviceFee; // Customer gets everything back except suite service fee
-
-      const { error: updatePaymentError } = await supabase
-        .from('booking_payments')
-        .update({
-          status: 'refunded',
-          pre_auth_scheduled_for: null,
-          capture_scheduled_for: null,
-          refunded_amount: refundAmount,
-          refund_reason: `Regular cancellation: ${cancellationReason}`,
-          refunded_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', payment.id);
-
-      if (updatePaymentError) {
-        console.error('Failed to update payment status:', updatePaymentError);
-      }
+    } else {
+      console.log('[Cancellation] ℹ️ No payment record or payment intent to process');
     }
 
     // Send email notifications
-    await sendCancellationEmails(booking, cancellationReason);
+    console.log('[Cancellation] 📧 Sending cancellation emails');
+    await sendCancellationEmails(booking as any, cancellationReason);
+    console.log('[Cancellation] ✅ Cancellation emails sent');
 
-    // Revalidate the booking detail page to ensure fresh data
+    // Revalidate the booking detail page
     revalidatePath(`/bookings/${appointment.id}`);
+    console.log('[Cancellation] 🔄 Revalidated booking page');
 
-    return { success: true };
+    return { 
+      success: true,
+      message: isProfessional 
+        ? 'Booking cancelled. Full refund including deposit will be processed.'
+        : 'Booking cancelled. Refund will be processed according to cancellation policy.'
+    };
 
   } catch (error) {
-    console.error('Error cancelling booking:', error);
+    console.error('[Cancellation] ❌ Error cancelling booking:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -229,7 +481,7 @@ export async function canCancelBookingAction(
       .from('bookings')
       .select(`
         *,
-        appointments!inner(*),
+        appointments_with_status!inner(*),
         professional_profiles!inner(
           cancellation_policy_enabled,
           users!inner(id)
@@ -243,7 +495,14 @@ export async function canCancelBookingAction(
       return { canCancel: false, reason: 'Booking not found' };
     }
 
-    const appointment = booking.appointments;
+    const appointment = Array.isArray(booking.appointments_with_status) 
+      ? booking.appointments_with_status[0] 
+      : booking.appointments_with_status;
+
+    if (!appointment) {
+      return { canCancel: false, reason: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
      
     const professionalUser = professionalProfile.users;
@@ -262,8 +521,8 @@ export async function canCancelBookingAction(
       return { canCancel: false, reason: 'Already cancelled' };
     }
 
-    // Check if completed
-    if (booking.status === 'completed' || appointment.status === 'completed') {
+    // Check if completed based on computed status
+    if (appointment.computed_status === 'completed') {
       return { canCancel: false, reason: 'Cannot cancel completed booking' };
     }
 
@@ -276,7 +535,6 @@ export async function canCancelBookingAction(
     // TODO: Implement cancellation policy logic for when it's enabled
     
     return { canCancel: true };
-
   } catch (error) {
     console.error('Error checking cancellation eligibility:', error);
     return { canCancel: false, reason: 'Error checking eligibility' };
@@ -286,106 +544,69 @@ export async function canCancelBookingAction(
 /**
  * Send cancellation email notifications
  */
- 
-async function sendCancellationEmails(booking: any, cancellationReason: string) {
-  const adminSupabase = createSupabaseAdminClient();
+async function sendCancellationEmails(booking: BookingQueryResult, cancellationReason: string): Promise<void> {
+  const adminSupabase = createSupabaseAdminClient(); 
 
-  try {
-    const appointment = booking.appointments;
-    const professionalProfile = booking.professional_profiles;
-     
-    const professionalUser = professionalProfile.users;
-    const clientUser = booking.clients;
-    const clientProfile = clientUser.client_profiles;
-    const bookingServices = booking.booking_services || [];
-    const payment = booking.booking_payments;
+  const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(booking.clients.id);     
+  const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(booking.professional_profiles.users.id);
 
-    // Get user emails using admin client
-    const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
-    const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(professionalUser.id);
+  const appointment = booking.appointments[0];
+  if (!appointment) throw new Error('Appointment not found');
+  
+  const professionalUser = booking.professional_profiles.users;
+  const clientUser = booking.clients;
 
-    if (!clientAuth.user?.email || !professionalAuth.user?.email) {
-      console.error('Failed to get user emails for cancellation notifications');
-      return;
-    }
+  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
-    // Format date and time
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+  const baseParams = {
+    booking_id: booking.id,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
 
-    const appointmentTime = new Date(`1970-01-01T${appointment.start_time}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+  console.log('APPOINTMENT', baseParams.appointment_details_url);
 
-    // Prepare services data
-     
-    const servicesData = bookingServices.map((bs: any) => ({
-      name: bs.services?.name || 'Service',
-      price: bs.price || 0
-    }));
-
-    // Prepare refund info if payment exists
-    // For regular cancellations: Tips (100%) + Service amount (100%) - Suite fee NOT refunded (platform keeps configured service fee)
-    const serviceAmount = bookingServices.reduce((sum: number, bs: any) => sum + bs.price, 0);
-    
-    // Note: Service fee is kept by platform and not refunded
-    
-    const refundInfo = payment ? {
-      originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment
-      refundAmount: (payment.tip_amount || 0) + serviceAmount, // Tips (100%) + Service amount (100%) - Suite fee stays with platform
-      status: 'Processing'
-    } : undefined;
-
-    // Send client email
-    const clientEmail = createBookingCancellationClientEmail(
-      clientAuth.user.email,
-      `${clientUser.first_name} ${clientUser.last_name}`,
+  // Send cancellation emails to both client and professional
+  await Promise.all([
+    sendBookingCancellationClient(
+      [{ 
+        email: clientAuth.user?.email || '', 
+        name: `${clientUser.first_name} ${clientUser.last_name}` 
+      }],
       {
-        bookingId: booking.id,
-        appointmentId: appointment.id,
-        appointmentDate,
-        appointmentTime,
-        professionalName: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        cancellationReason,
-        services: servicesData,
-        ...(refundInfo && { refundInfo })
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        cancellation_reason: cancellationReason,
+        ...baseParams
       }
-    );
-
-    // Send professional email
-    const professionalEmail = createBookingCancellationProfessionalEmail(
-      professionalAuth.user.email,
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
+    ),
+    sendBookingCancellationProfessional(
+      [{ 
+        email: professionalAuth.user?.email || '', 
+        name: `${professionalUser.first_name} ${professionalUser.last_name}` 
+      }],
       {
-        bookingId: booking.id,
-        appointmentId: appointment.id,
-        appointmentDate,
-        appointmentTime,
-        clientName: `${clientUser.first_name} ${clientUser.last_name}`,
-        clientPhone: clientProfile?.phone_number,
-        cancellationReason,
-        services: servicesData,
-        ...(refundInfo && { refundInfo })
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        cancellation_reason: cancellationReason,
+        ...baseParams
       }
-    );
-
-    // Send emails - these functions return EmailTemplate objects
-    await Promise.allSettled([
-      sendEmail(clientEmail),
-      sendEmail(professionalEmail)
-    ]);
-
-    console.log('Cancellation notification emails sent successfully');
-
-  } catch (error) {
-    console.error('Error sending cancellation notifications:', error);
-  }
+    )
+  ]);
 }
 
 /**
@@ -405,7 +626,7 @@ export async function markNoShowAction(
     }
 
     // Get appointment with booking and professional data
-    const { data: appointment, error } = await supabase
+    const { data: appointmentData, error } = await supabase
       .from('appointments')
       .select(`
         *,
@@ -434,21 +655,24 @@ export async function markNoShowAction(
       .eq('id', appointmentId)
       .single();
 
-    if (error || !appointment) {
+    if (error || !appointmentData) {
       return { success: false, error: 'Appointment not found' };
     }
 
+    const appointment = appointmentData;
     const booking = appointment.bookings;
     const professionalProfile = booking.professional_profiles;
-    const payment = booking.booking_payments;
+    const payment = Array.isArray(booking.booking_payments) 
+      ? booking.booking_payments[0] 
+      : booking.booking_payments;
 
     // Only professionals can mark no-show
-    if (user.id !== professionalProfile.users.id) {
+    if (user.id !== professionalProfile.user_id) {
       return { success: false, error: 'Only the professional can mark appointments as no-show' };
     }
 
     // Check if appointment is completed (past appointment time)
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const timeWindow = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -521,7 +745,7 @@ export async function markNoShowAction(
     }
 
     // Send notification emails
-    await sendNoShowEmails(appointment, chargeAmount, chargePercentage);
+    await sendNoShowEmails(appointment as any, chargeAmount);
 
     // Revalidate the booking detail page
     revalidatePath(`/bookings/${appointmentId}`);
@@ -567,41 +791,30 @@ export async function cancelWithPolicyAction(
         appointments!inner(*),
         professional_profiles!inner(
           cancellation_policy_enabled,
+          stripe_account_id,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
-          stripe_account_id,
           users!inner(id, first_name, last_name)
         ),
-        clients:users!client_id(id, first_name, last_name, client_profiles(*)),
-        booking_services(
-          id,
-          price,
-          services(name)
-        ),
-        booking_payments(
-          id,
-          amount,
-          tip_amount,
-          service_fee,
-          status,
-          stripe_payment_intent_id,
-          stripe_payment_method_id,
-          payment_methods(name, is_online)
-        )
+        clients:users!client_id(id, first_name, last_name),
+        booking_services(price)
       `)
       .eq('id', bookingId)
-      .single();
+      .single() as { data: BookingQueryResult | null; error: any };
 
     if (error || !booking) {
       return { success: false, error: 'Booking not found' };
     }
 
-    const appointment = booking.appointments;
+    const appointments = Array.isArray(booking.appointments) ? booking.appointments : [booking.appointments];
+    const appointment = appointments[0];
+    if (!appointment) {
+      return { success: false, error: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
-    const payment = booking.booking_payments;
+    const payment = booking.booking_payments?.[0];
 
     // Only clients can use cancellation policy
     if (user.id !== clientUser.id) {
@@ -619,7 +832,7 @@ export async function cancelWithPolicyAction(
     }
 
     // Calculate charge based on time until appointment
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.start_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const hoursUntilAppointment = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -819,7 +1032,10 @@ export async function cancelWithPolicyAction(
     await sendCancellationPolicyEmails(booking, cancellationReason, chargeAmount, chargePercentage);
 
     // Revalidate the booking detail page
-    revalidatePath(`/bookings/${appointment.id}`);
+    const firstAppointment = Array.isArray(booking.appointments) ? booking.appointments[0] : booking.appointments;
+    if (firstAppointment) {
+      revalidatePath(`/bookings/${firstAppointment.id}`);
+    }
 
     return { 
       success: true, 
@@ -885,7 +1101,7 @@ export async function canMarkNoShowAction(
     }
 
     // Check timing constraints
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.end_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const timeWindow = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -949,15 +1165,19 @@ export async function getCancellationPolicyAction(
       return { hasPolicy: false, error: 'Booking not found' };
     }
 
+    const appointment = booking.appointments[0] as AppointmentQueryResult;
+    if (!appointment) {
+      return { hasPolicy: false, error: 'Appointment not found' };
+    }
+
     const professionalProfile = booking.professional_profiles;
-    const appointment = booking.appointments;
 
     if (!professionalProfile.cancellation_policy_enabled) {
       return { hasPolicy: false };
     }
 
     // Calculate time until appointment
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.start_time}`);
+    const appointmentDateTime = new Date(appointment.end_time);
     const now = new Date();
     const hoursUntilAppointment = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -988,187 +1208,122 @@ export async function getCancellationPolicyAction(
   }
 }
 
-// Email sending functions
- 
-async function sendNoShowEmails(appointment: any, chargeAmount: number, chargePercentage: number) {
-  try {
-     
-    const booking = appointment.bookings as any;
-     
-    const professionalProfile = booking.professional_profiles as any;
-     
-    const professionalUser = professionalProfile.users as any;
-     
-    const clientUser = booking.clients as any;
-    
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    const appointmentTime = `${appointment.start_time} - ${appointment.end_time}`;
-    
-    const services = booking.booking_services.map((bs: any) => ({
-      name: bs.services.name,
-      price: bs.price
-    }));
-    
-    const chargeInfo = chargeAmount > 0 ? {
-      amount: chargeAmount,
-      percentage: chargePercentage,
-      originalAmount: booking.booking_services.reduce((sum: number, bs: any) => sum + bs.price, 0)
-    } : undefined;
-    
-    // Send client notification
-    const clientEmail = await createNoShowNotificationClientEmail(
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      appointmentDate,
-      appointmentTime,
-      appointment.id,
-      services,
-      chargeInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || '',
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
-      subject: clientEmail.subject,
-      htmlContent: clientEmail.html,
-      textContent: clientEmail.text,
-    });
-    
-    // Send professional notification
-    const professionalEmail = await createNoShowNotificationProfessionalEmail(
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      clientUser.client_profiles?.phone,
-      appointmentDate,
-      appointmentTime,
-      appointment.id,
-      services,
-      chargeInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
-      subject: professionalEmail.subject,
-      htmlContent: professionalEmail.html,
-      textContent: professionalEmail.text,
-    });
-    
-    console.log('No-show notification emails sent successfully');
-  } catch (error) {
-    console.error('Error sending no-show notification emails:', error);
-  }
+/**
+ * Send no-show notification emails to both client and professional
+ */
+async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmount: number): Promise<void> {
+  const booking = appointment.bookings;
+  if (!booking) throw new Error('Booking not found');
+
+  const professionalUser = booking.professional_profiles.users;
+  const clientUser = booking.clients;
+
+  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const baseParams = {
+    booking_id: booking.id,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  await Promise.all([
+    sendNoShowNotificationClient(
+      [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        no_show_fee: chargeAmount,
+        ...baseParams
+      }
+    ),
+    sendNoShowNotificationProfessional(
+      [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        no_show_fee: chargeAmount,
+        ...baseParams
+      }
+    )
+  ]);
 }
 
-async function sendCancellationPolicyEmails(booking: any, reason: string, chargeAmount: number, chargePercentage: number) {
-  const adminSupabase = createSupabaseAdminClient();
+/**
+ * Send cancellation policy charge emails to both client and professional
+ */
+async function sendCancellationPolicyEmails(
+  booking: BookingQueryResult,
+  reason: string,
+  chargeAmount: number,
+  chargePercentage: number
+): Promise<void> {
+  const appointment = booking.appointments[0];
+  if (!appointment) throw new Error('Appointment not found');
   
-  try {
-    const appointment = booking.appointments as any;
-    const professionalProfile = booking.professional_profiles as any;
-    const professionalUser = professionalProfile.users as any;
-    const clientUser = booking.clients as any;
-    
-    // Get user emails using admin client
-    const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(clientUser.id);
-    const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(professionalUser.id);
+  const professionalUser = booking.professional_profiles.users;
+  const clientUser = booking.clients;
+  const serviceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
+  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
-    if (!clientAuth.user?.email || !professionalAuth.user?.email) {
-      console.error('Failed to get user emails for cancellation policy notifications');
-      return;
-    }
-    
-    const appointmentDate = new Date(appointment.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    const appointmentTime = `${appointment.start_time} - ${appointment.end_time}`;
-    
-    const services = booking.booking_services.map((bs: any) => ({
-      name: bs.services.name,
-      price: bs.price
-    }));
-    
-    const serviceAmount = booking.booking_services.reduce((sum: number, bs: any) => sum + bs.price, 0);
-    
-    // Calculate time description
-    const appointmentDateTime = new Date(`${appointment.date}T${appointment.start_time}`);
-    const hoursUntil = Math.round((appointmentDateTime.getTime() - new Date().getTime()) / (1000 * 60 * 60));
-    const timeDescription = hoursUntil < 24 ? 'Less than 24 hours' : 
-                           hoursUntil < 48 ? 'Less than 48 hours' : 
-                           'More than 48 hours';
-    
-    const policyInfo = {
-      chargeAmount,
-      chargePercentage,
-      serviceAmount,
-      timeDescription
-    };
-    
-    const payment = booking.booking_payments as any;
-    
-    // Note: Service fee is kept by platform and not included in refund calculation
-    
-    const refundInfo = payment ? {
-      originalAmount: payment.amount + (payment.tip_amount || 0), // Full original payment  
-      refundAmount: (payment.tip_amount || 0) + (serviceAmount - chargeAmount), // Tips (100%) + Service amount after cancellation fee (Suite fee NOT refunded)
-      status: 'Processing'
-    } : undefined;
-    
-    // Send client notification
-    const clientEmail = await createCancellationPolicyChargeClientEmail(
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      appointmentDate,
-      appointmentTime,
-      booking.id,
-      reason,
-      services,
-      policyInfo,
-      refundInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: clientAuth.user.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
-      subject: clientEmail.subject,
-      htmlContent: clientEmail.html,
-      textContent: clientEmail.text,
-    });
-    
-    // Send professional notification
-    const professionalEmail = await createCancellationPolicyChargeProfessionalEmail(
-      `${professionalUser.first_name} ${professionalUser.last_name}`,
-      `${clientUser.first_name} ${clientUser.last_name}`,
-      clientUser.client_profiles?.phone,
-      appointmentDate,
-      appointmentTime,
-      booking.id,
-      reason,
-      services,
-      policyInfo,
-      process.env.NEXT_PUBLIC_BASE_URL || ''
-    );
-    
-    await sendEmail({
-      to: [{ email: professionalAuth.user.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
-      subject: professionalEmail.subject,
-      htmlContent: professionalEmail.html,
-      textContent: professionalEmail.text,
-    });
-    
-    console.log('Cancellation policy notification emails sent successfully');
-  } catch (error) {
-    console.error('Error sending cancellation policy notification emails:', error);
-  }
+  const baseParams = {
+    booking_id: booking.id,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
+
+  const policyInfo = {
+    charge_amount: chargeAmount,
+    charge_percentage: chargePercentage,
+    service_amount: serviceAmount,
+    time_description: 'Less than 24 hours' // TODO: Calculate this based on appointment time
+  };
+
+  await Promise.all([
+    sendCancellationPolicyChargeClient(
+      [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        policy_info: policyInfo,
+        ...baseParams
+      }
+    ),
+    sendCancellationPolicyChargeProfessional(
+      [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      {
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        policy_info: policyInfo,
+        ...baseParams
+      }
+    )
+  ]);
 } 

@@ -20,9 +20,11 @@ import { formatCurrency } from '@/utils';
 // Define appointment type
 type AppointmentType = {
   id: string;
-  start_time: string;
-  end_time: string;
+  booking_id: string;
+  start_time: string; // ISO string from timestamptz
+  end_time: string; // ISO string from timestamptz
   status: string;
+  computed_status?: string;
   location?: string;
   services?: {
     id: string;
@@ -74,7 +76,27 @@ type Appointment = {
   clientName?: string;
   professionalName?: string;
   status: 'upcoming' | 'completed' | 'cancelled' | 'pending';
+  computedStatus?: string;
   amount: number;
+};
+
+type BookingService = {
+  id: string;
+  price: number;
+};
+
+type BookingPayment = {
+  service_fee: number;
+  tip_amount: number;
+};
+
+type Booking = {
+  booking_services: BookingService[];
+  booking_payments: BookingPayment;
+};
+
+type AppointmentWithBooking = AppointmentType & {
+  booking?: Booking;
 };
 
 type DashboardAppointmentsPageClientProps = {
@@ -149,8 +171,15 @@ function FilterButtons({
 }
 
 // Helper component to render the status badge
-function AppointmentStatusBadge({ status }: { status: Appointment['status'] }) {
-  switch (status) {
+function AppointmentStatusBadge({
+  status,
+  computedStatus,
+}: {
+  status: string;
+  computedStatus?: string | undefined;
+}) {
+  const displayStatus = computedStatus || status;
+  switch (displayStatus) {
     case 'upcoming':
       return (
         <Badge
@@ -158,6 +187,15 @@ function AppointmentStatusBadge({ status }: { status: Appointment['status'] }) {
           className="bg-primary/10 text-primary border-primary/20"
         >
           Upcoming
+        </Badge>
+      );
+    case 'ongoing':
+      return (
+        <Badge
+          variant="outline"
+          className="bg-orange-500/10 text-orange-500 border-orange-500/20"
+        >
+          Ongoing
         </Badge>
       );
     case 'completed':
@@ -176,15 +214,6 @@ function AppointmentStatusBadge({ status }: { status: Appointment['status'] }) {
           className="bg-destructive/10 text-destructive border-destructive/20"
         >
           Cancelled
-        </Badge>
-      );
-    case 'pending':
-      return (
-        <Badge
-          variant="outline"
-          className="bg-amber-500/10 text-amber-800 border-amber-200"
-        >
-          Pending
         </Badge>
       );
     default:
@@ -245,7 +274,10 @@ function AppointmentTableCard({
               {appointment.time}
             </div>
           </div>
-          <AppointmentStatusBadge status={appointment.status} />
+          <AppointmentStatusBadge
+            status={appointment.status}
+            computedStatus={appointment.computedStatus}
+          />
         </div>
 
         <div className="mt-3 pt-3 border-t flex justify-between items-center">
@@ -328,7 +360,10 @@ function DashboardTemplateAppointmentsTable({
                     : appointment.professionalName || 'Professional'}
                 </TableCell>
                 <TableCell>
-                  <AppointmentStatusBadge status={appointment.status} />
+                  <AppointmentStatusBadge
+                    status={appointment.status}
+                    computedStatus={appointment.computedStatus}
+                  />
                 </TableCell>
                 <TableCell className="text-right font-medium">
                   {formatCurrency(appointment.amount)}
@@ -375,63 +410,56 @@ export function DashboardAppointmentsPageClient({
     : [];
 
   // Transform appointments into the format needed for the table
-  const transformedAppointments: Appointment[] = validAppointments.map(
-    (appointment) => {
-      const startTime = new Date(appointment.start_time);
+  const transformedAppointments: Appointment[] = (
+    validAppointments as AppointmentWithBooking[]
+  ).map((appointment: AppointmentWithBooking) => {
+    const startTime = new Date(appointment.start_time);
 
-      // Get service name with additional services indicator
-      const serviceName = appointment.services?.hasAdditionalServices
-        ? `${appointment.services.name} + ${appointment.services.additionalServicesCount} more`
-        : appointment.services?.name || 'Service';
+    // Get service name with additional services indicator
+    const serviceName = appointment.services?.name || 'Service';
 
-      // Get client name
-      const clientName = appointment.clients?.users
-        ? `${appointment.clients.users.first_name || ''} ${appointment.clients.users.last_name || ''}`.trim()
-        : 'Client';
+    // Get client name
+    const clientName = appointment.clients?.users
+      ? `${appointment.clients.users.first_name || ''} ${appointment.clients.users.last_name || ''}`.trim()
+      : 'Client';
 
-      // Get professional name
-      const professionalName = appointment.professionals?.users
-        ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
-        : 'Professional';
+    // Get professional name
+    const professionalName = appointment.professionals?.users
+      ? `${appointment.professionals.users.first_name || ''} ${appointment.professionals.users.last_name || ''}`.trim()
+      : 'Professional';
 
-      // Get amount including service fee for both professionals and clients
-      const amount =
-        appointment.services?.actualPaymentAmount ||
-        appointment.services?.totalWithServiceFee ||
-        (appointment.services?.totalPrice || appointment.services?.price || 0) +
-          1.0;
+    // Get the total amount from services.actualPaymentAmount which is already calculated
+    // in the server-side query including booking_services and booking_payments
+    const amount = appointment.services?.actualPaymentAmount || 0;
 
-      // Map status to expected format
-      let formattedStatus: Appointment['status'] = 'upcoming';
-      switch (appointment.status) {
-        case 'completed':
-          formattedStatus = 'completed';
-          break;
-        case 'cancelled':
-          formattedStatus = 'cancelled';
-          break;
-        case 'pending':
-          formattedStatus = 'pending';
-          break;
-        case 'confirmed':
-        case 'upcoming':
-        default:
-          formattedStatus = 'upcoming';
-          break;
-      }
+    // Map status to expected format
+    let formattedStatus: Appointment['status'] = 'upcoming';
+    const computedStatus = appointment.computed_status || appointment.status;
+    switch (computedStatus) {
+      case 'completed':
+        formattedStatus = 'completed';
+        break;
+      case 'cancelled':
+        formattedStatus = 'cancelled';
+        break;
+      case 'upcoming':
+      default:
+        formattedStatus = 'upcoming';
+        break;
+    }
 
-      return {
-        id: appointment.id,
-        date: startTime,
-        time: format(startTime, 'h:mm a'),
-        serviceName,
-        clientName,
-        professionalName,
-        status: formattedStatus,
-        amount,
-      };
-    },
-  );
+    return {
+      id: appointment.id,
+      date: startTime,
+      time: format(startTime, 'h:mm a'),
+      serviceName,
+      clientName,
+      professionalName,
+      status: formattedStatus,
+      computedStatus,
+      amount,
+    };
+  });
 
   // Filter appointments based on selected filters
   const filteredAppointments = transformedAppointments.filter((appointment) => {

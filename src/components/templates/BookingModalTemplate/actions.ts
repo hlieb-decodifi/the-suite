@@ -2,48 +2,7 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { format } from 'date-fns';
-import { parseWorkingHoursFromDB, convertWorkingHoursToClientTimezone, getAvailableDaysWithTimezoneConversion } from '@/utils/timezone';
-
-/**
- * Converts a timeSlot string (e.g., "14:00") to a time object
- * and calculates the end time based on the total duration of the service(s)
- */
-function timeSlotToTimeObject(
-  timeSlot: string,
-  mainServiceDuration: number,
-  extraServiceDurations: number[] = []
-): { start: string; end: string; durationMinutes: number } {
-  // Safely handle timeSlot parsing
-  const timeString = timeSlot || '00:00';
-  
-  // Convert local time to UTC for storage in database
-  // const utcTimeString = convertToUTC(timeString) || timeString;
-  const utcTimeString = timeString;
-  
-  const parts = utcTimeString.split(':');
-  const hoursStr = parts[0] || '0';
-  const minutesStr = parts[1] || '0';
-  
-  const hours = parseInt(hoursStr, 10) || 0;
-  const minutes = parseInt(minutesStr, 10) || 0;
-  
-  // Calculate total duration by adding up main service + extra services
-  const durationMinutes = mainServiceDuration + extraServiceDurations.reduce((total, duration) => total + duration, 0);
-  
-  // Calculate end time
-  const startDate = new Date();
-  startDate.setHours(hours, minutes, 0, 0);
-  
-  const endDate = new Date(startDate);
-  endDate.setMinutes(endDate.getMinutes() + durationMinutes);
-  
-  return {
-    start: format(startDate, 'HH:mm:ss'),
-    end: format(endDate, 'HH:mm:ss'),
-    durationMinutes
-  };
-}
+import { convertTimeToClientTimezone, getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
 
 /**
  * Calculate the total price for a booking
@@ -104,400 +63,369 @@ async function calculateTotalPrice(
  * @param professionalProfileId The ID of the professional's profile
  * @returns Object containing the booking ID and total price
  */
- 
 export async function createBooking(
-  formData: BookingFormValues,
+  formData: BookingFormValues & { dateWithTime: Date },
   professionalProfileId: string
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
   
-  // Get the current user
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    throw new Error('Not authenticated');
-  }
-  
-  // Get main service details including duration
-  const { data: mainService, error: mainServiceError } = await supabase
-    .from('services')
-    .select('price, duration')
-    .eq('id', formData.serviceId)
-    .single();
-  
-  if (mainServiceError || !mainService) {
-    throw new Error(`Error fetching main service: ${mainServiceError?.message || 'Service not found'}`);
-  }
-  
-  // Get extra services details including durations if any
-  let extraServiceDurations: number[] = [];
-  if (formData.extraServiceIds.length > 0) {
-    const { data: extraServices, error: extraServicesError } = await supabase
-      .from('services')
-      .select('id, price, duration')
-      .in('id', formData.extraServiceIds);
+  try {
+    // Get the current user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     
-    if (extraServicesError) {
-      throw new Error(`Error fetching extra services: ${extraServicesError.message}`);
+    if (authError || !user) {
+      throw new Error('Not authenticated');
     }
     
-    extraServiceDurations = extraServices?.map(service => service.duration) || [];
-  }
-  
-  // Parse the time slot with correct service durations
-  // This will convert local time to UTC for database storage
-  const timeInfo = timeSlotToTimeObject(
-    formData.timeSlot,
-    mainService.duration,
-    extraServiceDurations
-  );
-  
-  // Format date for database
-  const dateObject = new Date(formData.date);
-  const dateFormatted = format(dateObject, 'yyyy-MM-dd');
-  
-  // Calculate total price
-  const { total: totalPrice, serviceFee } = await calculateTotalPrice(
-    formData.serviceId,
-    formData.extraServiceIds,
-    formData.tipAmount || 0
-  );
-
-  // Get the payment method to check if it's online
-  const { data: paymentMethod } = await supabase
-    .from('payment_methods')
-    .select('is_online')
-    .eq('id', formData.paymentMethodId)
-    .single();
-  
-  // Determine initial payment status
-  const paymentStatus = paymentMethod?.is_online ? 'pending' : 'completed';
-  
-  try {
-    // Start transaction by inserting booking record
-    const { data: booking, error: bookingError } = await supabase
-      .from('bookings')
-      .insert({
-        client_id: user.id,
-        professional_profile_id: professionalProfileId,
-        status: 'pending',
-        notes: formData.notes || null,
-      })
-      .select('id')
+    // Get the main service details
+    const { data: mainService, error: mainServiceError } = await supabase
+      .from('services')
+      .select('id, name, price, duration')
+      .eq('id', formData.serviceId)
       .single();
     
-    if (bookingError || !booking) {
-      throw new Error(`Error creating booking: ${bookingError?.message}`);
+    if (mainServiceError || !mainService) {
+      throw new Error(`Error getting main service: ${mainServiceError?.message}`);
     }
     
-    // Create appointment record
-    const { error: appointmentError } = await supabase
-      .from('appointments')
-      .insert({
-        booking_id: booking.id,
-        date: dateFormatted,
-        start_time: timeInfo.start,
-        end_time: timeInfo.end,
-        status: 'upcoming',
-      });
-    
-    if (appointmentError) {
-      throw new Error(`Error creating appointment: ${appointmentError.message}`);
-    }
-    
-    // Insert main service into booking_services
-    const { error: mainServiceInsertError } = await supabase
-      .from('booking_services')
-      .insert({
-        booking_id: booking.id,
-        service_id: formData.serviceId,
-        price: mainService.price,
-        duration: mainService.duration,
-      });
-    
-    if (mainServiceInsertError) {
-      throw new Error(`Error adding main service: ${mainServiceInsertError.message}`);
-    }
-    
-    // Insert extra services into booking_services
+    // Get extra service durations
+    const extraServiceDurations: number[] = [];
     if (formData.extraServiceIds.length > 0) {
-      const { data: extraServices } = await supabase
+      const { data: extraServices, error: extraServicesError } = await supabase
         .from('services')
-        .select('id, price, duration')
+        .select('duration')
         .in('id', formData.extraServiceIds);
       
-      if (extraServices && extraServices.length > 0) {
-        const extraServicesData = extraServices.map(service => ({
+      if (extraServicesError || !extraServices) {
+        throw new Error(`Error fetching extra services: ${extraServicesError?.message}`);
+      }
+      
+      extraServices.forEach(service => {
+        if (service.duration) {
+          extraServiceDurations.push(service.duration);
+        }
+      });
+    }
+
+    // Calculate total duration
+    const totalDuration = mainService.duration + extraServiceDurations.reduce((sum, duration) => sum + duration, 0);
+
+    // Convert the local date to UTC
+    const localDate = new Date(formData.date);
+    const [hoursStr, minutesStr] = formData.timeSlot.split(':');
+    const hours = parseInt(hoursStr || '0', 10);
+    const minutes = parseInt(minutesStr || '0', 10);
+    
+    // Create the appointment start time in local timezone
+    const appointmentDate = new Date(localDate);
+    appointmentDate.setHours(hours, minutes, 0, 0);
+
+    // Convert to UTC
+    const utcDate = new Date(appointmentDate.getTime());
+    const utcEndDate = new Date(utcDate.getTime() + (totalDuration * 60 * 1000));
+
+    console.log('Appointment times:', {
+      local: appointmentDate.toLocaleString(),
+      utcStart: utcDate.toISOString(),
+      utcEnd: utcEndDate.toISOString(),
+      totalDuration
+    });
+
+    // Calculate total price
+    const { total: totalPrice, serviceFee } = await calculateTotalPrice(
+      formData.serviceId,
+      formData.extraServiceIds,
+      formData.tipAmount || 0
+    );
+
+    // Get the payment method to check if it's online
+    const { data: paymentMethod } = await supabase
+      .from('payment_methods')
+      .select('is_online')
+      .eq('id', formData.paymentMethodId)
+      .single();
+
+    // Determine initial payment status
+    const paymentStatus = paymentMethod?.is_online ? 'pending' : 'completed';
+    const bookingStatus = paymentMethod?.is_online ? 'pending' : 'confirmed';
+
+    try {
+      // Start transaction by inserting booking record
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          client_id: user.id,
+          professional_profile_id: professionalProfileId,
+          status: bookingStatus,
+          notes: formData.notes || null,
+        })
+        .select('id')
+        .single();
+      
+      if (bookingError || !booking) {
+        throw new Error(`Error creating booking: ${bookingError?.message}`);
+      }
+      
+      // Create appointment record
+      const { data: appointment, error: appointmentError } = await supabase
+        .from('appointments')
+        .insert({
           booking_id: booking.id,
-          service_id: service.id,
-          price: service.price,
-          duration: service.duration,
-        }));
+          start_time: utcDate.toISOString(),
+          end_time: utcEndDate.toISOString(),
+          status: 'active',
+        })
+        .select('id')
+        .single();
+      
+      if (appointmentError || !appointment) {
+        throw new Error(`Error creating appointment: ${appointmentError?.message}`);
+      }
+      
+      // Insert main service into booking_services
+      const { error: mainServiceInsertError } = await supabase
+        .from('booking_services')
+        .insert({
+          booking_id: booking.id,
+          service_id: formData.serviceId,
+          price: mainService.price,
+          duration: mainService.duration,
+        });
+      
+      if (mainServiceInsertError) {
+        throw new Error(`Error adding main service: ${mainServiceInsertError.message}`);
+      }
+      
+      // Insert extra services into booking_services
+      if (formData.extraServiceIds.length > 0) {
+        const { data: extraServices } = await supabase
+          .from('services')
+          .select('id, price, duration')
+          .in('id', formData.extraServiceIds);
         
-        const { error: extraServicesError } = await supabase
-          .from('booking_services')
-          .insert(extraServicesData);
-        
-        if (extraServicesError) {
-          throw new Error(`Error adding extra services: ${extraServicesError.message}`);
+        if (extraServices && extraServices.length > 0) {
+          const extraServicesData = extraServices.map(service => ({
+            booking_id: booking.id,
+            service_id: service.id,
+            price: service.price,
+            duration: service.duration,
+          }));
+          
+          const { error: extraServicesError } = await supabase
+            .from('booking_services')
+            .insert(extraServicesData);
+          
+          if (extraServicesError) {
+            throw new Error(`Error adding extra services: ${extraServicesError.message}`);
+          }
         }
       }
-    }
-    
-    // Create payment record
-    const { error: paymentError } = await supabase
-      .from('booking_payments')
-      .insert({
-        booking_id: booking.id,
-        payment_method_id: formData.paymentMethodId,
-        amount: totalPrice,
-        tip_amount: formData.tipAmount || 0,
-        service_fee: serviceFee,
-        status: paymentStatus,
-      });
-    
-    if (paymentError) {
-      throw new Error(`Error creating payment record: ${paymentError.message}`);
-    }
-    
-    // If payment method is online (e.g., credit card), we would typically
-    // create a Stripe payment intent here and return it for client-side processing
-    if (paymentMethod?.is_online) {
-      // Future implementation: Create Stripe payment intent
-      // const stripeIntent = await createStripePaymentIntent(totalPrice, booking.id);
       
-      // For now, just return the booking ID
+      // Create payment record
+      const { error: paymentError } = await supabase
+        .from('booking_payments')
+        .insert({
+          booking_id: booking.id,
+          payment_method_id: formData.paymentMethodId,
+          amount: totalPrice,
+          tip_amount: formData.tipAmount || 0,
+          service_fee: serviceFee,
+          status: paymentStatus,
+        });
+      
+      if (paymentError) {
+        throw new Error(`Error creating payment record: ${paymentError.message}`);
+      }
+      
+      // For cash payments, send confirmation emails immediately
+      // if (!paymentMethod?.is_online) {
+      //   try {
+      //     const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+      //     await sendBookingConfirmationEmails(booking.id, appointment.id, false);
+      //   } catch (emailError) {
+      //     console.error('Failed to send booking confirmation emails:', emailError);
+      //     // Don't fail the booking creation if email sending fails
+      //   }
+      // }
+      
+      // Return the booking details
       return { bookingId: booking.id, totalPrice };
+      
+    } catch (error) {
+      console.error('Error in createBooking:', error);
+      throw error;
     }
-    
-    // Return the booking details
-    return { bookingId: booking.id, totalPrice };
-    
   } catch (error) {
-    // We need to keep this error to log and re-throw it
     console.error('Error in createBooking:', error);
     throw error;
   }
 }
 
 /**
- * Process appointment times by extracting hours and minutes safely
- */
-function processTimeString(timeString: string): { hour: number; minute: number } {
-  const parts = timeString.split(':');
-  const hour = parseInt(parts[0] || '0', 10);
-  const minute = parseInt(parts[1] || '0', 10);
-  return { hour, minute };
-}
-
-/**
- * Convert a time to minutes since midnight
+ * Convert a time string to minutes since midnight
  */
 function timeToMinutes(timeString: string): number {
-  try {
-    if (!timeString || timeString.trim() === '') {
-      return 0;
-    }
-    
-    let adjustedTimeString = timeString;
-    
-    // Handle format like "2:00 PM" by converting to 24-hour format
-    if (timeString.toLowerCase().includes('pm') || timeString.toLowerCase().includes('am')) {
-      const parts = timeString.split(' ');
-      const timePart = parts[0];
-      const meridiem = parts[1]?.toLowerCase();
-      
-      if (!timePart || !meridiem) {
-        return 0;
-      }
-      
-      const [hourStr, minuteStr] = timePart.split(':');
-      if (!hourStr || !minuteStr) {
-        return 0;
-      }
-      
-      let hour = parseInt(hourStr, 10);
-      const minute = parseInt(minuteStr, 10);
-      
-      if (isNaN(hour) || isNaN(minute)) {
-        return 0;
-      }
-      
-      if (meridiem === 'pm' && hour < 12) hour += 12;
-      if (meridiem === 'am' && hour === 12) hour = 0;
-      
-      adjustedTimeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-    }
-    
-    // Now process the 24-hour format (HH:MM or HH:MM:SS)
-    const parts = adjustedTimeString.split(':');
-    const hour = parseInt(parts[0] || '0', 10);
-    const minute = parseInt(parts[1] || '0', 10);
-    
-    if (isNaN(hour) || isNaN(minute)) {
-      return 0;
-    }
-    
-    return hour * 60 + minute;
-  } catch (error) {
-    console.error('Error in timeToMinutes:', error);
-    return 0;
-  }
-}
-
-/**
- * Format time for display (24h -> 12h with AM/PM)
- */
-function formatTimeForDisplay(timeString: string): string {
-  const { hour, minute } = processTimeString(timeString);
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12; // Convert 0 to 12 for 12 AM
-  return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+  const [hours, minutes] = timeString.split(':').map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
 }
 
 /**
  * Check if a time slot overlaps with an appointment
  */
 function isSlotOverlapping(
-  slotStart: number,
-  slotEnd: number,
-  appointmentStart: number,
-  appointmentEnd: number
+  slotStartTime: string,
+  slotEndTime: string,
+  appointmentStartTime: string,
+  appointmentEndTime: string
 ): boolean {
-  return (
-    (slotStart < appointmentEnd && slotEnd > appointmentStart) ||
-    (appointmentStart < slotEnd && appointmentEnd > slotStart)
-  );
+  const slotStart = new Date(slotStartTime);
+  const slotEnd = new Date(slotEndTime);
+  const appointmentStart = new Date(appointmentStartTime);
+  const appointmentEnd = new Date(appointmentEndTime);
+
+  return slotStart < appointmentEnd && slotEnd > appointmentStart;
 }
 
 /**
- * Get available time slots for a professional with timezone conversion
- * @param professionalProfileId - The ID of the professional's profile
- * @param date - The date in YYYY-MM-DD format
- * @param professionalTimezone - Professional's timezone (optional, will fetch if not provided)
- * @param clientTimezone - Client's timezone (optional, will use professional's timezone if not provided)
- * @returns Array of available time slots formatted as "HH:MM AM/PM" in client timezone
+ * Get available time slots for a given date and professional
  */
 export async function getAvailableTimeSlots(
   professionalProfileId: string,
   date: string,
-  professionalTimezone?: string,
-  clientTimezone?: string
+  professionalTimezone: string = 'UTC',
+  clientTimezone: string = 'UTC'
 ): Promise<string[]> {
   const supabase = await createClient();
-  
+
   try {
-    // Step 1: Get the professional's working hours and timezone for the day of week
-    const dateObj = new Date(date);
-    const dayOfWeek = format(dateObj, 'EEEE').toLowerCase(); // e.g., "monday"
+    // Create date objects for the start and end of the day in professional's timezone
+    const professionalDate = new Date(date);
     
-    const { data: professionalProfile, error: profileError } = await supabase
+    // Calculate timezone offset between professional's timezone and UTC
+    const professionalOffsetMinutes = -new Date(date).getTimezoneOffset();
+    const targetTimezoneOffsetHours = professionalOffsetMinutes / 60;
+
+    console.log('Timezone info:', {
+      professionalTimezone,
+      offsetMinutes: professionalOffsetMinutes,
+      offsetHours: targetTimezoneOffsetHours
+    });
+    
+    // Adjust the date to professional's timezone for querying
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Convert to UTC for database query
+    const queryStartTime = new Date(startOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
+    const queryEndTime = new Date(endOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
+
+    // Get working hours
+    const { data: workingHoursData, error: workingHoursError } = await supabase
       .from('professional_profiles')
-      .select('working_hours, timezone')
+      .select('working_hours')
       .eq('id', professionalProfileId)
       .single();
 
-    if (profileError || !professionalProfile?.working_hours) {
-      return [];
-    }
-    
-    // Use provided timezone or fetch from database
-    const profTimezone = professionalTimezone || professionalProfile.timezone || 'UTC';
-    const targetTimezone = clientTimezone || profTimezone;
-    
-    // Parse timezone-aware working hours
-    const parsedWorkingHours = parseWorkingHoursFromDB(
-      professionalProfile.working_hours, 
-      profTimezone
-    );
-    
-    // Convert to client timezone if different
-    const workingHoursInClientTz = targetTimezone !== profTimezone 
-      ? convertWorkingHoursToClientTimezone(parsedWorkingHours, targetTimezone, dateObj)
-      : parsedWorkingHours;
-
-    // Find the entry for the current day in client timezone
-    const dayEntry = workingHoursInClientTz.hours.find(entry => 
-      entry.day.toLowerCase() === dayOfWeek.toLowerCase() && entry.enabled
-    );
-    
-    if (!dayEntry || !dayEntry.startTime || !dayEntry.endTime) {
+    if (workingHoursError || !workingHoursData?.working_hours) {
+      console.error('Error fetching working hours:', workingHoursError);
       return [];
     }
 
-    const daySchedule = {
-      start: dayEntry.startTime,
-      end: dayEntry.endTime
-    };
+    // Parse working hours with timezone conversion
+    const workingHours = parseWorkingHoursFromDB(workingHoursData.working_hours, professionalTimezone);
+    
+    // Get the day of the week in professional's timezone
+    const dayOfWeek = professionalDate.getDay();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+    const dayName = dayNames[dayOfWeek];
 
-    // Step 2: Generate all possible 30-minute time slots for the working hours
-    const allTimeSlots: string[] = [];
-    const startMinutes = timeToMinutes(daySchedule.start);
-    const endMinutes = timeToMinutes(daySchedule.end);
-    
-    // Generate 30-minute slots
-    for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const formattedHour = hour.toString().padStart(2, '0');
-      const formattedMinute = minute.toString().padStart(2, '0');
-      allTimeSlots.push(`${formattedHour}:${formattedMinute}`);
+    // Get working hours for this day
+    const dayWorkingHours = workingHours.hours.find(h => {
+      if (!dayName) return false;
+      return h.day.toLowerCase() === dayName.toLowerCase();
+    });
+
+    if (!dayWorkingHours?.enabled || !dayWorkingHours?.startTime || !dayWorkingHours?.endTime) {
+      console.log('Professional not working on this day');
+      return [];
     }
-    
-    // Step 3: Get booked appointments for the date to filter out unavailable slots
-    const { data: bookedAppointments, error: appointmentsError } = await supabase
+
+    // Get existing appointments for this day using UTC-adjusted query times
+    const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
       .select(`
         start_time,
         end_time,
-        bookings!inner(professional_profile_id)
+        bookings!inner (
+          professional_profile_id,
+          status
+        )
       `)
       .eq('bookings.professional_profile_id', professionalProfileId)
-      .eq('date', date)
-      .neq('status', 'cancelled');
+      .neq('bookings.status', 'cancelled')
+      .gte('start_time', queryStartTime.toISOString())
+      .lt('start_time', queryEndTime.toISOString());
 
     if (appointmentsError) {
-      return allTimeSlots.map(formatTimeForDisplay); // Return all slots if we can't check appointments
+      console.error('Error fetching appointments:', appointmentsError);
+      return [];
+    }
+    // Convert working hours to minutes for easier comparison
+    const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
+    const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
+
+    // Generate time slots every 30 minutes
+    const slots: string[] = [];
+    for (let minutes = workingStartMinutes; minutes < workingEndMinutes; minutes += 30) {
+      const hour = Math.floor(minutes / 60);
+      const minute = minutes % 60;
+      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+      // Create datetime strings in professional's timezone
+      const slotDate = new Date(date);
+      slotDate.setHours(hour, minute, 0, 0);
+      
+      // Convert slot times to UTC for comparison
+      const slotStartTime = new Date(slotDate.getTime());
+      const slotEndTime = new Date(slotDate.getTime() + (30 * 60 * 1000));
+
+      // Check if this slot overlaps with any existing appointments
+      let isAvailable = true;
+
+      for (const appointment of appointments || []) {
+        if (!appointment.start_time || !appointment.end_time) continue;
+
+        if (isSlotOverlapping(
+          slotStartTime.toISOString(),
+          slotEndTime.toISOString(),
+          appointment.start_time,
+          appointment.end_time
+        )) {
+          isAvailable = false;
+          break;
+        }
+      }
+
+      if (isAvailable) {
+        slots.push(timeString);
+      }
     }
 
-    // Step 4: Filter out booked time slots
-    const availableTimeSlots = allTimeSlots.filter(timeSlot => {
-      const slotStartMinutes = timeToMinutes(timeSlot);
-      const slotEndMinutes = slotStartMinutes + 30; // Each slot is 30 minutes
-      
-      // Check if this slot overlaps with any booked appointment
-      const isSlotBooked = bookedAppointments.some(appointment => {
-        if (!appointment.start_time || !appointment.end_time) return false;
-        
-        // Convert appointment times to minutes - first convert UTC to local
-        const apptStartTimeUTC = appointment.start_time.substring(0, 5); // Format: "14:00:00" -> "14:00"
-        const apptEndTimeUTC = appointment.end_time.substring(0, 5);
-        
-        // const apptStartTimeLocal = convertToLocal(apptStartTimeUTC) || apptStartTimeUTC;
-        const apptStartTimeLocal = apptStartTimeUTC;
-        // const apptEndTimeLocal = convertToLocal(apptEndTimeUTC) || apptEndTimeUTC;
-        const apptEndTimeLocal = apptEndTimeUTC;
-        
-        const apptStartMinutes = timeToMinutes(apptStartTimeLocal);
-        const apptEndMinutes = timeToMinutes(apptEndTimeLocal);
-        
-        return isSlotOverlapping(
-          slotStartMinutes, 
-          slotEndMinutes,
-          apptStartMinutes,
-          apptEndMinutes
-        );
-      });
-      
-      return !isSlotBooked;
+    // Convert slots to client timezone
+    const targetDate = new Date(date);
+    const convertedSlots = slots.map(slot => {
+      const { time } = convertTimeToClientTimezone(slot, professionalTimezone, clientTimezone, targetDate);
+      return time;
     });
-    
-    // Format time slots for display
-    const formattedTimeSlots = availableTimeSlots.map(formatTimeForDisplay);
-    
-    return formattedTimeSlots;
-    
-  } catch {
+
+    return convertedSlots;
+  } catch (error) {
+    console.error('Error in getAvailableTimeSlots:', error);
     return [];
   }
 }
