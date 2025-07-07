@@ -173,10 +173,8 @@ export function BalancePaymentContent({
     Math.round(serviceAmount * 0.2 * 100) / 100,
   ];
 
-  // Get professional title
-  const professionalTitle =
-    professional.profession ||
-    `${professional.users.first_name} ${professional.users.last_name}`;
+  // Get professional name
+  const professionalName = `${professional.users.first_name} ${professional.users.last_name}`;
 
   return (
     <div className="space-y-6">
@@ -190,7 +188,7 @@ export function BalancePaymentContent({
               </div>
               <div>
                 <Typography className="font-semibold text-xl">
-                  {professionalTitle}
+                  {professionalName}
                 </Typography>
                 <Typography className="text-muted-foreground">
                   Professional Service Provider
@@ -574,7 +572,7 @@ export function BalancePaymentContent({
             <CardContent className="flex-1">
               <ReviewSection
                 bookingId={booking.id}
-                professionalName={`${professional.users.first_name} ${professional.users.last_name}`}
+                professionalName={professionalName}
               />
             </CardContent>
           </Card>
