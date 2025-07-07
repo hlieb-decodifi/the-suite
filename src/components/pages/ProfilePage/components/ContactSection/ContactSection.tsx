@@ -101,7 +101,7 @@ export function ContactSection({
         <CardHeader>
           <div className="flex items-center justify-between">
             <Typography variant="h3" className="font-bold text-foreground">
-              Contact Hours
+              Working Hours
             </Typography>
             {isEditable && (
               <Button variant="outline" size="sm" onClick={handleEditClick}>
