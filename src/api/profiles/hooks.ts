@@ -2,7 +2,7 @@ import { toast } from '@/components/ui/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getProfile, toggleProfilePublishStatus, updateProfileHeader, updateSubscriptionStatus } from './api';
+import { getProfile, toggleProfilePublishStatus, updateProfileHeader, updateSubscriptionStatus, setCookieConsent } from './api';
 import type { HeaderFormValues, ProfileData } from '@/types/profiles';
 
 // Define query keys as constants for consistency
@@ -153,6 +153,25 @@ export function useUpdateSubscription() {
     onSettled: (_, __, userId) => {
       // Refetch after error or success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile(userId) });
+    },
+  });
+}
+
+export function useSetCookieConsent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, consent }: { userId: string; consent: boolean }) => {
+      return setCookieConsent(userId, consent);
+    },
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile(userId) });
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error updating cookie consent',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
     },
   });
 } 
