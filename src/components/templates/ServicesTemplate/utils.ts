@@ -45,20 +45,26 @@ export function sortServices(
     case 'name-desc':
       return sortedServices.sort((a, b) => b.name.localeCompare(a.name));
     
-    case 'location-asc':
-      return sortedServices.sort((a, b) => {
-        // For location sorting, we'll sort by city first, then by name as a tiebreaker
+    case 'location-asc': {
+      // First, sort by city and name as before
+      const citySorted = sortedServices.sort((a, b) => {
         const locationA = a.professional.address_data?.city || a.professional.address || '';
         const locationB = b.professional.address_data?.city || b.professional.address || '';
-        
         const cityComparison = locationA.localeCompare(locationB);
         if (cityComparison !== 0) {
           return cityComparison;
         }
-        
         // If cities are the same, sort by service name
         return a.name.localeCompare(b.name);
       });
+      // Then, move all with non-null address_data to the top, preserving order
+      return citySorted.sort((a, b) => {
+        const aHasAddress = !!a.professional.address_data;
+        const bHasAddress = !!b.professional.address_data;
+        if (aHasAddress === bHasAddress) return 0;
+        return aHasAddress ? -1 : 1;
+      });
+    }
     
     default:
       return sortedServices;
@@ -117,7 +123,8 @@ export function getServicesForDisplay(
   
   // If no filters are applied, use the services as is (already paginated from server)
   if (filters.searchTerm === '') {
-    return initialServices;
+    // Always apply the selected sort to the initial results
+    return sortServices(initialServices, filters.sortBy);
   }
 
   // Otherwise, apply pagination on client-side filtered results (search only)
