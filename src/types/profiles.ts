@@ -19,6 +19,7 @@ export type ProfileData = {
   photoUrl: string | null;
   isPublished: boolean | null;
   isSubscribed: boolean;
+  cookieConsent: boolean;
 }
 
 // Validation schemas

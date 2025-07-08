@@ -4,6 +4,7 @@ import tsparser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 import nextPlugin from '@next/eslint-plugin-next';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
   js.configs.recommended,
@@ -30,6 +31,7 @@ export default [
     plugins: {
       '@typescript-eslint': tseslint,
       '@next/next': nextPlugin,
+      'react-hooks': reactHooks,
     },
     rules: {
       // Next.js rules
@@ -88,6 +90,9 @@ export default [
       'no-multiple-empty-lines': ['error', { max: 1, maxEOF: 0 }],
       'no-trailing-spaces': 'error',
       'padded-blocks': ['error', 'never'],
+      // React Hooks rules
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
   {

@@ -1274,6 +1274,7 @@ export type Database = {
           last_name: string
           role_id: string
           updated_at: string
+          cookie_consent: boolean
         }
         Insert: {
           created_at?: string
@@ -1282,6 +1283,7 @@ export type Database = {
           last_name: string
           role_id: string
           updated_at?: string
+          cookie_consent?: boolean
         }
         Update: {
           created_at?: string
@@ -1290,6 +1292,7 @@ export type Database = {
           last_name?: string
           role_id?: string
           updated_at?: string
+          cookie_consent?: boolean
         }
         Relationships: [
           {

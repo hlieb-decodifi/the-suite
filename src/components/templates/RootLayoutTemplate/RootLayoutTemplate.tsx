@@ -6,6 +6,7 @@ import { Footer } from '@/components/common/Footer';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthSyncWrapper } from './components/AuthSyncWrapper';
 import { getUnreadMessagesCount } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
+import { CookieConsent } from '@/components/common/CookieConsent';
 
 export type RootLayoutTemplateProps = {
   children: ReactNode;
@@ -82,6 +83,7 @@ export async function RootLayoutTemplate({
           {children}
         </main>
         <Footer />
+        <CookieConsent />
         <Toaster />
       </div>
     </AuthSyncWrapper>
