@@ -12,12 +12,14 @@ export type UseSignUpFormProps = {
   onSubmit: (data: SignUpFormValues) => void;
   defaultValues?: Partial<SignUpFormValues>;
   redirectToDashboard?: boolean;
+  redirectTo?: string;
 };
 
 export function useSignUpForm({ 
   onSubmit, 
   defaultValues,
-  redirectToDashboard = false
+  redirectToDashboard = false,
+  redirectTo = '/profile',
 }: UseSignUpFormProps) {
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
@@ -37,8 +39,9 @@ export function useSignUpForm({
     try {
       setIsPending(true);
       
-      // Call the server action for signup
-      const result = await signUpAction(data);
+      console.log('redirectTo', redirectTo);
+      // Call the server action for signup with redirectTo
+      const result = await signUpAction(data, redirectTo);
       
       if (!result.success) {
         toast({
@@ -73,7 +76,7 @@ export function useSignUpForm({
     } finally {
       setIsPending(false);
     }
-  }, [onSubmit, router, redirectToDashboard]);
+  }, [onSubmit, router, redirectToDashboard, redirectTo]);
 
   return {
     form,

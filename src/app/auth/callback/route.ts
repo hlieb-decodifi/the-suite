@@ -162,7 +162,7 @@ export async function GET(request: Request) {
         
         // Add a small delay to ensure all database operations are complete
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         console.log('Redirecting to:', redirectTo);
         
         // Create response and set session cookie explicitly
