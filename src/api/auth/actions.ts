@@ -5,6 +5,7 @@ import { SignInFormValues } from '@/components/forms/SignInForm/schema';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
@@ -22,11 +23,44 @@ const getURL = () => {
   return url
 }
 
+// Helper function to check if a user exists by email (case-insensitive)
+async function userExistsByEmail(email: string): Promise<{ exists: boolean; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { exists: false, error: 'Missing Supabase admin credentials' };
+  }
+  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+  const { data: users, error } = await adminSupabase
+    .from('auth.users')
+    .select('id')
+    .ilike('email', email);
+  if (error) {
+    return { exists: false, error: error.message };
+  }
+  return { exists: !!(users && users.length > 0) };
+}
+
 /**
  * Server action for user signup
  */
 export async function signUpAction(data: SignUpFormValues) {
   const supabase = await createClient();
+
+  // Duplicate email check
+  const { exists, error: userCheckError } = await userExistsByEmail(data.email);
+  if (userCheckError) {
+    return {
+      success: false,
+      error: 'Error checking for existing user. Please try again later.',
+    };
+  }
+  if (exists) {
+    return {
+      success: false,
+      error: 'An account with this email already exists. Please sign in or use a different email.',
+    };
+  }
   
   try {
     // Ensure userType is set
