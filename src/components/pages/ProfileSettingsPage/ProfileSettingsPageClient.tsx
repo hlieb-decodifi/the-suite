@@ -66,6 +66,7 @@ export function ProfileSettingsPageClient({
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const { toast } = useToast();
+  const [messagingSettingsState, setMessagingSettingsState] = useState(messagingSettings);
 
   const canUserChangeEmail = canChangeEmail(user);
   const canUserChangePassword = canChangePassword(user);
@@ -127,6 +128,14 @@ export function ProfileSettingsPageClient({
       });
 
       if (result.success) {
+        // Refetch latest messaging settings from server
+        try {
+          const { fetchMessagingSettingsAction } = await import('./ProfileSettingsPage');
+          const latest = await fetchMessagingSettingsAction(user.id);
+          if (latest) setMessagingSettingsState(latest);
+        } catch (fetchError) {
+          console.error('Error fetching latest messaging settings:', fetchError);
+        }
         toast({
           title: 'Success',
           description: 'Messaging settings updated successfully',
@@ -326,7 +335,7 @@ export function ProfileSettingsPageClient({
                     </div>
                     <Switch
                       id="allow-messages"
-                      checked={messagingSettings.allow_messages}
+                      checked={messagingSettingsState?.allow_messages ?? false}
                       onCheckedChange={handleMessagingToggle}
                       disabled={isUpdatingMessagingSettings}
                     />

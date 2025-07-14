@@ -422,3 +422,8 @@ export async function updateMessagingSettingsAction({
     };
   }
 }
+
+// Server action to fetch latest messaging settings (for client refresh)
+export async function fetchMessagingSettingsAction(userId: string) {
+  return await getMessagingSettings(userId);
+}
