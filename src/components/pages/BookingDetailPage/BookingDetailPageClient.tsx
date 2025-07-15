@@ -361,6 +361,7 @@ export function BookingDetailPageClient({
         }`,
         address: formatAddress(professional?.address),
         phone: professional?.phone_number || null,
+        avatar_url: professional?.users?.avatar_url || null,
       };
     }
     const clientUser = appointment.bookings.clients;
@@ -369,6 +370,7 @@ export function BookingDetailPageClient({
       name: `${clientUser?.first_name || ''} ${clientUser?.last_name || ''}`,
       address: formatAddress(clientProfile?.address),
       phone: clientProfile?.phone_number || null,
+      avatar_url: clientUser?.avatar_url || null,
     };
   };
 
@@ -858,7 +860,7 @@ export function BookingDetailPageClient({
                 {/* Client Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
-                    <AvatarImage src="" />
+                    <AvatarImage src={getOtherPartyProfileData().avatar_url || ''} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -943,7 +945,7 @@ export function BookingDetailPageClient({
                 {/* Professional Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
-                    <AvatarImage src="" />
+                    <AvatarImage src={getOtherPartyProfileData().avatar_url || ''} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
