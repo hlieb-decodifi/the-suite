@@ -396,6 +396,14 @@ export async function getFilteredServices(
         
         return matches;
       });
+
+      // Prioritize services with non-null addresses
+      filteredServices = filteredServices.sort((a, b) => {
+        const aHasAddress = !!a.professional_profile?.address;
+        const bHasAddress = !!b.professional_profile?.address;
+        if (aHasAddress === bHasAddress) return 0;
+        return aHasAddress ? -1 : 1;
+      });
     }
     
     // Calculate pagination for filtered results
