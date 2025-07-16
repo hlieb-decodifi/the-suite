@@ -25,7 +25,7 @@ const getURL = () => {
 /**
  * Server action for user signup
  */
-export async function signUpAction(data: SignUpFormValues) {
+export async function signUpAction(data: SignUpFormValues, redirectTo?: string) {
   const supabase = await createClient();
   
   try {
@@ -44,7 +44,7 @@ export async function signUpAction(data: SignUpFormValues) {
           last_name: data.lastName,
           role: data.userType,
         },
-        emailRedirectTo: `${getURL()}/auth/callback`,
+        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(redirectTo || '/profile')}`,
       },
     });
 
