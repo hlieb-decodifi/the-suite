@@ -118,94 +118,11 @@ export async function getConversations(conversationId?: string): Promise<{
       })
     );
 
-    // Filter out null values and conversations without messages
-    let validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
-      conv !== null && conv.last_message !== undefined
+    // Filter out null values, and keep conversations that have messages OR match the provided conversationId.
+    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
+      conv !== null && (conv.last_message !== undefined || conv.id === conversationId)
     );
 
-    // If a conversationId is provided, ensure it is included
-    if (conversationId && !validConversations.some(conv => conv.id === conversationId)) {
-      // Fetch the conversation directly
-      const { data: conversation, error: conversationError } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('id', conversationId)
-        .or(`client_id.eq.${user.id},professional_id.eq.${user.id}`)
-        .single();
-
-      if (conversation && !conversationError) {
-        // Get the other user's details
-        const otherUserId = isProfessional ? conversation.client_id : conversation.professional_id;
-        const { data: otherUser } = await supabase
-          .from('users')
-          .select(`
-            id,
-            first_name,
-            last_name,
-            profile_photos (url)
-          `)
-          .eq('id', otherUserId)
-          .single();
-
-        // Get last message
-        const { data: lastMessageData } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            attachments:message_attachments(*)
-          `)
-          .eq('conversation_id', conversation.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        const lastMessage = lastMessageData ? {
-          id: lastMessageData.id,
-          conversation_id: lastMessageData.conversation_id,
-          sender_id: lastMessageData.sender_id,
-          content: lastMessageData.content,
-          is_read: lastMessageData.is_read,
-          created_at: lastMessageData.created_at,
-          updated_at: lastMessageData.updated_at,
-          attachments: lastMessageData.attachments?.map(att => ({
-            id: att.id,
-            message_id: att.message_id,
-            url: att.url,
-            type: 'image' as const,
-            file_name: att.file_name,
-            file_size: att.file_size,
-            created_at: att.created_at
-          })) || []
-        } : undefined;
-
-        // Count unread messages for the current user
-        const { count: unreadCount } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conversation.id)
-          .neq('sender_id', user.id)
-          .eq('is_read', false);
-
-        // Only add if not already present
-        validConversations = [
-          ...validConversations,
-          {
-            ...conversation,
-            other_user: {
-              id: otherUser?.id || '',
-              first_name: otherUser?.first_name || '',
-              last_name: otherUser?.last_name || '',
-              profile_photo_url: Array.isArray(otherUser?.profile_photos) 
-                ? otherUser.profile_photos[0]?.url 
-                : otherUser?.profile_photos?.url || undefined,
-            },
-            last_message: lastMessage,
-            unread_count: unreadCount || 0,
-          }
-        ];
-      }
-    }
-    
     return { success: true, conversations: validConversations };
   } catch (error) {
     console.error('Error in getConversations:', error);
