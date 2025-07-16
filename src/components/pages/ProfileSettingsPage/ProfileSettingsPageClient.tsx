@@ -66,7 +66,9 @@ export function ProfileSettingsPageClient({
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const { toast } = useToast();
-  const [messagingSettingsState, setMessagingSettingsState] = useState(messagingSettings);
+  const [messagingSettingsState, setMessagingSettingsState] = useState(
+    messagingSettings ?? { allow_messages: false }
+  );
 
   const canUserChangeEmail = canChangeEmail(user);
   const canUserChangePassword = canChangePassword(user);
@@ -128,14 +130,10 @@ export function ProfileSettingsPageClient({
       });
 
       if (result.success) {
-        // Refetch latest messaging settings from server
-        try {
-          const { fetchMessagingSettingsAction } = await import('./ProfileSettingsPage');
-          const latest = await fetchMessagingSettingsAction(user.id);
-          if (latest) setMessagingSettingsState(latest);
-        } catch (fetchError) {
-          console.error('Error fetching latest messaging settings:', fetchError);
-        }
+        // Update local state directly for a more responsive and robust UI
+        setMessagingSettingsState((prev) =>
+          prev ? { ...prev, allow_messages: allowMessages } : { allow_messages: allowMessages }
+        );
         toast({
           title: 'Success',
           description: 'Messaging settings updated successfully',
@@ -335,10 +333,18 @@ export function ProfileSettingsPageClient({
                     </div>
                     <Switch
                       id="allow-messages"
-                      checked={messagingSettingsState?.allow_messages ?? false}
+                      checked={Boolean(messagingSettingsState?.allow_messages)}
                       onCheckedChange={handleMessagingToggle}
-                      disabled={isUpdatingMessagingSettings}
+                      disabled={
+                        isUpdatingMessagingSettings ||
+                        typeof messagingSettingsState?.allow_messages === 'undefined'
+                      }
                     />
+                    {typeof messagingSettingsState?.allow_messages === 'undefined' && (
+                      <Typography variant="small" className="text-muted-foreground ml-2">
+                        Loading messaging settings…
+                      </Typography>
+                    )}
                   </div>
                   <div className="p-3 bg-muted/30 rounded-md">
                     <Typography
