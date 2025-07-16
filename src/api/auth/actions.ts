@@ -168,9 +168,14 @@ export async function resetPasswordAction(email: string) {
 /**
  * Server action to update password during reset flow
  */
-export async function updatePasswordAction(newPassword: string) {
+export async function updatePasswordAction(newPassword: string, accessToken?: string | null, refreshToken?: string | null) {
   const supabase = await createClient();
-  
+  if (accessToken && refreshToken) {
+    await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+  }
   try {
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
