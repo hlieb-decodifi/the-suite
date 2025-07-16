@@ -26,19 +26,40 @@ const getURL = () => {
 // Helper function to check if a user exists by email (case-insensitive)
 async function userExistsByEmail(email: string): Promise<{ exists: boolean; error?: string }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
   if (!supabaseUrl || !supabaseServiceKey) {
-    return { exists: false, error: 'Missing Supabase admin credentials' };
+    console.error('userExistsByEmail: Missing Supabase URL or Service Role Key.');
+    return { exists: false, error: 'Server configuration error' };
   }
+
   const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
-  const { data: users, error } = await adminSupabase
-    .from('auth.users')
-    .select('id')
-    .ilike('email', email);
-  if (error) {
-    return { exists: false, error: error.message };
+
+  let page = 1;
+  const perPage = 100;
+
+  while (true) {
+    const { data, error } = await adminSupabase.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      console.error('userExistsByEmail: Admin API error while checking for user:', error);
+      return { exists: false, error: 'Database error while checking for user' };
+    }
+
+    if (!data?.users?.length) break;
+
+    const exists = data.users.some(
+      user => user.email?.toLowerCase() === email.toLowerCase()
+    );
+    if (exists) return { exists: true };
+
+    // If less than perPage users returned, we've reached the end
+    if (data.users.length < perPage) break;
+
+    page += 1;
   }
-  return { exists: !!(users && users.length > 0) };
+
+  return { exists: false };
 }
 
 /**
