@@ -1,13 +1,14 @@
 import React from 'react'
+import { BookingsActivityWidget } from '@/components/templates/AdminDashboardTemplate'
+// Add other widgets as needed
 
 export function AdminDashboardPage() {
+  // In the future, receive data via props or context
+  // For now, render placeholder widgets
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
-      <div className="bg-white rounded shadow p-6">
-        {/* Dashboard widgets will go here */}
-        <p>Welcome, admin! Dashboard content coming soon.</p>
-      </div>
-    </div>
+    <>
+      <BookingsActivityWidget totalBookings={0} bookingsPerDay={{}} />
+      {/* Add other widgets here, e.g. <ClientsWidget />, <ProfessionalsWidget />, etc. */}
+    </>
   )
 } 

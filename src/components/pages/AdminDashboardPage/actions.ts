@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { requireAdminUser } from './auth'
 
 export async function getBookingsStats(options?: { from?: string; to?: string }) {
@@ -12,15 +13,18 @@ export async function getBookingsStats(options?: { from?: string; to?: string })
     options?.from ??
     new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
+  // Use admin client for bookings queries
+  const adminSupabase = createAdminClient()
+
   // Total bookings in range
-  const { count: totalBookings } = await supabase
+  const { count: totalBookings } = await adminSupabase
     .from('bookings')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', from)
     .lte('created_at', to)
 
   // Bookings per day in range
-  const { data: bookingsPerDay, error: bookingsPerDayError } = await supabase
+  const { data: bookingsPerDay, error: bookingsPerDayError } = await adminSupabase
     .from('bookings')
     .select('created_at')
     .gte('created_at', from)
