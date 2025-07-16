@@ -2529,5 +2529,23 @@ create policy "Admins can manage email templates"
 create trigger handle_updated_at before update on email_templates
   for each row execute procedure moddatetime (updated_at);
 
+-- ... existing code ...
+create or replace function is_admin(user_uuid uuid)
+returns boolean as $$
+declare
+  is_admin boolean;
+begin
+  select exists(
+    select 1 from users
+    join roles on users.role_id = roles.id
+    where users.id = user_uuid
+    and roles.name = 'admin'
+  ) into is_admin;
+  
+  return is_admin;
+end;
+$$ language plpgsql security definer;
+-- ... existing code ...
+
 
 
