@@ -35,31 +35,15 @@ async function userExistsByEmail(email: string): Promise<{ exists: boolean; erro
 
   const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
 
-  let page = 1;
-  const perPage = 100;
+  // Use the user_exists RPC function for efficient lookup
+  const { data, error } = await adminSupabase.rpc('user_exists', { p_email: email });
 
-  while (true) {
-    const { data, error } = await adminSupabase.auth.admin.listUsers({ page, perPage });
-
-    if (error) {
-      console.error('userExistsByEmail: Admin API error while checking for user:', error);
-      return { exists: false, error: 'Database error while checking for user' };
-    }
-
-    if (!data?.users?.length) break;
-
-    const exists = data.users.some(
-      user => user.email?.toLowerCase() === email.toLowerCase()
-    );
-    if (exists) return { exists: true };
-
-    // If less than perPage users returned, we've reached the end
-    if (data.users.length < perPage) break;
-
-    page += 1;
+  if (error) {
+    console.error('userExistsByEmail: RPC error while checking for user:', error);
+    return { exists: false, error: 'Database error while checking for user' };
   }
 
-  return { exists: false };
+  return { exists: data };
 }
 
 /**
