@@ -1,14 +1,31 @@
-import React from 'react'
-import { BookingsActivityWidget } from '@/components/templates/AdminDashboardTemplate'
-// Add other widgets as needed
+'use server';
 
-export function AdminDashboardPage() {
-  // In the future, receive data via props or context
-  // For now, render placeholder widgets
+import { AdminDashboardClient } from './AdminDashboardClient';
+import { getAdminDashboardData } from '@/components/layouts/AdminDashboardPageLayout/AdminDashboardPageLayout';
+
+export default async function AdminDashboardPage({ searchParams }: { searchParams?: { [key: string]: string | string[] } }) {
+  let startDate = typeof searchParams?.start_date === 'string' ? searchParams.start_date : undefined;
+  let endDate = typeof searchParams?.end_date === 'string' ? searchParams.end_date : undefined;
+
+  if (!startDate && !endDate) {
+    // Default to last 30 days
+    const now = new Date();
+    endDate = now.toISOString();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    startDate = thirtyDaysAgo.toISOString();
+  }
+
+  const data = await getAdminDashboardData({ startDate, endDate });
   return (
-    <>
-      <BookingsActivityWidget totalBookings={0} bookingsPerDay={{}} />
-      {/* Add other widgets here, e.g. <ClientsWidget />, <ProfessionalsWidget />, etc. */}
-    </>
-  )
+    <AdminDashboardClient
+      totalBookings={data.totalBookings}
+      bookingsPerDay={data.bookingsPerDay}
+      totalClients={data.totalClients}
+      newClients={data.newClients}
+      totalProfessionals={data.totalProfessionals}
+      newProfessionals={data.newProfessionals}
+      totalChats={data.totalChats}
+      totalRefunds={data.totalRefunds}
+    />
+  );
 } 

@@ -63,7 +63,7 @@ export function useSignInForm({
       
       // Redirect based on admin status
       if (result.isAdmin) {
-        router.push('/admin/dashboard');
+        router.push('/admin');
         return;
       }
       if (redirectTo) {
