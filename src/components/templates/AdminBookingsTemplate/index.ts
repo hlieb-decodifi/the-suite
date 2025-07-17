@@ -1,0 +1,1 @@
+export { AdminBookingsTemplate } from './AdminBookingsTemplate'; 

@@ -1,4 +1,9 @@
+// Section widget for the Admin Dashboard.
+// Displays professional statistics.
+// Used as a section component in AdminDashboardOverviewPageClient.
 import React from 'react'
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Typography } from '@/components/ui/typography';
 
 type ProfessionalsWidgetProps = {
   totalProfessionals: number
@@ -7,10 +12,14 @@ type ProfessionalsWidgetProps = {
 
 export function ProfessionalsWidget({ totalProfessionals, newProfessionals }: ProfessionalsWidgetProps) {
   return (
-    <div className="bg-card border rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold mb-2">Service Professionals</h2>
-      <div>Total professionals: {totalProfessionals}</div>
-      <div>New professionals (last 30 days): {newProfessionals}</div>
-    </div>
+    <Card>
+      <CardHeader>
+        <Typography variant="h4">Service Professionals</Typography>
+      </CardHeader>
+      <CardContent>
+        <Typography>Total professionals: {totalProfessionals}</Typography>
+        <Typography>New professionals (last 30 days): {newProfessionals}</Typography>
+      </CardContent>
+    </Card>
   )
 } 

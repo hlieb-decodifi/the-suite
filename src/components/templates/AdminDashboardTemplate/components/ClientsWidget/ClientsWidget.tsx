@@ -1,4 +1,9 @@
+// Section widget for the Admin Dashboard.
+// Displays client statistics.
+// Used as a section component in AdminDashboardOverviewPageClient.
 import React from 'react'
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Typography } from '@/components/ui/typography';
 
 type ClientsWidgetProps = {
   totalClients: number
@@ -7,10 +12,14 @@ type ClientsWidgetProps = {
 
 export function ClientsWidget({ totalClients, newClients }: ClientsWidgetProps) {
   return (
-    <div className="bg-card border rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold mb-2">Clients Registered</h2>
-      <div>Total clients: {totalClients}</div>
-      <div>New clients (last 30 days): {newClients}</div>
-    </div>
+    <Card>
+      <CardHeader>
+        <Typography variant="h4">Clients Registered</Typography>
+      </CardHeader>
+      <CardContent>
+        <Typography>Total clients: {totalClients}</Typography>
+        <Typography>New clients (last 30 days): {newClients}</Typography>
+      </CardContent>
+    </Card>
   )
 } 

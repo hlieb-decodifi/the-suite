@@ -1,4 +1,9 @@
+// Section widget for the Admin Dashboard.
+// Displays messages statistics.
+// Used as a section component in AdminDashboardOverviewPageClient.
 import React from 'react'
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Typography } from '@/components/ui/typography';
 
 type MessagesWidgetProps = {
   totalChats: number
@@ -6,9 +11,13 @@ type MessagesWidgetProps = {
 
 export function MessagesWidget({ totalChats }: MessagesWidgetProps) {
   return (
-    <div className="bg-card border rounded-lg shadow-sm p-4">
-      <h2 className="text-lg font-semibold mb-2">Messages</h2>
-      <div>Total chats: {totalChats}</div>
-    </div>
+    <Card>
+      <CardHeader>
+        <Typography variant="h4">Messages</Typography>
+      </CardHeader>
+      <CardContent>
+        <Typography>Total chats: {totalChats}</Typography>
+      </CardContent>
+    </Card>
   )
 } 

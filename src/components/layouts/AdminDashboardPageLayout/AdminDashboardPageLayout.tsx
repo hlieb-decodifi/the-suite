@@ -8,8 +8,6 @@ import { redirect } from 'next/navigation';
 
 export type AdminDashboardPageLayoutProps = {
   children: React.ReactNode;
-  startDate?: string;
-  endDate?: string;
 };
 
 // Throws if not authenticated or not admin. Returns the user object if authenticated and admin.
@@ -94,7 +92,7 @@ export async function getAdminDashboardData({ startDate, endDate }: { startDate?
   };
 }
 
-export async function AdminDashboardPageLayout({ children, startDate, endDate }: AdminDashboardPageLayoutProps) {
+export async function AdminDashboardPageLayout({ children }: AdminDashboardPageLayoutProps) {
   const supabase = await createClient();
   let user;
   try {
@@ -103,7 +101,8 @@ export async function AdminDashboardPageLayout({ children, startDate, endDate }:
     return redirect('/');
   }
 
-  let dashboardData = {
+  // Remove all date range logic from here. Only fetch static/user data.
+  const dashboardData = {
     totalBookings: 0,
     bookingsPerDay: {},
     totalClients: 0,
@@ -113,11 +112,7 @@ export async function AdminDashboardPageLayout({ children, startDate, endDate }:
     totalChats: 0,
     totalRefunds: 0,
   };
-  try {
-    dashboardData = await getAdminDashboardData({ startDate, endDate });
-  } catch {
-    // Optionally log error
-  }
+  // Optionally fetch static data here if needed
 
   return (
     <div className="w-full mx-auto">
