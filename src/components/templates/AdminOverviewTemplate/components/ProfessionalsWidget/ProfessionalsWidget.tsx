@@ -8,17 +8,20 @@ import { Typography } from '@/components/ui/typography';
 type ProfessionalsWidgetProps = {
   totalProfessionals: number
   newProfessionals: number
+  dateRangeLabel: string
 }
 
-export function ProfessionalsWidget({ totalProfessionals, newProfessionals }: ProfessionalsWidgetProps) {
+export function ProfessionalsWidget({ totalProfessionals, newProfessionals, dateRangeLabel }: ProfessionalsWidgetProps) {
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <Typography variant="h4">Service Professionals</Typography>
       </CardHeader>
       <CardContent>
         <Typography>Total professionals: {totalProfessionals}</Typography>
-        <Typography>New professionals (last 30 days): {newProfessionals}</Typography>
+        <Typography>
+          New professionals <span className="text-yellow-500">{dateRangeLabel}</span>: {newProfessionals}
+        </Typography>
       </CardContent>
     </Card>
   )

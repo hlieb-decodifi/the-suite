@@ -1,32 +1,58 @@
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/server';
 import { createClient } from '@/lib/supabase/server';
-import { AdminDashboardPageLayoutClient } from '@/components/layouts/AdminDashboardPageLayout/AdminDashboardPageLayoutClient';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+import { createAdminClient } from '@/lib/supabase/server';
+import { AdminDashboardPageLayoutClient } from './AdminDashboardPageLayoutClient';
+import { DateRangeContextProvider } from './DateRangeContextProvider';
+import { formatDateLocalYYYYMMDD } from '@/utils/formatDate';
 
 export type AdminDashboardPageLayoutProps = {
   children: React.ReactNode;
 };
 
-// Throws if not authenticated or not admin. Returns the user object if authenticated and admin.
-async function requireAdminUser(supabase: SupabaseClient) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  const { data: isAdmin } = await supabase.rpc('is_admin', { user_uuid: user.id });
-  if (!isAdmin) throw new Error('Not authorized');
-  return user;
+// Helper to parse YYYY-MM-DD as local date
+function parseLocalDate(dateString?: string) {
+  if (!dateString) return undefined;
+  const [yearStr, monthStr, dayStr] = dateString.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+// Convert a local date to UTC ISO string for the start of the day
+function getLocalDayStartUTC(dateString?: string) {
+  const date = dateString ? parseLocalDate(dateString) : new Date();
+  if (!date) return undefined;
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+// Convert a local date to UTC ISO string for the end of the day
+function getLocalDayEndUTC(dateString?: string) {
+  const date = dateString ? parseLocalDate(dateString) : new Date();
+  if (!date) return undefined;
+  date.setHours(23, 59, 59, 999);
+  return date.toISOString();
 }
 
 export async function getAdminDashboardData({ startDate, endDate }: { startDate?: string | undefined; endDate?: string | undefined }) {
-  const adminSupabase = createAdminClient();
+  const adminSupabase = await createAdminClient();
   const now = new Date();
-  const toDate = endDate ?? now.toISOString();
-  const fromDate = startDate ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Default to last 30 days (inclusive) if no dates provided
+  const defaultEnd = formatDateLocalYYYYMMDD(now);
+  const defaultStart = formatDateLocalYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29));
+  const toDate = endDate ? getLocalDayEndUTC(endDate) : getLocalDayEndUTC(defaultEnd);
+  const fromDate = startDate ? getLocalDayStartUTC(startDate) : getLocalDayStartUTC(defaultStart);
 
   // Bookings
   const { count: totalBookings } = await adminSupabase
+    .from('bookings')
+    .select('*', { count: 'exact', head: true });
+  const { count: newBookings } = await adminSupabase
     .from('bookings')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', fromDate)
@@ -37,37 +63,36 @@ export async function getAdminDashboardData({ startDate, endDate }: { startDate?
     .gte('created_at', fromDate)
     .lte('created_at', toDate);
   const bookingsPerDay: Record<string, number> = {};
-  bookingsPerDayData?.forEach(({ created_at }) => {
+  (bookingsPerDayData as { created_at: string }[] | undefined)?.forEach(({ created_at }) => {
     const day = created_at.slice(0, 10);
     bookingsPerDay[day] = (bookingsPerDay[day] || 0) + 1;
   });
 
   // Clients
   const { count: totalClients } = await adminSupabase
-    .from('users')
-    .select('*', { count: 'exact', head: true })
-    .eq('role_id', 'client');
+    .from('client_profiles')
+    .select('*', { count: 'exact', head: true });
   const { count: newClients } = await adminSupabase
-    .from('users')
+    .from('client_profiles')
     .select('*', { count: 'exact', head: true })
-    .eq('role_id', 'client')
     .gte('created_at', fromDate)
     .lte('created_at', toDate);
 
   // Professionals
   const { count: totalProfessionals } = await adminSupabase
-    .from('users')
-    .select('*', { count: 'exact', head: true })
-    .eq('role_id', 'professional');
+    .from('professional_profiles')
+    .select('*', { count: 'exact', head: true });
   const { count: newProfessionals } = await adminSupabase
-    .from('users')
+    .from('professional_profiles')
     .select('*', { count: 'exact', head: true })
-    .eq('role_id', 'professional')
     .gte('created_at', fromDate)
     .lte('created_at', toDate);
 
   // Messages (chats)
   const { count: totalChats } = await adminSupabase
+    .from('conversations')
+    .select('*', { count: 'exact', head: true });
+  const { count: newChats } = await adminSupabase
     .from('conversations')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', fromDate)
@@ -76,49 +101,51 @@ export async function getAdminDashboardData({ startDate, endDate }: { startDate?
   // Refunds
   const { count: totalRefunds } = await adminSupabase
     .from('refunds')
+    .select('*', { count: 'exact', head: true });
+  const { count: newRefunds } = await adminSupabase
+    .from('refunds')
     .select('*', { count: 'exact', head: true })
     .gte('created_at', fromDate)
     .lte('created_at', toDate);
 
   return {
     totalBookings: totalBookings || 0,
+    newBookings: newBookings || 0,
     bookingsPerDay,
     totalClients: totalClients || 0,
     newClients: newClients || 0,
     totalProfessionals: totalProfessionals || 0,
     newProfessionals: newProfessionals || 0,
     totalChats: totalChats || 0,
+    newChats: newChats || 0,
     totalRefunds: totalRefunds || 0,
+    newRefunds: newRefunds || 0,
   };
 }
 
-export async function AdminDashboardPageLayout({ children }: AdminDashboardPageLayoutProps) {
+export async function AdminDashboardPageLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
-  let user;
-  try {
-    user = await requireAdminUser(supabase);
-  } catch {
-    return redirect('/');
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/');
+  const { data: isAdmin } = await supabase.rpc('is_admin', { user_uuid: user.id });
+  if (!isAdmin) redirect('/');
 
-  // Remove all date range logic from here. Only fetch static/user data.
-  const dashboardData = {
-    totalBookings: 0,
-    bookingsPerDay: {},
-    totalClients: 0,
-    newClients: 0,
-    totalProfessionals: 0,
-    newProfessionals: 0,
-    totalChats: 0,
-    totalRefunds: 0,
-  };
-  // Optionally fetch static data here if needed
+  // Get date range from headers (for initial dashboard data fetch)
+  const rawHeaders = await headers();
+  const xNextUrl = rawHeaders.get('x-next-url');
+  const search = xNextUrl?.split('?')[1] || '';
+  const searchParams = new URLSearchParams(search);
+  const start: string | undefined = searchParams.get('start') || undefined;
+  const end: string | undefined = searchParams.get('end') || undefined;
+
+  // Fetch dashboard data for the current date range
+  const dashboardData = await getAdminDashboardData({ startDate: start, endDate: end });
 
   return (
-    <div className="w-full mx-auto">
+    <DateRangeContextProvider initialStart={start} initialEnd={end}>
       <AdminDashboardPageLayoutClient user={user} dashboardData={dashboardData}>
         {children}
       </AdminDashboardPageLayoutClient>
-    </div>
+    </DateRangeContextProvider>
   );
 } 

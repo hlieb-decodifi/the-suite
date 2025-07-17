@@ -7,16 +7,21 @@ import { Typography } from '@/components/ui/typography';
 
 type MessagesWidgetProps = {
   totalChats: number
+  newChats: number
+  dateRangeLabel: string
 }
 
-export function MessagesWidget({ totalChats }: MessagesWidgetProps) {
+export function MessagesWidget({ totalChats, newChats, dateRangeLabel }: MessagesWidgetProps) {
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <Typography variant="h4">Messages</Typography>
       </CardHeader>
       <CardContent>
         <Typography>Total chats: {totalChats}</Typography>
+        <Typography>
+          New chats <span className="text-yellow-500">{dateRangeLabel}</span>: {newChats}
+        </Typography>
       </CardContent>
     </Card>
   )
