@@ -34,6 +34,7 @@ create table users (
   first_name text not null,
   last_name text not null,
   role_id uuid references roles not null,
+  cookie_consent boolean not null default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

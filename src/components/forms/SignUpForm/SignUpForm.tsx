@@ -26,6 +26,7 @@ export function SignUpForm({
   } = useSignUpForm({
     onSubmit,
     redirectToDashboard,
+    redirectTo
   });
 
   return (

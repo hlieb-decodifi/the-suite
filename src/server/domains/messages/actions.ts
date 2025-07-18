@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 /**
  * Get conversations for the current user
  */
-export async function getConversations(): Promise<{
+export async function getConversations(conversationId?: string): Promise<{
   success: boolean;
   conversations?: ConversationWithUser[];
   error?: string;
@@ -43,7 +43,7 @@ export async function getConversations(): Promise<{
 
     // Transform conversations to include other user details
     const conversationsWithUsers = await Promise.all(
-      conversations.map(async (conversation) => {
+      (conversations || []).map(async (conversation) => {
         // Get the other user's details
         const otherUserId = isProfessional ? conversation.client_id : conversation.professional_id;
         const { data: otherUser, error: userError } = await supabase
@@ -118,11 +118,11 @@ export async function getConversations(): Promise<{
       })
     );
 
-    // Filter out null values and conversations without messages
+    // Filter out null values, and keep conversations that have messages OR match the provided conversationId.
     const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
-      conv !== null && conv.last_message !== undefined
+      conv !== null && (conv.last_message !== undefined || conv.id === conversationId)
     );
-    
+
     return { success: true, conversations: validConversations };
   } catch (error) {
     console.error('Error in getConversations:', error);

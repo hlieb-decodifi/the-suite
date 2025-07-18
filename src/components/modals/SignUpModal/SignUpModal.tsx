@@ -11,6 +11,7 @@ type SignUpModalProps = {
   onSignInClick?: () => void;
   onSuccess?: () => void;
   redirectToDashboard?: boolean;
+  redirectTo?: string;
 };
 
 export function SignUpModal({
@@ -19,6 +20,7 @@ export function SignUpModal({
   onSignInClick,
   onSuccess,
   redirectToDashboard = false,
+  redirectTo = '/profile',
 }: SignUpModalProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const router = useRouter();
@@ -53,8 +55,6 @@ export function SignUpModal({
       onSignInClick();
     }
   };
-
-  const redirectTo = redirectToDashboard ? '/profile' : '/profile';
 
   return (
     <Modal

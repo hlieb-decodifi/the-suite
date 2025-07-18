@@ -49,7 +49,7 @@ async function userExistsByEmail(email: string): Promise<{ exists: boolean; erro
 /**
  * Server action for user signup
  */
-export async function signUpAction(data: SignUpFormValues) {
+export async function signUpAction(data: SignUpFormValues, redirectTo?: string) {
   const supabase = await createClient();
 
   // Duplicate email check
@@ -83,7 +83,7 @@ export async function signUpAction(data: SignUpFormValues) {
           last_name: data.lastName,
           role: data.userType,
         },
-        emailRedirectTo: `${getURL()}/auth/callback`,
+        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(redirectTo || '/profile')}`,
       },
     });
 
@@ -207,9 +207,14 @@ export async function resetPasswordAction(email: string) {
 /**
  * Server action to update password during reset flow
  */
-export async function updatePasswordAction(newPassword: string) {
+export async function updatePasswordAction(newPassword: string, accessToken?: string | null, refreshToken?: string | null) {
   const supabase = await createClient();
-  
+  if (accessToken && refreshToken) {
+    await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+  }
   try {
     const { error } = await supabase.auth.updateUser({
       password: newPassword,

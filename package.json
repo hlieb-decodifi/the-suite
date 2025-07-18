@@ -104,6 +104,7 @@
     "eslint": "^9",
     "eslint-config-next": "^15",
     "eslint-config-prettier": "^10",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^13",
     "prettier": "^3",
     "tailwindcss-animate": "^1.0.7",
