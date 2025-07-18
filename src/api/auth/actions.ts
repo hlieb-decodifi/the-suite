@@ -5,6 +5,7 @@ import { SignInFormValues } from '@/components/forms/SignInForm/schema';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
@@ -22,11 +23,49 @@ const getURL = () => {
   return url
 }
 
+// Helper function to check if a user exists by email (case-insensitive)
+async function userExistsByEmail(email: string): Promise<{ exists: boolean; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('userExistsByEmail: Missing Supabase URL or Service Role Key.');
+    return { exists: false, error: 'Server configuration error' };
+  }
+
+  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+  // Use the user_exists RPC function for efficient lookup
+  const { data, error } = await adminSupabase.rpc('user_exists', { p_email: email });
+
+  if (error) {
+    console.error('userExistsByEmail: RPC error while checking for user:', error);
+    return { exists: false, error: 'Database error while checking for user' };
+  }
+
+  return { exists: data };
+}
+
 /**
  * Server action for user signup
  */
 export async function signUpAction(data: SignUpFormValues, redirectTo?: string) {
   const supabase = await createClient();
+
+  // Duplicate email check
+  const { exists, error: userCheckError } = await userExistsByEmail(data.email);
+  if (userCheckError) {
+    return {
+      success: false,
+      error: 'Error checking for existing user. Please try again later.',
+    };
+  }
+  if (exists) {
+    return {
+      success: false,
+      error: 'An account with this email already exists. Please sign in or use a different email.',
+    };
+  }
   
   try {
     // Ensure userType is set
