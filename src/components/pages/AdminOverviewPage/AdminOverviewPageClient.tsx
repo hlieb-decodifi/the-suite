@@ -1,7 +1,7 @@
 // Client component for admin dashboard overview tab
 "use client";
 import { useDateRange } from '@/components/layouts/AdminDashboardPageLayout/DateRangeContextProvider';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getAdminDashboardData } from '@/components/layouts/AdminDashboardPageLayout/AdminDashboardPageLayout';
 import { AdminOverviewTemplate } from '@/components/templates/AdminOverviewTemplate';
 import {
@@ -33,6 +33,12 @@ export default function AdminOverviewPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Store the initial date range
+  const initialRange = useRef<{ start?: string; end?: string }>(
+    Object.assign({}, start ? { start } : {}, end ? { end } : {})
+  );
+  const isInitialMount = useRef(true);
+
   // Compute date range label in the same format as the DateRangePicker
   function formatDatePicker(dateStr?: string) {
     if (!dateStr) return '';
@@ -47,6 +53,17 @@ export default function AdminOverviewPageClient() {
   else dateRangeLabel = '(last 30 days)';
 
   useEffect(() => {
+    // Skip fetch on initial mount if date range matches initial values
+    if (
+      isInitialMount.current &&
+      initialRange.current.start === start &&
+      initialRange.current.end === end
+    ) {
+      isInitialMount.current = false;
+      setLoading(false);
+      return;
+    }
+    isInitialMount.current = false;
     setLoading(true);
     setError(null);
     getAdminDashboardData({ startDate: start, endDate: end })
@@ -60,25 +77,43 @@ export default function AdminOverviewPageClient() {
   if (!dashboardData) return null;
 
   return (
-    <AdminOverviewTemplate>
-      <BookingsActivityWidget
-        totalBookings={dashboardData.totalBookings}
-        newBookings={dashboardData.newBookings}
-        bookingsPerDay={dashboardData.bookingsPerDay}
-        dateRangeLabel={dateRangeLabel}
-      />
-      <ClientsWidget
-        totalClients={dashboardData.totalClients}
-        newClients={dashboardData.newClients}
-        dateRangeLabel={dateRangeLabel}
-      />
-      <ProfessionalsWidget
-        totalProfessionals={dashboardData.totalProfessionals}
-        newProfessionals={dashboardData.newProfessionals}
-        dateRangeLabel={dateRangeLabel}
-      />
-      <MessagesWidget totalChats={dashboardData.totalChats} newChats={dashboardData.newChats} dateRangeLabel={dateRangeLabel} />
-      <RefundsWidget totalRefunds={dashboardData.totalRefunds} newRefunds={dashboardData.newRefunds} dateRangeLabel={dateRangeLabel} />
-    </AdminOverviewTemplate>
+    <AdminOverviewTemplate
+      bookingsActivity={
+        <BookingsActivityWidget
+          totalBookings={dashboardData.totalBookings}
+          newBookings={dashboardData.newBookings}
+          bookingsPerDay={dashboardData.bookingsPerDay}
+          dateRangeLabel={dateRangeLabel}
+        />
+      }
+      clients={
+        <ClientsWidget
+          totalClients={dashboardData.totalClients}
+          newClients={dashboardData.newClients}
+          dateRangeLabel={dateRangeLabel}
+        />
+      }
+      professionals={
+        <ProfessionalsWidget
+          totalProfessionals={dashboardData.totalProfessionals}
+          newProfessionals={dashboardData.newProfessionals}
+          dateRangeLabel={dateRangeLabel}
+        />
+      }
+      messages={
+        <MessagesWidget
+          totalChats={dashboardData.totalChats}
+          newChats={dashboardData.newChats}
+          dateRangeLabel={dateRangeLabel}
+        />
+      }
+      refunds={
+        <RefundsWidget
+          totalRefunds={dashboardData.totalRefunds}
+          newRefunds={dashboardData.newRefunds}
+          dateRangeLabel={dateRangeLabel}
+        />
+      }
+    />
   );
 } 

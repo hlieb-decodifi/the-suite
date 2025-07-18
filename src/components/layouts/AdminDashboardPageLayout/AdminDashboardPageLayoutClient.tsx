@@ -37,7 +37,6 @@ export type AdminDashboardPageLayoutClientProps = {
 };
 
 export function AdminDashboardPageLayoutClient({ user, children, dashboardData }: AdminDashboardPageLayoutClientProps) {
-  console.log('AdminDashboardPageLayoutClient (client) rendered');
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { start, end, setDateRange } = useDateRange();
