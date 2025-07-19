@@ -81,12 +81,14 @@ export type DetailedAppointmentType = {
         id: string;
         first_name: string | null;
         last_name: string | null;
+        avatar_url?: string | null;
       };
     } | null;
     clients: {
       id: string;
       first_name: string | null;
       last_name: string | null;
+      avatar_url?: string | null;
       client_profiles: Array<{
         id: string;
         phone_number?: string | null;
@@ -224,13 +226,15 @@ export async function getAppointmentById(
             users(
               id,
               first_name,
-              last_name
+              last_name,
+              profile_photos:profile_photos(url)
             )
           ),
           clients:users!client_id(
             id,
             first_name,
             last_name,
+            profile_photos:profile_photos(url),
             client_profiles(
               id,
               phone_number,
@@ -339,6 +343,9 @@ export async function getAppointmentById(
                 first_name:
                   data.bookings.professionals.users.first_name ?? null,
                 last_name: data.bookings.professionals.users.last_name ?? null,
+                avatar_url: Array.isArray(data.bookings.professionals.users.profile_photos)
+                  ? (data.bookings.professionals.users.profile_photos[0]?.url ?? null)
+                  : (data.bookings.professionals.users.profile_photos?.url ?? null),
               },
             }
           : null,
@@ -346,6 +353,9 @@ export async function getAppointmentById(
           ...data.bookings.clients,
           first_name: data.bookings.clients.first_name ?? null,
           last_name: data.bookings.clients.last_name ?? null,
+          avatar_url: Array.isArray(data.bookings.clients.profile_photos)
+            ? (data.bookings.clients.profile_photos[0]?.url ?? null)
+            : (data.bookings.clients.profile_photos?.url ?? null),
           client_profiles: Array.isArray(data.bookings.clients.client_profiles)
             ? data.bookings.clients.client_profiles.map((profile) => ({
                 ...profile,

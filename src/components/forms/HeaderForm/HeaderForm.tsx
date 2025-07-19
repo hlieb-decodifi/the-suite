@@ -11,6 +11,7 @@ import { useHeaderForm } from './useHeaderForm';
 import { HeaderFormValues } from './schema';
 import { Typography } from '@/components/ui/typography';
 import { forwardRef, useEffect } from 'react';
+import { UseFormReturn } from 'react-hook-form';
 
 export type HeaderFormProps = {
   onSubmitSuccess: (data: HeaderFormValues) => Promise<void> | void;
@@ -35,10 +36,23 @@ export const HeaderForm = forwardRef<HTMLFormElement, HeaderFormProps>(
       form,
       isPending,
       onSubmit: handleFormSubmit,
+    }: {
+      form: UseFormReturn<HeaderFormValues>;
+      isPending: boolean;
+      onSubmit: (data: HeaderFormValues) => Promise<void>;
     } = useHeaderForm({
       onSubmit: onSubmitSuccess,
       defaultValues,
     });
+
+    // Wrapper to normalize phoneNumber before calling onSubmitSuccess
+    const handlePhoneNumberSubmit = async (data: HeaderFormValues) => {
+      let phoneNumber = data.phoneNumber;
+      if (phoneNumber && /^\+\d{1,4}$/.test(phoneNumber.trim())) {
+        phoneNumber = undefined;
+      }
+      await handleFormSubmit({ ...data, phoneNumber });
+    };
 
     // Notify parent of pending state changes
     useEffect(() => {
@@ -51,7 +65,7 @@ export const HeaderForm = forwardRef<HTMLFormElement, HeaderFormProps>(
       <Form {...form}>
         <form
           ref={ref}
-          onSubmit={form.handleSubmit(handleFormSubmit)}
+          onSubmit={form.handleSubmit(handlePhoneNumberSubmit)}
           noValidate
           className="space-y-5"
         >
