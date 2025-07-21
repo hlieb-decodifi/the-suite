@@ -1,4 +1,8 @@
 -- supabase/seed.sql
+DELETE FROM public.roles;
+
+insert into roles (name) values ('client'), ('professional'), ('admin');
+
 
 -- Clear existing data from payment_methods to avoid duplicates if script is run multiple times
 -- Be cautious with DELETE in production environments!
