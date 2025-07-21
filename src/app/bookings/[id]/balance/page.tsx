@@ -142,14 +142,8 @@ export default async function BalancePaymentPage({
               </Typography>
               <Typography className="text-muted-foreground text-lg">
                 {isCashPayment
-                  ? `Leave a review and add a tip for your appointment with ${
-                      professional.profession ||
-                      `${professional.users.first_name} ${professional.users.last_name}`
-                    }`
-                  : `Finish paying for your appointment with ${
-                      professional.profession ||
-                      `${professional.users.first_name} ${professional.users.last_name}`
-                    }`}
+                  ? `Leave a review and add a tip for your appointment with ${professional.users.first_name} ${professional.users.last_name}`
+                  : `Finish paying for your appointment with ${professional.users.first_name} ${professional.users.last_name}`}
               </Typography>
             </div>
           </div>

@@ -16,6 +16,8 @@ export default function ResetPasswordPage() {
   const [isVerifying, setIsVerifying] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -37,6 +39,9 @@ export default function ResetPasswordPage() {
 
         // Get user email
         setUserEmail(session.user.email || null);
+        // Get access and refresh tokens
+        setAccessToken(session.access_token || null);
+        setRefreshToken(session.refresh_token || null);
       } catch (err) {
         console.error('Error verifying password reset token:', err);
         setError('Failed to verify password reset link');
@@ -48,11 +53,19 @@ export default function ResetPasswordPage() {
     verifyPasswordResetToken();
   }, []);
 
-  const handleSubmit = async (data: ResetPasswordFormValues) => {
+  const handleSubmit = async (
+    data: ResetPasswordFormValues,
+    at?: string | null,
+    rt?: string | null
+  ) => {
     setIsLoading(true);
 
     try {
-      const result = await updatePasswordAction(data.password);
+      const result = await updatePasswordAction(
+        data.password,
+        at ?? accessToken,
+        rt ?? refreshToken
+      );
 
       if (result.success) {
         toast({

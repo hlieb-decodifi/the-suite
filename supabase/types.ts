@@ -484,6 +484,27 @@ export type Database = {
           },
         ]
       }
+      dummy_test_table: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          value?: number | null
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           created_at: string
@@ -1268,6 +1289,7 @@ export type Database = {
       }
       users: {
         Row: {
+          cookie_consent: boolean
           created_at: string
           first_name: string
           id: string
@@ -1276,6 +1298,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cookie_consent?: boolean
           created_at?: string
           first_name: string
           id: string
@@ -1284,6 +1307,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cookie_consent?: boolean
           created_at?: string
           first_name?: string
           id?: string
@@ -1422,6 +1446,10 @@ export type Database = {
       }
       update_service_limit: {
         Args: { prof_profile_id: string; new_limit: number }
+        Returns: boolean
+      }
+      user_exists: {
+        Args: { p_email: string }
         Returns: boolean
       }
     }

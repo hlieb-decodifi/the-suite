@@ -91,6 +91,11 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
       return null;
     }
 
+    // Check if professional profile is subscribed
+    if (!professionalProfile?.is_subscribed) {
+      return null;
+    }
+
     // Handle profile_photo structure safely - it might not exist
     let profilePhotoUrl: string | undefined = undefined;
     if (user?.profile_photo) {

@@ -5,7 +5,8 @@ import {
   getProfileFromDb,
   toggleProfilePublishStatusInDb,
   updateProfileHeaderInDb,
-  updateSubscriptionStatusInDb
+  updateSubscriptionStatusInDb,
+  setCookieConsentInDb
 } from './db';
 import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
 
@@ -70,6 +71,19 @@ export async function updateSubscriptionStatusAction(userId: string) {
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to update subscription'
+    };
+  }
+}
+
+export async function setCookieConsentAction(userId: string, consent: boolean) {
+  try {
+    await setCookieConsentInDb(userId, consent);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating cookie consent:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update cookie consent',
     };
   }
 } 

@@ -1,9 +1,7 @@
 import { LegalDocumentPage } from '@/components/pages/LegalDocumentPage/LegalDocumentPage';
 import type { Metadata } from 'next';
 
-// Use static generation with revalidation instead of dynamic rendering
-export const dynamic = 'force-static';
-export const revalidate = 3600; // Revalidate every hour
+// Use dynamic rendering instead of static generation
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',

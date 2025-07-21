@@ -5,16 +5,17 @@ import { SignInFormValues } from '@/components/forms/SignInForm/schema';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
+    process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
     process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
-    process?.env?.NEXT_PUBLIC_VERCEL_URL ?? // Automatically set by Vercel.
     'http://localhost:3000/'
   // Make sure to include `https://` when not localhost.
   console.log('url', url);
   console.log('process.env.NEXT_PUBLIC_BASE_URL', process.env.NEXT_PUBLIC_BASE_URL);
-  console.log('process.env.NEXT_PUBLIC_VERCEL_URL', process.env.NEXT_PUBLIC_VERCEL_URL);
+  console.log('process.env.VERCEL_URL', process.env.NEXT_PUBLIC_VERCEL_URL);
   console.log('process.env.NEXT_PUBLIC_SITE_URL', process.env.NEXT_PUBLIC_SITE_URL);
   url = url.startsWith('http') ? url : `https://${url}`
   // Make sure to include a trailing `/`.
@@ -22,11 +23,49 @@ const getURL = () => {
   return url
 }
 
+// Helper function to check if a user exists by email (case-insensitive)
+async function userExistsByEmail(email: string): Promise<{ exists: boolean; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('userExistsByEmail: Missing Supabase URL or Service Role Key.');
+    return { exists: false, error: 'Server configuration error' };
+  }
+
+  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+  // Use the user_exists RPC function for efficient lookup
+  const { data, error } = await adminSupabase.rpc('user_exists', { p_email: email });
+
+  if (error) {
+    console.error('userExistsByEmail: RPC error while checking for user:', error);
+    return { exists: false, error: 'Database error while checking for user' };
+  }
+
+  return { exists: data };
+}
+
 /**
  * Server action for user signup
  */
-export async function signUpAction(data: SignUpFormValues) {
+export async function signUpAction(data: SignUpFormValues, redirectTo?: string) {
   const supabase = await createClient();
+
+  // Duplicate email check
+  const { exists, error: userCheckError } = await userExistsByEmail(data.email);
+  if (userCheckError) {
+    return {
+      success: false,
+      error: 'Error checking for existing user. Please try again later.',
+    };
+  }
+  if (exists) {
+    return {
+      success: false,
+      error: 'An account with this email already exists. Please sign in or use a different email.',
+    };
+  }
   
   try {
     // Ensure userType is set
@@ -44,7 +83,7 @@ export async function signUpAction(data: SignUpFormValues) {
           last_name: data.lastName,
           role: data.userType,
         },
-        emailRedirectTo: `${getURL()}/auth/callback`,
+        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(redirectTo || '/profile')}`,
       },
     });
 
@@ -168,9 +207,14 @@ export async function resetPasswordAction(email: string) {
 /**
  * Server action to update password during reset flow
  */
-export async function updatePasswordAction(newPassword: string) {
+export async function updatePasswordAction(newPassword: string, accessToken?: string | null, refreshToken?: string | null) {
   const supabase = await createClient();
-  
+  if (accessToken && refreshToken) {
+    await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+  }
   try {
     const { error } = await supabase.auth.updateUser({
       password: newPassword,

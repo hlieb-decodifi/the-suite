@@ -34,6 +34,7 @@ create table users (
   first_name text not null,
   last_name text not null,
   role_id uuid references roles not null,
+  cookie_consent boolean not null default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -2528,6 +2529,18 @@ create policy "Admins can manage email templates"
 -- Add trigger for updated_at
 create trigger handle_updated_at before update on email_templates
   for each row execute procedure moddatetime (updated_at);
+
+-- Efficiently check if a user exists by email in auth.users
+create or replace function public.user_exists(p_email text)
+returns boolean
+language plpgsql
+security definer
+as $$
+begin
+  -- Check for email existence in the auth.users table
+  return exists (select 1 from auth.users where lower(email) = lower(p_email));
+end;
+$$;
 
 
 
