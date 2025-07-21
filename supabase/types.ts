@@ -484,6 +484,27 @@ export type Database = {
           },
         ]
       }
+      dummy_test_table: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          value?: number | null
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           created_at: string
