@@ -3,6 +3,8 @@ import { getServices } from './actions';
 import { ClientServicesContainer } from './components/ClientServicesContainer';
 import { ServicesTemplateHeader } from './components/ServicesTemplateHeader';
 import { SortOption } from './types';
+import { createClient } from '@/lib/supabase/server';
+import { AuthStatus } from './types';
 
 type SearchParams = {
   page?: string;
@@ -34,6 +36,9 @@ export async function ServicesTemplate({
     location,
   );
 
+  // Get auth status from server
+  const authStatus = await getAuthStatus();
+
   return (
     <div className="max-w-7xl w-full mx-auto">
       <div className="py-8 space-y-8">
@@ -52,9 +57,35 @@ export async function ServicesTemplate({
             initialSearchTerm={searchTerm}
             initialLocation={location}
             initialSortBy={sortBy}
+            authStatus={authStatus}
           />
         </Suspense>
       </div>
     </div>
   );
+}
+
+// Get authentication status from server
+async function getAuthStatus(): Promise<AuthStatus> {
+  const supabase = await createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    return {
+      isAuthenticated: false,
+      isLoading: false,
+      isClient: false,
+    };
+  }
+
+  // Use the RPC function is_client to determine if the user is a client
+  const { data: isClient } = await supabase.rpc('is_client', {
+    user_uuid: session.user.id
+  });
+
+  return {
+    isAuthenticated: true,
+    isLoading: false,
+    isClient: !!isClient, // Convert to boolean with double negation
+  };
 }
