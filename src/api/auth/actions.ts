@@ -132,12 +132,18 @@ export async function signInAction(data: SignInFormValues) {
       };
     }
 
-    // Return success with user and session data that will be used to update the auth store
-    revalidatePath('/');
+    // Check if user is admin
+    let isAdmin = false;
+    if (authData.user) {
+      const { data: adminResult } = await supabase.rpc('is_admin', { user_uuid: authData.user.id });
+      isAdmin = !!adminResult;
+    }
+
     return {
       success: true,
       user: authData.user,
       session: authData.session,
+      isAdmin, // <--- add this
     };
   } catch (error) {
     console.error('Authentication error:', error);

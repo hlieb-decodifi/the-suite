@@ -1,0 +1,5 @@
+export * from './BookingsActivityWidget/BookingsActivityWidget'
+export * from './ProfessionalsWidget/ProfessionalsWidget'
+export * from './ClientsWidget/ClientsWidget'
+export * from './MessagesWidget/MessagesWidget'
+export * from './RefundsWidget/RefundsWidget' 

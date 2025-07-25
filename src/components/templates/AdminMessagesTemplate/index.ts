@@ -1,0 +1,1 @@
+export { AdminMessagesTemplate } from './AdminMessagesTemplate'; 
