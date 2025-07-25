@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, RefObject } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
 import { 
   ServicesFilters, 
   PaginationInfo, 
   ServiceListItem, 
-  AuthStatus,
   SortOption
 } from '../../types';
 import {
@@ -47,28 +45,6 @@ function smoothScrollToContainer(containerRef: RefObject<HTMLDivElement | null>,
       behavior: 'smooth',
     });
   }
-}
-
-/**
- * Hook to manage authentication status for the component
- */
-export function useAuthStatus(): AuthStatus {
-  const { isAuthenticated, isLoading, user } = useAuthStore();
-  const [authStatus, setAuthStatus] = useState<AuthStatus>({
-    isAuthenticated: false,
-    isLoading: true,
-    isClient: false,
-  });
-
-  useEffect(() => {
-    setAuthStatus({
-      isAuthenticated,
-      isLoading,
-      isClient: isAuthenticated && user?.user_metadata?.role === 'client',
-    });
-  }, [isAuthenticated, isLoading, user]);
-
-  return authStatus;
 }
 
 /**

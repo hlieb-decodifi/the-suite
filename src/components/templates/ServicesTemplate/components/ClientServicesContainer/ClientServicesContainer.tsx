@@ -13,7 +13,6 @@ import {
 import { ServicesTemplateListSection } from '../ServicesTemplateListSection';
 import { FiltersSection } from './FiltersSection';
 import {
-  useAuthStatus,
   useFiltersHandler,
   usePageChangeHandler,
   useServicesState,
@@ -27,6 +26,7 @@ type ClientServicesContainerProps = {
   initialSearchTerm?: string;
   initialLocation?: string;
   initialSortBy?: SortOption;
+  authStatus: AuthStatus;
 };
 
 // Helper function to handle smooth scrolling
@@ -181,9 +181,9 @@ export function ClientServicesContainer({
   initialSearchTerm = '',
   initialLocation = '',
   initialSortBy = 'name-asc',
+  authStatus,
 }: ClientServicesContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const authStatus = useAuthStatus();
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const { resetSearch } = useSearch();
 
