@@ -9,8 +9,8 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
-    process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
     process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
+    process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
     'http://localhost:3000/'
   // Make sure to include `https://` when not localhost.
   console.log('url', url);
