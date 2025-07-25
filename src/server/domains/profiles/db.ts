@@ -11,6 +11,7 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
       id,
       first_name,
       last_name,
+      cookie_consent,
       professional_profiles (
         description,
         profession,
@@ -42,6 +43,7 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
     photoUrl: data.profile_photos?.url ?? null,
     isPublished: data.professional_profiles?.is_published ?? null,
     isSubscribed: false, // Mock value - would be determined by subscription status in a real app
+    cookieConsent: data.cookie_consent ?? false,
   };
 }
 
@@ -102,4 +104,13 @@ export async function updateSubscriptionStatusInDb(userId: string): Promise<void
   // This would be implemented with actual subscription logic
   // For now, we'll just simulate a successful operation
   console.log(`Subscription updated for user ${userId}`);
+}
+
+export async function setCookieConsentInDb(userId: string, consent: boolean): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('users')
+    .update({ cookie_consent: consent, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) throw new Error(`Failed to update cookie consent: ${error.message}`);
 } 

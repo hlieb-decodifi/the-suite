@@ -75,6 +75,17 @@ export async function ProfileServicesPage({
     redirect('/');
   }
 
+  // Fetch isBookable (professional is subscribed)
+  let isBookable = false;
+  const { data: profileData } = await supabase
+    .from('professional_profiles')
+    .select('is_subscribed')
+    .eq('user_id', targetUserId)
+    .single();
+  if (profileData && profileData.is_subscribed === true) {
+    isBookable = true;
+  }
+
   // Extract search parameters
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page =
@@ -112,6 +123,7 @@ export async function ProfileServicesPage({
       initialSearch={search}
       isEditable={isEditable}
       serviceLimitInfo={serviceLimitInfo}
+      isBookable={isBookable}
     />
   );
 }

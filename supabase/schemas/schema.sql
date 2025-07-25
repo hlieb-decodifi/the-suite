@@ -34,6 +34,7 @@ create table users (
   first_name text not null,
   last_name text not null,
   role_id uuid references roles not null,
+  cookie_consent boolean not null default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -979,7 +980,7 @@ create table appointments (
   booking_id uuid references bookings not null,
   start_time timestamptz not null,
   end_time timestamptz not null,
-  status text not null check (status in ('active', 'completed', 'cancelled', 'ongoing')),
+  status text not null check (status in ('completed', 'cancelled', 'ongoing')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -1015,8 +1016,8 @@ begin
     return 'completed';
   end if;
 
-  -- If we're between start and end time, it's ongoing
-  return 'ongoing';
+  -- If we're between start and end time, it's still considered upcoming
+  return 'upcoming';
 end;
 $$ language plpgsql;
 
@@ -1351,81 +1352,81 @@ create publication supabase_realtime for table
 * STORAGE BUCKETS
 * Define storage buckets and their policies
 */
--- Create profile-photos bucket
-insert into storage.buckets (id, name, public)
-  values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
+-- -- Create profile-photos bucket
+-- insert into storage.buckets (id, name, public)
+--   values ('profile-photos', 'Profile Photos', true); -- TODO: change to false
 
--- Create portfolio-photos bucket (not public)
-insert into storage.buckets (id, name, public)
-  values ('portfolio-photos', 'Portfolio Photos', true);
+-- -- Create portfolio-photos bucket (not public)
+-- insert into storage.buckets (id, name, public)
+--   values ('portfolio-photos', 'Portfolio Photos', true);
 
--- Policies for profile-photos bucket
-create policy "Allow authenticated uploads to profile-photos"
-  on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- -- Policies for profile-photos bucket
+-- create policy "Allow authenticated uploads to profile-photos"
+--   on storage.objects for insert to authenticated
+--   with check (
+--     bucket_id = 'profile-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow authenticated users to modify their own profile photos"
-  on storage.objects for update to authenticated
-  with check (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- create policy "Allow authenticated users to modify their own profile photos"
+--   on storage.objects for update to authenticated
+--   with check (
+--     bucket_id = 'profile-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow authenticated users to delete their own profile photos"
-  on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'profile-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- create policy "Allow authenticated users to delete their own profile photos"
+--   on storage.objects for delete to authenticated
+--   using (
+--     bucket_id = 'profile-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow authenticated users to see all profile photos"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'profile-photos'
-  );
+-- create policy "Allow authenticated users to see all profile photos"
+--   on storage.objects for select to authenticated
+--   using (
+--     bucket_id = 'profile-photos'
+--   );
 
--- Policies for portfolio-photos bucket
-create policy "Allow authenticated uploads to portfolio-photos"
-  on storage.objects for insert to authenticated
-  with check (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- -- Policies for portfolio-photos bucket
+-- create policy "Allow authenticated uploads to portfolio-photos"
+--   on storage.objects for insert to authenticated
+--   with check (
+--     bucket_id = 'portfolio-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow authenticated users to modify their own portfolio photos"
-  on storage.objects for update to authenticated
-  with check (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- create policy "Allow authenticated users to modify their own portfolio photos"
+--   on storage.objects for update to authenticated
+--   with check (
+--     bucket_id = 'portfolio-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow authenticated users to delete their own portfolio photos"
-  on storage.objects for delete to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- create policy "Allow authenticated users to delete their own portfolio photos"
+--   on storage.objects for delete to authenticated
+--   using (
+--     bucket_id = 'portfolio-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow users to view their own portfolio photos"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- create policy "Allow users to view their own portfolio photos"
+--   on storage.objects for select to authenticated
+--   using (
+--     bucket_id = 'portfolio-photos' and
+--     (storage.foldername(name))[1] = auth.uid()::text
+--   );
 
-create policy "Allow viewing portfolio photos of published professionals"
-  on storage.objects for select to authenticated
-  using (
-    bucket_id = 'portfolio-photos' and
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.user_id::text = (storage.foldername(name))[1]
-      and professional_profiles.is_published = true
-    )
-  );
+-- create policy "Allow viewing portfolio photos of published professionals"
+--   on storage.objects for select to authenticated
+--   using (
+--     bucket_id = 'portfolio-photos' and
+--     exists (
+--       select 1 from professional_profiles
+--       where professional_profiles.user_id::text = (storage.foldername(name))[1]
+--       and professional_profiles.is_published = true
+--     )
+--   );
 
 /**
 * USER POLICIES
@@ -2529,7 +2530,18 @@ create policy "Admins can manage email templates"
 create trigger handle_updated_at before update on email_templates
   for each row execute procedure moddatetime (updated_at);
 
--- ... existing code ...
+-- Efficiently check if a user exists by email in auth.users
+create or replace function public.user_exists(p_email text)
+returns boolean
+language plpgsql
+security definer
+as $$
+begin
+  -- Check for email existence in the auth.users table
+  return exists (select 1 from auth.users where lower(email) = lower(p_email));
+end;
+$$;
+
 create or replace function is_admin(user_uuid uuid)
 returns boolean as $$
 declare

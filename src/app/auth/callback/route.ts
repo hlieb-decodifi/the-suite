@@ -8,6 +8,7 @@ import { uploadOAuthProfilePhoto } from '@/server/domains/photos/oauth-photo-upl
  */
 export async function GET(request: Request) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  console.log(`[AUTH_CALLBACK] Received request: ${request.url}`);
   
   try {
     const url = new URL(request.url);
@@ -16,23 +17,32 @@ export async function GET(request: Request) {
     const mode = url.searchParams.get('mode') || 'signin';
     const role = url.searchParams.get('role');
     
+    console.log(`[AUTH_CALLBACK] Parsed params:`, { code, redirectTo, mode, role });
+    
     if (code) {
+      console.log(`[AUTH_CALLBACK] Code found, proceeding with exchange.`);
       const supabase = await createClient();
       
       // Try to exchange the code for a session (OAuth flow)
+      console.log(`[AUTH_CALLBACK] Attempting to exchange code for session...`);
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      
+      console.log(`[AUTH_CALLBACK] Exchange result:`, { data: !!data.session, error });
+
       if (data.session && !error) {
+        console.log(`[AUTH_CALLBACK] Session successfully exchanged. User ID: ${data.user.id}`);
         // For signin mode, check if user already exists in our database
         if (mode === 'signin') {
+          console.log(`[AUTH_CALLBACK] Mode: signin. Checking for existing user...`);
           const { data: existingUser, error: userError } = await supabase
             .from('users')
             .select('id')
             .eq('id', data.user.id)
             .single();
           
+          console.log(`[AUTH_CALLBACK] Existing user check result:`, { existingUser: !!existingUser, userError });
+          
           if (userError || !existingUser) {
-            console.log('User not found during signin, redirecting with error');
+            console.log('[AUTH_CALLBACK] User not found during signin, redirecting with error');
             // User doesn't exist, sign them out and redirect with error
             await supabase.auth.signOut();
             return NextResponse.redirect(new URL('/auth/confirmed?verified=false&error=user_not_found', baseUrl));
@@ -41,46 +51,49 @@ export async function GET(request: Request) {
         
         // For signup mode, handle role assignment and profile creation
         if (mode === 'signup' && role) {
-          console.log('Processing signup with role:', role);
+          console.log('[AUTH_CALLBACK] Mode: signup. Processing signup with role:', role);
           
           // Auto-upload profile photo from Google OAuth for any new user
           const avatarUrl = data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture;
-          console.log('Avatar URL from OAuth:', avatarUrl);
+          console.log('[AUTH_CALLBACK] Avatar URL from OAuth:', avatarUrl);
           
           if (avatarUrl) {
+            console.log('[AUTH_CALLBACK] Attempting to upload OAuth profile photo...');
             try {
               const photoResult = await uploadOAuthProfilePhoto(data.user.id, avatarUrl, 'google');
-              console.log('Photo upload result:', photoResult);
+              console.log('[AUTH_CALLBACK] Photo upload result:', photoResult);
             } catch (error) {
-              console.error('Error uploading OAuth profile photo:', error);
+              console.error('[AUTH_CALLBACK] Error uploading OAuth profile photo:', error);
             }
           }
           
           // Get the role ID for the selected role
+          console.log(`[AUTH_CALLBACK] Looking up role ID for role: ${role}`);
           const { data: roleData, error: roleError } = await supabase
             .from('roles')
             .select('id')
             .eq('name', role)
             .single();
           
-          console.log('Role lookup result:', { roleData, roleError, requestedRole: role });
+          console.log('[AUTH_CALLBACK] Role lookup result:', { roleData, roleError, requestedRole: role });
           
           if (!roleData) {
-            console.error('Invalid role specified:', role);
+            console.error('[AUTH_CALLBACK] Invalid role specified:', role);
             return NextResponse.redirect(new URL('/auth/confirmed?verified=false&error=invalid_role', baseUrl));
           }
           
           // Check current user data
+          console.log(`[AUTH_CALLBACK] Looking up current user data for user ID: ${data.user.id}`);
           const { data: currentUser, error: currentUserError } = await supabase
             .from('users')
             .select('role_id, roles!inner(name)')
             .eq('id', data.user.id)
             .single();
           
-          console.log('Current user lookup:', { currentUser, currentUserError });
+          console.log('[AUTH_CALLBACK] Current user lookup:', { currentUser, currentUserError });
           
           const currentRole = currentUser?.roles?.name;
-          console.log('Current role vs requested role:', { currentRole, requestedRole: role });
+          console.log('[AUTH_CALLBACK] Current role vs requested role:', { currentRole, requestedRole: role });
           
           // Extract names from Google metadata
           const firstName = data.user.user_metadata?.given_name || 
@@ -90,9 +103,10 @@ export async function GET(request: Request) {
                           data.user.user_metadata?.name?.split(' ').slice(1).join(' ') || 
                           '';
           
-          console.log('Extracted names:', { firstName, lastName });
+          console.log('[AUTH_CALLBACK] Extracted names:', { firstName, lastName });
           
           // Update user with the selected role and correct names
+          console.log(`[AUTH_CALLBACK] Updating user with role ID: ${roleData.id}`);
           const { error: updateError } = await supabase
             .from('users')
             .update({ 
@@ -102,57 +116,59 @@ export async function GET(request: Request) {
             })
             .eq('id', data.user.id);
           
-          console.log('User update result:', { updateError });
+          console.log('[AUTH_CALLBACK] User update result:', { updateError });
           
           if (updateError) {
-            console.error('Error updating user role:', updateError);
+            console.error('[AUTH_CALLBACK] Error updating user role:', updateError);
           }
           
           // Handle profile creation/switching
           if (currentRole !== role) {
-            console.log('Role change detected, creating profiles...');
+            console.log('[AUTH_CALLBACK] Role change detected, creating/checking profiles...');
             
             // If switching from client to professional
             if (currentRole === 'client' && role === 'professional') {
+              console.log('[AUTH_CALLBACK] Role switch: client -> professional. Creating professional profile...');
               // Create professional profile
               const { error: profError } = await supabase
                 .from('professional_profiles')
                 .insert({ user_id: data.user.id });
               
-              console.log('Professional profile creation result:', { profError });
+              console.log('[AUTH_CALLBACK] Professional profile creation result:', { profError });
               
               if (profError && !profError.message.includes('duplicate')) {
-                console.error('Error creating professional profile:', profError);
+                console.error('[AUTH_CALLBACK] Error creating professional profile:', profError);
               }
             }
             
             // If switching from professional to client  
             if (currentRole === 'professional' && role === 'client') {
+              console.log('[AUTH_CALLBACK] Role switch: professional -> client. Ensuring client profile exists...');
               // Client profile should already exist from trigger, but ensure it's there
               const { error: clientError } = await supabase
                 .from('client_profiles')
                 .insert({ user_id: data.user.id });
               
-              console.log('Client profile creation result:', { clientError });
+              console.log('[AUTH_CALLBACK] Client profile creation result:', { clientError });
               
               if (clientError && !clientError.message.includes('duplicate')) {
-                console.error('Error creating client profile:', clientError);
+                console.error('[AUTH_CALLBACK] Error creating client profile:', clientError);
               }
             }
             
             // If this is a new user (no previous role), create the appropriate profile
             if (!currentRole) {
-              console.log('New user, creating profile for role:', role);
+              console.log('[AUTH_CALLBACK] New user detected, creating profile for role:', role);
               
               if (role === 'professional') {
                 const { error: profError } = await supabase
                   .from('professional_profiles')
                   .insert({ user_id: data.user.id });
                 
-                console.log('New professional profile creation result:', { profError });
+                console.log('[AUTH_CALLBACK] New professional profile creation result:', { profError });
                 
                 if (profError && !profError.message.includes('duplicate')) {
-                  console.error('Error creating professional profile:', profError);
+                  console.error('[AUTH_CALLBACK] Error creating professional profile:', profError);
                 }
               }
               // Client profile should already exist from trigger
@@ -161,14 +177,16 @@ export async function GET(request: Request) {
         }
         
         // Add a small delay to ensure all database operations are complete
+        console.log('[AUTH_CALLBACK] Waiting for 1 second before redirect...');
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        console.log('Redirecting to:', redirectTo);
+        console.log('[AUTH_CALLBACK] Redirecting to:', redirectTo);
         
         // Create response and set session cookie explicitly
         const response = NextResponse.redirect(new URL(redirectTo, baseUrl));
         
         // Ensure session is properly set in cookies
+        console.log('[AUTH_CALLBACK] Refreshing session cookie...');
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           // Refresh the session to ensure it's properly established
@@ -182,6 +200,7 @@ export async function GET(request: Request) {
       }
       
       // If OAuth fails, try email verification
+      console.log('[AUTH_CALLBACK] OAuth exchange failed, trying email verification...');
       const { error: emailError } = await supabase.auth.verifyOtp({
         token_hash: code,
         type: 'email',
@@ -189,18 +208,19 @@ export async function GET(request: Request) {
       
       if (!emailError) {
         // Email verification successful
+        console.log('[AUTH_CALLBACK] Email verification successful.');
         return NextResponse.redirect(new URL('/auth/confirmed?verified=true', baseUrl));
       }
       
       // Both OAuth and email verification failed
-      console.error('Auth callback errors:', { oauthError: error, emailError });
+      console.error('[AUTH_CALLBACK] All auth attempts failed.', { oauthError: error, emailError });
     }
     
     // Redirect to confirmed page with error state if verification failed
-    console.log('Auth callback failed, redirecting with error');
+    console.log('[AUTH_CALLBACK] No code found or all attempts failed, redirecting with error.');
     return NextResponse.redirect(new URL('/auth/confirmed?verified=false', baseUrl));
   } catch (error) {
-    console.error('Error in auth callback:', error);
+    console.error('[AUTH_CALLBACK] Unhandled error in auth callback:', error);
     return NextResponse.redirect(new URL('/auth/confirmed?verified=false', baseUrl));
   }
 } 

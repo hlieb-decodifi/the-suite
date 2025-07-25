@@ -35,6 +35,7 @@ export type ProfileServicesPageClientProps = {
   initialSearch: string;
   isEditable?: boolean;
   serviceLimitInfo?: ServiceLimitInfo | null;
+  isBookable?: boolean;
 };
 
 // ServiceCard component
@@ -50,6 +51,7 @@ function ServiceCard({
   isAtLimit = false,
   authStatus,
   onBookNowClick,
+  isBookable = false,
 }: {
   service: ServiceUI;
   onEdit: (service: ServiceUI) => void;
@@ -66,10 +68,12 @@ function ServiceCard({
     isClient: boolean;
   };
   onBookNowClick?: (serviceId: string) => void;
+  isBookable?: boolean;
 }) {
   // Determine if the Book Now button should be shown
   const shouldShowBookButton =
     !isEditable &&
+    isBookable &&
     authStatus &&
     (!authStatus.isAuthenticated || authStatus.isClient);
 
@@ -296,6 +300,7 @@ export function ProfileServicesPageClient({
   initialServices,
   isEditable = true,
   serviceLimitInfo,
+  isBookable = false,
 }: ProfileServicesPageClientProps) {
   // State
   const [services, setServices] = useState<ServiceUI[]>(initialServices);
@@ -659,6 +664,7 @@ export function ProfileServicesPageClient({
                 isAtLimit={isAtLimit}
                 authStatus={authStatus}
                 onBookNowClick={handleBookNowClick}
+                isBookable={isBookable}
               />
             ))}
           </div>
@@ -707,6 +713,7 @@ export function ProfileServicesPageClient({
                     isAtLimit={isAtLimit}
                     authStatus={authStatus}
                     onBookNowClick={handleBookNowClick}
+                    isBookable={isBookable}
                   />
                 ))}
               </>
