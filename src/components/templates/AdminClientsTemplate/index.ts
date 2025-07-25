@@ -1,0 +1,1 @@
+export { AdminClientsTemplate } from './AdminClientsTemplate'; 

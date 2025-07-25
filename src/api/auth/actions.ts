@@ -9,13 +9,14 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
-    process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
     process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
+    process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
     'http://localhost:3000/'
   // Make sure to include `https://` when not localhost.
   console.log('url', url);
   console.log('process.env.NEXT_PUBLIC_BASE_URL', process.env.NEXT_PUBLIC_BASE_URL);
   console.log('process.env.VERCEL_URL', process.env.NEXT_PUBLIC_VERCEL_URL);
+  console.log('process.env.VERCEL_BRANCH_URL', process.env.VERCEL_BRANCH_URL);
   console.log('process.env.NEXT_PUBLIC_SITE_URL', process.env.NEXT_PUBLIC_SITE_URL);
   url = url.startsWith('http') ? url : `https://${url}`
   // Make sure to include a trailing `/`.
@@ -132,12 +133,18 @@ export async function signInAction(data: SignInFormValues) {
       };
     }
 
-    // Return success with user and session data that will be used to update the auth store
-    revalidatePath('/');
+    // Check if user is admin
+    let isAdmin = false;
+    if (authData.user) {
+      const { data: adminResult } = await supabase.rpc('is_admin', { user_uuid: authData.user.id });
+      isAdmin = !!adminResult;
+    }
+
     return {
       success: true,
       user: authData.user,
       session: authData.session,
+      isAdmin, // <--- add this
     };
   } catch (error) {
     console.error('Authentication error:', error);
