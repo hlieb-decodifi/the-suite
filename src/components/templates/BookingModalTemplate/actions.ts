@@ -170,18 +170,30 @@ export async function createBooking(
       }
       
       // Create appointment record
+      console.log('About to create appointment with status: "ongoing", permitted statuses in schema are "completed", "cancelled", "ongoing"');
+      console.log('Appointment data:', {
+        booking_id: booking.id,
+        start_time: utcDate.toISOString(),
+        end_time: utcEndDate.toISOString(),
+        status: 'ongoing' // Changed from 'active' to match allowed statuses
+      });
+      
       const { data: appointment, error: appointmentError } = await supabase
         .from('appointments')
         .insert({
           booking_id: booking.id,
           start_time: utcDate.toISOString(),
           end_time: utcEndDate.toISOString(),
-          status: 'active',
+          status: 'ongoing', // Changed to match the allowed status values in the database schema
         })
         .select('id')
         .single();
       
       if (appointmentError || !appointment) {
+        console.error('Appointment creation error:', appointmentError);
+        console.error('Error code:', appointmentError?.code);
+        console.error('Error message:', appointmentError?.message);
+        console.error('Error details:', appointmentError?.details);
         throw new Error(`Error creating appointment: ${appointmentError?.message}`);
       }
       
