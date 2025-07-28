@@ -484,33 +484,6 @@ export type Database = {
           },
         ]
       }
-      dummy_test_table: {
-        Row: {
-          active: boolean | null
-          created_at: string
-          description: string | null
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       email_templates: {
         Row: {
           created_at: string
