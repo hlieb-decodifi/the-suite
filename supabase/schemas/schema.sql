@@ -2542,5 +2542,24 @@ begin
 end;
 $$;
 
+/**
+* DUMMY TABLE
+* This is a simple test table for demonstration purposes
+*/
+create table dummy_table (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  value integer default 0,
+  is_active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table dummy_table enable row level security;
+
+-- Add RLS policy to allow anyone to view dummy table data
+create policy "Anyone can view dummy table data"
+  on dummy_table for select
+  using (true);
+
 
 
