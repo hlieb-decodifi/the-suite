@@ -2542,5 +2542,24 @@ begin
 end;
 $$;
 
+/**
+* DUMMY TEST TABLE
+* This is a test table referenced in migrations but missing from the schema
+*/
+create table if not exists dummy_test_table (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table dummy_test_table enable row level security;
+
+-- Add RLS policy to allow anyone to view dummy test data
+create policy "Anyone can view dummy test data"
+  on dummy_test_table for select
+  using (true);
+
 
 
