@@ -105,7 +105,7 @@ file_size_limit = "50MiB"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "env(SUPABASE_AUTH_SITE_URL)"
+site_url = "env(NEXT_PUBLIC_BASE_URL)"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://localhost:3000", "env(NEXT_PUBLIC_BASE_URL)/**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
@@ -316,18 +316,3 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
-
-# Branch configuration for remote branches
-[remotes.main-git]
-project_id = "hcuprvuuwilvxqgqtvuq"
-# This is your base/production branch
-
-[remotes.dave-dev]
-project_id = "awweeiwmazinxvmnxjpc" 
-# Personal development branch
-# You can add branch-specific configurations here if needed
-
-[remotes.staging]
-project_id = "vpcidoeumpmcxmymfdng"
-# Staging environment (currently acts as production)
-# You can override specific settings for staging if needed
