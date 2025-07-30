@@ -111,6 +111,7 @@ export async function ProfileServicesPage({
   if (isEditable) {
     const limitResult = await getServiceLimitInfo({ userId: targetUserId });
     if (limitResult.success && limitResult.data) {
+      console.log('limitResult', limitResult);
       serviceLimitInfo = limitResult.data;
     }
   }

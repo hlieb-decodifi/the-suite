@@ -138,6 +138,16 @@ export async function upsertService({
     
     // Validate service count for new services
     if (!serviceData.id) {
+      // Get the service limit for this professional
+      const { data: limitData, error: limitError } = await supabase
+        .rpc('get_service_limit', { prof_profile_id: profileId });
+      
+      if (limitError) {
+        console.error('Error fetching service limit:', limitError);
+        throw new Error('Could not verify service limit.');
+      }
+      
+      // Get current service count
       const { count, error: countError } = await supabase
         .from('services')
         .select('*', { count: 'exact', head: true })
@@ -147,8 +157,10 @@ export async function upsertService({
         throw new Error(countError.message);
       }
       
-      if (count !== null && count >= 10) {
-        throw new Error('You have reached the maximum limit of 10 services.');
+      const maxServices = limitData || 50; // Default to 50 if no limit found
+      
+      if (count !== null && count >= maxServices) {
+        throw new Error(`You have reached the maximum limit of ${maxServices} services.`);
       }
     }
     
