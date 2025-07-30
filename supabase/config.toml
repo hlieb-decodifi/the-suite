@@ -107,8 +107,9 @@ enabled = true
 # in emails.
 site_url = "env(SUPABASE_AUTH_SITE_URL)"
 additional_redirect_urls = [
-    "env(SUPABASE_AUTH_SITE_URL)/**",
-    "https://localhost:3000/**"
+    "https://localhost:3000/**",
+    "https://*-decodifi.vercel.app/**",
+    "https://the-suite.vercel.app/**"
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
