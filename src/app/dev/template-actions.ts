@@ -9,7 +9,7 @@ import {
   sendBookingCancellationProfessional,
   sendBookingConfirmationClient,
 } from '@/providers/brevo';
-import { TEMPLATE_IDS } from '@/providers/brevo/constants';
+import { DEFAULT_TEMPLATE_IDS } from '@/providers/brevo/constants';
 
 export type TemplateResponse = {
   success: boolean;
@@ -65,7 +65,7 @@ export async function sendTemplateTest(
     };
 
     switch (templateId) {
-      case TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT: {
+      case DEFAULT_TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT: {
         const params: BookingCancellationClientParams = {
           ...baseParams,
           client_name: 'John Doe',
@@ -75,7 +75,7 @@ export async function sendTemplateTest(
         break;
       }
 
-      case TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL: {
+      case DEFAULT_TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL: {
         const params: BookingCancellationProfessionalParams = {
           ...baseParams,
           client_name: 'John Doe',
@@ -86,7 +86,7 @@ export async function sendTemplateTest(
         break;
       }
 
-      case TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT: {
+      case DEFAULT_TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT: {
         // Example for cash payment with deposit
         const subtotal = 110.00;
         const serviceFee = 2.75;

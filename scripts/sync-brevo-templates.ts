@@ -54,6 +54,31 @@ type BrevoTemplatesResponse = {
   templates: BrevoTemplate[];
 };
 
+/**
+ * Updates the template ID in the database
+ */
+async function updateTemplateIdInDatabase(tag: string, templateId: number): Promise<void> {
+  try {
+    console.log(`Updating template ID in database for ${tag}: ${templateId}`);
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    
+    const { error } = await supabase
+      .from('email_templates')
+      .update({ brevo_template_id: templateId })
+      .eq('tag', tag);
+      
+    if (error) {
+      console.error(`Error updating template ID in database for ${tag}:`, error);
+    } else {
+      console.log(`Successfully updated database template ID for ${tag}`);
+    }
+  } catch (error) {
+    console.error(`Error updating template ID in database for ${tag}:`, error);
+    // Continue execution - don't throw error so sync process can continue
+  }
+}
+
 async function syncTemplateToBrevo(template: EmailTemplate) {
   try {
     // First check if template exists by tag
@@ -116,6 +141,10 @@ async function syncTemplateToBrevo(template: EmailTemplate) {
       }
 
       console.log(`Successfully updated template: ${template.name} (ID: ${existingTemplate.id})`);
+      
+      // Update template ID in database
+      await updateTemplateIdInDatabase(template.tag, existingTemplate.id);
+      
       return existingTemplate.id;
     } else {
       // Create new template
@@ -138,6 +167,10 @@ async function syncTemplateToBrevo(template: EmailTemplate) {
 
       const newTemplate = (await createResponse.json()) as { id: number };
       console.log(`Successfully created template: ${template.name} (ID: ${newTemplate.id})`);
+      
+      // Save template ID in database
+      await updateTemplateIdInDatabase(template.tag, newTemplate.id);
+      
       return newTemplate.id;
     }
   } catch (error) {
