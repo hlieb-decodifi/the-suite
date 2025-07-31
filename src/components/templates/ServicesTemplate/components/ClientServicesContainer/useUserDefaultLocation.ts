@@ -55,7 +55,7 @@ export function useUserDefaultLocation() {
   const geoLocation = useBrowserGeolocation();
 
   // Always call the queries, but only enable if userId exists
-  const { data, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ['clientProfileWithAddress', userId],
     queryFn: async () => {
       try {
@@ -71,7 +71,7 @@ export function useUserDefaultLocation() {
   });
 
   // Use the professional profile hook directly
-  const { data: profData, isLoading: isProfLoading } = useProfessionalProfileWithAddress(userId);
+  const { data: profData } = useProfessionalProfileWithAddress(userId);
 
   // Try to get latitude/longitude from client profile address
   const address = data?.address;
