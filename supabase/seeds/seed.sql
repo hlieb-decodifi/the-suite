@@ -446,3 +446,730 @@ create policy "Allow users to view message attachments in bucket"
   using (
     bucket_id = 'message-attachments'
   );
+
+/**
+* DUMMY USERS
+* Create test users for development
+*/
+
+-- Create dummy professional account with Stripe Connect account and subscription
+DO $$
+DECLARE
+    dummy_user_id uuid := gen_random_uuid();
+    professional_role_id uuid;
+    monthly_plan_id uuid;
+    dummy_address_id uuid;
+    dummy_profile_id uuid;
+BEGIN
+    -- Create the auth user with all required fields
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        recovery_sent_at,
+        last_sign_in_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at,
+        confirmation_token,
+        email_change,
+        email_change_token_new,
+        recovery_token
+    ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        dummy_user_id,
+        'authenticated',
+        'authenticated',
+        'professional@mail.com',
+        crypt('secret', gen_salt('bf')),
+        current_timestamp,
+        current_timestamp,
+        current_timestamp,
+        '{"provider":"email","providers":["email"]}',
+        '{"first_name": "John", "last_name": "Doe", "role": "professional"}',
+        current_timestamp,
+        current_timestamp,
+        '',
+        '',
+        '',
+        ''
+    );
+    
+    -- Create email identity for the user
+    INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider_id,
+        provider,
+        last_sign_in_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        gen_random_uuid(),
+        dummy_user_id,
+        format('{"sub":"%s","email":"%s"}', dummy_user_id::text, 'professional@mail.com')::jsonb,
+        dummy_user_id,
+        'email',
+        current_timestamp,
+        current_timestamp,
+        current_timestamp
+    );
+    
+    -- Get the professional role ID
+    SELECT id INTO professional_role_id FROM roles WHERE name = 'professional';
+    
+    -- Get the monthly subscription plan ID
+    SELECT id INTO monthly_plan_id FROM subscription_plans WHERE name = 'Monthly' AND interval = 'month';
+    
+    -- Create address for the professional
+    INSERT INTO addresses (
+        country,
+        state,
+        city,
+        street_address,
+        apartment,
+        latitude,
+        longitude,
+        google_place_id
+    ) VALUES (
+        'United States',
+        'California',
+        'San Francisco',
+        '123 Main Street',
+        'Apt 4B',
+        37.7749,
+        -122.4194,
+        'ChIJN1t_tDeuEmsRUsoyG83frY4'
+    ) RETURNING id INTO dummy_address_id;
+    
+    -- Note: The trigger on_auth_user_created will automatically create the user record
+    -- and professional profile, so we don't need to insert them manually
+    
+    -- Get the professional profile ID that was created by the trigger
+    SELECT id INTO dummy_profile_id 
+    FROM professional_profiles 
+    WHERE user_id = dummy_user_id;
+    
+    -- Update the professional profile with additional details and Stripe Connect info
+    UPDATE professional_profiles SET
+        description = 'Experienced professional with over 10 years in the industry. Specializing in high-quality services and exceptional customer satisfaction.',
+        profession = 'Professional Services',
+        appointment_requirements = 'Please arrive 10 minutes early for your appointment. Bring any necessary documentation.',
+        phone_number = '+1-555-0123',
+        working_hours = '{"monday": {"start": "09:00", "end": "17:00"}, "tuesday": {"start": "09:00", "end": "17:00"}, "wednesday": {"start": "09:00", "end": "17:00"}, "thursday": {"start": "09:00", "end": "17:00"}, "friday": {"start": "09:00", "end": "17:00"}, "saturday": {"start": "10:00", "end": "15:00"}, "sunday": {"start": "10:00", "end": "15:00"}}'::jsonb,
+        timezone = 'America/Los_Angeles',
+        location = 'San Francisco, CA',
+        address_id = dummy_address_id,
+        facebook_url = 'https://facebook.com/johndoe',
+        instagram_url = 'https://instagram.com/johndoe',
+        tiktok_url = 'https://tiktok.com/@johndoe',
+        is_published = true,
+        is_subscribed = true,
+        stripe_account_id = 'acct_1Rps2uPtT7haMfhy',
+        stripe_connect_status = 'complete',
+        stripe_connect_updated_at = NOW(),
+        requires_deposit = true,
+        deposit_type = 'percentage',
+        deposit_value = 25.00,
+        allow_messages = true,
+        hide_full_address = false,
+        cancellation_policy_enabled = true,
+        cancellation_24h_charge_percentage = 50.00,
+        cancellation_48h_charge_percentage = 25.00
+    WHERE user_id = dummy_user_id;
+    
+    -- Create active subscription
+    INSERT INTO professional_subscriptions (
+        professional_profile_id,
+        subscription_plan_id,
+        status,
+        start_date,
+        end_date,
+        stripe_subscription_id,
+        cancel_at_period_end
+    ) VALUES (
+        dummy_profile_id,
+        monthly_plan_id,
+        'active',
+        NOW(),
+        NOW() + INTERVAL '1 month',
+        'sub_dummy123456789',
+        false
+    );
+    
+    -- Create some sample services
+    INSERT INTO services (
+        professional_profile_id,
+        name,
+        description,
+        price,
+        duration,
+        stripe_status,
+        stripe_sync_status
+    ) VALUES 
+    (
+        dummy_profile_id,
+        'Basic Consultation',
+        'Initial consultation to discuss your needs and requirements',
+        50.00,
+        30,
+        'active',
+        'synced'
+    ),
+    (
+        dummy_profile_id,
+        'Standard Service',
+        'Our most popular service package with comprehensive coverage',
+        150.00,
+        60,
+        'active',
+        'synced'
+    ),
+    (
+        dummy_profile_id,
+        'Premium Service',
+        'Premium service with extended duration and additional features',
+        250.00,
+        90,
+        'active',
+        'synced'
+    );
+    
+    -- Add some payment methods
+    INSERT INTO professional_payment_methods (
+        professional_profile_id,
+        payment_method_id
+    ) 
+    SELECT dummy_profile_id, id 
+    FROM payment_methods 
+    WHERE name IN ('Credit Card', 'Cash', 'Bank Transfer')
+    LIMIT 3;
+    
+    RAISE NOTICE 'Dummy professional account created successfully!';
+    RAISE NOTICE 'User ID: %', dummy_user_id;
+    RAISE NOTICE 'Profile ID: %', dummy_profile_id;
+    RAISE NOTICE 'Email: professional@mail.com';
+    RAISE NOTICE 'Password: secret';
+    RAISE NOTICE 'Stripe Account: acct_1Rps2uPtT7haMfhy';
+    
+END $$;
+
+-- Create dummy client account
+DO $$
+DECLARE
+    client_user_id uuid := gen_random_uuid();
+    client_role_id uuid;
+    client_address_id uuid;
+    client_profile_id uuid;
+    professional_user_id uuid;
+    prof_profile_id uuid;
+    basic_service_id uuid;
+    standard_service_id uuid;
+    premium_service_id uuid;
+    booking_id uuid;
+    appointment_id uuid;
+    booking_payment_id uuid;
+BEGIN
+    -- Get the professional user ID that was created above
+    SELECT id INTO professional_user_id FROM auth.users WHERE email = 'professional@mail.com';
+    SELECT id INTO prof_profile_id FROM professional_profiles WHERE user_id = professional_user_id;
+    
+    -- Get service IDs
+    SELECT id INTO basic_service_id FROM services s WHERE s.professional_profile_id = prof_profile_id AND s.name = 'Basic Consultation' LIMIT 1;
+    SELECT id INTO standard_service_id FROM services s WHERE s.professional_profile_id = prof_profile_id AND s.name = 'Standard Service' LIMIT 1;
+    SELECT id INTO premium_service_id FROM services s WHERE s.professional_profile_id = prof_profile_id AND s.name = 'Premium Service' LIMIT 1;
+    
+    -- Create the auth user for client
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        recovery_sent_at,
+        last_sign_in_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at,
+        confirmation_token,
+        email_change,
+        email_change_token_new,
+        recovery_token
+    ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        client_user_id,
+        'authenticated',
+        'authenticated',
+        'client@mail.com',
+        crypt('secret', gen_salt('bf')),
+        current_timestamp,
+        current_timestamp,
+        current_timestamp,
+        '{"provider":"email","providers":["email"]}',
+        '{"first_name": "Jane", "last_name": "Smith", "role": "client"}',
+        current_timestamp,
+        current_timestamp,
+        '',
+        '',
+        '',
+        ''
+    );
+    
+    -- Create email identity for the client
+    INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider_id,
+        provider,
+        last_sign_in_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        gen_random_uuid(),
+        client_user_id,
+        format('{"sub":"%s","email":"%s"}', client_user_id::text, 'client@mail.com')::jsonb,
+        client_user_id,
+        'email',
+        current_timestamp,
+        current_timestamp,
+        current_timestamp
+    );
+    
+    -- Get the client role ID
+    SELECT id INTO client_role_id FROM roles WHERE name = 'client';
+    
+    -- Create address for the client
+    INSERT INTO addresses (
+        country,
+        state,
+        city,
+        street_address,
+        apartment,
+        latitude,
+        longitude,
+        google_place_id
+    ) VALUES (
+        'United States',
+        'California',
+        'San Francisco',
+        '456 Oak Avenue',
+        'Unit 2C',
+        37.7849,
+        -122.4094,
+        'ChIJN1t_tDeuEmsRUsoyG83frY5'
+    ) RETURNING id INTO client_address_id;
+    
+    -- Note: The trigger on_auth_user_created will automatically create the user record
+    -- and client profile, so we don't need to insert them manually
+    
+    -- Get the client profile ID that was created by the trigger
+    SELECT id INTO client_profile_id 
+    FROM client_profiles 
+    WHERE user_id = client_user_id;
+    
+    -- Update the client profile with additional details
+    UPDATE client_profiles SET
+        phone_number = '+1-555-0456',
+        location = 'San Francisco, CA',
+        address_id = client_address_id
+    WHERE user_id = client_user_id;
+    
+    RAISE NOTICE 'Dummy client account created successfully!';
+    RAISE NOTICE 'Client User ID: %', client_user_id;
+    RAISE NOTICE 'Client Profile ID: %', client_profile_id;
+    RAISE NOTICE 'Email: client@mail.com';
+    RAISE NOTICE 'Password: secret';
+    
+    -- Create various appointments covering different scenarios
+    
+    -- 1. Past completed appointment (with payment and review)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'completed',
+        'Great service, very professional'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() - INTERVAL '7 days' + INTERVAL '10 hours',
+        NOW() - INTERVAL '7 days' + INTERVAL '11 hours',
+        'completed'
+    ) RETURNING id INTO appointment_id;
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        standard_service_id,
+        150.00,
+        60
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        150.00,
+        20.00,
+        1.00,
+        'completed',
+        'pi_completed_123'
+    ) RETURNING id INTO booking_payment_id;
+    
+    -- Add review for completed appointment
+    INSERT INTO reviews (
+        appointment_id,
+        client_id,
+        professional_id,
+        score,
+        message
+    ) VALUES (
+        appointment_id,
+        client_user_id,
+        professional_user_id,
+        5,
+        'Excellent service! Very professional and thorough. Would definitely recommend.'
+    );
+    
+    -- 2. Past cancelled appointment (with cancellation fee)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'cancelled',
+        'Cancelled due to emergency'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() - INTERVAL '3 days' + INTERVAL '14 hours',
+        NOW() - INTERVAL '3 days' + INTERVAL '15 hours',
+        'cancelled'
+    );
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        premium_service_id,
+        250.00,
+        90
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id,
+        refunded_amount,
+        refund_reason,
+        refunded_at
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        250.00,
+        0.00,
+        1.00,
+        'partially_refunded',
+        'pi_cancelled_456',
+        187.50,
+        'Cancellation fee applied (25% of service amount)',
+        NOW() - INTERVAL '2 days'
+    );
+    
+    -- 3. Upcoming confirmed appointment (with deposit paid)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'confirmed',
+        'Looking forward to the appointment'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() + INTERVAL '2 days' + INTERVAL '9 hours',
+        NOW() + INTERVAL '2 days' + INTERVAL '10 hours',
+        'ongoing'
+    );
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        basic_service_id,
+        50.00,
+        30
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id,
+        deposit_amount,
+        balance_amount,
+        payment_type,
+        requires_balance_payment
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        50.00,
+        0.00,
+        1.00,
+        'deposit_paid',
+        'pi_deposit_789',
+        12.50,
+        37.50,
+        'deposit',
+        true
+    );
+    
+    -- 4. Future appointment (pending payment)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'pending_payment',
+        'New appointment request'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() + INTERVAL '1 week' + INTERVAL '11 hours',
+        NOW() + INTERVAL '1 week' + INTERVAL '12 hours 30 minutes',
+        'ongoing'
+    );
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        standard_service_id,
+        150.00,
+        60
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_checkout_session_id
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        150.00,
+        0.00,
+        1.00,
+        'incomplete',
+        'cs_pending_101'
+    );
+    
+    -- 5. Past no-show appointment
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'cancelled',
+        'Client no-show'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() - INTERVAL '1 day' + INTERVAL '13 hours',
+        NOW() - INTERVAL '1 day' + INTERVAL '14 hours',
+        'cancelled'
+    );
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        basic_service_id,
+        50.00,
+        30
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id,
+        refunded_amount,
+        refund_reason,
+        refunded_at
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        50.00,
+        0.00,
+        1.00,
+        'partially_refunded',
+        'pi_noshow_202',
+        25.00,
+        'No-show fee applied (50% of service amount)',
+        NOW() - INTERVAL '12 hours'
+    );
+    
+    -- 6. Future appointment with pre-auth scheduled
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'confirmed',
+        'Pre-auth appointment'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() + INTERVAL '5 days' + INTERVAL '15 hours',
+        NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes',
+        'ongoing'
+    );
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        premium_service_id,
+        250.00,
+        90
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id,
+        capture_method,
+        pre_auth_scheduled_for,
+        capture_scheduled_for
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        250.00,
+        30.00,
+        1.00,
+        'authorized',
+        'pi_preauth_303',
+        'manual',
+        NOW() + INTERVAL '1 day',
+        NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes' + INTERVAL '12 hours'
+    );
+    
+    RAISE NOTICE 'All appointments created successfully!';
+    RAISE NOTICE 'Created 6 different appointment scenarios:';
+    RAISE NOTICE '1. Past completed appointment with review';
+    RAISE NOTICE '2. Past cancelled appointment with cancellation fee';
+    RAISE NOTICE '3. Upcoming confirmed appointment with deposit';
+    RAISE NOTICE '4. Future appointment pending payment';
+    RAISE NOTICE '5. Past no-show appointment';
+    RAISE NOTICE '6. Future appointment with pre-auth scheduled';
+    
+END $$;
