@@ -2496,6 +2496,7 @@ create table email_templates (
   subject text not null,
   html_content text not null,
   to_field text not null,
+  brevo_template_id integer,
   is_active boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,

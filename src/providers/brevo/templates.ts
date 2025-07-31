@@ -23,14 +23,25 @@ import {
   NoShowNotificationClientParams,
   NoShowNotificationProfessionalParams,
 } from './types';
-import { TEMPLATE_IDS } from './constants';
+import { DEFAULT_TEMPLATE_IDS } from './constants';
+import { getEmailTemplateIds } from './templates-db';
 
 async function sendTemplateEmail<T extends Record<string, unknown>>(
-  templateId: number,
+  templateKey: keyof typeof DEFAULT_TEMPLATE_IDS,
   to: EmailRecipient[],
   params: T
 ): Promise<EmailResult> {
   try {
+    // Get template ID from database if possible, or fall back to default
+    let templateId: number;
+    try {
+      const dbTemplates = await getEmailTemplateIds();
+      templateId = dbTemplates[templateKey] || DEFAULT_TEMPLATE_IDS[templateKey];
+    } catch (error) {
+      console.warn(`Failed to get template ID from database for ${templateKey}. Using default.`, error);
+      templateId = DEFAULT_TEMPLATE_IDS[templateKey];
+    }
+    
     const method = getEmailMethod();
     const sender = initEmailSender();
 
@@ -43,8 +54,8 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
       
       // Prepare email content - either from template or fallback
       const emailContent = templateContent || {
-        subject: `Test Email - Template ${templateId}`,
-        html: `<h1>Test Email - Template ${templateId}</h1>
+        subject: `Test Email - Template ${templateId} (${templateKey})`,
+        html: `<h1>Test Email - Template ${templateId} (${templateKey})</h1>
                <pre>${JSON.stringify(params, null, 2)}</pre>`
       };
 
@@ -96,7 +107,7 @@ export async function sendBookingCancellationClient(
   params: BookingCancellationClientParams
 ): Promise<EmailResult> {
   console.log('CANCELLATION CLIENT', {to, params});
-  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT, to, params);
+  return sendTemplateEmail('BOOKING_CANCELLATION_CLIENT', to, params);
 }
 
 export async function sendBookingCancellationProfessional(
@@ -104,21 +115,21 @@ export async function sendBookingCancellationProfessional(
   params: BookingCancellationProfessionalParams
 ): Promise<EmailResult> {
   console.log('CANCELLATION PROFESSIONAL', {to, params});
-  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL, to, params);
+  return sendTemplateEmail('BOOKING_CANCELLATION_PROFESSIONAL', to, params);
 }
 
 export async function sendBookingConfirmationClient(
   to: EmailRecipient[],
   params: BookingConfirmationClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT, to, params);
+  return sendTemplateEmail('BOOKING_CONFIRMATION_CLIENT', to, params);
 }
 
 export async function sendBookingConfirmationProfessional(
   to: EmailRecipient[],
   params: BookingConfirmationProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.BOOKING_CONFIRMATION_PROFESSIONAL, to, params);
+  return sendTemplateEmail('BOOKING_CONFIRMATION_PROFESSIONAL', to, params);
 }
 
 // Payment Related
@@ -126,21 +137,21 @@ export async function sendPaymentConfirmationClient(
   to: EmailRecipient[],
   params: PaymentConfirmationClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.PAYMENT_CONFIRMATION_CLIENT, to, params);
+  return sendTemplateEmail('PAYMENT_CONFIRMATION_CLIENT', to, params);
 }
 
 export async function sendPaymentConfirmationProfessional(
   to: EmailRecipient[],
   params: PaymentConfirmationProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.PAYMENT_CONFIRMATION_PROFESSIONAL, to, params);
+  return sendTemplateEmail('PAYMENT_CONFIRMATION_PROFESSIONAL', to, params);
 }
 
 export async function sendBalanceNotification(
   to: EmailRecipient[],
   params: BalanceNotificationParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.BALANCE_NOTIFICATION, to, params);
+  return sendTemplateEmail('BALANCE_NOTIFICATION', to, params);
 }
 
 // Refund Related
@@ -148,28 +159,28 @@ export async function sendRefundRequestProfessional(
   to: EmailRecipient[],
   params: RefundRequestProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.REFUND_REQUEST_PROFESSIONAL, to, params);
+  return sendTemplateEmail('REFUND_REQUEST_PROFESSIONAL', to, params);
 }
 
 export async function sendRefundCompletionClient(
   to: EmailRecipient[],
   params: RefundCompletionClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.REFUND_COMPLETION_CLIENT, to, params);
+  return sendTemplateEmail('REFUND_COMPLETION_CLIENT', to, params);
 }
 
 export async function sendRefundCompletionProfessional(
   to: EmailRecipient[],
   params: RefundCompletionProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.REFUND_COMPLETION_PROFESSIONAL, to, params);
+  return sendTemplateEmail('REFUND_COMPLETION_PROFESSIONAL', to, params);
 }
 
 export async function sendRefundDeclineClient(
   to: EmailRecipient[],
   params: RefundDeclineClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.REFUND_DECLINE_CLIENT, to, params);
+  return sendTemplateEmail('REFUND_DECLINE_CLIENT', to, params);
 }
 
 // Review Related
@@ -177,7 +188,7 @@ export async function sendReviewTipNotification(
   to: EmailRecipient[],
   params: ReviewTipNotificationParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.REVIEW_TIP_NOTIFICATION, to, params);
+  return sendTemplateEmail('REVIEW_TIP_NOTIFICATION', to, params);
 }
 
 // Contact Related
@@ -185,14 +196,14 @@ export async function sendContactInquiryAdmin(
   to: EmailRecipient[],
   params: ContactInquiryAdminParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.CONTACT_INQUIRY_ADMIN, to, params);
+  return sendTemplateEmail('CONTACT_INQUIRY_ADMIN', to, params);
 }
 
 export async function sendContactInquiryConfirmation(
   to: EmailRecipient[],
   params: ContactInquiryConfirmationParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.CONTACT_INQUIRY_CONFIRMATION, to, params);
+  return sendTemplateEmail('CONTACT_INQUIRY_CONFIRMATION', to, params);
 }
 
 // Policy Related
@@ -200,14 +211,14 @@ export async function sendCancellationPolicyChargeClient(
   to: EmailRecipient[],
   params: CancellationPolicyChargeClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.CANCELLATION_POLICY_CHARGE_CLIENT, to, params);
+  return sendTemplateEmail('CANCELLATION_POLICY_CHARGE_CLIENT', to, params);
 }
 
 export async function sendCancellationPolicyChargeProfessional(
   to: EmailRecipient[],
   params: CancellationPolicyChargeProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.CANCELLATION_POLICY_CHARGE_PROFESSIONAL, to, params);
+  return sendTemplateEmail('CANCELLATION_POLICY_CHARGE_PROFESSIONAL', to, params);
 }
 
 // Incident Related
@@ -215,12 +226,12 @@ export async function sendNoShowNotificationClient(
   to: EmailRecipient[],
   params: NoShowNotificationClientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.NO_SHOW_NOTIFICATION_CLIENT, to, params);
+  return sendTemplateEmail('NO_SHOW_NOTIFICATION_CLIENT', to, params);
 }
 
 export async function sendNoShowNotificationProfessional(
   to: EmailRecipient[],
   params: NoShowNotificationProfessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(TEMPLATE_IDS.NO_SHOW_NOTIFICATION_PROFESSIONAL, to, params);
+  return sendTemplateEmail('NO_SHOW_NOTIFICATION_PROFESSIONAL', to, params);
 }

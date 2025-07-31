@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TEMPLATE_IDS } from '@/providers/brevo/constants';
+import { DEFAULT_TEMPLATE_IDS } from '@/providers/brevo/constants';
 import { sendTemplateTest } from './template-actions';
 
 type TemplateResponse = {
@@ -37,7 +37,7 @@ function SubmitButton() {
 }
 
 const TEMPLATE_EXAMPLES = {
-  [TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT]: {
+  [DEFAULT_TEMPLATE_IDS.BOOKING_CANCELLATION_CLIENT]: {
     name: 'Booking Cancellation - Client',
     description: 'Notification to client when a booking is cancelled',
     variables: [
@@ -52,7 +52,7 @@ const TEMPLATE_EXAMPLES = {
       'Refund Amount: $110.00',
     ],
   },
-  [TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL]: {
+  [DEFAULT_TEMPLATE_IDS.BOOKING_CANCELLATION_PROFESSIONAL]: {
     name: 'Booking Cancellation - Professional',
     description: 'Notification to professional when a booking is cancelled',
     variables: [
@@ -68,7 +68,7 @@ const TEMPLATE_EXAMPLES = {
       'Refund Amount: $110.00',
     ],
   },
-  [TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT]: {
+  [DEFAULT_TEMPLATE_IDS.BOOKING_CONFIRMATION_CLIENT]: {
     name: 'Booking Confirmation - Client',
     description: 'Confirmation to client when a booking is made',
     variables: [
@@ -88,7 +88,7 @@ const TEMPLATE_EXAMPLES = {
       'Due Date: August 15, 2024',
     ],
   },
-  [TEMPLATE_IDS.BOOKING_CONFIRMATION_PROFESSIONAL]: {
+  [DEFAULT_TEMPLATE_IDS.BOOKING_CONFIRMATION_PROFESSIONAL]: {
     name: 'Booking Confirmation - Professional',
     description: 'Notification to professional when a booking is made',
     variables: [
@@ -104,7 +104,7 @@ const TEMPLATE_EXAMPLES = {
       'Professional Total: $132.00',
     ],
   },
-  [TEMPLATE_IDS.PAYMENT_CONFIRMATION_CLIENT]: {
+  [DEFAULT_TEMPLATE_IDS.PAYMENT_CONFIRMATION_CLIENT]: {
     name: 'Payment Confirmation - Client',
     description: 'Confirmation to client when a payment is processed',
     variables: [

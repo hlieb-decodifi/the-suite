@@ -1,4 +1,5 @@
-export const TEMPLATE_IDS = {
+// Default template IDs for fallback (will be replaced by database values)
+export const DEFAULT_TEMPLATE_IDS = {
   // Booking related
   BOOKING_CANCELLATION_CLIENT: 15,
   BOOKING_CANCELLATION_PROFESSIONAL: 14,
@@ -30,4 +31,18 @@ export const TEMPLATE_IDS = {
   // Incident related
   NO_SHOW_NOTIFICATION_CLIENT: 32,
   NO_SHOW_NOTIFICATION_PROFESSIONAL: 33,
-} as const; 
+}
+
+// This proxy uses the database values when available, falling back to defaults
+export const TEMPLATE_IDS = new Proxy(DEFAULT_TEMPLATE_IDS, {
+  get: function(target, prop) {
+    // For server-side, we'll load from database
+    if (typeof window === 'undefined') {
+      // We can't use async/await here, so we'll return the default value
+      // The actual template functions will fetch and use the correct values
+      return target[prop as keyof typeof target];
+    }
+    // For client-side, just use defaults
+    return target[prop as keyof typeof target];
+  }
+}); 
