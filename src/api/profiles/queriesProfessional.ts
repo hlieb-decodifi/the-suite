@@ -22,7 +22,7 @@ async function getProfessionalProfileWithAddress(userId: string): Promise<{ addr
 export function useProfessionalProfileWithAddress(userId: string | undefined) {
   return useQuery({
     queryKey: ['professionalProfileWithAddress', userId],
-    queryFn: () => (userId ? getProfessionalProfileWithAddress(userId) : Promise.resolve({ address: null })),
+    queryFn: () => getProfessionalProfileWithAddress(userId!),
     enabled: !!userId,
   });
 }

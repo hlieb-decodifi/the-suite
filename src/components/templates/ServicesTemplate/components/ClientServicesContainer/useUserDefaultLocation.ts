@@ -1,3 +1,12 @@
+// Type guard for PostgREST not found error
+function isPostgrestNotFoundError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const err = error as { code?: string; message?: string; status?: number };
+  const isPGRST116 = err.code === 'PGRST116' && typeof err.message === 'string' && err.message.includes('no rows returned');
+  return isPGRST116;
+}
 
 
 import { useEffect, useState } from 'react';
@@ -49,21 +58,10 @@ export function useUserDefaultLocation() {
   const { data, isLoading } = useQuery({
     queryKey: ['clientProfileWithAddress', userId],
     queryFn: async () => {
-      if (!userId) return { address: null };
       try {
-        return await getClientProfileWithAddress(userId);
+        return await getClientProfileWithAddress(userId!);
       } catch (err: unknown) {
-        // Suppress 406 (Not Acceptable) and PGRST116 errors
-        if (
-          typeof err === 'object' && err !== null &&
-          ((
-            'code' in err && (err as { code?: string }).code === 'PGRST116' &&
-            'message' in err && typeof (err as { message?: string }).message === 'string' &&
-            (err as { message?: string }).message?.includes('no rows returned')
-          ) || (
-            'status' in err && (err as { status?: number }).status === 406
-          ))
-        ) {
+        if (isPostgrestNotFoundError(err)) {
           return { address: null };
         }
         throw err;
@@ -80,8 +78,7 @@ export function useUserDefaultLocation() {
   if (
     address &&
     typeof address.latitude === 'number' &&
-    typeof address.longitude === 'number' &&
-    !isLoading
+    typeof address.longitude === 'number'
   ) {
     return { latitude: address.latitude, longitude: address.longitude };
   }
@@ -91,8 +88,7 @@ export function useUserDefaultLocation() {
   if (
     profAddress &&
     typeof profAddress.latitude === 'number' &&
-    typeof profAddress.longitude === 'number' &&
-    !isProfLoading
+    typeof profAddress.longitude === 'number'
   ) {
     return { latitude: profAddress.latitude, longitude: profAddress.longitude };
   }
