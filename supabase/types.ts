@@ -1369,6 +1369,10 @@ export type Database = {
         Args: { config_key: string; default_value?: string }
         Returns: string
       }
+      get_admin_dashboard_data: {
+        Args: { start_date?: string; end_date?: string }
+        Returns: Json
+      }
       get_appointment_computed_status: {
         Args: { p_start_time: string; p_end_time: string; p_status: string }
         Returns: string
@@ -1410,6 +1414,10 @@ export type Database = {
           p_google_place_id?: string
         }
         Returns: string
+      }
+      is_admin: {
+        Args: { user_uuid: string }
+        Returns: boolean
       }
       is_client: {
         Args: { user_uuid: string }
