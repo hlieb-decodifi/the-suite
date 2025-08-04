@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, MessageSquare } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,23 +16,21 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-export type RefundRequestModalProps = {
+export type SupportRequestModalProps = {
   isOpen: boolean;
   onClose: () => void;
   appointmentId: string;
   serviceName: string;
-  totalAmount: number;
   onSuccess: () => void;
 };
 
-export function RefundRequestModal({
+export function SupportRequestModal({
   isOpen,
   onClose,
   appointmentId,
   serviceName,
-  totalAmount,
   onSuccess,
-}: RefundRequestModalProps) {
+}: SupportRequestModalProps) {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -45,7 +42,7 @@ export function RefundRequestModal({
       toast({
         variant: 'destructive',
         title: 'Reason required',
-        description: 'Please provide a reason for your refund request.',
+        description: 'Please provide a reason for your support request.',
       });
       return;
     }
@@ -53,31 +50,34 @@ export function RefundRequestModal({
     setIsSubmitting(true);
 
     try {
-      // Refunds are now handled through support requests
-      // Redirect to create a support request instead
       const { createSupportRequest } = await import(
         '@/server/domains/support-requests/actions'
       );
       const result = await createSupportRequest({
         appointment_id: appointmentId,
-        reason: `Refund request: ${reason.trim()}`,
+        reason: reason.trim(),
       });
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to create refund request');
+        throw new Error(result.error || 'Failed to create support request');
       }
 
       toast({
         title: 'Support request submitted',
         description:
-          'Your refund request has been created as a support request. You can track its progress in the Support Requests section.',
+          'Your support request has been sent to the professional. You can discuss the details through the conversation.',
       });
 
       onSuccess();
       onClose();
       setReason('');
+
+      // Navigate to the created support request
+      if (result.supportRequestId) {
+        window.location.href = `/support-request/${result.supportRequestId}`;
+      }
     } catch (error) {
-      console.error('Error creating refund request:', error);
+      console.error('Error creating support request:', error);
       toast({
         variant: 'destructive',
         title: 'Failed to submit request',
@@ -101,12 +101,12 @@ export function RefundRequestModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-primary" />
-            Request Refund
+            <MessageSquare className="h-5 w-5 text-primary" />
+            Create Support Request
           </DialogTitle>
           <DialogDescription>
-            Submit a refund request for your completed appointment. The
-            professional will review your request.
+            Submit a support request to discuss any issues with your appointment.
+            You'll be able to communicate directly with the professional.
           </DialogDescription>
         </DialogHeader>
 
@@ -119,33 +119,25 @@ export function RefundRequestModal({
               </span>
               <span className="text-sm font-semibold">{serviceName}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-muted-foreground">
-                Amount:
-              </span>
-              <span className="text-sm font-semibold">
-                ${totalAmount.toFixed(2)}
-              </span>
-            </div>
           </div>
 
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              Refund requests are subject to professional approval. Processing
-              may take 3-5 business days.
+              Your support request will start a conversation with the professional.
+              They will review your request and help resolve any issues.
             </AlertDescription>
           </Alert>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="reason">
-                Reason for refund request{' '}
+                Describe your issue{' '}
                 <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="reason"
-                placeholder="Please explain why you are requesting a refund..."
+                placeholder="Please describe the issue you're experiencing..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 disabled={isSubmitting}
@@ -175,11 +167,11 @@ export function RefundRequestModal({
           >
             {isSubmitting ? (
               <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Submitting...
+                <MessageSquare className="h-4 w-4 mr-2 animate-pulse" />
+                Creating...
               </>
             ) : (
-              'Submit Request'
+              'Create Request'
             )}
           </Button>
         </DialogFooter>

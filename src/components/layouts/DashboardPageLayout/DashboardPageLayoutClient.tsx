@@ -33,7 +33,7 @@ export function DashboardPageLayoutClient({
     if (path === '/dashboard' || path === '/dashboard/') return 'overview';
     if (path.includes('/dashboard/appointments')) return 'appointments';
     if (path.includes('/dashboard/messages')) return 'messages';
-    if (path.includes('/dashboard/refunds')) return 'refunds';
+    if (path.includes('/dashboard/support-requests')) return 'support-requests';
     return 'overview';
   };
 
@@ -138,10 +138,19 @@ export function DashboardPageLayoutClient({
         ) : undefined,
     },
     {
-      key: 'refunds',
-      label: 'Refunds',
-      href: createTabUrl('/dashboard/refunds'),
-      isActive: activeTab === 'refunds',
+      key: 'support-requests',
+      label: 'Support Requests',
+      href: createTabUrl('/dashboard/support-requests'),
+      isActive: activeTab === 'support-requests',
+      badge:
+        userData.unreadSupportMessagesCount && userData.unreadSupportMessagesCount > 0 ? (
+          <MessageBadge
+            count={userData.unreadSupportMessagesCount}
+            size="sm"
+            variant={activeTab === 'support-requests' ? 'active' : 'default'}
+            className="ml-1.5 hover:bg-white hover:text-primary"
+          />
+        ) : undefined,
     },
   ];
 

@@ -1,8 +1,23 @@
-import { Database } from '../../supabase/types';
+/**
+ * Legacy refund types - refunds are now handled as support requests
+ */
 
-export type Refund = Database['public']['Tables']['refunds']['Row'];
-export type RefundInsert = Database['public']['Tables']['refunds']['Insert'];
-export type RefundUpdate = Database['public']['Tables']['refunds']['Update'];
+// Legacy types for backward compatibility
+export type Refund = {
+  id: string;
+  appointment_id: string;
+  client_id: string;
+  professional_id: string;
+  reason: string;
+  original_amount: number;
+  refund_amount?: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RefundInsert = Omit<Refund, 'id' | 'created_at' | 'updated_at'>;
+export type RefundUpdate = Partial<RefundInsert>;
 
 export type RefundRequest = {
   appointment_id: string;

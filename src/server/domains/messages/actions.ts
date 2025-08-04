@@ -26,10 +26,11 @@ export async function getConversations(conversationId?: string): Promise<{
       user_uuid: user.id,
     });
 
-    // Get conversations for current user
+    // Get only general conversations for current user
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('*')
+      .eq('purpose', 'general') // Only show general conversations
       .or(isProfessional 
         ? `professional_id.eq.${user.id}`
         : `client_id.eq.${user.id}`
@@ -593,10 +594,11 @@ export async function getRecentConversations(): Promise<{
       user_uuid: user.id,
     });
 
-    // Get recent conversations for current user (limit to 2 for dashboard)
+    // Get recent general conversations for current user (limit to 2 for dashboard)
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('*')
+      .eq('purpose', 'general') // Only show general conversations
       .or(isProfessional 
         ? `professional_id.eq.${user.id}`
         : `client_id.eq.${user.id}`
