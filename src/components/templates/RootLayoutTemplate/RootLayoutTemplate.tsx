@@ -41,32 +41,36 @@ export async function RootLayoutTemplate({
     // Fetch unread messages count
     unreadMessagesCount = await getUnreadMessagesCount(user.id);
 
-    // Fetch user's first and last name from the database
+    // Fetch user's first and last name and role from the database
     let firstName = '';
     let lastName = '';
+    let isAdmin = false;
 
     try {
       const { data: userData } = await supabase
         .from('users')
-        .select('first_name, last_name')
+        .select('first_name, last_name, roles:role_id (name)')
         .eq('id', user.id)
         .single();
 
       if (userData) {
         firstName = userData.first_name || '';
         lastName = userData.last_name || '';
+        isAdmin = userData.roles?.name === 'admin';
       }
     } catch (error) {
-      console.error('Error fetching user name from database:', error);
+      console.error('Error fetching user name/role from database:', error);
       // Fallback to metadata if database fetch fails
       firstName = user.user_metadata?.first_name || '';
       lastName = user.user_metadata?.last_name || '';
+      isAdmin = false;
     }
 
     userInfo = {
       name: `${firstName} ${lastName}`.trim() || 'User',
       email: user.email || '',
       avatarUrl,
+      isAdmin,
     };
   }
 
