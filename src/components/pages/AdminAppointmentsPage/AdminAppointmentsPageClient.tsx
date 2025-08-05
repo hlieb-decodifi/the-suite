@@ -1,32 +1,51 @@
 // Client component for admin appointments tab
 'use client';
-import { useDateRange } from '@/components/layouts/AdminDashboardPageLayout/DateRangeContextProvider';
-import { useEffect, useState } from 'react';
+
+import { useMemo, useState } from 'react';
 import { AdminAppointmentsTemplate } from '@/components/templates/AdminAppointmentsTemplate';
+// Import Appointment type directly for compatibility
+import type { Appointment } from '@/types/appointments';
 
-export function AdminAppointmentsPageClient() {
-  const { start, end } = useDateRange();
-  const [appointmentsData, setAppointmentsData] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function AdminAppointmentsPageClient({ appointments, clients, professionals }: {
+  appointments: Appointment[];
+  clients: string[];
+  professionals: string[];
+}) {
+  // Filter/sort state
+  const [filterClient, setFilterClient] = useState('');
+  const [filterProfessional, setFilterProfessional] = useState('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    // Placeholder: simulate async fetch
-    setTimeout(() => {
-      setAppointmentsData({
-        appointments: [],
-        start,
-        end,
-      });
-      setLoading(false);
-    }, 500);
-  }, [start, end]);
+  // Filter and sort appointments
+  const filteredAppointments = useMemo(() => {
+    let filtered = appointments;
+    if (filterClient) {
+      filtered = filtered.filter(a => a.client === filterClient);
+    }
+    if (filterProfessional) {
+      filtered = filtered.filter(a => a.professional === filterProfessional);
+    }
+    filtered = filtered.sort((a, b) => {
+      if (sortDirection === 'asc') {
+        return a.startTime.localeCompare(b.startTime);
+      } else {
+        return b.startTime.localeCompare(a.startTime);
+      }
+    });
+    return filtered;
+  }, [appointments, filterClient, filterProfessional, sortDirection]);
 
-  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading appointments...</div>;
-  if (error) return <div className="py-8 text-center text-destructive">{error}</div>;
-  if (!appointmentsData) return null;
-
-  return <AdminAppointmentsTemplate />;
+  return (
+    <AdminAppointmentsTemplate
+      appointments={filteredAppointments}
+      clients={clients}
+      professionals={professionals}
+      filterClient={filterClient}
+      filterProfessional={filterProfessional}
+      sortDirection={sortDirection}
+      onFilterClient={setFilterClient}
+      onFilterProfessional={setFilterProfessional}
+      onSortDirection={setSortDirection}
+    />
+  );
 }

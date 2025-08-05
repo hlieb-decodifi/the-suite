@@ -21,7 +21,7 @@ export const DateRangeContext = createContext<DateRangeContextType | undefined>(
 export type AdminDashboardPageLayoutClientProps = {
   user: User;
   children: React.ReactNode;
-  dashboardData: {
+  dashboardData?: {
     totalBookings: number;
     newBookings: number;
     bookingsPerDay: Record<string, number>;
@@ -33,7 +33,7 @@ export type AdminDashboardPageLayoutClientProps = {
     newChats: number;
     totalRefunds: number;
     newRefunds: number;
-  };
+  } | undefined;
 };
 
 export function AdminDashboardPageLayoutClient({ user, children, dashboardData }: AdminDashboardPageLayoutClientProps) {
@@ -117,7 +117,7 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
       !('dashboardData' in (child.props as object))
     ) {
       return React.cloneElement(
-        child as React.ReactElement<{ dashboardData: typeof dashboardData }>,
+        child as React.ReactElement<{ dashboardData?: typeof dashboardData }>,
         { dashboardData }
       );
     }
