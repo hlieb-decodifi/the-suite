@@ -1,6 +1,4 @@
-import React from 'react';
-
+// Server-side logic for legal page can be added here
 export default function AdminLegalPageServer() {
-  // Server-side logic for legal page can be added here
   return null;
 }
