@@ -2799,8 +2799,8 @@ begin
     'newProfessionals', (select count(*) from professional_profiles where created_at >= from_date and created_at <= to_date),
     'totalChats', (select count(*) from conversations),
     'newChats', (select count(*) from conversations where created_at >= from_date and created_at <= to_date),
-    'totalRefunds', (select count(*) from refunds),
-    'newRefunds', (select count(*) from refunds where created_at >= from_date and created_at <= to_date)
+    'totalRefunds', (select count(*) from booking_payments where status = 'refunded'),
+    'newRefunds', (select count(*) from booking_payments where status = 'refunded' and refunded_at >= from_date and refunded_at <= to_date)
   );
 end;
 $$ security definer;
