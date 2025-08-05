@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign } from 'lucide-react';
+import { DollarSign, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { initiateRefund } from '@/server/domains/support-requests/actions';
+import { initiateRefundServerAction } from '@/server/domains/support-requests/server-actions';
 
 type RefundModalProps = {
   isOpen: boolean;
@@ -22,6 +22,13 @@ type RefundModalProps = {
   originalAmount: number;
   serviceName: string;
   onSuccess: () => void;
+  paymentDetails?: {
+    baseAmount?: number;
+    depositAmount?: number;
+    tipAmount?: number;
+    serviceFee?: number;
+    paymentMethod?: string;
+  };
 };
 
 export const RefundModal: React.FC<RefundModalProps> = ({
@@ -31,6 +38,7 @@ export const RefundModal: React.FC<RefundModalProps> = ({
   originalAmount,
   serviceName,
   onSuccess,
+  paymentDetails,
 }) => {
   const [refundAmount, setRefundAmount] = useState(originalAmount.toString());
   const [refundReason, setRefundReason] = useState('');
@@ -61,11 +69,15 @@ export const RefundModal: React.FC<RefundModalProps> = ({
 
     try {
       setIsSubmitting(true);
-      const result = await initiateRefund({
-        support_request_id: supportRequestId,
-        refund_amount: amount,
-        professional_notes: refundReason.trim(),
-      });
+      
+      // Create FormData for the server action
+      const formData = new FormData();
+      formData.append('support_request_id', supportRequestId);
+      formData.append('refund_amount', amount.toString());
+      formData.append('professional_notes', refundReason.trim());
+      
+      console.log('Submitting refund request to server action');
+      const result = await initiateRefundServerAction(formData);
 
       if (result.success) {
         toast({
@@ -107,8 +119,27 @@ export const RefundModal: React.FC<RefundModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+    <>
+      {/* Full screen loading overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-card p-6 rounded-lg shadow-lg text-center max-w-md w-full">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium">Processing Refund</h3>
+                <p className="text-muted-foreground">
+                  Please wait while we process your refund request with the payment provider. 
+                  This may take a moment.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-primary" />
@@ -128,11 +159,54 @@ export const RefundModal: React.FC<RefundModalProps> = ({
               </span>
               <span className="text-sm font-semibold">{serviceName}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-muted-foreground">
-                Original Amount:
-              </span>
-              <span className="text-sm font-semibold">${originalAmount.toFixed(2)}</span>
+            
+            {/* Payment Breakdown */}
+            <div className="pt-2 border-t border-border mt-2">
+              <h4 className="text-sm font-medium mb-2">Payment Breakdown</h4>
+              
+              {paymentDetails?.baseAmount !== undefined && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Service Amount:</span>
+                  <span>${paymentDetails.baseAmount.toFixed(2)}</span>
+                </div>
+              )}
+              
+              {paymentDetails?.depositAmount !== undefined && paymentDetails.depositAmount > 0 && (
+                <div className="flex justify-between items-center text-xs mt-1">
+                  <span className="text-muted-foreground">Deposit:</span>
+                  <span>${paymentDetails.depositAmount.toFixed(2)}</span>
+                </div>
+              )}
+              
+              {paymentDetails?.tipAmount !== undefined && paymentDetails.tipAmount > 0 && (
+                <div className="flex justify-between items-center text-xs mt-1">
+                  <span className="text-muted-foreground">Tip:</span>
+                  <span>${paymentDetails.tipAmount.toFixed(2)}</span>
+                </div>
+              )}
+              
+              {paymentDetails?.serviceFee !== undefined && paymentDetails.serviceFee > 0 && (
+                <div className="flex justify-between items-center text-xs mt-1">
+                  <span className="text-muted-foreground">Service Fee:</span>
+                  <span>${paymentDetails.serviceFee.toFixed(2)}</span>
+                </div>
+              )}
+              
+              <div className="flex justify-between items-center font-medium text-sm mt-2 pt-1 border-t border-border">
+                <span>Total Paid:</span>
+                <span>${originalAmount.toFixed(2)}</span>
+              </div>
+              
+              {paymentDetails?.paymentMethod && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  Payment Method: {paymentDetails.paymentMethod}
+                </div>
+              )}
+            </div>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-2 text-xs text-amber-800">
+              <p className="font-medium">Important:</p>
+              <p>Professional is responsible for transaction fees. Client will receive the exact refund amount specified.</p>
             </div>
           </div>
 
@@ -189,12 +263,13 @@ export const RefundModal: React.FC<RefundModalProps> = ({
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !refundAmount || !refundReason.trim()}
-            className="min-w-[120px] bg-primary hover:bg-primary/90"
+            className="min-w-[140px] bg-primary hover:bg-primary/90"
           >
-            {isSubmitting ? 'Processing...' : 'Initiate Refund'}
+            Initiate Refund
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 };

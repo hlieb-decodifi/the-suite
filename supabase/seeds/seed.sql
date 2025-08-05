@@ -925,11 +925,13 @@ BEGIN
     
     -- 3. Upcoming confirmed appointment (with deposit paid)
     INSERT INTO bookings (
+        id,
         client_id,
         professional_profile_id,
         status,
         notes
     ) VALUES (
+        '0a399b49-4f8c-4064-8bc4-d0629e2dd694',
         client_user_id,
         prof_profile_id,
         'confirmed',
@@ -961,6 +963,7 @@ BEGIN
     );
     
     INSERT INTO booking_payments (
+        id,
         booking_id,
         payment_method_id,
         amount,
@@ -968,21 +971,24 @@ BEGIN
         service_fee,
         status,
         stripe_payment_intent_id,
+        stripe_checkout_session_id,
         deposit_amount,
         balance_amount,
         payment_type,
         requires_balance_payment
     ) VALUES (
+        '73dc758a-0d9d-4001-8276-679f6ec04504',
         booking_id,
         (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        50.00,
+        51.00,
         0.00,
         1.00,
-        'deposit_paid',
-        'pi_deposit_789',
-        12.50,
-        37.50,
-        'deposit',
+        'completed',
+        'pi_3RsTfxLMOPuguC730nldFayF',
+        'cs_test_a1zaEXowPcQaX9Mru09sikilJ5eU3AdvuvPnLuFfKOA83yExY4RHTAmsI7',
+        50.00,
+        1.00,
+        'full',
         true
     );
     

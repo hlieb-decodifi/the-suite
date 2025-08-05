@@ -34,7 +34,7 @@ type SupportRequestChatWidgetProps = {
     id: string;
     first_name: string;
     last_name: string;
-    profile_photo_url?: string;
+    profile_photo_url?: string | undefined;
   };
   readOnly?: boolean;
   resolvedInfo?: {
@@ -137,7 +137,7 @@ export function SupportRequestChatWidget({
       id: string;
       first_name: string;
       last_name: string;
-      profile_photo_url?: string;
+      profile_photo_url?: string | undefined;
     };
   } | null>(otherUser ? {
     id: conversationId,
@@ -158,7 +158,7 @@ export function SupportRequestChatWidget({
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Scroll to first unread message or bottom if no unread messages

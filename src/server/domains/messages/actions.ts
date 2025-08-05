@@ -406,12 +406,13 @@ export async function createOrGetConversationEnhanced(
       return { success: false, error: 'Conversations can only be created between clients and professionals' };
     }
 
-    // Check if conversation already exists
+    // Check if general conversation already exists
     const { data: existingConversation } = await supabase
       .from('conversations')
       .select('*')
       .eq('client_id', clientId)
       .eq('professional_id', professionalId)
+      .eq('purpose', 'general')
       .single();
 
     if (existingConversation) {
@@ -447,6 +448,7 @@ export async function createOrGetConversationEnhanced(
         .insert({
           client_id: clientId,
           professional_id: professionalId,
+          purpose: 'general'
         })
         .select()
         .single();
@@ -485,6 +487,7 @@ export async function createOrGetConversationEnhanced(
       .insert({
         client_id: clientId,
         professional_id: professionalId,
+        purpose: 'general'
       })
       .select()
       .single();

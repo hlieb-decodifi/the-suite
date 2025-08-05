@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/table';
 import { Typography } from '@/components/ui/typography';
 import { MessageBadge } from '@/components/ui/message-badge';
-import { formatCurrency } from '@/utils';
 import { format } from 'date-fns';
 import { ChevronRight, Clock, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
@@ -54,6 +53,11 @@ type SupportRequestType = {
       }[];
     }[];
   };
+  // Fields added by the server
+  unreadCount?: number;
+  conversations?: {
+    id: string;
+  };
 };
 
 // Type for transformed support request data for the table
@@ -67,8 +71,8 @@ type SupportRequest = {
   status: 'pending' | 'in_progress' | 'resolved' | 'closed';
   amount?: number | undefined;
   serviceName?: string | undefined;
-  unreadCount?: number;
-  conversationId?: string;
+  unreadCount?: number | undefined;
+  conversationId?: string | undefined;
 };
 
 type DashboardSupportRequestsPageClientProps = {
@@ -84,11 +88,13 @@ function FilterButtons({
   activeFilter,
   setActiveFilter,
   pendingCount,
+  inProgressCount,
   resolvedCount,
 }: {
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
   pendingCount: number;
+  inProgressCount: number;
   resolvedCount: number;
 }) {
   return (
@@ -114,6 +120,18 @@ function FilterButtons({
         onClick={() => setActiveFilter('pending')}
       >
         Pending
+      </button>
+      <button
+        className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+          inProgressCount > 0 ? 'hover:bg-muted' : ''
+        } ${
+          activeFilter === 'in_progress'
+            ? 'bg-white shadow-sm'
+            : 'text-muted-foreground'
+        }`}
+        onClick={() => setActiveFilter('in_progress')}
+      >
+        In Progress
       </button>
       <button
         className={`px-4 py-1.5 rounded-full text-sm font-medium ${
@@ -225,13 +243,13 @@ function SupportRequestTableCard({
                 <Typography className="font-medium">
                   {supportRequest.title}
                 </Typography>
-                {supportRequest.unreadCount > 0 && (
+                {supportRequest.unreadCount && supportRequest.unreadCount > 0 && (
                   <MessageBadge count={supportRequest.unreadCount} size="sm" className="ml-2" />
                 )}
               </div>
               <div className="text-muted-foreground text-sm flex items-center mt-1">
                 <MessageSquare className="mr-1 h-3 w-3" />
-                {format(supportRequest.date, 'MMM dd, yyyy')}
+                {format(supportRequest.date, 'MMM d, yyyy')}
                 <span className="mx-1">•</span>
                 <Clock className="mr-1 h-3 w-3" />
                 {format(supportRequest.date, 'h:mm a')}
@@ -252,15 +270,6 @@ function SupportRequestTableCard({
             </Typography>
           </div>
           <div className="flex items-center">
-            {supportRequest.amount ? (
-              <Typography className="font-bold mr-2">
-                {formatCurrency(supportRequest.amount)}
-              </Typography>
-            ) : (
-              <Typography className="font-bold mr-2 text-muted-foreground">
-                -
-              </Typography>
-            )}
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </div>
@@ -291,13 +300,13 @@ function DashboardTemplateSupportRequestsTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/20 hover:bg-muted/20">
-              <TableHead className="w-[180px]">Date & Time</TableHead>
-              <TableHead className="w-[200px]">Service</TableHead>
-              <TableHead className="w-[180px]">
+              <TableHead className="w-[160px]">Date & Time</TableHead>
+              <TableHead className="w-[180px]">Service</TableHead>
+              <TableHead className="w-[250px]">Reason</TableHead>
+              <TableHead className="w-[150px]">
                 {isProfessionalView ? 'Client' : 'Professional'}
               </TableHead>
               <TableHead className="w-[120px]">Status</TableHead>
-              <TableHead className="w-[100px] text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -311,8 +320,8 @@ function DashboardTemplateSupportRequestsTable({
                   <div className="flex flex-col">
                     <div className="flex items-center">
                       <MessageSquare className="mr-1 h-3 w-3 text-muted-foreground" />
-                      <span>{format(supportRequest.date, 'MMM dd, yyyy')}</span>
-                      {supportRequest.unreadCount > 0 && (
+                      <span>{format(supportRequest.date, 'MMM d, yyyy')}</span>
+                      {supportRequest.unreadCount && supportRequest.unreadCount > 0 && (
                         <MessageBadge count={supportRequest.unreadCount} size="sm" className="ml-2" />
                       )}
                     </div>
@@ -323,18 +332,13 @@ function DashboardTemplateSupportRequestsTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="space-y-1">
-                    <div className="font-medium line-clamp-1">
-                      {supportRequest.title}
-                    </div>
-                    <div className="text-sm text-muted-foreground line-clamp-2">
-                      {supportRequest.description}
-                    </div>
-                    {supportRequest.serviceName && (
-                      <div className="text-xs text-muted-foreground">
-                        Service: {supportRequest.serviceName}
-                      </div>
-                    )}
+                  <div className="font-medium">
+                    {supportRequest.serviceName || supportRequest.title || 'General Inquiry'}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm line-clamp-2 leading-relaxed">
+                    {supportRequest.description}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -344,9 +348,6 @@ function DashboardTemplateSupportRequestsTable({
                 </TableCell>
                 <TableCell>
                   <SupportRequestStatusBadge status={supportRequest.status} />
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {supportRequest.amount ? formatCurrency(supportRequest.amount) : '-'}
                 </TableCell>
               </TableRow>
             ))}
@@ -388,7 +389,7 @@ export function DashboardSupportRequestsPageClient({
         setIsLoading(true);
         setError(null);
         
-        const { getSupportRequests } = await import('@/server/domains/support-requests/actions');
+        const { getSupportRequests } = await import('@/server/domains/support-requests/client-actions');
         const result = await getSupportRequests();
         
         if (result.success && result.supportRequests) {
@@ -448,7 +449,7 @@ export function DashboardSupportRequestsPageClient({
       status: supportRequest.status,
       amount: supportRequest.requested_amount || undefined,
       serviceName: serviceName,
-      unreadCount: supportRequest.unread_count || 0,
+      unreadCount: supportRequest.unreadCount || 0,
       conversationId: supportRequest.conversations?.id,
     };
   });
@@ -468,16 +469,14 @@ export function DashboardSupportRequestsPageClient({
     (supportRequest) => supportRequest.status === 'pending',
   );
 
+  // Count of in-progress support requests for the filter buttons
   const inProgressSupportRequests = filteredSupportRequests.filter(
     (supportRequest) => supportRequest.status === 'in_progress',
   );
 
+  // Count of resolved support requests for the filter buttons
   const resolvedSupportRequests = filteredSupportRequests.filter(
     (supportRequest) => supportRequest.status === 'resolved',
-  );
-
-  const closedSupportRequests = filteredSupportRequests.filter(
-    (supportRequest) => supportRequest.status === 'closed',
   );
 
   // Sort by date (newest first)
@@ -523,6 +522,7 @@ export function DashboardSupportRequestsPageClient({
             activeFilter={activeFilter}
             setActiveFilter={setActiveFilter}
             pendingCount={pendingSupportRequests.length}
+            inProgressCount={inProgressSupportRequests.length}
             resolvedCount={resolvedSupportRequests.length}
           />
 
@@ -532,9 +532,13 @@ export function DashboardSupportRequestsPageClient({
                 ? sortedSupportRequests
                 : activeFilter === 'pending'
                   ? pendingSupportRequests
-                  : sortedSupportRequests.filter(
-                      (sr) => sr.status === activeFilter,
-                    )
+                  : activeFilter === 'in_progress'
+                    ? inProgressSupportRequests
+                    : activeFilter === 'resolved'
+                      ? resolvedSupportRequests
+                      : sortedSupportRequests.filter(
+                          (sr) => sr.status === activeFilter,
+                        )
             }
             isLoading={isLoading}
             isProfessionalView={isProfessional}

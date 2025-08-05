@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay/LoadingOverlay';
 import { formatCurrency } from '@/utils';
 import { format } from 'date-fns';
 import {
@@ -17,14 +18,14 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SupportRequestChatWidget } from './SupportRequestChatWidget';
 import { RefundModal } from './RefundModal';
 import { ResolutionModal } from './ResolutionModal';
+import { SupportRequestData } from '@/server/domains/support-requests/actions';
 
 type SupportRequestDetailPageClientProps = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supportRequest: Record<string, any>;
+  supportRequest: SupportRequestData;
   isProfessional: boolean;
   currentUserId: string;
 };
@@ -81,6 +82,37 @@ export function SupportRequestDetailPageClient({
   const router = useRouter();
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
+  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Effect to stop polling when support request is resolved
+  useEffect(() => {
+    if (isProcessingRefund && (supportRequest.status === 'resolved' || supportRequest.refund_status === 'succeeded')) {
+      console.log('Support request resolved, stopping refund polling');
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
+      }
+      setIsProcessingRefund(false);
+    }
+  }, [supportRequest.status, supportRequest.refund_status, isProcessingRefund]);
+
+  // Cleanup intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Extract data from support request
   const clientName = supportRequest.client_user
@@ -91,8 +123,11 @@ export function SupportRequestDetailPageClient({
     ? `${supportRequest.professional_user.first_name || ''} ${supportRequest.professional_user.last_name || ''}`.trim()
     : 'Professional';
 
+  // Directly access the appointment from the supportRequest
   const appointment = supportRequest.appointments;
-  const booking = appointment?.bookings?.[0];
+  
+  // Directly access the booking from the appointment
+  const booking = appointment?.bookings;
 
   // Extract services with better error handling
   let services: string[] = [];
@@ -106,11 +141,15 @@ export function SupportRequestDetailPageClient({
     console.error('Error extracting service names:', error);
   }
 
-  const payment = booking?.booking_payments?.[0];
-
+  // Directly access the payment from the booking
+  const payment = booking?.booking_payments;
+  
+  // Check if payment was made by card (for refund eligibility)
+  const isPaidByCard = payment?.stripe_payment_intent_id;
+  
   // Better service name fallback logic with direct access to service data
   let serviceName = 'General Inquiry';
-
+  
   if (services.length > 0) {
     serviceName = services.join(', ');
   } else if (supportRequest.category === 'refund_request') {
@@ -120,13 +159,78 @@ export function SupportRequestDetailPageClient({
     serviceName = supportRequest.title;
   }
 
-  const handleModalSuccess = () => {
-    // Refresh the page to show updated status
-    router.refresh();
+  const handleModalSuccess = (isRefund = false) => {
+    if (isRefund) {
+      // Set processing state for refunds
+      setIsProcessingRefund(true);
+      
+      let pollCount = 0;
+      const maxPolls = 20; // Poll for up to 60 seconds (20 * 3 seconds)
+      
+      // Clear any existing intervals
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
+      
+      // Poll by refreshing the page data every 3 seconds to check for refund completion
+      pollingIntervalRef.current = setInterval(() => {
+        pollCount++;
+        console.log(`Polling for refund status update... (${pollCount}/${maxPolls})`);
+        
+        // Refresh the page to get updated data from server
+        router.refresh();
+        
+        // Check if we've reached maximum polls
+        if (pollCount >= maxPolls) {
+          console.log('Maximum polling attempts reached, stopping polling');
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          setIsProcessingRefund(false);
+        }
+        
+        // Note: We rely on the webhook's revalidatePath to update the data
+        // The polling will stop when the component re-renders with updated status
+      }, 3000);
+      
+      // Set a backup timeout to ensure we stop polling
+      pollingTimeoutRef.current = setTimeout(() => {
+        console.log('Polling timeout reached, stopping polling and refreshing');
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setIsProcessingRefund(false);
+        router.refresh();
+      }, 65000); // 65 seconds to be safe
+    } else {
+      // For non-refund actions, just refresh the page
+      router.refresh();
+    }
   };
 
+  console.log({
+    supportRequest,
+    booking,
+    appointment,
+    payment,
+    isPaidByCard,
+  })
+
   return (
-    <div className="space-y-6 w-full mx-auto">
+    <div className="space-y-6 w-full mx-auto relative">
+      {/* Loading overlay for refund processing */}
+      {isProcessingRefund && (
+        <LoadingOverlay
+          loadingText="Processing Refund. Please wait while we process the refund with your payment provider. This may take a few moments."
+          variant="light"
+        />
+      )}
+      
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -145,15 +249,16 @@ export function SupportRequestDetailPageClient({
             supportRequest.status !== 'resolved' &&
             supportRequest.status !== 'closed' && (
               <div className="flex gap-3">
-                {/* Refund Button - Only show if appointment has payment and not already a refund request */}
+                {/* Refund Button - Only show if appointment has payment made by card and not already a refund request */}
                 {appointment &&
                   payment &&
-                  supportRequest.category !== 'refund_request' && (
+                  isPaidByCard &&
+                   (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setIsRefundModalOpen(true)}
-                      className="text-orange-600 border-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                      className="text-sm text-orange-600 border-orange-600 hover:bg-orange-50 hover:text-orange-700"
                     >
                       <DollarSign className="h-4 w-4 mr-2" />
                       Process Refund
@@ -464,24 +569,17 @@ export function SupportRequestDetailPageClient({
                             supportRequest.professional_user.first_name,
                           last_name:
                             supportRequest.professional_user.last_name,
-                          profile_photo_url: Array.isArray(
-                            supportRequest.professional_user.profile_photos,
-                          )
-                            ? supportRequest.professional_user
-                                .profile_photos[0]?.url
-                            : supportRequest.professional_user.profile_photos
-                                ?.url,
+                          profile_photo_url: supportRequest.professional_user.profile_photos && 
+                            supportRequest.professional_user.profile_photos.length > 0 ? 
+                            supportRequest.professional_user.profile_photos[0]?.url || undefined : undefined,
                         }
                       : {
                           id: supportRequest.client_user.id,
                           first_name: supportRequest.client_user.first_name,
                           last_name: supportRequest.client_user.last_name,
-                          profile_photo_url: Array.isArray(
-                            supportRequest.client_user.profile_photos,
-                          )
-                            ? supportRequest.client_user.profile_photos[0]
-                                ?.url
-                            : supportRequest.client_user.profile_photos?.url,
+                          profile_photo_url: supportRequest.client_user.profile_photos && 
+                            supportRequest.client_user.profile_photos.length > 0 ? 
+                            supportRequest.client_user.profile_photos[0]?.url || undefined : undefined,
                         }
                   }
                   readOnly={supportRequest.status === 'resolved' || supportRequest.status === 'closed'}
@@ -516,7 +614,14 @@ export function SupportRequestDetailPageClient({
           supportRequestId={supportRequest.id}
           originalAmount={payment.amount + (payment.tip_amount || 0)}
           serviceName={serviceName}
-          onSuccess={handleModalSuccess}
+          onSuccess={() => handleModalSuccess(true)}
+          paymentDetails={{
+            baseAmount: payment.amount - (payment.deposit_amount || 0) - (payment.service_fee || 0),
+            depositAmount: payment.deposit_amount || 0,
+            tipAmount: payment.tip_amount || 0,
+            serviceFee: payment.service_fee || 0,
+            paymentMethod: payment.payment_methods?.name || 'Card',
+          }}
         />
       )}
 

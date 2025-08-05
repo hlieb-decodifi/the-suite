@@ -56,7 +56,7 @@ export function RefundRequestModal({
       // Refunds are now handled through support requests
       // Redirect to create a support request instead
       const { createSupportRequest } = await import(
-        '@/server/domains/support-requests/actions'
+        '@/server/domains/support-requests/client-actions'
       );
       const result = await createSupportRequest({
         appointment_id: appointmentId,

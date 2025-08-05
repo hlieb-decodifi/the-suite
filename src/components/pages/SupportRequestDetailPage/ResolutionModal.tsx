@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { resolveSupportRequest } from '@/server/domains/support-requests/actions';
+import { resolveSupportRequest } from '@/server/domains/support-requests/client-actions';
 
 type ResolutionModalProps = {
   isOpen: boolean;
