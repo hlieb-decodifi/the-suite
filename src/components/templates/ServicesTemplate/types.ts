@@ -2,13 +2,13 @@
 export type Professional = {
   id: string;
   name: string;
-  avatar?: string | undefined;
+  avatar: string;
   address: string;
   rating: number;
   reviewCount: number;
-  profile_id: string; // Database profile ID for use with APIs
+  profile_id?: string;
   hide_full_address: boolean;
-  address_data: {
+  address_data?: {
     id: string;
     country: string;
     state: string;
@@ -18,9 +18,8 @@ export type Professional = {
     latitude: number;
     longitude: number;
   } | null;
-};
-
-// Service type with related professional information
+  is_subscribed?: boolean;
+}
 export type ServiceListItem = {
   id: string;
   name: string;
