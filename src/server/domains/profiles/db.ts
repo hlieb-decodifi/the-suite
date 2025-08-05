@@ -5,6 +5,7 @@ import { ProfileData, HeaderFormValues } from '@/types/profiles';
 export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   const supabase = await createClient();
   
+  // Fetch user, role, and profile info
   const { data, error } = await supabase
     .from('users')
     .select(`
@@ -12,6 +13,8 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
       first_name,
       last_name,
       cookie_consent,
+      role_id,
+      roles:role_id (name),
       professional_profiles (
         description,
         profession,
@@ -25,10 +28,10 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
     `)
     .eq('id', userId)
     .single();
-  
+
   if (error) throw new Error(`Database error: ${error.message}`);
   if (!data) throw new Error('Profile not found');
-  
+
   // Transform from snake_case DB model to camelCase client model
   return {
     id: data.id,

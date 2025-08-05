@@ -20,6 +20,7 @@ export type ProfileData = {
   isPublished: boolean | null;
   isSubscribed: boolean;
   cookieConsent: boolean;
+  isAdmin?: boolean;
 }
 
 // Validation schemas

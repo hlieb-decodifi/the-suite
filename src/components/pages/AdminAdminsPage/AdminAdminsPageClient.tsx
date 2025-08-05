@@ -1,17 +1,17 @@
-// Client component for admin clients tab
-'use client';
+"use client";
+
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
+  import InviteAdminModal from '@/components/modals/InviteAdminModal';
 
-
-
-export default function AdminClientsPageClient({ clients }: { clients: Array<{ id: string; name: string; email: string; createdAt: string; completedAppointmentsCount: number }> }) {
+export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
   const [filterName, setFilterName] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [inviteOpen, setInviteOpen] = useState(false);
 
-  const filteredClients = useMemo(() => {
-    let filtered = clients;
+  const filteredAdmins = useMemo(() => {
+    let filtered = admins;
     if (filterName) {
       filtered = filtered.filter(a => a.name.toLowerCase().includes(filterName.toLowerCase()));
     }
@@ -23,17 +23,25 @@ export default function AdminClientsPageClient({ clients }: { clients: Array<{ i
       }
     });
     return filtered;
-  }, [clients, filterName, sortDirection]);
+  }, [admins, filterName, sortDirection]);
+    
+    // Handler for successful invite
+    const handleInvited = () => {
+      setInviteOpen(false);
+      // Optionally, you can refetch admins here if you use SWR or React Query
+      // Optionally, you can refetch admins here if you use SWR or React Query
+    };
 
   return (
     <div className="space-y-6">
+        <InviteAdminModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={handleInvited} />
       <div className="rounded-lg bg-card border shadow-sm overflow-hidden">
         <div className="p-6 border-b bg-muted/30">
           <Typography variant="h3" className="text-xl font-semibold">
-            Clients
+            Admins
           </Typography>
           <Typography variant="small" className="text-muted-foreground">
-            Showing {filteredClients.length} clients
+            Showing {filteredAdmins.length} admins
           </Typography>
         </div>
         <div className="p-4">
@@ -59,6 +67,12 @@ export default function AdminClientsPageClient({ clients }: { clients: Array<{ i
                 <option value="desc">Descending</option>
               </select>
             </label>
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition"
+                onClick={() => setInviteOpen(true)}
+              >
+                Invite Admin
+              </button>
           </div>
           {/* Desktop table view */}
           <div className="hidden md:block overflow-x-auto">
@@ -68,29 +82,27 @@ export default function AdminClientsPageClient({ clients }: { clients: Array<{ i
                   <th className="border px-2 py-1">Name</th>
                   <th className="border px-2 py-1">Email</th>
                   <th className="border px-2 py-1">Created Date</th>
-                  <th className="border px-2 py-1">Completed Appointments</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredClients.length === 0 ? (
+                {filteredAdmins.length === 0 ? (
                   <tr>
-                    <td colSpan={4}>
+                    <td colSpan={3}>
                       <div className="flex flex-col items-center justify-center space-y-2 py-8">
                         <CalendarDays className="h-12 w-12 text-muted-foreground" />
-                        <Typography>No clients found</Typography>
+                        <Typography>No admins found</Typography>
                         <Typography variant="small" className="text-muted-foreground">
-                          Clients will appear here once added.
+                          Admins will appear here once added.
                         </Typography>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredClients.map(client => (
-                    <tr key={client.id} className="hover:bg-muted/50 cursor-pointer">
-                      <td className="border px-2 py-1">{client.name}</td>
-                      <td className="border px-2 py-1">{client.email}</td>
-                      <td className="border px-2 py-1">{new Date(client.createdAt).toLocaleDateString()}</td>
-                      <td className="border px-2 py-1 text-center">{client.completedAppointmentsCount ?? 0}</td>
+                  filteredAdmins.map(admin => (
+                    <tr key={admin.id} className="hover:bg-muted/50 cursor-pointer">
+                      <td className="border px-2 py-1">{admin.name}</td>
+                      <td className="border px-2 py-1">{admin.email}</td>
+                      <td className="border px-2 py-1">{new Date(admin.createdAt).toLocaleDateString()}</td>
                     </tr>
                   ))
                 )}
@@ -99,31 +111,31 @@ export default function AdminClientsPageClient({ clients }: { clients: Array<{ i
           </div>
           {/* Mobile card view */}
           <div className="md:hidden">
-            {filteredClients.length === 0 ? (
+            {filteredAdmins.length === 0 ? (
               <div className="flex flex-col items-center justify-center space-y-2 py-8">
                 <CalendarDays className="h-12 w-12 text-muted-foreground" />
-                <Typography>No clients found</Typography>
+                <Typography>No admins found</Typography>
                 <Typography variant="small" className="text-muted-foreground">
-                  Clients will appear here once added.
+                  Admins will appear here once added.
                 </Typography>
               </div>
             ) : (
-              filteredClients.map(client => (
-                <div key={client.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
+              filteredAdmins.map(admin => (
+                <div key={admin.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>
-                      <Typography className="font-medium">{client.name}</Typography>
-                      <div className="text-muted-foreground text-sm mt-1">{client.email}</div>
+                      <Typography className="font-medium">{admin.name}</Typography>
+                      <div className="text-muted-foreground text-sm mt-1">
+                        {admin.email}
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2">
+                  <div className="mt-3 pt-3 border-t flex justify-between items-center">
                     <div>
-                      <Typography variant="small" className="text-muted-foreground">Completed</Typography>
-                      <Typography className="font-medium">{client.completedAppointmentsCount ?? 0}</Typography>
-                    </div>
-                    <div className="col-span-2">
-                      <Typography variant="small" className="text-muted-foreground">Created</Typography>
-                      <Typography className="font-medium">{new Date(client.createdAt).toLocaleDateString()}</Typography>
+                      <Typography variant="small" className="text-muted-foreground">
+                        Created
+                      </Typography>
+                      <Typography className="font-medium">{new Date(admin.createdAt).toLocaleDateString()}</Typography>
                     </div>
                   </div>
                 </div>

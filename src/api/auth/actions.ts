@@ -48,6 +48,60 @@ async function userExistsByEmail(email: string): Promise<{ exists: boolean; erro
 }
 
 /**
+ * Server action to invite a new admin
+ */
+export async function inviteAdminAction(email: string, firstName?: string, lastName?: string) {
+  // Check if user already exists
+  const { exists, error: userCheckError } = await userExistsByEmail(email);
+  if (userCheckError) {
+    return { success: false, error: 'Error checking for existing user.' };
+  }
+  if (exists) {
+    return { success: false, error: 'A user with this email already exists.' };
+  }
+
+  // Get Supabase admin client
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { success: false, error: 'Server configuration error.' };
+  }
+  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+  // Get admin role id
+  const { data: rolesData, error: rolesError } = await adminSupabase
+    .from('roles')
+    .select('id')
+    .eq('name', 'admin')
+    .single();
+  if (rolesError || !rolesData?.id) {
+    return { success: false, error: 'Could not find admin role id.' };
+  }
+  const ADMIN_ROLE_ID = rolesData.id;
+
+  // Create user with admin role, no password, email not confirmed
+  const { error: userError } = await adminSupabase.auth.admin.createUser({
+    email,
+    email_confirm: false,
+    user_metadata: {
+      first_name: firstName,
+      last_name: lastName,
+      role_id: ADMIN_ROLE_ID,
+    },
+  });
+  if (userError) {
+    return { success: false, error: userError.message };
+  }
+
+  // Send invite (verification) email
+  // Supabase JS v2 does not have sendEmail, so we rely on the default invite email
+  // The user will receive the invite automatically
+  // If you want to customize, you can use an external email provider here
+
+  return { success: true };
+}
+
+/**
  * Server action for user signup
  */
 export async function signUpAction(data: SignUpFormValues, redirectTo?: string) {
