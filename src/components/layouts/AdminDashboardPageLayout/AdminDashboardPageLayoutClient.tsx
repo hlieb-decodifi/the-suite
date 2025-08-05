@@ -63,11 +63,13 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
   // Determine active tab from pathname
   const getActiveTabFromPath = (path: string): string => {
     if (path === '/admin' || path === '/admin/') return 'overview';
-    if (path.includes('/admin/bookings')) return 'bookings';
+    if (path.includes('/admin/appointments')) return 'appointments';
     if (path.includes('/admin/clients')) return 'clients';
     if (path.includes('/admin/professionals')) return 'professionals';
     if (path.includes('/admin/refunds')) return 'refunds';
     if (path.includes('/admin/messages')) return 'messages';
+    if (path.includes('/admin/admins')) return 'admins';
+    if (path.includes('/admin/legal')) return 'legal';
     return 'overview';
   };
 
@@ -81,11 +83,13 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
 
   const tabs: TabItem[] = useMemo(() => [
     { key: 'overview', label: 'Overview', href: createTabUrl('/admin'), isActive: activeTab === 'overview' },
-    { key: 'bookings', label: 'Bookings', href: createTabUrl('/admin/bookings'), isActive: activeTab === 'bookings' },
+    { key: 'appointments', label: 'Appointments', href: createTabUrl('/admin/appointments'), isActive: activeTab === 'appointments' },
     { key: 'clients', label: 'Clients', href: createTabUrl('/admin/clients'), isActive: activeTab === 'clients' },
     { key: 'professionals', label: 'Professionals', href: createTabUrl('/admin/professionals'), isActive: activeTab === 'professionals' },
+    { key: 'admins', label: 'Admins', href: createTabUrl('/admin/admins'), isActive: activeTab === 'admins' },
     { key: 'refunds', label: 'Refunds', href: createTabUrl('/admin/refunds'), isActive: activeTab === 'refunds' },
     { key: 'messages', label: 'Messages', href: createTabUrl('/admin/messages'), isActive: activeTab === 'messages' },
+    { key: 'legal', label: 'Legal', href: createTabUrl('/admin/legal'), isActive: activeTab === 'legal' },
   ], [activeTab, searchParams]);
 
   const displayName = [user.user_metadata?.first_name, user.user_metadata?.last_name]
@@ -153,4 +157,4 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
       <div className="mt-4">{childrenWithDashboardData}</div>
     </div>
   );
-} 
+}

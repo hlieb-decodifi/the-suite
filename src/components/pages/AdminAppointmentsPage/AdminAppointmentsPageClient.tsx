@@ -1,12 +1,12 @@
-// Client component for admin bookings tab
+// Client component for admin appointments tab
 'use client';
 import { useDateRange } from '@/components/layouts/AdminDashboardPageLayout/DateRangeContextProvider';
 import { useEffect, useState } from 'react';
-import { AdminBookingsTemplate } from '@/components/templates/AdminBookingsTemplate';
+import { AdminAppointmentsTemplate } from '@/components/templates/AdminAppointmentsTemplate';
 
-export function AdminBookingsPageClient() {
+export function AdminAppointmentsPageClient() {
   const { start, end } = useDateRange();
-  const [bookingsData, setBookingsData] = useState<unknown>(null);
+  const [appointmentsData, setAppointmentsData] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,8 +15,8 @@ export function AdminBookingsPageClient() {
     setError(null);
     // Placeholder: simulate async fetch
     setTimeout(() => {
-      setBookingsData({
-        bookings: [],
+      setAppointmentsData({
+        appointments: [],
         start,
         end,
       });
@@ -24,11 +24,9 @@ export function AdminBookingsPageClient() {
     }, 500);
   }, [start, end]);
 
-  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading bookings...</div>;
+  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading appointments...</div>;
   if (error) return <div className="py-8 text-center text-destructive">{error}</div>;
-  if (!bookingsData) return null;
+  if (!appointmentsData) return null;
 
-  return (
-    <AdminBookingsTemplate />
-  );
-} 
+  return <AdminAppointmentsTemplate />;
+}
