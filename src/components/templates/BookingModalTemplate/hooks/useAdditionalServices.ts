@@ -89,7 +89,7 @@ async function fetchAdditionalServices(
         professional: {
           id: user?.id || 'unknown',
           name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
-          avatar: profilePhoto,
+          avatar: profilePhoto ?? '',
           address: professionalProfile?.location || 'Location not specified',
           rating: 0,
           reviewCount: 0,
