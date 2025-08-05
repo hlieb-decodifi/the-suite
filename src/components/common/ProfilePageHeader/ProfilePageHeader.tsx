@@ -1,20 +1,7 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Typography } from '@/components/ui/typography';
-import {
-  Eye,
-  EyeOff,
-  LayoutDashboard,
-  AlertTriangle,
-  X,
-  MessageCircle,
-} from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useProfile } from '@/api/profiles/hooks';
-import { User } from '@supabase/supabase-js';
-import Link from 'next/link';
-import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -22,11 +9,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/utils';
-import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
-import { useRouter } from 'next/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Typography } from '@/components/ui/typography';
 import { useToast } from '@/components/ui/use-toast';
-import { MessageBadge } from '@/components/ui/message-badge';
+import { createOrGetConversationEnhanced } from '@/server/domains/messages/actions';
+import { cn } from '@/utils';
+import { User } from '@supabase/supabase-js';
+import {
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  LayoutDashboard,
+  MessageCircle,
+  X,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 // Type for ProfilePageHeader props
 export type ProfilePageHeaderProps = {
@@ -68,7 +67,6 @@ export function ProfilePageHeader({
   isCurrentUserClient = false,
   hasSharedAppointments = false,
   professionalId,
-  unreadMessagesCount = 0,
 }: ProfilePageHeaderProps) {
   const [showBlockingDialog, setShowBlockingDialog] = useState(false);
   const [isMessageLoading, setIsMessageLoading] = useState(false);
@@ -186,13 +184,6 @@ export function ProfilePageHeader({
                 <Button variant="outline" className="w-full md:w-auto relative">
                   <LayoutDashboard size={16} className="mr-2" />
                   Go to Dashboard
-                  {unreadMessagesCount > 0 && (
-                    <MessageBadge
-                      count={unreadMessagesCount}
-                      size="sm"
-                      className="ml-2"
-                    />
-                  )}
                 </Button>
               </Link>
             )}

@@ -34,6 +34,8 @@ export async function getAdminDashboardData({ startDate, endDate }: { startDate?
   const { data, error } = await adminSupabase.rpc('get_admin_dashboard_data', params);
   if (error) throw new Error(error.message);
   if (!data) throw new Error('No dashboard data returned');
+  (data as DashboardData).totalRefunds = 0;
+  (data as DashboardData).newRefunds = 0;
   return data as DashboardData;
 }
 

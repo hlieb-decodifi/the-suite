@@ -5,7 +5,7 @@ import { Header, type UserInfo } from '@/components/common/Header';
 import { Footer } from '@/components/common/Footer';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthSyncWrapper } from './components/AuthSyncWrapper';
-import { getUnreadMessagesCount } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
+import { getUnreadMessagesCount, getUnreadSupportMessagesCount } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
 import { CookieConsent } from '@/components/common/CookieConsent';
 
 export type RootLayoutTemplateProps = {
@@ -27,6 +27,7 @@ export async function RootLayoutTemplate({
   let userInfo: UserInfo | null = null;
   let isProfessional = false;
   let unreadMessagesCount = 0;
+  let unreadSupportRequestsCount = 0;
 
   if (user) {
     // Check if user is a professional
@@ -40,6 +41,9 @@ export async function RootLayoutTemplate({
 
     // Fetch unread messages count
     unreadMessagesCount = await getUnreadMessagesCount(user.id);
+
+    // Fetch unread support requests count
+    unreadSupportRequestsCount = await getUnreadSupportMessagesCount(user.id);
 
     // Fetch user's first and last name from the database
     let firstName = '';
@@ -78,6 +82,7 @@ export async function RootLayoutTemplate({
           userInfo={userInfo}
           isProfessional={isProfessional}
           unreadMessagesCount={unreadMessagesCount}
+          unreadSupportRequestsCount={unreadSupportRequestsCount}
         />
         <main className="flex flex-grow container mx-auto py-8">
           {children}

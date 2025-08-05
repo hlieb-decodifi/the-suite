@@ -1575,10 +1575,11 @@ create table conversations (
   id uuid primary key default uuid_generate_v4(),
   client_id uuid references users not null,
   professional_id uuid references users not null,
+  purpose text default 'general', -- Purpose of conversation: 'general', 'support_request', etc.
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  -- Ensure unique conversation between client and professional
-  constraint unique_conversation unique (client_id, professional_id),
+  -- Ensure unique conversation between client and professional for a specific purpose
+  constraint unique_conversation unique (client_id, professional_id, purpose),
   -- Ensure client is actually a client and professional is actually a professional
   constraint client_is_client check (is_client(client_id)),
   constraint professional_is_professional check (is_professional(professional_id))
@@ -1781,6 +1782,330 @@ create policy "Users can insert attachments in their conversations"
 -- Add trigger for updated_at
 create trigger handle_updated_at before update on public.message_attachments
   for each row execute procedure moddatetime (updated_at);
+
+/**
+* SUPPORT REQUESTS
+* Ticket-like system for client support requests with conversation integration
+*/
+
+-- Create enum for support request statuses
+create type support_request_status as enum ('pending', 'in_progress', 'resolved', 'closed');
+
+-- Create enum for support request priority levels
+create type support_request_priority as enum ('low', 'medium', 'high', 'urgent');
+
+-- Create enum for support request categories
+create type support_request_category as enum (
+  'booking_issue',
+  'payment_issue', 
+  'profile_issue',
+  'technical_issue',
+  'service_quality',
+  'billing_dispute',
+  'account_access',
+  'refund_request',
+  'other'
+);
+
+create table support_requests (
+  id uuid primary key default uuid_generate_v4(),
+  -- The client who created the support request
+  client_id uuid references users not null,
+  -- The professional this request is about (if applicable)
+  professional_id uuid references users,
+  -- The conversation for this support request (leveraging existing messaging system)
+  conversation_id uuid references conversations not null,
+  -- Core request details
+  title text not null,
+  description text not null,
+  category support_request_category not null default 'other',
+  priority support_request_priority not null default 'medium',
+  status support_request_status not null default 'pending',
+  -- Related booking/appointment (if applicable)
+  booking_id uuid references bookings,
+  appointment_id uuid references appointments,
+  -- Refund-specific fields (only used when category = 'refund_request')
+  booking_payment_id uuid references booking_payments,
+  requested_amount decimal(10, 2), -- Amount requested by client
+  original_amount decimal(10, 2), -- Original payment amount for reference
+  transaction_fee decimal(10, 2) default 0, -- Stripe transaction fee
+  refund_amount decimal(10, 2), -- Final refunded amount (after fees)
+  stripe_refund_id text, -- Stripe refund ID when processed
+  professional_notes text, -- Professional's notes when approving/declining
+  declined_reason text, -- Reason for decline if applicable
+  processed_at timestamp with time zone, -- When refund was processed by Stripe
+  -- Resolution details
+  resolved_at timestamp with time zone,
+  resolved_by uuid references users,
+  resolution_notes text,
+  -- Tracking fields
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Constraints
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (professional_id is null or is_professional(professional_id)),
+  constraint resolved_by_is_professional check (resolved_by is null or is_professional(resolved_by)),
+  constraint resolved_status_consistency check (
+    (status in ('resolved', 'closed') and resolved_at is not null and resolved_by is not null) 
+    or (status not in ('resolved', 'closed') and resolved_at is null)
+  ),
+  -- Refund-specific constraints
+  constraint refund_appointment_unique unique (appointment_id) deferrable initially deferred,
+  constraint valid_refund_amount check (
+    category != 'refund_request' or 
+    requested_amount is null or 
+    (requested_amount > 0 and requested_amount <= original_amount)
+  ),
+  constraint refund_fields_consistency check (
+    category != 'refund_request' or 
+    (appointment_id is not null and booking_payment_id is not null and original_amount is not null)
+  )
+);
+
+alter table support_requests enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_support_requests_client_id on support_requests(client_id);
+create index if not exists idx_support_requests_professional_id on support_requests(professional_id);
+create index if not exists idx_support_requests_conversation_id on support_requests(conversation_id);
+create index if not exists idx_support_requests_status on support_requests(status);
+create index if not exists idx_support_requests_priority on support_requests(priority);
+create index if not exists idx_support_requests_category on support_requests(category);
+create index if not exists idx_support_requests_created_at on support_requests(created_at);
+create index if not exists idx_support_requests_booking_id on support_requests(booking_id);
+create index if not exists idx_support_requests_appointment_id on support_requests(appointment_id);
+create index if not exists idx_support_requests_stripe_refund_id on support_requests(stripe_refund_id) where stripe_refund_id is not null;
+
+-- Function to validate refund request creation conditions
+create or replace function can_create_refund_request(p_appointment_id uuid, p_client_id uuid)
+returns boolean as $$
+declare
+  appointment_status text;
+  appointment_client_id uuid;
+  payment_method_online boolean;
+  payment_status text;
+  existing_refund_count integer;
+begin
+  -- Get appointment and payment details
+  select a.status, b.client_id, pm.is_online, bp.status 
+  into appointment_status, appointment_client_id, payment_method_online, payment_status
+  from appointments a
+  join bookings b on a.booking_id = b.id
+  join booking_payments bp on b.id = bp.booking_id
+  join payment_methods pm on bp.payment_method_id = pm.id
+  where a.id = p_appointment_id;
+  
+  -- Check if appointment exists
+  if appointment_status is null then
+    return false;
+  end if;
+  
+  -- Check if appointment is completed
+  if appointment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if requesting user is the client for this appointment
+  if appointment_client_id != p_client_id then
+    return false;
+  end if;
+  
+  -- Check if payment was made by card (online payment method)
+  if payment_method_online != true then
+    return false;
+  end if;
+  
+  -- Check if payment was completed
+  if payment_status != 'completed' then
+    return false;
+  end if;
+  
+  -- Check if refund request already exists for this appointment
+  select count(*) into existing_refund_count
+  from support_requests
+  where appointment_id = p_appointment_id and category = 'refund_request';
+  
+  if existing_refund_count > 0 then
+    return false;
+  end if;
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Function to create a conversation for support request
+create or replace function create_support_conversation(
+  p_client_id uuid,
+  p_professional_id uuid default null,
+  p_purpose text default 'support_request'
+)
+returns uuid as $$
+declare
+  conversation_uuid uuid;
+  default_professional_id uuid;
+begin
+  -- If no professional specified, use a default support professional or admin
+  if p_professional_id is null then
+    -- Find first admin user to handle support requests
+    select u.id into default_professional_id
+    from users u
+    join roles r on u.role_id = r.id
+    where r.name = 'admin'
+    limit 1;
+    
+    -- If no admin found, find any professional
+    if default_professional_id is null then
+      select u.id into default_professional_id
+      from users u
+      join roles r on u.role_id = r.id
+      where r.name = 'professional'
+      limit 1;
+    end if;
+    
+    p_professional_id := default_professional_id;
+  end if;
+  
+  -- Create a new conversation with specific purpose
+  -- Note: Support requests always create new conversations for isolation
+  insert into conversations (client_id, professional_id, purpose)
+  values (p_client_id, p_professional_id, p_purpose)
+  on conflict (client_id, professional_id, purpose) 
+  do update set updated_at = timezone('utc'::text, now())
+  returning id into conversation_uuid;
+  
+  return conversation_uuid;
+end;
+$$ language plpgsql security definer;
+
+-- Function to update support request status
+create or replace function update_support_request_status(
+  p_request_id uuid,
+  p_new_status support_request_status,
+  p_resolved_by uuid default null,
+  p_resolution_notes text default null
+)
+returns boolean as $$
+declare
+  current_status support_request_status;
+begin
+  -- Get current status
+  select status into current_status
+  from support_requests
+  where id = p_request_id;
+  
+  -- Validate status transition
+  if current_status = 'closed' then
+    raise exception 'Cannot change status of a closed support request';
+  end if;
+  
+  -- Update the support request
+  update support_requests
+  set 
+    status = p_new_status,
+    resolved_at = case 
+      when p_new_status in ('resolved', 'closed') then timezone('utc'::text, now())
+      else null 
+    end,
+    resolved_by = case 
+      when p_new_status in ('resolved', 'closed') then coalesce(p_resolved_by, auth.uid())
+      else null 
+    end,
+    resolution_notes = case 
+      when p_new_status in ('resolved', 'closed') then p_resolution_notes
+      else resolution_notes 
+    end,
+    updated_at = timezone('utc'::text, now())
+  where id = p_request_id;
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Function to prevent further messages in resolved/closed support requests
+create or replace function check_support_request_messaging()
+returns trigger as $$
+declare
+  support_request_status support_request_status;
+begin
+  -- Check if this conversation is linked to a support request
+  select sr.status into support_request_status
+  from support_requests sr
+  where sr.conversation_id = new.conversation_id;
+  
+  -- If linked to support request and it's resolved/closed, prevent new messages
+  if support_request_status in ('resolved', 'closed') then
+    raise exception 'Cannot send messages to a % support request', support_request_status;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger to prevent messaging in resolved/closed support requests
+create trigger prevent_messaging_resolved_support
+  before insert on messages
+  for each row
+  execute function check_support_request_messaging();
+
+/**
+* RLS policies for support requests
+*/
+
+-- Support request policies
+create policy "Clients can view their own support requests"
+  on support_requests for select
+  using (auth.uid() = client_id);
+
+create policy "Professionals can view support requests they are assigned to"
+  on support_requests for select
+  using (auth.uid() = professional_id);
+
+create policy "Professionals can view support requests in their conversations"
+  on support_requests for select
+  using (
+    exists (
+      select 1 from conversations c
+      where c.id = support_requests.conversation_id
+      and c.professional_id = auth.uid()
+    )
+  );
+
+create policy "Clients can create support requests"
+  on support_requests for insert
+  with check (
+    auth.uid() = client_id
+    and is_client(client_id)
+    and (professional_id is null or is_professional(professional_id))
+    and (
+      category != 'refund_request' or 
+      (appointment_id is not null and can_create_refund_request(appointment_id, client_id))
+    )
+  );
+
+create policy "Professionals can update support request status and resolution"
+  on support_requests for update
+  using (
+    auth.uid() = professional_id
+    or exists (
+      select 1 from conversations c
+      where c.id = support_requests.conversation_id
+      and c.professional_id = auth.uid()
+    )
+  );
+
+-- Clients are not allowed to update support requests, only create and view them
+
+-- Update realtime publication to include support requests
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table 
+  services, 
+  bookings, 
+  appointments, 
+  subscription_plans, 
+  professional_subscriptions,
+  conversations,
+  messages,
+  support_requests;
 
 /**
 * LEGAL DOCUMENTS
@@ -2232,149 +2557,13 @@ create trigger update_reviews_updated_at
   execute function update_reviews_updated_at();
 
 /**
-* REFUNDS SYSTEM
-* Tables for managing refund requests and processing
+* REFUNDS SYSTEM - DEPRECATED
+* Refund requests are now handled through the support_requests table with category='refund_request'
+* This provides better tracking, communication, and resolution workflow.
 */
 
 /**
-* REFUNDS
-* Tracks refund requests from clients and their processing status
-*/
-create table refunds (
-  id uuid primary key default uuid_generate_v4(),
-  appointment_id uuid references appointments not null unique, -- One refund per appointment
-  client_id uuid references users not null,
-  professional_id uuid references users not null,
-  booking_payment_id uuid references booking_payments not null,
-  reason text not null,
-  requested_amount decimal(10, 2), -- Amount requested by client (initially null, set by professional)
-  original_amount decimal(10, 2) not null, -- Original payment amount for reference
-  transaction_fee decimal(10, 2) default 0 not null, -- Stripe transaction fee (professional responsibility)
-  refund_amount decimal(10, 2), -- Final refunded amount (after fees)
-  status text not null default 'pending' check (status in ('pending', 'approved', 'processing', 'completed', 'declined', 'failed')),
-  stripe_refund_id text, -- Stripe refund ID when processed
-  professional_notes text, -- Professional's notes when approving/declining
-  declined_reason text, -- Reason for decline if applicable
-  processed_at timestamp with time zone, -- When refund was processed by Stripe
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  -- Ensure client is actually a client and professional is actually a professional
-  constraint client_is_client check (is_client(client_id)),
-  constraint professional_is_professional check (is_professional(professional_id)),
-  -- Ensure requested amount doesn't exceed original amount
-  constraint valid_refund_amount check (requested_amount is null or (requested_amount > 0 and requested_amount <= original_amount))
-);
-alter table refunds enable row level security;
-
--- Create indexes for better performance
-create index if not exists idx_refunds_appointment_id on refunds(appointment_id);
-create index if not exists idx_refunds_client_id on refunds(client_id);
-create index if not exists idx_refunds_professional_id on refunds(professional_id);
-create index if not exists idx_refunds_status on refunds(status);
-create index if not exists idx_refunds_created_at on refunds(created_at);
-create index if not exists idx_refunds_stripe_refund_id on refunds(stripe_refund_id) where stripe_refund_id is not null;
-
--- Function to validate refund creation conditions
-create or replace function can_create_refund(p_appointment_id uuid, p_client_id uuid)
-returns boolean as $$
-declare
-  appointment_status text;
-  appointment_client_id uuid;
-  payment_method_online boolean;
-  payment_status text;
-  existing_refund_count integer;
-begin
-  -- Get appointment and payment details
-  select a.status, b.client_id, pm.is_online, bp.status 
-  into appointment_status, appointment_client_id, payment_method_online, payment_status
-  from appointments a
-  join bookings b on a.booking_id = b.id
-  join booking_payments bp on b.id = bp.booking_id
-  join payment_methods pm on bp.payment_method_id = pm.id
-  where a.id = p_appointment_id;
-  
-  -- Check if appointment exists
-  if appointment_status is null then
-    return false;
-  end if;
-  
-  -- Check if appointment is completed
-  if appointment_status != 'completed' then
-    return false;
-  end if;
-  
-  -- Check if requesting user is the client for this appointment
-  if appointment_client_id != p_client_id then
-    return false;
-  end if;
-  
-  -- Check if payment was made by card (online payment method)
-  if payment_method_online != true then
-    return false;
-  end if;
-  
-  -- Check if payment was completed
-  if payment_status != 'completed' then
-    return false;
-  end if;
-  
-  -- Check if refund already exists for this appointment
-  select count(*) into existing_refund_count
-  from refunds
-  where appointment_id = p_appointment_id;
-  
-  if existing_refund_count > 0 then
-    return false;
-  end if;
-  
-  return true;
-end;
-$$ language plpgsql security definer;
-
-/**
-* RLS policies for refunds
-*/
-
--- Clients can view their own refund requests
-create policy "Clients can view their own refund requests"
-  on refunds for select
-  using (auth.uid() = client_id);
-
--- Professionals can view refund requests for their appointments
-create policy "Professionals can view refund requests for their appointments"
-  on refunds for select
-  using (auth.uid() = professional_id);
-
--- Clients can create refund requests for their completed card-paid appointments
-create policy "Clients can create refund requests for eligible appointments"
-  on refunds for insert
-  with check (
-    auth.uid() = client_id
-    and can_create_refund(appointment_id, client_id)
-  );
-
--- Professionals can update refund requests (approve/decline, set amounts)
-create policy "Professionals can update refund requests for their appointments"
-  on refunds for update
-  using (auth.uid() = professional_id)
-  with check (auth.uid() = professional_id);
-
--- Add trigger for updated_at on refunds
-create or replace function update_refunds_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = timezone('utc'::text, now());
-  return new;
-end;
-$$ language plpgsql;
-
-create trigger update_refunds_updated_at
-  before update on refunds
-  for each row
-  execute function update_refunds_updated_at();
-
-/**
-* Update realtime publication to include refunds and reviews
+* Update realtime publication to include support_requests and reviews
 */
 drop publication if exists supabase_realtime;
 create publication supabase_realtime for table 
@@ -2386,7 +2575,7 @@ create publication supabase_realtime for table
   conversations,
   messages,
   reviews,
-  refunds;
+  support_requests;
 
 -- Add a function to safely insert address and return the ID (bypasses RLS)
 create or replace function insert_address_and_return_id(
@@ -2610,8 +2799,8 @@ begin
     'newProfessionals', (select count(*) from professional_profiles where created_at >= from_date and created_at <= to_date),
     'totalChats', (select count(*) from conversations),
     'newChats', (select count(*) from conversations where created_at >= from_date and created_at <= to_date),
-    'totalRefunds', (select count(*) from refunds),
-    'newRefunds', (select count(*) from refunds where created_at >= from_date and created_at <= to_date)
+    'totalRefunds', (select count(*) from booking_payments where status = 'refunded'),
+    'newRefunds', (select count(*) from booking_payments where status = 'refunded' and refunded_at >= from_date and refunded_at <= to_date)
   );
 end;
 $$ security definer;

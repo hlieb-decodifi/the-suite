@@ -22,6 +22,7 @@ export type HeaderProps = {
   userInfo: UserInfo | null;
   isProfessional?: boolean;
   unreadMessagesCount?: number;
+  unreadSupportRequestsCount?: number;
 };
 
 export function Header({
@@ -30,6 +31,7 @@ export function Header({
   userInfo,
   isProfessional = false,
   unreadMessagesCount = 0,
+  unreadSupportRequestsCount = 0,
 }: HeaderProps) {
   const {
     isSignUpModalOpen,
@@ -46,6 +48,7 @@ export function Header({
         isProfessional={isProfessional}
         userInfo={userInfo}
         unreadMessagesCount={unreadMessagesCount}
+        unreadSupportRequestsCount={unreadSupportRequestsCount}
       />
     ) : (
       <AuthButtons
@@ -88,6 +91,7 @@ export function Header({
           userInfo={mobileUserInfo}
           isProfessional={isProfessional}
           unreadMessagesCount={unreadMessagesCount}
+          unreadSupportRequestsCount={unreadSupportRequestsCount}
           onSignUpClick={authHandlers.handleSignUpClick}
           onSignInClick={authHandlers.handleSignInClick}
           onSearch={handleSearch}
