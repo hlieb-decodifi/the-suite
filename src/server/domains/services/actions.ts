@@ -148,10 +148,10 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
   const supabase = await createClient();
 
   try {
-    // Get professional profile
+    // Get professional profile and its max_services if set
     const { data: professionalProfile, error: profileError } = await supabase
       .from('professional_profiles')
-      .select('id')
+      .select('id, max_services')
       .eq('user_id', userId)
       .single();
 
@@ -175,16 +175,41 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
       };
     }
 
-    // Get service limit from service_limits table (defaults to 50 if not set)
-    const { data: limitData } = await supabase
-      .from('service_limits')
-      .select('max_services')
-      .eq('professional_profile_id', professionalProfile.id)
-      .single();
+    // 1. Try professional_profiles.max_services
+    let maxServices = professionalProfile.max_services;
 
-    // If no custom limit is set or query failed, use default of 50
-    const maxServices = limitData?.max_services || 50;
-    
+    // 2. If not set, try service_limits table
+    if (maxServices == null) {
+      const { data: limitData } = await supabase
+        .from('service_limits')
+        .select('max_services')
+        .eq('professional_profile_id', professionalProfile.id)
+        .single();
+      if (limitData?.max_services != null) {
+        maxServices = limitData.max_services;
+      }
+    }
+
+    // 3. If still not set, try admin_configs table
+    if (maxServices == null) {
+      const { data: adminConfig } = await supabase
+        .from('admin_configs')
+        .select('value')
+        .eq('key', 'max_services_default')
+        .single();
+      if (adminConfig?.value != null) {
+        const parsed = parseInt(adminConfig.value, 10);
+        if (!isNaN(parsed)) {
+          maxServices = parsed;
+        }
+      }
+    }
+
+    // 4. Fallback to 50
+    if (maxServices == null) {
+      maxServices = 50;
+    }
+
     const currentCountNum = currentCount || 0;
     const remaining = Math.max(0, maxServices - currentCountNum);
     const isAtLimit = currentCountNum >= maxServices;

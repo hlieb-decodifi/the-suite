@@ -146,6 +146,8 @@ create table professional_profiles (
   cancellation_48h_charge_percentage decimal(5,2) default 25.00 not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+  ,max_services integer -- Maximum number of services allowed for this professional
+  -- If null, use default from admin_configs
 );
 alter table professional_profiles enable row level security;
 
@@ -469,8 +471,11 @@ begin
   
   if new.role_id = professional_role_id then
     -- Create professional profile if it doesn't exist
-    insert into professional_profiles (user_id)
-    values (new.id)
+    insert into professional_profiles (user_id, max_services)
+    values (
+      new.id,
+      get_admin_config('max_services_default', '50')::integer
+    )
     on conflict (user_id) do nothing;
   end if;
   

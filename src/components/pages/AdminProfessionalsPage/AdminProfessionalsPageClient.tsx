@@ -1,14 +1,22 @@
 // Client component for admin professionals tab
 'use client';
+
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { ProfessionalDetailsModal } from '@/components/modals/ProfessionalDetailsModal/ProfessionalDetailsModal';
+import type { ProfessionalDetails as ServerProfessionalDetails } from '@/lib/admin/fetchProfessionalDetails';
+
 
 
 
 export default function AdminProfessionalsPageClient({ professionals }: { professionals: Array<{ id: string; name: string; email: string; createdAt: string; serviceCount: number; completedAppointmentsCount: number; isPublished: boolean }> }) {
   const [filterName, setFilterName] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [modalOpen, setModalOpen] = useState(false);
+  type ModalProfessionalDetails = Omit<ServerProfessionalDetails, 'createdAt'> & { name: string; isPublished: boolean; createdAt: string };
+  const [selectedProfessional, setSelectedProfessional] = useState<ModalProfessionalDetails | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
   const filteredProfessionals = useMemo(() => {
     let filtered = professionals;
@@ -25,8 +33,40 @@ export default function AdminProfessionalsPageClient({ professionals }: { profes
     return filtered;
   }, [professionals, filterName, sortDirection]);
 
+
+  // Fetch full professional details from API
+  async function handleProfessionalClick(professional: { id: string; name: string; isPublished: boolean }) {
+    setModalLoading(true);
+    setModalOpen(true);
+    setSelectedProfessional(null);
+    try {
+      const res = await fetch(`/api/admin/professionals/${professional.id}/details`);
+      if (!res.ok) throw new Error('Failed to fetch details');
+      const data = await res.json();
+      setSelectedProfessional({
+        ...data,
+        name: professional.name, // fallback to list name if needed
+        isPublished: professional.isPublished,
+        createdAt: data.createdAt !== undefined && data.createdAt !== null ? String(data.createdAt) : '', // Always provide a string
+      });
+    } catch {
+      setSelectedProfessional(null);
+    } finally {
+      setModalLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <ProfessionalDetailsModal
+        isOpen={modalOpen}
+        onOpenChange={open => {
+          setModalOpen(open);
+          if (!open) setSelectedProfessional(null);
+        }}
+        professional={selectedProfessional}
+        loading={modalLoading}
+      />
       <div className="rounded-lg bg-card border shadow-sm overflow-hidden">
         <div className="p-6 border-b bg-muted/30">
           <Typography variant="h3" className="text-xl font-semibold">
@@ -88,7 +128,11 @@ export default function AdminProfessionalsPageClient({ professionals }: { profes
                   </tr>
                 ) : (
                   filteredProfessionals.map(professional => (
-                    <tr key={professional.id} className="hover:bg-muted/50 cursor-pointer">
+                    <tr
+                      key={professional.id}
+                      className="hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleProfessionalClick(professional)}
+                    >
                       <td className="border px-2 py-1">{professional.name}</td>
                       <td className="border px-2 py-1">{professional.email}</td>
                       <td className="border px-2 py-1">{new Date(professional.createdAt).toLocaleDateString()}</td>
@@ -119,7 +163,11 @@ export default function AdminProfessionalsPageClient({ professionals }: { profes
               </div>
             ) : (
               filteredProfessionals.map(professional => (
-                <div key={professional.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
+                <div
+                  key={professional.id}
+                  className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => handleProfessionalClick(professional)}
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <Typography className="font-medium">{professional.name}</Typography>
