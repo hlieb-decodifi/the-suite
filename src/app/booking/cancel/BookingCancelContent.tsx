@@ -24,6 +24,7 @@ export function BookingCancelContent() {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
+    if (!searchParams) return;
     const bookingIdParam = searchParams.get('booking_id');
     if (bookingIdParam) {
       setBookingId(bookingIdParam);

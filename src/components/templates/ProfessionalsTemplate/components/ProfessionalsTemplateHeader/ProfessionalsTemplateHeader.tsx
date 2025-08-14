@@ -29,7 +29,7 @@ export function ProfessionalsTemplateHeader({
 
   const performSearch = useCallback(
     (searchValue: string) => {
-      const params = new URLSearchParams(searchParams);
+      const params = new URLSearchParams(searchParams ?? '');
 
       if (searchValue.trim()) {
         params.set('q', searchValue.trim());

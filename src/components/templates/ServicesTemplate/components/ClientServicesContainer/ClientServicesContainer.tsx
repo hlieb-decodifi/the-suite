@@ -83,7 +83,7 @@ function useServerSearch(
       setIsLoading(true);
 
       // Update URL without navigation
-      const params = new URLSearchParams(searchParams.toString());
+  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
       if (searchTerm.trim()) {
         params.set('search', searchTerm.trim());
       } else {

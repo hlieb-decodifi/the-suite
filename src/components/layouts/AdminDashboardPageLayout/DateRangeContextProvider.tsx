@@ -27,6 +27,7 @@ export function DateRangeContextProvider(props: DateRangeContextProviderProps) {
 
   // On mount and whenever searchParams change, update state from URL if present
   useEffect(() => {
+    if (!searchParams) return;
     const urlStart = searchParams.get("start");
     const urlEnd = searchParams.get("end");
     setDateRangeState(prev => ({
@@ -36,6 +37,7 @@ export function DateRangeContextProvider(props: DateRangeContextProviderProps) {
   }, [searchParams]);
 
   const setDateRange = useCallback((newStart?: string, newEnd?: string) => {
+    if (!searchParams) return;
     const params = new URLSearchParams(searchParams.toString());
     if (newStart) params.set("start", newStart); else params.delete("start");
     if (newEnd) params.set("end", newEnd); else params.delete("end");

@@ -73,12 +73,13 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
     return 'overview';
   };
 
-  const activeTab = getActiveTabFromPath(pathname);
+  const activeTab = getActiveTabFromPath(pathname ?? '');
 
   // Helper to create tab URLs with preserved query params
   const createTabUrl = (basePath: string): string => {
-    const params = searchParams.toString();
-    return params ? `${basePath}?${params}` : basePath;
+  if (!searchParams) return basePath;
+  const params = searchParams.toString();
+  return params ? `${basePath}?${params}` : basePath;
   };
 
   const tabs: TabItem[] = useMemo(() => [
