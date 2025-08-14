@@ -44,8 +44,27 @@ export async function getAdminAppointmentsData({ start, end }: { start?: string 
   if (appointmentsError) throw new Error(appointmentsError.message);
 
   // Map the nested data to the UI shape
+  // Define types for the nested Supabase result
+  type SupabaseUser = { id: string; first_name: string; last_name: string };
+  type SupabaseService = { id: string; name: string };
+  type SupabaseBookingService = { service: SupabaseService | null };
+  type SupabaseProfessionalProfile = { id: string; user: SupabaseUser | null };
+  type SupabaseBooking = {
+    id: string;
+    client: SupabaseUser | null;
+    professional_profile: SupabaseProfessionalProfile | null;
+    booking_services: SupabaseBookingService[];
+  };
+  type AppointmentRow = {
+    id: string;
+    status: string;
+    start_time: string;
+    end_time: string;
+    booking: SupabaseBooking | null;
+  };
+
   const appointments = Array.isArray(rawAppointments)
-    ? rawAppointments.map((a: any) => {
+    ? (rawAppointments as AppointmentRow[]).map((a) => {
         const booking = a.booking;
         const client = booking?.client;
         const professionalProfile = booking?.professional_profile;
