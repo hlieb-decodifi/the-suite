@@ -80,25 +80,35 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   const ADMIN_ROLE_ID = rolesData.id;
 
   // Create user with admin role, no password, email not confirmed
-  const { error: userError } = await adminSupabase.auth.admin.createUser({
+  const { data: createdUser, error: userError } = await adminSupabase.auth.admin.createUser({
     email,
     email_confirm: false,
     user_metadata: {
       first_name: firstName,
       last_name: lastName,
+      role: 'admin',
       role_id: ADMIN_ROLE_ID,
     },
   });
+
   if (userError) {
     return { success: false, error: userError.message };
   }
 
-  // Send invite (verification) email
-  // Supabase JS v2 does not have sendEmail, so we rely on the default invite email
-  // The user will receive the invite automatically
-  // If you want to customize, you can use an external email provider here
 
-  return { success: true };
+  // Send a password-reset (magic) link to the invited user so they can set their password.
+  // Use the admin client to trigger Supabase's reset password email which contains the secure link.
+  const { error: resetError } = await adminSupabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${getURL()}auth/reset-password?invited=true`,
+  });
+
+  if (resetError) {
+    console.error('inviteAdminAction: failed to send reset/invite email', resetError);
+    // Optionally, you could remove the created user here via adminSupabase.auth.admin.deleteUser(createdUser?.id)
+    return { success: false, error: 'Failed to send invitation email.' };
+  }
+
+  return { success: true, user: createdUser };
 }
 
 /**

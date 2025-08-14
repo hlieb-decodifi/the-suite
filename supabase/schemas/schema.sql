@@ -552,7 +552,7 @@ begin
   -- For regular signups, validate the role
   if role_name is not null then
     -- Validate the role with better error message
-    if role_name != 'client' and role_name != 'professional' then
+    if role_name != 'client' and role_name != 'professional' and role_name != 'admin' then
       RAISE NOTICE 'Invalid role specified: %', role_name;
       role_name := 'client'; -- Default to client if not specified properly
     end if;
@@ -590,6 +590,7 @@ begin
     elsif role_name = 'client' then
         insert into public.client_profiles (user_id)
       values (new.id);
+    -- No profile creation for admin role
     end if;
     exception when others then
       RAISE EXCEPTION 'Error creating profile record: %', SQLERRM;

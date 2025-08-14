@@ -15,6 +15,18 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Reset state when modal is closed
+  React.useEffect(() => {
+    if (!isOpen) {
+      setEmail('');
+      setFirstName('');
+      setLastName('');
+      setError(null);
+      setSuccess(false);
+      setLoading(false);
+    }
+  }, [isOpen]);
+
   const handleInvite = async () => {
     setLoading(true);
     setError(null);
