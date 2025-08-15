@@ -21,7 +21,7 @@ export function ResetPasswordFormContent({
   userEmail,
 }: ResetPasswordFormContentProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="text-center space-y-2">
         <Typography variant="h2" className="text-2xl font-bold">
@@ -41,40 +41,44 @@ export function ResetPasswordFormContent({
 
       {/* Form */}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormFieldWrapper
-            control={form.control}
-            name="password"
-            label="New Password"
-          >
-            {(field) => (
-              <FormPasswordInput
-                {...field}
-                placeholder="Enter your new password"
-                disabled={isPending}
-                autoComplete="new-password"
-              />
-            )}
-          </FormFieldWrapper>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <FormFieldWrapper
+              control={form.control}
+              name="password"
+              label="New Password"
+            >
+              {(field) => (
+                <FormPasswordInput
+                  {...field}
+                  placeholder="Enter your new password"
+                  disabled={isPending}
+                  autoComplete="new-password"
+                />
+              )}
+            </FormFieldWrapper>
+          </div>
 
-          <FormFieldWrapper
-            control={form.control}
-            name="confirmPassword"
-            label="Confirm New Password"
-          >
-            {(field) => (
-              <FormPasswordInput
-                {...field}
-                placeholder="Confirm your new password"
-                disabled={isPending}
-                autoComplete="new-password"
-              />
-            )}
-          </FormFieldWrapper>
+          <div className="flex flex-col gap-2">
+            <FormFieldWrapper
+              control={form.control}
+              name="confirmPassword"
+              label="Confirm New Password"
+            >
+              {(field) => (
+                <FormPasswordInput
+                  {...field}
+                  placeholder="Confirm your new password"
+                  disabled={isPending}
+                  autoComplete="new-password"
+                />
+              )}
+            </FormFieldWrapper>
+          </div>
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full mt-2"
             disabled={isPending}
             size="lg"
           >

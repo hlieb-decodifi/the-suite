@@ -17,6 +17,7 @@ export type UserMenuProps = {
     name: string;
     email: string;
     avatarUrl?: string | null;
+    isAdmin?: boolean;
   };
   isProfessional?: boolean;
   unreadMessagesCount?: number;
@@ -29,6 +30,7 @@ export function UserMenu({
   unreadMessagesCount = 0,
   unreadSupportRequestsCount = 0,
 }: UserMenuProps) {
+  const isAdmin = userInfo?.isAdmin;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -44,44 +46,48 @@ export function UserMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem asChild>
-          <Link href="/dashboard" className="w-full cursor-pointer">
+          <Link href={isAdmin ? '/admin' : '/dashboard'} className="w-full cursor-pointer">
             Dashboard
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link
-            href={isProfessional ? '/profile' : '/client-profile'}
-            className="w-full cursor-pointer"
-          >
-            Profile
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link
-            href="/dashboard/appointments"
-            className="w-full cursor-pointer"
-          >
-            My Bookings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link
-            href="/dashboard/messages"
-            className="w-full cursor-pointer flex items-center justify-between"
-          >
-            <span>Messages</span>
-            <MessageBadge count={unreadMessagesCount} size="sm" />
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link
-            href="/dashboard/support-requests"
-            className="w-full cursor-pointer flex items-center justify-between"
-          >
-            <span>Support Requests</span>
-            <MessageBadge count={unreadSupportRequestsCount} size="sm" />
-          </Link>
-        </DropdownMenuItem>
+        {!isAdmin && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link
+                href={isProfessional ? '/profile' : '/client-profile'}
+                className="w-full cursor-pointer"
+              >
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/dashboard/appointments"
+                className="w-full cursor-pointer"
+              >
+                My Bookings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/dashboard/messages"
+                className="w-full cursor-pointer flex items-center justify-between"
+              >
+                <span>Messages</span>
+                <MessageBadge count={unreadMessagesCount} size="sm" />
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/dashboard/support-requests"
+                className="w-full cursor-pointer flex items-center justify-between"
+              >
+                <span>Support Requests</span>
+                <MessageBadge count={unreadSupportRequestsCount} size="sm" />
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <SignOutButton className="w-full justify-start" />

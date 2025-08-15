@@ -113,6 +113,7 @@ export function useURLSync(
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    if (!searchParams) return;
     const page = searchParams.get('page')
       ? parseInt(searchParams.get('page') as string, 10)
       : 1;
@@ -186,7 +187,7 @@ export function useFiltersHandler(
       }
 
       // Otherwise use the normal URL update approach
-      const params = new URLSearchParams(searchParams.toString());
+  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
 
       // Handle search term
       if (newFilters.searchTerm.trim()) {
@@ -290,14 +291,14 @@ export function usePageChangeHandler(
           smoothScrollToContainer(containerRef, false);
         }, 50);
       } else {
-        // Otherwise, update URL with the new page
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('page', page.toString());
+  // Otherwise, update URL with the new page
+  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
+  params.set('page', page.toString());
         
-        // Use direct URL navigation to avoid issues with async searchParams
-        window.location.href = `${pathname}?${params.toString()}`;
+  // Use direct URL navigation to avoid issues with async searchParams
+  window.location.href = `${pathname}?${params.toString()}`;
         
-        // No need to scroll here as the page will reload
+  // No need to scroll here as the page will reload
       }
     },
     [
