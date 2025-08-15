@@ -146,6 +146,7 @@ create table professional_profiles (
   cancellation_48h_charge_percentage decimal(5,2) default 25.00 not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+  -- If null, use default from admin_configs
 );
 alter table professional_profiles enable row level security;
 
@@ -469,8 +470,8 @@ begin
   
   if new.role_id = professional_role_id then
     -- Create professional profile if it doesn't exist
-    insert into professional_profiles (user_id)
-    values (new.id)
+  insert into professional_profiles (user_id)
+  values (new.id)
     on conflict (user_id) do nothing;
   end if;
   
@@ -552,7 +553,7 @@ begin
   -- For regular signups, validate the role
   if role_name is not null then
     -- Validate the role with better error message
-    if role_name != 'client' and role_name != 'professional' then
+    if role_name != 'client' and role_name != 'professional' and role_name != 'admin' then
       RAISE NOTICE 'Invalid role specified: %', role_name;
       role_name := 'client'; -- Default to client if not specified properly
     end if;
@@ -590,6 +591,7 @@ begin
     elsif role_name = 'client' then
         insert into public.client_profiles (user_id)
       values (new.id);
+    -- No profile creation for admin role
     end if;
     exception when others then
       RAISE EXCEPTION 'Error creating profile record: %', SQLERRM;

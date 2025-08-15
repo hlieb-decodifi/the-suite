@@ -29,6 +29,7 @@ export function BookingSuccessContent() {
   const hasShownToast = useRef(false);
 
   useEffect(() => {
+    if (!searchParams) return;
     const sessionId = searchParams.get('session_id');
     const bookingIdParam = searchParams.get('booking_id');
 

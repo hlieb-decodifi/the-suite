@@ -220,7 +220,7 @@ function InlineServiceForm({
   // Get service limit info
   const maxServices = serviceLimitInfo?.maxServices || 50;
   const currentCount = serviceLimitInfo?.currentCount || 0;
-  const remaining = serviceLimitInfo?.remaining || maxServices - currentCount;
+  const isAtLimit = serviceLimitInfo?.isAtLimit || currentCount >= maxServices;
 
   const defaultValues = editingService
     ? {
@@ -273,7 +273,7 @@ function InlineServiceForm({
         </div>
 
         {/* Warning for new services when close to limit */}
-        {!isEditMode && remaining > 0 && remaining <= 3 && (
+        {/* {!isEditMode && remaining > 0 && remaining <= 3 && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
             <Typography variant="small" className="text-amber-800">
               {remaining === 1
@@ -281,10 +281,11 @@ function InlineServiceForm({
                 : `Only ${remaining} services remaining before reaching your limit.`}
             </Typography>
           </div>
-        )}
+        )} */}
 
         <div key={formKey}>
           <ServiceForm
+            disabled={isAtLimit}
             onSubmitSuccess={handleFormSubmitSuccess}
             {...(isEditMode || isDuplicateMode ? { onCancel } : {})}
             defaultValues={defaultValues}

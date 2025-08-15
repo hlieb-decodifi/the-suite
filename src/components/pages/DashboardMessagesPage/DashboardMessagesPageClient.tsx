@@ -149,6 +149,7 @@ export function DashboardMessagesPageClient({
 
   // Handle conversation selection from URL parameters
   useEffect(() => {
+    if (!searchParams) return;
     const conversationId = searchParams.get('conversation');
     if (conversationId && conversations.length > 0) {
       const conversation = conversations.find(
@@ -223,7 +224,7 @@ export function DashboardMessagesPageClient({
           '@/server/domains/messages/actions'
         );
         // Get conversationId from URL
-        const conversationId = searchParams.get('conversation') || undefined;
+        const conversationId = searchParams ? searchParams.get('conversation') || undefined : undefined;
         const result = await getConversations(conversationId);
         if (result.success && result.conversations) {
           setConversations(result.conversations);
