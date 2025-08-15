@@ -38,16 +38,17 @@ export function sortServices(
 ): ServiceListItem[] {
   const sortedServices = [...services];
   
+  let result: ServiceListItem[];
   switch (sortBy) {
     case 'name-asc':
-      return sortedServices.sort((a, b) => a.name.localeCompare(b.name));
-    
+      result = sortedServices.sort((a, b) => a.name.localeCompare(b.name));
+      break;
     case 'name-desc':
-      return sortedServices.sort((a, b) => b.name.localeCompare(a.name));
-    
+      result = sortedServices.sort((a, b) => b.name.localeCompare(a.name));
+      break;
     case 'location-asc': {
       // First, sort by city and name as before
-      const citySorted = sortedServices.sort((a, b) => {
+      result = sortedServices.sort((a, b) => {
         const locationA = a.professional.address_data?.city || a.professional.address || '';
         const locationB = b.professional.address_data?.city || b.professional.address || '';
         const cityComparison = locationA.localeCompare(locationB);
@@ -57,18 +58,24 @@ export function sortServices(
         // If cities are the same, sort by service name
         return a.name.localeCompare(b.name);
       });
-      // Then, move all with non-null address_data to the top, preserving order
-      return citySorted.sort((a, b) => {
-        const aHasAddress = !!a.professional.address_data;
-        const bHasAddress = !!b.professional.address_data;
-        if (aHasAddress === bHasAddress) return 0;
-        return aHasAddress ? -1 : 1;
-      });
+      break;
     }
-    
     default:
-      return sortedServices;
+      result = sortedServices;
+      break;
   }
+
+  // Final sort: subscribed professionals first, then those with addresses
+  return result.sort((a, b) => {
+    const aSubscribed = !!a.professional.is_subscribed;
+    const bSubscribed = !!b.professional.is_subscribed;
+    if (aSubscribed !== bSubscribed) return aSubscribed ? -1 : 1;
+
+    const aHasAddress = !!a.professional.address_data;
+    const bHasAddress = !!b.professional.address_data;
+    if (aHasAddress === bHasAddress) return 0;
+    return aHasAddress ? -1 : 1;
+  });
 }
 
 /**
