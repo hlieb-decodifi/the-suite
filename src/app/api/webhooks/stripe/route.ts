@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { updatePlanPriceInDb, updateStripeConnectStatus } from '@/server/domains/subscriptions/db';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
+import { revalidatePath } from 'next/cache';
 
 // Configure this API route to use Node.js Runtime for email functionality
 export const runtime = 'nodejs';
@@ -152,6 +153,7 @@ export async function POST(request: Request) {
       // Handle refund events from our refund system
       case 'refund.created':
       case 'refund.failed':
+      case 'refund.updated':
         console.log(`[Webhook] 💰 Handling refund event: ${event.type}`);
         await handleRefundEvent(event.data.object as Stripe.Refund);
         break;
@@ -1261,11 +1263,19 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         serviceFee: payment.service_fee
       });
       
-      // Update payment status to refunded
+      // Calculate refund amount in dollars from charge data
+      const refundAmountDollars = charge.amount_refunded / 100;
+      const refundReason = charge.refunds?.data[0]?.reason || 'Manual refund via Stripe dashboard';
+
+      // Update payment status to refunded with complete refund information
       const { error: updateError } = await supabase
         .from('booking_payments')
         .update({
           status: 'refunded',
+          refunded_amount: refundAmountDollars,
+          refund_reason: refundReason,
+          refunded_at: new Date().toISOString(),
+          refund_transaction_id: charge.refunds?.data[0]?.id || charge.id,
           updated_at: new Date().toISOString()
         })
         .eq('id', payment.id);
@@ -1275,7 +1285,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         return;
       }
       
-      console.log(`[Webhook] ✅ Updated payment status to refunded for booking ${payment.booking_id}`);
+      console.log(`[Webhook] ✅ Updated payment status to refunded for booking ${payment.booking_id} - Amount: $${refundAmountDollars}`);
       
       // Also update booking status to cancelled if not already
       const { error: bookingError } = await supabase
@@ -1293,6 +1303,68 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         console.log(`[Webhook] ✅ Updated booking status to cancelled for ${payment.booking_id}`);
       }
       
+      // Find and update related support request to mark as completed
+      const { data: supportRequest, error: supportRequestError } = await supabase
+        .from('support_requests')
+        .select('id, conversation_id, professional_id')
+        .eq('booking_id', payment.booking_id)
+        .eq('status', 'in_progress')
+        .single();
+
+      if (supportRequest && !supportRequestError) {
+        console.log(`[Webhook] Found related support request ${supportRequest.id} for booking ${payment.booking_id}`);
+        
+        // Update support request to completed/resolved
+        const { error: supportUpdateError } = await supabase
+          .from('support_requests')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolved_by: supportRequest.professional_id,
+            refund_amount: refundAmountDollars,
+            stripe_refund_id: charge.refunds?.data[0]?.id || null,
+            processed_at: new Date().toISOString(),
+            resolution_notes: 'Refund processed via Stripe dashboard',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', supportRequest.id);
+
+        if (supportUpdateError) {
+          console.error(`[Webhook] ❌ Error updating support request status:`, supportUpdateError);
+        } else {
+          console.log(`[Webhook] ✅ Updated support request ${supportRequest.id} to resolved status`);
+          
+          // Add a message to the conversation about the refund completion
+          if (supportRequest.conversation_id && supportRequest.professional_id) {
+            const { error: messageError } = await supabase.from('messages').insert({
+              conversation_id: supportRequest.conversation_id,
+              sender_id: supportRequest.professional_id,
+              content: `Refund of $${refundAmountDollars.toFixed(2)} has been successfully processed via Stripe dashboard.`,
+              is_read: false,
+            });
+
+            if (messageError) {
+              console.error('[Webhook] ❌ Error creating refund completion message:', messageError);
+            } else {
+              console.log('[Webhook] ✅ Added refund completion message to conversation');
+            }
+          }
+
+          // Revalidate the support request page to refresh the UI
+          try {
+            revalidatePath(`/support-request/${supportRequest.id}`);
+            revalidatePath('/dashboard/support-requests'); // Also refresh the support requests list
+            console.log(`[Webhook] ✅ Revalidated support request page paths for ${supportRequest.id}`);
+          } catch (revalidateError) {
+            console.error('[Webhook] ❌ Error revalidating paths:', revalidateError);
+          }
+        }
+      } else if (supportRequestError && supportRequestError.code !== 'PGRST116') {
+        console.error(`[Webhook] ❌ Error checking for support request:`, supportRequestError);
+      } else {
+        console.log(`[Webhook] ℹ️ No in-progress support request found for booking ${payment.booking_id}`);
+      }
+
       console.log(`[Webhook] ✅ Successfully processed refund for booking ${payment.booking_id}`);
     } catch (error) {
       console.error(`[Webhook] ❌ Error handling refund for payment intent ${paymentIntentId}:`, error);
@@ -1309,7 +1381,8 @@ async function handleRefundEvent(refund: Stripe.Refund) {
     status: refund.status,
     amount: refund.amount,
     reason: refund.reason,
-    metadata: refund.metadata
+    metadata: refund.metadata,
+    payment_intent: refund.payment_intent
   });
   
   try {
@@ -1331,6 +1404,29 @@ async function handleRefundEvent(refund: Stripe.Refund) {
       status: refund.status,
       amount: refund.amount
     });
+
+    // If refund succeeded, try to revalidate related support request pages
+    if (refund.status === 'succeeded') {
+      try {
+        // Try to get support request ID from metadata first
+        const supportRequestId = refund.metadata?.support_request_id;
+        
+        if (supportRequestId) {
+          console.log(`[Webhook] Revalidating pages for support request: ${supportRequestId}`);
+          revalidatePath(`/support-request/${supportRequestId}`);
+          revalidatePath('/dashboard/support-requests');
+          console.log(`[Webhook] ✅ Revalidated support request page paths for ${supportRequestId}`);
+        } else {
+          // If no support request ID in metadata, we need to find it by payment intent
+          // For now, we'll just revalidate the general support requests page
+          console.log(`[Webhook] No support request ID in metadata, revalidating general pages`);
+          revalidatePath('/dashboard/support-requests');
+          console.log(`[Webhook] ✅ Revalidated general support request pages`);
+        }
+      } catch (revalidateError) {
+        console.error('[Webhook] ❌ Error revalidating paths in refund event:', revalidateError);
+      }
+    }
   } catch (error) {
     console.error(`[Webhook] ❌ Error handling refund event:`, {
       refundId: refund.id,

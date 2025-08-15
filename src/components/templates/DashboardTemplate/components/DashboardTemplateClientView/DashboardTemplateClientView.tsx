@@ -223,7 +223,7 @@ function MessagesTabContent({ messages }: { messages: Message[] }) {
                   )}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {message.createdAt.toLocaleDateString()}
+                  {message.createdAt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                 </div>
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">
@@ -260,7 +260,7 @@ function RefundsTabContent({ refunds }: { refunds: Refund[] }) {
                     {refund.serviceName}
                   </Typography>
                   <Typography variant="small" className="text-muted-foreground">
-                    {refund.date.toLocaleDateString()}
+                    {refund.date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                   </Typography>
                 </div>
                 <div className="space-y-1 text-right">

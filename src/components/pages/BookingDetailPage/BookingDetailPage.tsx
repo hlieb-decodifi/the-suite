@@ -114,7 +114,7 @@ export async function BookingDetailPage({ id }: { id: string }) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/sign-in');
+    redirect('/');
   }
 
   const appointment = await getAppointmentById(id);

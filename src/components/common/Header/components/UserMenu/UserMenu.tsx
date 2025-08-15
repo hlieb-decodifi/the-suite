@@ -21,12 +21,14 @@ export type UserMenuProps = {
   };
   isProfessional?: boolean;
   unreadMessagesCount?: number;
+  unreadSupportRequestsCount?: number;
 };
 
 export function UserMenu({
   userInfo,
   isProfessional,
   unreadMessagesCount = 0,
+  unreadSupportRequestsCount = 0,
 }: UserMenuProps) {
   const isAdmin = userInfo?.isAdmin;
   return (
@@ -37,6 +39,8 @@ export function UserMenu({
             userInfo={userInfo}
             as="div"
             className="cursor-pointer"
+            unreadMessagesCount={unreadMessagesCount}
+            unreadSupportRequestsCount={unreadSupportRequestsCount}
           />
         </div>
       </DropdownMenuTrigger>
@@ -71,6 +75,15 @@ export function UserMenu({
               >
                 <span>Messages</span>
                 <MessageBadge count={unreadMessagesCount} size="sm" />
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/dashboard/support-requests"
+                className="w-full cursor-pointer flex items-center justify-between"
+              >
+                <span>Support Requests</span>
+                <MessageBadge count={unreadSupportRequestsCount} size="sm" />
               </Link>
             </DropdownMenuItem>
           </>

@@ -1,0 +1,432 @@
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { processStripeRefund } from '../refunds/stripe-refund';
+import { redirect } from 'next/navigation';
+
+/**
+ * Create a new support request - Server Action
+ */
+export async function createSupportRequestAction({
+  appointment_id,
+  reason,
+}: {
+  appointment_id: string;
+  reason: string;
+}): Promise<{ success: boolean; supportRequestId?: string; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    // Validate UUID format to prevent database errors
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(appointment_id)) {
+      return {
+        success: false,
+        error: 'Invalid appointment ID format',
+      };
+    }
+
+    // Get appointment details with booking information
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
+      .select(`
+        id,
+        booking_id
+      `)
+      .eq('id', appointment_id)
+      .single();
+
+    if (appointmentError || !appointment) {
+      console.error('Error fetching appointment:', appointmentError);
+      return {
+        success: false,
+        error: 'Appointment not found',
+      };
+    }
+
+    // Get booking details with service information
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        client_id,
+        professional_profile_id,
+        professional_profiles (
+          user_id
+        ),
+        booking_services (
+          services (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', appointment.booking_id)
+      .single();
+
+    if (bookingError || !booking) {
+      console.error('Error fetching booking:', bookingError);
+      return {
+        success: false,
+        error: 'Booking not found for this appointment',
+      };
+    }
+    
+    const clientId = booking.client_id;
+    
+    // Access the professional's user_id
+    const professionalId = booking.professional_profiles?.user_id;
+
+    // Verify the user is the client
+    if (user.id !== clientId) {
+      return {
+        success: false,
+        error: 'You can only create support requests for your own appointments',
+      };
+    }
+
+    if (!professionalId) {
+      return {
+        success: false,
+        error: 'Professional not found for this appointment',
+      };
+    }
+
+    // Create a conversation for this support request
+    const conversationPurpose = `support_request_${appointment_id}`;
+    
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .insert({
+        client_id: clientId,
+        professional_id: professionalId,
+        purpose: conversationPurpose,
+      })
+      .select()
+      .single();
+
+    if (conversationError) {
+      console.error('Error creating conversation:', conversationError);
+      return {
+        success: false,
+        error: 'Failed to create conversation for support request',
+      };
+    }
+
+    // Extract service name for the title - handle potential type issues with safe access
+    let serviceName = '';
+    try {
+      const firstBookingService = booking.booking_services?.[0];
+      const services = firstBookingService?.services;
+      // Handle both array and object cases for services
+      if (Array.isArray(services)) {
+        serviceName = services[0]?.name || '';
+      } else if (services && typeof services === 'object') {
+        serviceName = (services as {name?: string}).name || '';
+      }
+    } catch {
+      serviceName = '';
+    }
+    const title = serviceName ? serviceName : 'Appointment Support Request';
+
+    // Create the support request
+    const { data: supportRequest, error: supportRequestError } = await supabase
+      .from('support_requests')
+      .insert({
+        client_id: clientId,
+        professional_id: professionalId,
+        conversation_id: conversation.id,
+        title: title,
+        description: reason,
+        category: 'booking_issue', // Default category
+        priority: 'medium', // Default priority
+        status: 'pending',
+        appointment_id: appointment_id,
+        booking_id: booking.id,
+      })
+      .select()
+      .single();
+
+    if (supportRequestError) {
+      console.error('Error creating support request:', supportRequestError);
+      return {
+        success: false,
+        error: 'Failed to create support request',
+      };
+    }
+
+    // Add initial message to the conversation
+    const { error: messageError } = await supabase.from('messages').insert({
+      conversation_id: conversation.id,
+      sender_id: clientId,
+      content: `Support request opened: ${reason}`,
+      is_read: false,
+    });
+
+    if (messageError) {
+      console.error('Error creating initial message:', messageError);
+      // We don't return an error here as the support request was created successfully
+    }
+
+    return {
+      success: true,
+      supportRequestId: supportRequest.id,
+    };
+  } catch (error) {
+    console.error('Error in createSupportRequest:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}
+
+/**
+ * Create support request and redirect to the created request page
+ */
+export async function createSupportRequestWithRedirect(formData: FormData) {
+  const appointment_id = formData.get('appointment_id') as string;
+  const reason = formData.get('reason') as string;
+
+  if (!appointment_id || !reason?.trim()) {
+    return { success: false, error: 'Missing required fields' };
+  }
+
+  const result = await createSupportRequestAction({
+    appointment_id,
+    reason: reason.trim(),
+  });
+
+  if (result.success && result.supportRequestId) {
+    redirect(`/support-request/${result.supportRequestId}`);
+  }
+
+  return result;
+}
+
+/**
+ * Initiate a refund for a support request - Server Action
+ */
+export async function initiateRefundServerAction(formData: FormData) {
+  try {
+    const support_request_id = formData.get('support_request_id') as string;
+    const refund_amount = parseFloat(formData.get('refund_amount') as string);
+    const professional_notes = formData.get('professional_notes') as string | undefined;
+
+    if (!support_request_id || isNaN(refund_amount)) {
+      return {
+        success: false,
+        error: 'Invalid input parameters',
+      };
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(support_request_id)) {
+      return {
+        success: false,
+        error: 'Invalid support request ID format',
+      };
+    }
+
+    // Get support request
+    const { data: supportRequest, error: supportRequestError } = await supabase
+      .from('support_requests')
+      .select('*')
+      .eq('id', support_request_id)
+      .eq('professional_id', user.id)
+      .single();
+
+    if (supportRequestError || !supportRequest) {
+      console.error('Error fetching support request:', supportRequestError);
+      return {
+        success: false,
+        error: 'Support request not found or you do not have permission',
+      };
+    }
+
+    console.log('[SERVER-ACTION] Processing refund through Stripe');
+    // Process the refund through Stripe
+    const { success, refundId, error: refundError } = await processStripeRefund(
+      support_request_id,
+      refund_amount
+    );
+
+    if (!success) {
+      console.error('[SERVER-ACTION] Refund processing failed:', refundError);
+      return {
+        success: false,
+        error: refundError || 'Failed to process refund',
+      };
+    }
+
+    console.log('[SERVER-ACTION] Refund processed successfully, updating support request');
+    // Update the support request with refund information
+    const { error: updateError } = await supabase
+      .from('support_requests')
+      .update({
+        refund_amount: refund_amount,
+        stripe_refund_id: refundId || null,
+        professional_notes: professional_notes || null,
+        status: 'in_progress' // Set to in_progress while waiting for Stripe webhook
+      })
+      .eq('id', support_request_id);
+
+    if (updateError) {
+      console.error('[SERVER-ACTION] Error updating support request:', updateError);
+      return {
+        success: false,
+        error: 'Failed to update support request with refund information',
+      };
+    }
+
+    // Add a message to the conversation
+    if (supportRequest.conversation_id) {
+      const { error: messageError } = await supabase.from('messages').insert({
+        conversation_id: supportRequest.conversation_id,
+        sender_id: user.id,
+        content: `Refund of $${refund_amount.toFixed(2)} has been initiated. ${
+          professional_notes ? `Note: ${professional_notes}` : ''
+        }`,
+        is_read: false,
+      });
+
+      if (messageError) {
+        console.error('[SERVER-ACTION] Error creating refund message:', messageError);
+        // Don't return error as the refund was processed successfully
+      }
+    }
+
+    console.log('[SERVER-ACTION] Refund initiation completed successfully');
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('[SERVER-ACTION] Error in initiateRefundServerAction:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}
+
+/**
+ * Resolve a support request - Server Action
+ */
+export async function resolveSupportRequestAction({
+  support_request_id,
+  resolution_notes,
+}: {
+  support_request_id: string;
+  resolution_notes?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(support_request_id)) {
+      return {
+        success: false,
+        error: 'Invalid support request ID format',
+      };
+    }
+
+    // Get support request to check if user is the professional
+    const { data: supportRequest, error: supportRequestError } = await supabase
+      .from('support_requests')
+      .select('*')
+      .eq('id', support_request_id)
+      .eq('professional_id', user.id)
+      .single();
+
+    if (supportRequestError || !supportRequest) {
+      console.error('Error fetching support request:', supportRequestError);
+      return {
+        success: false,
+        error: 'Support request not found or you do not have permission',
+      };
+    }
+
+    // Update the support request
+    const { error: updateError } = await supabase
+      .from('support_requests')
+      .update({
+        status: 'resolved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: user.id,
+        resolution_notes: resolution_notes || null,
+      })
+      .eq('id', support_request_id);
+
+    if (updateError) {
+      console.error('Error resolving support request:', updateError);
+      return {
+        success: false,
+        error: 'Failed to resolve support request',
+      };
+    }
+
+    // Add a message to the conversation
+    if (supportRequest.conversation_id) {
+      const { error: messageError } = await supabase.from('messages').insert({
+        conversation_id: supportRequest.conversation_id,
+        sender_id: user.id,
+        content: `Support request has been resolved. ${
+          resolution_notes ? `Resolution notes: ${resolution_notes}` : ''
+        }`,
+        is_read: false,
+      });
+
+      if (messageError) {
+        console.error('Error creating resolution message:', messageError);
+        // Don't return error as the support request was resolved successfully
+      }
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Error in resolveSupportRequest:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}

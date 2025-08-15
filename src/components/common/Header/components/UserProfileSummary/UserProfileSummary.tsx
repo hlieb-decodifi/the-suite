@@ -16,6 +16,8 @@ export type UserProfileSummaryProps = {
   as?: 'div' | 'button';
   onClick?: React.MouseEventHandler<HTMLButtonElement>;
   tabIndex?: number;
+  unreadMessagesCount?: number;
+  unreadSupportRequestsCount?: number;
 };
 
 export function UserProfileSummary({
@@ -24,22 +26,31 @@ export function UserProfileSummary({
   as = 'div',
   onClick,
   tabIndex,
+  unreadMessagesCount = 0,
+  unreadSupportRequestsCount = 0,
 }: UserProfileSummaryProps) {
+  const totalUnreadCount = unreadMessagesCount + unreadSupportRequestsCount;
+  const hasUnreadMessages = totalUnreadCount > 0;
   const shared = (
     <>
-      {userInfo.avatarUrl ? (
-        <Avatar>
-          <AvatarImage
-            src={userInfo.avatarUrl}
-            alt="User avatar"
-            className="object-cover size-10 rounded-full"
-          />
-        </Avatar>
-      ) : (
-        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-          <User size={20} className="text-primary-foreground" />
-        </div>
-      )}
+      <div className="relative">
+        {userInfo.avatarUrl ? (
+          <Avatar>
+            <AvatarImage
+              src={userInfo.avatarUrl}
+              alt="User avatar"
+              className="object-cover size-10 rounded-full"
+            />
+          </Avatar>
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+            <User size={20} className="text-primary-foreground" />
+          </div>
+        )}
+        {hasUnreadMessages && (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+        )}
+      </div>
       <div className="flex flex-col text-left justify-center">
         <Typography
           variant="small"

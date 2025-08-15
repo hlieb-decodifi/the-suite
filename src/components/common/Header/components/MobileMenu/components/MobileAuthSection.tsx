@@ -18,6 +18,7 @@ export type MobileAuthSectionProps = {
     | undefined;
   isProfessional?: boolean;
   unreadMessagesCount?: number;
+  unreadSupportRequestsCount?: number;
   onSignUpClick?: () => void;
   onSignInClick?: () => void;
 };
@@ -27,6 +28,7 @@ export function MobileAuthSection({
   userInfo,
   isProfessional = false,
   unreadMessagesCount = 0,
+  unreadSupportRequestsCount = 0,
   onSignUpClick,
   onSignInClick,
 }: MobileAuthSectionProps) {
@@ -38,6 +40,8 @@ export function MobileAuthSection({
           <UserProfileSummary
             userInfo={userInfo}
             className="bg-muted rounded-md p-3"
+            unreadMessagesCount={unreadMessagesCount}
+            unreadSupportRequestsCount={unreadSupportRequestsCount}
           />
 
           {/* Navigation Links */}
@@ -68,6 +72,13 @@ export function MobileAuthSection({
                 >
                   <span>Messages</span>
                   <MessageBadge count={unreadMessagesCount} size="sm" />
+                </Link>
+                <Link
+                  className="hover:text-primary w-full justify-start text-left flex items-center justify-between"
+                  href="/dashboard/support-requests"
+                >
+                  <span>Support Requests</span>
+                  <MessageBadge count={unreadSupportRequestsCount} size="sm" />
                 </Link>
               </>
             )}
