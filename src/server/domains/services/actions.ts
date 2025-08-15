@@ -175,19 +175,39 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
       };
     }
 
-    // Get service limit from service_limits table (defaults to 50 if not set)
+    // Get max_services from service_limits table
+    let maxServices: number | null = null;
     const { data: limitData } = await supabase
       .from('service_limits')
       .select('max_services')
       .eq('professional_profile_id', professionalProfile.id)
       .single();
+    if (limitData?.max_services != null) {
+      maxServices = limitData.max_services;
+    }
 
-    // If no custom limit is set or query failed, use default of 50
-    const maxServices = limitData?.max_services || 50;
-    
+    // If not set, fallback to admin_configs.max_services_default, then 50
+    if (maxServices == null) {
+      const { data: adminConfig } = await supabase
+        .from('admin_configs')
+        .select('value')
+        .eq('key', 'max_services_default')
+        .single();
+      if (adminConfig?.value != null) {
+        const parsed = parseInt(adminConfig.value, 10);
+        if (!isNaN(parsed)) {
+          maxServices = parsed;
+        } else {
+          maxServices = 50;
+        }
+      } else {
+        maxServices = 50;
+      }
+    }
+
     const currentCountNum = currentCount || 0;
     const remaining = Math.max(0, maxServices - currentCountNum);
-    const isAtLimit = currentCountNum >= maxServices;
+    const isAtLimit = maxServices > 0 ? currentCountNum >= maxServices : false;
 
     return {
       success: true,

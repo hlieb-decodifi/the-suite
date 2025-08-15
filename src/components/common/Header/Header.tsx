@@ -14,6 +14,7 @@ export type UserInfo = {
   name: string;
   email: string;
   avatarUrl: string | null;
+  isAdmin?: boolean;
 };
 
 export type HeaderProps = {
@@ -63,6 +64,7 @@ export function Header({
         name: userInfo.name,
         email: userInfo.email,
         avatarUrl: userInfo.avatarUrl,
+        isAdmin: userInfo.isAdmin,
       }
     : undefined;
 

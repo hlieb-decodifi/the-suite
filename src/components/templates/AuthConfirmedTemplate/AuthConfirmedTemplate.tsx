@@ -19,8 +19,8 @@ export function AuthConfirmedTemplate() {
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const searchParams = useSearchParams();
   
-  const verified = searchParams.get('verified') === 'true';
-  const error = searchParams.get('error');
+  const verified = searchParams ? searchParams.get('verified') === 'true' : false;
+  const error = searchParams ? searchParams.get('error') : null;
 
   const handleLoginClick = () => {
     setIsSignInModalOpen(true);
