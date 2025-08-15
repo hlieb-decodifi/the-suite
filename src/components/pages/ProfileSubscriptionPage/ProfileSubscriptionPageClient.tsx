@@ -310,7 +310,11 @@ export function ProfileSubscriptionPageClient({
                         {userData.subscriptionDetails?.nextBillingDate
                           ? new Date(
                               userData.subscriptionDetails.nextBillingDate,
-                            ).toLocaleDateString('en-GB')
+                            ).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                            })
                           : 'your next billing date'}
                         . You'll continue to have access to all professional
                         features until then.
@@ -340,7 +344,11 @@ export function ProfileSubscriptionPageClient({
                       {userData.subscriptionDetails?.nextBillingDate
                         ? new Date(
                             userData.subscriptionDetails.nextBillingDate,
-                          ).toLocaleDateString('en-GB')
+                          ).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                          })
                         : 'Not available'}
                     </Typography>
                   </div>
