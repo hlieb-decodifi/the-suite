@@ -894,8 +894,8 @@ export function BookingDetailPageClient({
               <CardContent className="space-y-6">
                 {/* Client Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
-                    <AvatarImage src={getOtherPartyProfileData().avatar_url || ''} />
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
+                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -979,8 +979,8 @@ export function BookingDetailPageClient({
               <CardContent className="space-y-6">
                 {/* Professional Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
-                    <AvatarImage src={getOtherPartyProfileData().avatar_url || ''} />
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
+                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
