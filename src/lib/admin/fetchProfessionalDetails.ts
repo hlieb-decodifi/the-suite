@@ -27,16 +27,24 @@ export async function fetchProfessionalDetails(userId: string): Promise<Professi
 	// 2. Get professional profile
 	let professionalProfileId: string | null = null;
 	let maxServices: number | null = null;
+	let createdAt: string | undefined = undefined;
 	const { data: profile, error: profileError } = await supabase
 		.from('professional_profiles')
-		.select('id, is_published, max_services, created_at')
+		.select('id, is_published, created_at')
 		.eq('user_id', userId)
 		.single();
-	let createdAt: string | undefined = undefined;
 	if (!profileError && profile) {
 		professionalProfileId = profile.id;
-		maxServices = profile.max_services ?? null;
 		createdAt = profile.created_at ?? undefined;
+		// Get max_services from service_limits table
+		const { data: limitData } = await supabase
+			.from('service_limits')
+			.select('max_services')
+			.eq('professional_profile_id', profile.id)
+			.single();
+		if (limitData?.max_services != null) {
+			maxServices = limitData.max_services;
+		}
 	}
 
 		// 3. Get services for this professional

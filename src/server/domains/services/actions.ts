@@ -148,10 +148,10 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
   const supabase = await createClient();
 
   try {
-    // Get professional profile and its max_services if set
+    // Get professional profile
     const { data: professionalProfile, error: profileError } = await supabase
       .from('professional_profiles')
-      .select('id, max_services')
+      .select('id')
       .eq('user_id', userId)
       .single();
 
@@ -175,22 +175,18 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
       };
     }
 
-    // 1. Try professional_profiles.max_services
-    let maxServices = professionalProfile.max_services;
-
-    // 2. If not set, try service_limits table
-    if (maxServices == null) {
-      const { data: limitData } = await supabase
-        .from('service_limits')
-        .select('max_services')
-        .eq('professional_profile_id', professionalProfile.id)
-        .single();
-      if (limitData?.max_services != null) {
-        maxServices = limitData.max_services;
-      }
+    // Get max_services from service_limits table
+    let maxServices: number | null = null;
+    const { data: limitData } = await supabase
+      .from('service_limits')
+      .select('max_services')
+      .eq('professional_profile_id', professionalProfile.id)
+      .single();
+    if (limitData?.max_services != null) {
+      maxServices = limitData.max_services;
     }
 
-    // 3. If still not set, try admin_configs table
+    // If not set, fallback to admin_configs.max_services_default, then 50
     if (maxServices == null) {
       const { data: adminConfig } = await supabase
         .from('admin_configs')
@@ -201,18 +197,17 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
         const parsed = parseInt(adminConfig.value, 10);
         if (!isNaN(parsed)) {
           maxServices = parsed;
+        } else {
+          maxServices = 50;
         }
+      } else {
+        maxServices = 50;
       }
-    }
-
-    // 4. Fallback to 50
-    if (maxServices == null) {
-      maxServices = 50;
     }
 
     const currentCountNum = currentCount || 0;
     const remaining = Math.max(0, maxServices - currentCountNum);
-    const isAtLimit = currentCountNum >= maxServices;
+    const isAtLimit = maxServices > 0 ? currentCountNum >= maxServices : false;
 
     return {
       success: true,
