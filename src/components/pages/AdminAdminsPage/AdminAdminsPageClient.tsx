@@ -3,19 +3,23 @@
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
-  import InviteAdminModal from '@/components/modals/InviteAdminModal';
+import { useAdmins, AdminUser } from '@/hooks/useAdmins';
+import InviteAdminModal from '@/components/modals/InviteAdminModal';
+import { Button } from '@/components/ui/button';
 
-export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
+
+export default function AdminAdminsPageClient({ admins: initialAdmins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
   const [filterName, setFilterName] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-    const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const { data: admins = [], mutate } = useAdmins(initialAdmins);
 
   const filteredAdmins = useMemo(() => {
     let filtered = admins;
     if (filterName) {
-      filtered = filtered.filter(a => a.name.toLowerCase().includes(filterName.toLowerCase()));
+      filtered = filtered.filter((a: AdminUser) => a.name.toLowerCase().includes(filterName.toLowerCase()));
     }
-    filtered = filtered.sort((a, b) => {
+    filtered = filtered.sort((a: AdminUser, b: AdminUser) => {
       if (sortDirection === 'asc') {
         return a.createdAt.localeCompare(b.createdAt);
       } else {
@@ -24,13 +28,12 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
     });
     return filtered;
   }, [admins, filterName, sortDirection]);
-    
-    // Handler for successful invite
-    const handleInvited = () => {
-      setInviteOpen(false);
-      // Optionally, you can refetch admins here if you use SWR or React Query
-      // Optionally, you can refetch admins here if you use SWR or React Query
-    };
+
+  // Handler for successful invite
+  const handleInvited = async () => {
+    setInviteOpen(false);
+    await mutate(); // Refetch the admins list
+  };
 
   return (
     <div className="space-y-6">
@@ -67,12 +70,9 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                 <option value="desc">Descending</option>
               </select>
             </label>
-              <button
-                className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition"
-                onClick={() => setInviteOpen(true)}
-              >
+              <Button onClick={() => setInviteOpen(true)}>
                 Invite Admin
-              </button>
+              </Button>
           </div>
           {/* Desktop table view */}
           <div className="hidden md:block overflow-x-auto">
@@ -98,7 +98,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                     </td>
                   </tr>
                 ) : (
-                  filteredAdmins.map(admin => (
+                  filteredAdmins.map((admin: AdminUser) => (
                     <tr key={admin.id} className="hover:bg-muted/50 cursor-pointer">
                       <td className="border px-2 py-1">{admin.name}</td>
                       <td className="border px-2 py-1">{admin.email}</td>
@@ -120,7 +120,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                 </Typography>
               </div>
             ) : (
-              filteredAdmins.map(admin => (
+              filteredAdmins.map((admin: AdminUser) => (
                 <div key={admin.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>

@@ -394,7 +394,6 @@ export async function getUnreadSupportMessagesCount(userId: string): Promise<num
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('id')
-      .neq('purpose', 'general') // Not general conversations (support_request_*)
       .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
 
     if (conversationsError || !conversations) {
@@ -436,11 +435,10 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
   try {
     const supabase = await createClient();
 
-    // Get general conversations for this user
+    // Get conversations for this user
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('id')
-      .eq('purpose', 'general')
       .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
 
     if (conversationsError || !conversations) {

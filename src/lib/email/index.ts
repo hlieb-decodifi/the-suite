@@ -6,7 +6,8 @@ export {
   sendBookingConfirmationProfessional,
   sendBookingConfirmationClient,
   type EmailRecipient,
-  type EmailResult
+  type EmailResult,
+  sendAdminInvitationEmail
 } from '@/providers/brevo';
 
 // Export the email provider (currently Brevo)

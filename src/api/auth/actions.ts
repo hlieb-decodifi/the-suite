@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { sendAdminInvitationEmail } from '@/lib/email';
 
 const getURL = () => {
   let url =
@@ -96,10 +97,10 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   }
 
 
-  // Send a password-reset (magic) link to the invited user so they can set their password.
-  // Use the admin client to trigger Supabase's reset password email which contains the secure link.
+  // Generate invite link to set password (new page)
+  // Supabase will still require a password reset token, so trigger resetPasswordForEmail, but use /auth/set-password as the redirect
   const { error: resetError } = await adminSupabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${getURL()}auth/reset-password?invited=true`,
+    redirectTo: `${getURL()}auth/set-password`,
   });
 
   if (resetError) {
@@ -107,6 +108,17 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
     // Optionally, you could remove the created user here via adminSupabase.auth.admin.deleteUser(createdUser?.id)
     return { success: false, error: 'Failed to send invitation email.' };
   }
+
+  // Compose invite link (user will receive Supabase's reset link, but we want to send our own branded email)
+  // The reset link is sent to the user by Supabase, but we want to send our own email as well
+  // For security, we can't generate the token ourselves, so we instruct the user to use the link from Supabase
+  // Optionally, you could fetch the out-of-band link from Supabase logs, but that's not recommended
+
+  // Instead, send our own invitation email with a link to /auth/set-password (user will land here after clicking the Supabase link)
+  await sendAdminInvitationEmail({
+    email,
+    firstName: firstName || '',
+  });
 
   return { success: true, user: createdUser };
 }
