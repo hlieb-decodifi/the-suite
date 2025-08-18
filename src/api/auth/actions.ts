@@ -80,47 +80,28 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   }
   const ADMIN_ROLE_ID = rolesData.id;
 
-  // Create user with admin role, no password, email not confirmed
-  const { data: createdUser, error: userError } = await adminSupabase.auth.admin.createUser({
-    email,
-    email_confirm: false,
-    user_metadata: {
+  // Use Supabase's inviteUserByEmail to invite the admin
+  const { data: invitedUser, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+    data: {
       first_name: firstName,
       last_name: lastName,
       role: 'admin',
       role_id: ADMIN_ROLE_ID,
     },
-  });
-
-  if (userError) {
-    return { success: false, error: userError.message };
-  }
-
-
-  // Generate invite link to set password (new page)
-  // Supabase will still require a password reset token, so trigger resetPasswordForEmail, but use /auth/set-password as the redirect
-  const { error: resetError } = await adminSupabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${getURL()}auth/set-password`,
   });
 
-  if (resetError) {
-    console.error('inviteAdminAction: failed to send reset/invite email', resetError);
-    // Optionally, you could remove the created user here via adminSupabase.auth.admin.deleteUser(createdUser?.id)
-    return { success: false, error: 'Failed to send invitation email.' };
+  if (inviteError) {
+    return { success: false, error: inviteError.message };
   }
 
-  // Compose invite link (user will receive Supabase's reset link, but we want to send our own branded email)
-  // The reset link is sent to the user by Supabase, but we want to send our own email as well
-  // For security, we can't generate the token ourselves, so we instruct the user to use the link from Supabase
-  // Optionally, you could fetch the out-of-band link from Supabase logs, but that's not recommended
-
-  // Instead, send our own invitation email with a link to /auth/set-password (user will land here after clicking the Supabase link)
+  // Optionally, send your own branded invitation email here
   await sendAdminInvitationEmail({
     email,
     firstName: firstName || '',
   });
 
-  return { success: true, user: createdUser };
+  return { success: true, user: invitedUser };
 }
 
 /**
