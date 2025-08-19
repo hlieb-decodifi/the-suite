@@ -23,12 +23,26 @@ export type DashboardData = {
   newProfessionals: number;
   totalChats: number;
   newChats: number;
-  totalRefunds: number;
-  newRefunds: number;
+  totalSupportRequests: number;
+  newSupportRequests: number;
 };
 
 
 // Fetch dashboard overview data (RPC)
+type DashboardDataRpc = {
+  totalBookings?: number;
+  newBookings?: number;
+  bookingsPerDay?: Record<string, number>;
+  totalClients?: number;
+  newClients?: number;
+  totalProfessionals?: number;
+  newProfessionals?: number;
+  totalChats?: number;
+  newChats?: number;
+  totalSupportRequests?: number;
+  newSupportRequests?: number;
+};
+
 export async function getAdminDashboardData({ startDate, endDate }: { startDate?: string | undefined; endDate?: string | undefined }): Promise<DashboardData> {
   const adminSupabase = await createAdminClient();
   const params: { start_date?: string; end_date?: string } = {};
@@ -36,10 +50,21 @@ export async function getAdminDashboardData({ startDate, endDate }: { startDate?
   if (endDate) params.end_date = endDate;
   const { data, error } = await adminSupabase.rpc('get_admin_dashboard_data', params);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error('No dashboard data returned');
-  (data as DashboardData).totalRefunds = 0;
-  (data as DashboardData).newRefunds = 0;
-  return data as DashboardData;
+  if (!data || typeof data !== 'object') throw new Error('No dashboard data returned');
+  const d: DashboardDataRpc = (data && !Array.isArray(data) && typeof data === 'object') ? data : {};
+  return {
+    totalBookings: d.totalBookings ?? 0,
+    newBookings: d.newBookings ?? 0,
+    bookingsPerDay: d.bookingsPerDay ?? {},
+    totalClients: d.totalClients ?? 0,
+    newClients: d.newClients ?? 0,
+    totalProfessionals: d.totalProfessionals ?? 0,
+    newProfessionals: d.newProfessionals ?? 0,
+    totalChats: d.totalChats ?? 0,
+    newChats: d.newChats ?? 0,
+    totalSupportRequests: d.totalSupportRequests ?? 0,
+    newSupportRequests: d.newSupportRequests ?? 0,
+  };
 }
 
 // Fetch appointments data (direct query)
@@ -92,7 +117,7 @@ export async function AdminDashboardPageLayout({ children }: { children: React.R
     if (path.includes('/admin/appointments')) return 'appointments';
     if (path.includes('/admin/clients')) return 'clients';
     if (path.includes('/admin/professionals')) return 'professionals';
-    if (path.includes('/admin/refunds')) return 'refunds';
+  if (path.includes('/admin/support-requests')) return 'support-requests';
     if (path.includes('/admin/messages')) return 'messages';
     if (path.includes('/admin/admins')) return 'admins';
     if (path.includes('/admin/legal')) return 'legal';

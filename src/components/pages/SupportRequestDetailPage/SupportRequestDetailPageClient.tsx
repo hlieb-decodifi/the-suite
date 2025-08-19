@@ -28,6 +28,7 @@ type SupportRequestDetailPageClientProps = {
   supportRequest: SupportRequestData;
   isProfessional: boolean;
   currentUserId: string;
+  isAdmin?: boolean;
 };
 
 // Helper component to render the status badge
@@ -78,6 +79,7 @@ export function SupportRequestDetailPageClient({
   supportRequest,
   isProfessional,
   currentUserId,
+  isAdmin = false,
 }: SupportRequestDetailPageClientProps) {
   const router = useRouter();
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
@@ -235,8 +237,7 @@ export function SupportRequestDetailPageClient({
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Link
-            href="/dashboard/support-requests"
-            // className="text-muted-foreground hover:text-foreground"
+            href={isAdmin ? "/admin/support-requests" : "/dashboard/support-requests"}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
