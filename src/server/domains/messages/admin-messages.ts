@@ -1,4 +1,5 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
+import { requireAdminUser } from '@/server/lib/auth';
 import { ChatMessage } from '@/types/messages';
 
 /**
@@ -6,33 +7,10 @@ import { ChatMessage } from '@/types/messages';
  */
 export async function getMessagesForAdmin(conversationId: string): Promise<{ success: boolean; messages?: ChatMessage[]; error?: string }> {
   try {
-    // 1. Check user is admin using regular client
-    const supabase = await createClient();
-    const { data: sessionData, error: sessionError } = await supabase.auth.getUser();
-    const sessionUser = sessionData?.user;
-    if (sessionError || !sessionUser) {
-      return { success: false, error: 'Not authenticated' };
-    }
-    // Get user role
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('role_id')
-      .eq('id', sessionUser.id)
-      .single();
-    if (userError || !userData) {
-      return { success: false, error: 'User not found' };
-    }
-    // Get admin role id
-    const { data: adminRole, error: adminRoleError } = await supabase
-      .from('roles')
-      .select('id')
-      .eq('name', 'admin')
-      .single();
-    if (adminRoleError || !adminRole) {
-      return { success: false, error: 'Admin role not found' };
-    }
-    if (userData.role_id !== adminRole.id) {
-      return { success: false, error: 'Permission denied: admin only' };
+    // 1. Check user is admin using shared utility
+    const adminCheck = await requireAdminUser();
+    if (!adminCheck.success) {
+      return adminCheck;
     }
 
     // 2. Use admin client to fetch messages

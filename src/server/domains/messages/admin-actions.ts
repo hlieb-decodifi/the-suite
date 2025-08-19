@@ -1,36 +1,14 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
+import { requireAdminUser } from '@/server/lib/auth';
 
 /**
  * Fetch all general conversations for admin, filtered by last message date range.
  */
 export async function getAllGeneralConversationsForAdmin({ start, end }: { start: string; end: string }) {
-  // 1. Check user is admin using regular client
-  const supabase = await createClient();
-  const { data: sessionData, error: sessionError } = await supabase.auth.getUser();
-  const sessionUser = sessionData?.user;
-  if (sessionError || !sessionUser) {
-    return { success: false, error: 'Not authenticated' };
-  }
-  // Get user role
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select('role_id')
-    .eq('id', sessionUser.id)
-    .single();
-  if (userError || !userData) {
-    return { success: false, error: 'User not found' };
-  }
-  // Get admin role id
-  const { data: adminRole, error: adminRoleError } = await supabase
-    .from('roles')
-    .select('id')
-    .eq('name', 'admin')
-    .single();
-  if (adminRoleError || !adminRole) {
-    return { success: false, error: 'Admin role not found' };
-  }
-  if (userData.role_id !== adminRole.id) {
-    return { success: false, error: 'Permission denied: admin only' };
+  // 1. Check user is admin using shared utility
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return adminCheck;
   }
 
   // 2. Use admin client to fetch all conversations/messages
@@ -44,52 +22,74 @@ export async function getAllGeneralConversationsForAdmin({ start, end }: { start
     return { success: false, error: 'Failed to fetch conversations' };
   }
 
-  // For each conversation, get the last message and both users' info, filter by date
-  const conversationsWithUsers = await Promise.all(
-    (conversations || []).map(async (conversation) => {
-      // Fetch last message
-      const { data: lastMessage } = await adminSupabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversation.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (!lastMessage) return null;
-      const lastMessageDate = new Date(lastMessage.created_at);
-  if (lastMessageDate < new Date(start) || lastMessageDate > new Date(new Date(end).setHours(23,59,59,999))) return null;
+  // If no conversations, return early
+  if (!conversations || conversations.length === 0) {
+    return { success: true, conversations: [] };
+  }
 
-      // Fetch client user info
-      const { data: clientUser, error: clientUserError } = await adminSupabase
-        .from('users')
-        .select('id, first_name, last_name')
-        .eq('id', conversation.client_id)
-        .single();
-      if (!clientUser || clientUserError) {
-  console.error('[AdminMessages] Client user not found for id:', conversation.client_id, clientUserError);
-      }
+  // Collect all conversation IDs, client IDs, and professional IDs
+  const conversationIds = conversations.map((c) => c.id);
+  const clientIds = conversations.map((c) => c.client_id);
+  const professionalIds = conversations.map((c) => c.professional_id);
+  const allUserIds = Array.from(new Set([...clientIds, ...professionalIds]));
 
-      // Fetch professional user info
-      const { data: professionalUser, error: professionalUserError } = await adminSupabase
-        .from('users')
-        .select('id, first_name, last_name')
-        .eq('id', conversation.professional_id)
-        .single();
-      if (!professionalUser || professionalUserError) {
-  console.error('[AdminMessages] Professional user not found for id:', conversation.professional_id, professionalUserError);
-      }
+  // Fetch all last messages for these conversations in a single query
+  const { data: allMessages, error: messagesError } = await adminSupabase
+    .from('messages')
+    .select('*')
+    .in('conversation_id', conversationIds);
+  if (messagesError) {
+    return { success: false, error: 'Failed to fetch messages' };
+  }
 
-      return {
-        ...conversation,
-        last_message: lastMessage,
-        client_user: clientUser || null,
-        professional_user: professionalUser || null,
-      };
-    })
-  );
+  // For each conversation, get the last message (by created_at desc)
+  const lastMessagesMap = new Map();
+  for (const msg of allMessages || []) {
+    const prev = lastMessagesMap.get(msg.conversation_id);
+    if (!prev || new Date(msg.created_at) > new Date(prev.created_at)) {
+      lastMessagesMap.set(msg.conversation_id, msg);
+    }
+  }
 
-  // Filter out nulls
-  const filtered = conversationsWithUsers.filter(Boolean);
+  // Fetch all users in a single query
+  const { data: allUsers, error: usersError } = await adminSupabase
+    .from('users')
+    .select('id, first_name, last_name')
+    .in('id', allUserIds);
+  if (usersError) {
+    return { success: false, error: 'Failed to fetch users' };
+  }
+  const usersMap = new Map();
+  for (const user of allUsers || []) {
+    usersMap.set(user.id, user);
+  }
+
+  // Assemble the result
+  const filtered = (conversations || []).map((conversation) => {
+    const lastMessage = lastMessagesMap.get(conversation.id);
+    if (!lastMessage) return null;
+    const lastMessageDate = new Date(lastMessage.created_at);
+    if (
+      lastMessageDate < new Date(start) ||
+      lastMessageDate > new Date(new Date(end).setHours(23, 59, 59, 999))
+    ) {
+      return null;
+    }
+    const clientUser = usersMap.get(conversation.client_id) || null;
+    const professionalUser = usersMap.get(conversation.professional_id) || null;
+    if (!clientUser) {
+      console.error('[AdminMessages] Client user not found for id:', conversation.client_id);
+    }
+    if (!professionalUser) {
+      console.error('[AdminMessages] Professional user not found for id:', conversation.professional_id);
+    }
+    return {
+      ...conversation,
+      last_message: lastMessage,
+      client_user: clientUser,
+      professional_user: professionalUser,
+    };
+  }).filter(Boolean);
 
   return { success: true, conversations: filtered };
 }

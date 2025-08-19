@@ -35,10 +35,22 @@ export function AdminMessagesPageClient({ initialConversations }: Props) {
 
   // Fetch messages for a conversation
   const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
-    const res = await fetch('/api/admin/messages/conversation/' + conversationId);
-    const data = await res.json();
-    if (data.success) return data.messages || [];
-    return [];
+    try {
+      const res = await fetch('/api/admin/messages/conversation/' + conversationId);
+      if (!res.ok) {
+        console.error('Failed to fetch messages, status:', res.status);
+        return [];
+      }
+      const data = await res.json();
+      if (data.success) {
+        return data.messages || [];
+      }
+      console.error('API error fetching messages:', data.error);
+      return [];
+    } catch (error) {
+      console.error('An unexpected error occurred while fetching messages:', error);
+      return [];
+    }
   }, []);
 
   if (loading) return <div className="py-8 text-center text-muted-foreground">Loading messages...</div>;
