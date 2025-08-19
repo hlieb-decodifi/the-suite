@@ -50,8 +50,6 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
 import * as Brevo from '@getbrevo/brevo';
 import nodemailer from 'nodemailer';
 import { initEmailSender, getEmailMethod } from './config';
-import path from 'path';
-import fs from 'fs';
 // Handlebars will be dynamically imported in server-only code
 import {
   EmailRecipient,
@@ -77,57 +75,6 @@ import {
 } from './types';
 import { TEMPLATE_IDS } from './constants';
 
-// Admin Invitation Email
-export async function sendAdminInvitationEmail({
-  email,
-  firstName,
-}: {
-  email: string;
-  firstName?: string;
-}): Promise<EmailResult> {
-  const method = getEmailMethod();
-  const sender = initEmailSender();
-  const params = { firstName };
-  if (method === 'local') {
-    const transporter = sender as nodemailer.Transporter;
-    // Dynamically import Handlebars only on the server
-    const Handlebars = (await import('handlebars')).default;
-    // Read and render the Handlebars templates directly
-    // Use process.cwd() as base for Next.js/ESM environments
-    const templatesDir = path.resolve(process.cwd(), 'src/lib/email/templates');
-    const hbsPath = path.join(templatesDir, 'admin-invitation.hbs');
-    const txtPath = path.join(templatesDir, 'admin-invitation.txt');
-    let html = '';
-    let text = '';
-    try {
-      const hbsSource = fs.readFileSync(hbsPath, 'utf8');
-      const hbsTemplate = Handlebars.compile(hbsSource);
-      html = hbsTemplate(params);
-    } catch {
-      html = `<h1>You have been invited as an admin</h1><pre>${JSON.stringify(params, null, 2)}</pre>`;
-    }
-    try {
-      const txtSource = fs.readFileSync(txtPath, 'utf8');
-      const txtTemplate = Handlebars.compile(txtSource);
-      text = txtTemplate(params);
-    } catch {
-      text = html.replace(/<[^>]*>/g, '');
-    }
-    const info = await transporter.sendMail({
-      from: 'test@example.com',
-      to: email,
-      subject: 'You have been invited as an admin',
-      html,
-      text
-    });
-    return { success: true, messageId: info.messageId };
-  } else {
-    // For production, you may want to add a Brevo template and use its ID
-    // For now, fallback to local template rendering and send via Brevo
-    // (Or throw an error if not supported)
-    return { success: false, error: 'Admin invitation email not implemented for production/Brevo yet.' };
-  }
-}
 
 // Booking Related
 export async function sendBookingCancellationClient(

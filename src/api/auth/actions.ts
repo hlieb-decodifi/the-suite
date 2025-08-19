@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { sendAdminInvitationEmail } from '@/lib/email';
 
 const getURL = () => {
   let url =
@@ -96,10 +95,6 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   }
 
   // Optionally, send your own branded invitation email here
-  await sendAdminInvitationEmail({
-    email,
-    firstName: firstName || '',
-  });
 
   return { success: true, user: invitedUser };
 }
