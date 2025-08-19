@@ -44,9 +44,9 @@ export async function fetchAdminSupportRequests({ start, end }: { start?: string
     resolved_at: req.resolved_at ?? undefined,
     resolved_by: req.resolved_by ?? undefined,
     resolution_notes: req.resolution_notes ?? undefined,
-    client_user: req.client_user,
-    professional_user: req.professional_user,
-    appointments: req.appointments,
-    conversations: req.conversations,
+  client_user: req.client_user ?? undefined,
+  professional_user: req.professional_user ?? undefined,
+  appointments: req.appointments ?? undefined,
+  conversations: req.conversations ?? undefined,
   })) as unknown) as SupportRequest[];
 }

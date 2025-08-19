@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 /**
  * Get a single support request with all details (admin version)
  */
@@ -112,7 +112,6 @@ export async function getAdminSupportRequest(id: string): Promise<{
     };
   }
 }
-import { createClient } from '@/lib/supabase/server';
 import { processStripeRefund } from '../refunds/stripe-refund';
 
 /**

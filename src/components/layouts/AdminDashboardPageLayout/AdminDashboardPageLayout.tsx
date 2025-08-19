@@ -117,7 +117,7 @@ export async function AdminDashboardPageLayout({ children }: { children: React.R
     if (path.includes('/admin/appointments')) return 'appointments';
     if (path.includes('/admin/clients')) return 'clients';
     if (path.includes('/admin/professionals')) return 'professionals';
-  if (path.includes('/admin/support-requests')) return 'support-requests';
+    if (path.includes('/admin/support-requests')) return 'support-requests';
     if (path.includes('/admin/messages')) return 'messages';
     if (path.includes('/admin/admins')) return 'admins';
     if (path.includes('/admin/legal')) return 'legal';
