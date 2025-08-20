@@ -61,11 +61,13 @@ async function calculateTotalPrice(
  * 
  * @param formData The booking form data
  * @param professionalProfileId The ID of the professional's profile
+ * @param clientTimezone The client's timezone for proper date conversion
  * @returns Object containing the booking ID and total price
  */
 export async function createBooking(
   formData: BookingFormValues & { dateWithTime: Date },
-  professionalProfileId: string
+  professionalProfileId: string,
+  clientTimezone: string = 'UTC'
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
   
@@ -113,22 +115,26 @@ export async function createBooking(
     // Calculate total duration
     const totalDuration = mainService.duration + extraServiceDurations.reduce((sum, duration) => sum + duration, 0);
 
-    // Convert the local date to UTC
+    // Properly convert appointment time from client timezone to UTC for database storage
     const localDate = new Date(formData.date);
     const [hoursStr, minutesStr] = formData.timeSlot.split(':');
     const hours = parseInt(hoursStr || '0', 10);
     const minutes = parseInt(minutesStr || '0', 10);
     
-    // Create the appointment start time in local timezone
-    const appointmentDate = new Date(localDate);
-    appointmentDate.setHours(hours, minutes, 0, 0);
+    // Create the appointment start time in client's local time
+    const appointmentDateInClientTz = new Date(localDate);
+    appointmentDateInClientTz.setHours(hours, minutes, 0, 0);
 
-    // Convert to UTC
-    const utcDate = new Date(appointmentDate.getTime());
+    // Import timezone utilities for proper conversion
+    const { fromZonedTime } = await import('date-fns-tz');
+    
+    // Convert from client timezone to UTC for database storage
+    const utcDate = fromZonedTime(appointmentDateInClientTz, clientTimezone);
     const utcEndDate = new Date(utcDate.getTime() + (totalDuration * 60 * 1000));
 
     console.log('Appointment times:', {
-      local: appointmentDate.toLocaleString(),
+      clientLocalTime: appointmentDateInClientTz.toLocaleString(),
+      clientTimezone,
       utcStart: utcDate.toISOString(),
       utcEnd: utcEndDate.toISOString(),
       totalDuration

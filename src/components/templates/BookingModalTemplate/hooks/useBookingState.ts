@@ -199,7 +199,8 @@ export function useBookingState(props: BookingModalProps) {
       // Execute the server action to create the booking with Stripe payment
       const paymentResult = await createBookingWithStripePayment(
         formData,
-        professionalProfileId
+        professionalProfileId,
+        clientTimezone
       );
       
       if (!paymentResult.success) {
