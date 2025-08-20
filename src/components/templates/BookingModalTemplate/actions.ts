@@ -383,8 +383,8 @@ export async function getAvailableTimeSlots(
       `)
       .eq('bookings.professional_profile_id', professionalProfileId)
       .neq('bookings.status', 'cancelled')
-      .lt('end_time', queryEndTime.toISOString()) // appointment ends after day starts
-      .gt('start_time', queryStartTime.toISOString()); // appointment starts before day ends
+      .lt('start_time', queryEndTime.toISOString()) // appointment starts before day ends
+      .gt('end_time', queryStartTime.toISOString()); // appointment ends after day starts
 
     if (appointmentsError) {
       console.error('Error fetching appointments:', appointmentsError);
