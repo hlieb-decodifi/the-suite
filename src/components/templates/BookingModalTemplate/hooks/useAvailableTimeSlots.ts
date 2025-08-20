@@ -10,6 +10,7 @@ import { getAvailableTimeSlots } from '../actions';
 export function useAvailableTimeSlots(
   professionalProfileId: string,
   date: string | null,
+  requiredDurationMinutes: number = 30,
   professionalTimezone: string = 'UTC',
   clientTimezone: string = 'UTC',
   enabled = true
@@ -29,7 +30,7 @@ export function useAvailableTimeSlots(
         return [];
       }
 
-      const slots = await getAvailableTimeSlots(professionalProfileId, date, professionalTimezone, clientTimezone);
+  const slots = await getAvailableTimeSlots(professionalProfileId, date, requiredDurationMinutes, professionalTimezone, clientTimezone);
       console.log('Received time slots:', slots);
       return slots;
     },

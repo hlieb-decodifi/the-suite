@@ -307,6 +307,7 @@ function isSlotOverlapping(
 export async function getAvailableTimeSlots(
   professionalProfileId: string,
   date: string,
+  requiredDurationMinutes: number = 30,
   professionalTimezone: string = 'UTC',
   clientTimezone: string = 'UTC'
 ): Promise<string[]> {
@@ -367,7 +368,9 @@ export async function getAvailableTimeSlots(
       return [];
     }
 
-    // Get existing appointments for this day using UTC-adjusted query times
+
+    // Get all appointments that overlap with the day (not just those that start within the day)
+    // This ensures we catch appointments that start before the day but end during it
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
       .select(`
@@ -380,8 +383,8 @@ export async function getAvailableTimeSlots(
       `)
       .eq('bookings.professional_profile_id', professionalProfileId)
       .neq('bookings.status', 'cancelled')
-      .gte('start_time', queryStartTime.toISOString())
-      .lt('start_time', queryEndTime.toISOString());
+      .lt('end_time', queryEndTime.toISOString()) // appointment ends after day starts
+      .gt('start_time', queryStartTime.toISOString()); // appointment starts before day ends
 
     if (appointmentsError) {
       console.error('Error fetching appointments:', appointmentsError);
@@ -391,9 +394,10 @@ export async function getAvailableTimeSlots(
     const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
     const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
 
-    // Generate time slots every 30 minutes
+
+    // Generate time slots every 30 minutes, but check the full required duration for each slot
     const slots: string[] = [];
-    for (let minutes = workingStartMinutes; minutes < workingEndMinutes; minutes += 30) {
+    for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
       const hour = Math.floor(minutes / 60);
       const minute = minutes % 60;
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -401,12 +405,12 @@ export async function getAvailableTimeSlots(
       // Create datetime strings in professional's timezone
       const slotDate = new Date(date);
       slotDate.setHours(hour, minute, 0, 0);
-      
+
       // Convert slot times to UTC for comparison
       const slotStartTime = new Date(slotDate.getTime());
-      const slotEndTime = new Date(slotDate.getTime() + (30 * 60 * 1000));
+      const slotEndTime = new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000));
 
-      // Check if this slot overlaps with any existing appointments
+      // Check if this slot (for the full required duration) overlaps with any existing appointments
       let isAvailable = true;
 
       for (const appointment of appointments || []) {
