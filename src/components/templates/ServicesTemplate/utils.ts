@@ -45,18 +45,18 @@ export function sortServices(
   userLocation?: { latitude: number; longitude: number } | null
 ): ServiceListItem[] {
   const sortedServices = [...services];
-
+  let result: ServiceListItem[];
   switch (sortBy) {
     case 'name-asc':
-      return sortedServices.sort((a, b) => a.name.localeCompare(b.name));
-
+      result = sortedServices.sort((a, b) => a.name.localeCompare(b.name));
+      break;
     case 'name-desc':
-      return sortedServices.sort((a, b) => b.name.localeCompare(a.name));
-
+      result = sortedServices.sort((a, b) => b.name.localeCompare(a.name));
+      break;
     case 'location-asc': {
       // If no user location, fallback to alphabetical by city
       if (!userLocation) {
-        return sortedServices.sort((a, b) => {
+        result = sortedServices.sort((a, b) => {
           const locationA = a.professional.address_data?.city || a.professional.address || '';
           const locationB = b.professional.address_data?.city || b.professional.address || '';
           const cityComparison = locationA.localeCompare(locationB);
@@ -65,21 +65,35 @@ export function sortServices(
           }
           return a.name.localeCompare(b.name);
         });
+      } else {
+        // Sort by distance to user location
+        result = sortedServices.sort((a, b) => {
+          const distA = getDistanceFromUser(userLocation, a.professional.address_data || undefined);
+          const distB = getDistanceFromUser(userLocation, b.professional.address_data || undefined);
+          if (distA === distB) {
+            return a.name.localeCompare(b.name);
+          }
+          return distA - distB;
+        });
       }
-      // Sort by distance to user location
-      return sortedServices.sort((a, b) => {
-        const distA = getDistanceFromUser(userLocation, a.professional.address_data || undefined);
-        const distB = getDistanceFromUser(userLocation, b.professional.address_data || undefined);
-        if (distA === distB) {
-          return a.name.localeCompare(b.name);
-        }
-        return distA - distB;
-      });
+      break;
     }
-
     default:
-      return sortedServices;
+      result = sortedServices;
+      break;
   }
+
+  // Final sort: subscribed professionals first, then those with addresses
+  return result.sort((a, b) => {
+    const aSubscribed = !!a.professional.is_subscribed;
+    const bSubscribed = !!b.professional.is_subscribed;
+    if (aSubscribed !== bSubscribed) return aSubscribed ? -1 : 1;
+
+    const aHasAddress = !!a.professional.address_data;
+    const bHasAddress = !!b.professional.address_data;
+    if (aHasAddress === bHasAddress) return 0;
+    return aHasAddress ? -1 : 1;
+  });
 }
 
 /**
