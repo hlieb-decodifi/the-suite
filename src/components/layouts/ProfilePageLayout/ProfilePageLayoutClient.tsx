@@ -108,7 +108,7 @@ export function ProfilePageLayoutClient({
     return 'profile';
   };
 
-  const activeTab = getActiveTabFromPath(pathname);
+  const activeTab = getActiveTabFromPath(pathname ?? '');
 
   const handlePublishToggle = () => {
     const newPublishStatus = !optimisticUserData.isPublished;

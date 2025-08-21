@@ -33,11 +33,11 @@ export function DashboardPageLayoutClient({
     if (path === '/dashboard' || path === '/dashboard/') return 'overview';
     if (path.includes('/dashboard/appointments')) return 'appointments';
     if (path.includes('/dashboard/messages')) return 'messages';
-    if (path.includes('/dashboard/refunds')) return 'refunds';
+    if (path.includes('/dashboard/support-requests')) return 'support-requests';
     return 'overview';
   };
 
-  const activeTab = getActiveTabFromPath(pathname);
+  const activeTab = getActiveTabFromPath(pathname ?? '');
 
   // Helper function to parse date string as local date (YYYY-MM-DD)
   const parseDateFromURL = (dateString: string): Date | undefined => {
@@ -53,6 +53,7 @@ export function DashboardPageLayoutClient({
 
   // Initialize date range from URL parameters on mount
   useEffect(() => {
+    if (!searchParams) return;
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
 
@@ -77,6 +78,7 @@ export function DashboardPageLayoutClient({
     (range: DateRange) => {
       setDateRange(range);
 
+      if (!searchParams) return;
       const params = new URLSearchParams(searchParams.toString());
 
       if (range.from) {
@@ -95,8 +97,8 @@ export function DashboardPageLayoutClient({
 
       // Update URL without triggering a full page reload
       const newUrl = params.toString()
-        ? `${pathname}?${params.toString()}`
-        : pathname;
+        ? `${pathname ?? ''}?${params.toString()}`
+        : pathname ?? '';
       router.push(newUrl, { scroll: false });
     },
     [pathname, router, searchParams],
@@ -104,8 +106,9 @@ export function DashboardPageLayoutClient({
 
   // Helper function to create tab URLs with preserved query parameters
   const createTabUrl = (basePath: string): string => {
-    const params = searchParams.toString();
-    return params ? `${basePath}?${params}` : basePath;
+  if (!searchParams) return basePath;
+  const params = searchParams.toString();
+  return params ? `${basePath}?${params}` : basePath;
   };
 
   // Create tabs array for TabNavigation component
@@ -138,10 +141,19 @@ export function DashboardPageLayoutClient({
         ) : undefined,
     },
     {
-      key: 'refunds',
-      label: 'Refunds',
-      href: createTabUrl('/dashboard/refunds'),
-      isActive: activeTab === 'refunds',
+      key: 'support-requests',
+      label: 'Support Requests',
+      href: createTabUrl('/dashboard/support-requests'),
+      isActive: activeTab === 'support-requests',
+      badge:
+        userData.unreadSupportMessagesCount && userData.unreadSupportMessagesCount > 0 ? (
+          <MessageBadge
+            count={userData.unreadSupportMessagesCount}
+            size="sm"
+            variant={activeTab === 'support-requests' ? 'active' : 'default'}
+            className="ml-1.5 hover:bg-white hover:text-primary"
+          />
+        ) : undefined,
     },
   ];
 

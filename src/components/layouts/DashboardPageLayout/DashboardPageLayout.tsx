@@ -19,6 +19,7 @@ export type UserDashboardData = {
     total: number;
   };
   unreadMessagesCount?: number;
+  unreadSupportMessagesCount?: number;
 };
 
 export type DashboardPageLayoutProps = {
@@ -108,8 +109,11 @@ export async function getUserDashboardData(
     // Get appointment counts
     const appointmentCounts = await getAppointmentsCountByStatus(userId);
 
-    // Get unread messages count
+    // Get unread messages count for general conversations
     const unreadMessagesCount = await getUnreadMessagesCount(userId);
+    
+    // Get unread messages count for support requests
+    const unreadSupportMessagesCount = await getUnreadSupportMessagesCount(userId);
 
     return {
       id: userData.id,
@@ -120,6 +124,7 @@ export async function getUserDashboardData(
       email,
       appointmentCounts,
       unreadMessagesCount,
+      unreadSupportMessagesCount,
     };
   } catch (error) {
     console.error('Error in getUserDashboardData:', error);
@@ -380,14 +385,62 @@ export async function getDashboardAppointments(
 }
 
 // Get unread messages count
+// Get unread support request messages count
+export async function getUnreadSupportMessagesCount(userId: string): Promise<number> {
+  try {
+    const supabase = await createClient();
+
+    // Get support request conversations for this user
+    const { data: conversations, error: conversationsError } = await supabase
+      .from('conversations')
+      .select('id')
+      .neq('purpose', 'general') // Not general conversations (support_request_*)
+      .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
+
+    if (conversationsError || !conversations) {
+      console.error(
+        'Error fetching support conversations for unread count:',
+        conversationsError,
+      );
+      return 0;
+    }
+
+    if (conversations.length === 0) {
+      return 0;
+    }
+
+    const conversationIds = conversations.map((conv) => conv.id);
+
+    // Count unread messages where sender is not the current user
+    const { count, error: messagesError } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .in('conversation_id', conversationIds)
+      .eq('is_read', false)
+      .neq('sender_id', userId);
+
+    if (messagesError) {
+      console.error('Error counting unread support messages:', messagesError);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error in getUnreadSupportMessagesCount:', error);
+    return 0;
+  }
+}
+
+// Get unread general messages count
 export async function getUnreadMessagesCount(userId: string): Promise<number> {
   try {
     const supabase = await createClient();
 
-    // Get all conversations for this user
+    // Get general conversations for this user
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('id')
+      .eq('purpose', 'general')
       .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
 
     if (conversationsError || !conversations) {

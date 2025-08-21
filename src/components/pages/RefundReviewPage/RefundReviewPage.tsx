@@ -1,8 +1,6 @@
 'use server';
 
-import { getRefundForReview } from '@/server/domains/refunds/actions';
-import { notFound, redirect } from 'next/navigation';
-import { RefundReviewPageClient } from './RefundReviewPageClient';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
 export async function RefundReviewPage({ refundId }: { refundId: string }) {
@@ -14,31 +12,14 @@ export async function RefundReviewPage({ refundId }: { refundId: string }) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/signin');
+    redirect('/');
   }
 
-  // Check if user is professional
-  const { data: isProfessional } = await supabase.rpc('is_professional', {
-    user_uuid: user.id,
-  });
-
-  try {
-    const result = await getRefundForReview(refundId);
-
-    if (!result.success || !result.refund) {
-      console.error('Failed to get refund for review:', result.error);
-      return notFound();
-    }
-
-    return (
-      <RefundReviewPageClient
-        refund={result.refund}
-        currentUserId={user.id}
-        isProfessional={!!isProfessional}
-      />
-    );
-  } catch (error) {
-    console.error('Error loading refund review page:', error);
-    return notFound();
-  }
+  // Since refunds are now handled as support requests, 
+  // redirect to the support request detail page
+  // The refundId should correspond to a support request ID
+  redirect(`/support-request/${refundId}`);
+  
+  // This return will never be reached due to redirect, but TypeScript needs it
+  return null;
 }

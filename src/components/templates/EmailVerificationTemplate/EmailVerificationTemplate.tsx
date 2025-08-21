@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 
 export function EmailVerificationTemplate() {
   const searchParams = useSearchParams();
-  const email = searchParams.get('email');
+  const email = searchParams ? searchParams.get('email') : null;
 
   return <EmailConfirmationTemplate email={email} />;
 }
