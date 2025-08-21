@@ -477,6 +477,42 @@ export function formatTimeInTimezone(
 }
 
 /**
+ * Format a Date object (like appointment start/end time) in a specific timezone
+ */
+export function formatDateTimeInTimezone(
+  date: Date | string,
+  timezone: string,
+  dateFormat: string = 'EEEE, MMMM d, yyyy',
+  timeFormat: string = 'h:mm a'
+): { date: string; time: string; dateTime: string } {
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (!isValid(dateObj)) {
+      return { 
+        date: 'Invalid Date', 
+        time: 'Invalid Time', 
+        dateTime: 'Invalid DateTime' 
+      };
+    }
+
+    const zonedDate = toZonedTime(dateObj, timezone);
+    
+    return {
+      date: format(zonedDate, dateFormat),
+      time: format(zonedDate, timeFormat),
+      dateTime: format(zonedDate, `${dateFormat} 'at' ${timeFormat}`)
+    };
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error);
+    return { 
+      date: 'Format Error', 
+      time: 'Format Error', 
+      dateTime: 'Format Error' 
+    };
+  }
+}
+
+/**
  * Check if a day's hours cross midnight when converted to another timezone
  */
 export function checkDayBoundaryCrossing(

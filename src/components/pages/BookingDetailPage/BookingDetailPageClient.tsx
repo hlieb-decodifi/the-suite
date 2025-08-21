@@ -22,6 +22,7 @@ import { createOrGetConversationEnhanced } from '@/server/domains/messages/actio
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
+import { getUserTimezone, formatDateTimeInTimezone } from '@/utils/timezone';
 import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
   ArrowLeftIcon,
@@ -112,9 +113,15 @@ export function BookingDetailPageClient({
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
   const [existingSupportRequest, setExistingSupportRequest] = useState<{ id: string; status: string; category?: string } | null>(null);
   const [isLoadingSupportRequest, setIsLoadingSupportRequest] = useState(true);
+  const [userTimezone, setUserTimezone] = useState<string>('UTC');
 
   const router = useRouter();
   const { toast } = useToast();
+
+  // Get user's timezone on component mount
+  useEffect(() => {
+    setUserTimezone(getUserTimezone());
+  }, []);
 
   // Check for existing support request for this appointment
   useEffect(() => {
@@ -862,12 +869,16 @@ export function BookingDetailPageClient({
                   Date & Time
                 </Typography>
                 <Typography variant="muted" className="mb-1">
-                  {format(startDateTime, 'EEEE, MMMM d, yyyy')}
+                  {formatDateTimeInTimezone(startDateTime, userTimezone, 'EEEE, MMMM d, yyyy').date}
                 </Typography>
                 <Typography variant="muted">
-                  {format(startDateTime, 'h:mm a')} -{' '}
-                  {format(endDateTime, 'h:mm a')}
+                  {formatDateTimeInTimezone(startDateTime, userTimezone, 'EEEE, MMMM d, yyyy', 'h:mm a').time} -{' '}
+                  {formatDateTimeInTimezone(endDateTime, userTimezone, 'EEEE, MMMM d, yyyy', 'h:mm a').time}
                 </Typography>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <ClockIcon className="h-3 w-3" />
+                  <span>Times shown in your timezone ({userTimezone})</span>
+                </div>
               </div>
               {appointment.bookings.notes && (
                 <div>

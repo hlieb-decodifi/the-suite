@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/utils/cn';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { format } from 'date-fns';
+import { getUserTimezone, formatDateTimeInTimezone } from '@/utils/timezone';
 import {
   BarChart3Icon,
   CalendarIcon,
@@ -65,6 +66,13 @@ export function DashboardPageClient({
   // State for conversations to enable real-time updates
   const [conversations, setConversations] =
     useState<ConversationWithUser[]>(recentConversations);
+  
+  // Get user's timezone
+  const [userTimezone, setUserTimezone] = useState('UTC');
+
+  useEffect(() => {
+    setUserTimezone(getUserTimezone());
+  }, []);
 
   // Polling for conversation updates
   useEffect(() => {
@@ -208,6 +216,13 @@ export function DashboardPageClient({
           viewAllLink="/dashboard/appointments"
           viewAllText="View all appointments"
         >
+          {/* Timezone indicator */}
+          {upcomingAppointments.length > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3 px-3">
+              <ClockIcon className="h-3 w-3" />
+              <span>Times shown in your timezone ({userTimezone})</span>
+            </div>
+          )}
           <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
             {upcomingAppointments.length > 0 ? (
               upcomingAppointments.slice(0, 3).map((appointment) => {
@@ -252,16 +267,19 @@ export function DashboardPageClient({
                       <div className="flex items-center text-sm text-muted-foreground">
                         <CalendarIcon className="mr-1 h-3 w-3" />
                         {appointment.start_time
-                          ? format(
+                          ? formatDateTimeInTimezone(
                               new Date(appointment.start_time),
-                              'MMM d, yyyy',
-                            )
+                              userTimezone,
+                              'MMM d, yyyy'
+                            ).date
                           : 'No date'}
                         <ClockIcon className="ml-2 mr-1 h-3 w-3" />
-                        {format(
+                        {formatDateTimeInTimezone(
                           new Date(appointment.start_time || new Date()),
-                          'h:mm a',
-                        )}
+                          userTimezone,
+                          'MMM d, yyyy',
+                          'h:mm a'
+                        ).time}
                       </div>
                     </Link>
                   </div>
