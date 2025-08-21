@@ -85,8 +85,8 @@ export async function DashboardPage({
     ? recentConversationsResult.conversations || []
     : [];
 
-  // Get recent refunds for the dashboard (latest 3)
-  const recentRefunds = await getDashboardRefunds(
+  // Get recent support requests for the dashboard (latest 3)
+  const recentSupportRequests = await getDashboardSupportRequests(
     user.id,
     !!isProfessional,
     undefined,
@@ -100,7 +100,7 @@ export async function DashboardPage({
       upcomingAppointments={appointmentsForDashboard as AppointmentType[]}
       stats={stats}
       recentConversations={recentConversations}
-      recentRefunds={recentRefunds}
+      recentSupportRequests={recentSupportRequests}
     />
   );
 }
@@ -176,8 +176,8 @@ export async function getDashboardStats(
   }
 }
 
-// Get refunds for the dashboard
-export async function getDashboardRefunds(
+// Get support requests for the dashboard
+export async function getDashboardSupportRequests(
   userId: string,
   isProfessional: boolean,
   startDate?: string,
@@ -187,14 +187,16 @@ export async function getDashboardRefunds(
   try {
     const supabase = await createClient();
 
-    // First get refunds data with basic info
-    let refundsQuery = supabase.from('refunds').select(`
+    // First get support requests data with basic info
+    let supportRequestsQuery = supabase.from('support_requests').select(`
         id,
-        reason,
+        title,
+        description,
         requested_amount,
         original_amount,
         refund_amount,
         status,
+        category,
         created_at,
         updated_at,
         appointment_id,
@@ -204,45 +206,45 @@ export async function getDashboardRefunds(
 
     // Filter based on user role
     if (isProfessional) {
-      refundsQuery = refundsQuery.eq('professional_id', userId);
+      supportRequestsQuery = supportRequestsQuery.eq('professional_id', userId);
     } else {
-      refundsQuery = refundsQuery.eq('client_id', userId);
+      supportRequestsQuery = supportRequestsQuery.eq('client_id', userId);
     }
 
     // Apply date filters if provided
     if (startDate) {
-      refundsQuery = refundsQuery.gte('created_at', startDate);
+      supportRequestsQuery = supportRequestsQuery.gte('created_at', startDate);
     }
 
     if (endDate) {
-      refundsQuery = refundsQuery.lte('created_at', endDate);
+      supportRequestsQuery = supportRequestsQuery.lte('created_at', endDate);
     }
 
     // Order by created_at descending and apply limit if specified
-    refundsQuery = refundsQuery.order('created_at', { ascending: false });
+    supportRequestsQuery = supportRequestsQuery.order('created_at', { ascending: false });
 
     if (limit) {
-      refundsQuery = refundsQuery.limit(limit);
+      supportRequestsQuery = supportRequestsQuery.limit(limit);
     }
 
-    const { data: refundsData, error: refundsError } = await refundsQuery;
+    const { data: supportRequestsData, error: supportRequestsError } = await supportRequestsQuery;
 
-    if (refundsError) {
-      console.error('Error fetching refunds:', refundsError);
+    if (supportRequestsError) {
+      console.error('Error fetching support requests:', supportRequestsError);
       return [];
     }
 
-    if (!refundsData || refundsData.length === 0) {
+    if (!supportRequestsData || supportRequestsData.length === 0) {
       return [];
     }
 
     // Get additional data for appointments and user names
-    const appointmentIds = refundsData.map((r) => r.appointment_id);
-    const clientIds = refundsData.map((r) => r.client_id);
-    const professionalIds = refundsData.map((r) => r.professional_id);
+    const appointmentIds = supportRequestsData.map((r) => r.appointment_id).filter((id): id is string => Boolean(id));
+    const clientIds = supportRequestsData.map((r) => r.client_id);
+    const professionalIds = supportRequestsData.map((r) => r.professional_id).filter((id): id is string => Boolean(id));
 
     // Fetch appointments data
-    const { data: appointmentsData } = await supabase
+    const { data: appointmentsData } = appointmentIds.length > 0 ? await supabase
       .from('appointments')
       .select(
         `
@@ -257,7 +259,7 @@ export async function getDashboardRefunds(
         )
       `,
       )
-      .in('id', appointmentIds);
+      .in('id', appointmentIds) : { data: [] };
 
     // Fetch user data
     const { data: usersData } = await supabase
@@ -272,10 +274,10 @@ export async function getDashboardRefunds(
     const usersMap = new Map(usersData?.map((u) => [u.id, u]) || []);
 
     // Transform the data to match the expected format
-    const transformedRefunds = refundsData.map((refund) => {
-      const appointment = appointmentsMap.get(refund.appointment_id);
-      const clientUser = usersMap.get(refund.client_id);
-      const professionalUser = usersMap.get(refund.professional_id);
+    const transformedSupportRequests = supportRequestsData.map((supportRequest) => {
+      const appointment = supportRequest.appointment_id ? appointmentsMap.get(supportRequest.appointment_id) : null;
+      const clientUser = usersMap.get(supportRequest.client_id);
+      const professionalUser = supportRequest.professional_id ? usersMap.get(supportRequest.professional_id) : null;
 
       // Get client/professional name
       const clientName = clientUser
@@ -289,7 +291,7 @@ export async function getDashboardRefunds(
       // Get service name from first booking service
       const serviceName =
         appointment?.bookings?.booking_services?.[0]?.services?.name ||
-        'Service';
+        supportRequest.title || 'Support Request';
 
       // Create appointment date/time from start_time
       const appointmentDate = appointment?.start_time
@@ -297,15 +299,17 @@ export async function getDashboardRefunds(
         : new Date();
 
       return {
-        id: refund.id,
-        appointmentId: refund.appointment_id,
-        reason: refund.reason,
-        requestedAmount: refund.requested_amount,
-        originalAmount: refund.original_amount,
-        refundAmount: refund.refund_amount,
-        status: refund.status,
-        createdAt: refund.created_at,
-        updatedAt: refund.updated_at,
+        id: supportRequest.id,
+        appointmentId: supportRequest.appointment_id,
+        title: supportRequest.title,
+        description: supportRequest.description,
+        requestedAmount: supportRequest.requested_amount,
+        originalAmount: supportRequest.original_amount,
+        refundAmount: supportRequest.refund_amount,
+        status: supportRequest.status,
+        category: supportRequest.category,
+        createdAt: supportRequest.created_at,
+        updatedAt: supportRequest.updated_at,
         serviceName,
         clientName,
         professionalName,
@@ -313,9 +317,9 @@ export async function getDashboardRefunds(
       };
     });
 
-    return transformedRefunds;
+    return transformedSupportRequests;
   } catch (error) {
-    console.error('Error in getDashboardRefunds:', error);
+    console.error('Error in getDashboardSupportRequests:', error);
     return [];
   }
 }

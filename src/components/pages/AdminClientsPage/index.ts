@@ -1,2 +1,2 @@
 export { default as AdminClientsPage } from './AdminClientsPage';
-export { AdminClientsPageClient } from './AdminClientsPageClient'; 
+export { default as AdminClientsPageClient } from './AdminClientsPageClient';

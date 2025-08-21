@@ -29,14 +29,16 @@ type DashboardStats = {
   percentChange: number;
 };
 
-export type RefundType = {
+export type SupportRequestType = {
   id: string;
-  appointmentId: string;
-  reason: string;
+  appointmentId: string | null;
+  title: string;
+  description: string;
   requestedAmount: number | null;
-  originalAmount: number;
+  originalAmount: number | null;
   refundAmount: number | null;
   status: string;
+  category: string;
   createdAt: string;
   updatedAt: string;
   serviceName: string;
@@ -50,7 +52,7 @@ type DashboardPageClientProps = {
   upcomingAppointments: AppointmentType[];
   stats: DashboardStats;
   recentConversations: ConversationWithUser[];
-  recentRefunds?: RefundType[];
+  recentSupportRequests?: SupportRequestType[];
 };
 
 export function DashboardPageClient({
@@ -58,7 +60,7 @@ export function DashboardPageClient({
   upcomingAppointments = [],
   stats,
   recentConversations = [],
-  recentRefunds = [],
+  recentSupportRequests = [],
 }: DashboardPageClientProps) {
   // State for conversations to enable real-time updates
   const [conversations, setConversations] =
@@ -139,11 +141,11 @@ export function DashboardPageClient({
   }, 0);
 
   // Refunds data from props
-  const refunds = recentRefunds;
-  const pendingRefunds = refunds.filter(
-    (refund) => refund.status === 'pending',
+  const supportRequests = recentSupportRequests;
+  const pendingSupportRequests = supportRequests.filter(
+    (supportRequest) => supportRequest.status === 'pending',
   ).length;
-  const totalRefunds = refunds.length;
+  const totalSupportRequests = supportRequests.length;
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -336,62 +338,62 @@ export function DashboardPageClient({
         </WidgetCard>
 
         <WidgetCard
-          title="Refunds"
-          count={totalRefunds}
-          description={`${pendingRefunds} pending refund`}
+          title="Support Requests"
+          count={totalSupportRequests}
+          description={`${pendingSupportRequests} pending request${pendingSupportRequests !== 1 ? 's' : ''}`}
           icon={<RefreshCwIcon className="h-5 w-5" />}
           countColor="text-primary"
-          viewAllLink="/dashboard/refunds"
-          viewAllText="View all refunds"
+          viewAllLink="/dashboard/support-requests"
+          viewAllText="View all requests"
         >
           <div className="space-y-4">
-            {refunds.length > 0 ? (
-              refunds.map((refund) => (
+            {supportRequests.length > 0 ? (
+              supportRequests.map((supportRequest) => (
                 <Link
-                  key={refund.id}
-                  href={`/refunds/${refund.id}`}
+                  key={supportRequest.id}
+                  href={`/support-request/${supportRequest.id}`}
                   className="block"
                 >
                   <div className="p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex justify-between items-center mb-1">
                       <Typography className="font-medium">
-                        $
-                        {(
-                          refund.requestedAmount || refund.originalAmount
-                        ).toFixed(2)}
+                        {supportRequest.category === 'refund_request' && supportRequest.requestedAmount ? 
+                          `$${supportRequest.requestedAmount.toFixed(2)}` : 
+                          supportRequest.title
+                        }
                       </Typography>
                       <div
                         className={cn(
                           'text-xs px-2 py-0.5 rounded-full',
-                          refund.status === 'completed'
+                          supportRequest.status === 'resolved'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : refund.status === 'approved'
+                            : supportRequest.status === 'in_progress'
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-amber-100 text-amber-800',
                         )}
                       >
-                        {refund.status === 'completed'
-                          ? 'Completed'
-                          : refund.status === 'approved'
-                            ? 'Approved'
+                        {supportRequest.status === 'resolved'
+                          ? 'Resolved'
+                          : supportRequest.status === 'in_progress'
+                            ? 'In Progress'
                             : 'Pending'}
                       </div>
                     </div>
                     <Typography className="text-sm text-muted-foreground line-clamp-2">
-                      {refund.serviceName} -{' '}
+                      {supportRequest.serviceName} -{' '}
                       {isProfessional
-                        ? refund.clientName
-                        : refund.professionalName}
+                        ? supportRequest.clientName
+                        : supportRequest.professionalName}
                     </Typography>
                     <Typography className="text-xs text-muted-foreground">
-                      {format(new Date(refund.createdAt), 'MMM d, yyyy')}
+                      {format(new Date(supportRequest.createdAt), 'MMM d, yyyy')}
                     </Typography>
                   </div>
                 </Link>
               ))
             ) : (
               <div className="py-4 text-center text-muted-foreground">
-                No recent refunds
+                No recent support requests
               </div>
             )}
           </div>

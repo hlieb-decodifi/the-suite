@@ -14,12 +14,14 @@ export type ServiceFormProps = {
   defaultValues?: Partial<ServiceFormValues> | undefined;
   // Add isEditMode if needed for button text etc.
   // isEditMode?: boolean;
+  disabled?: boolean;
 };
 
 export function ServiceForm({
   onSubmitSuccess,
   onCancel,
   defaultValues,
+  disabled = false,
 }: ServiceFormProps) {
   const hookProps: UseServiceFormProps = {
     onSubmit: async (data) => {
@@ -128,7 +130,7 @@ export function ServiceForm({
               Cancel
             </Button>
           )}
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" disabled={isPending || disabled}>
             {isPending
               ? 'Saving...'
               : defaultValues

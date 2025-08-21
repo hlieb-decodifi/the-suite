@@ -9,8 +9,8 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
-    process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
     process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
+    process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
     'http://localhost:3000/'
   // Make sure to include `https://` when not localhost.
   console.log('url', url);
@@ -45,6 +45,70 @@ async function userExistsByEmail(email: string): Promise<{ exists: boolean; erro
   }
 
   return { exists: data };
+}
+
+/**
+ * Server action to invite a new admin
+ */
+export async function inviteAdminAction(email: string, firstName?: string, lastName?: string) {
+  // Check if user already exists
+  const { exists, error: userCheckError } = await userExistsByEmail(email);
+  if (userCheckError) {
+    return { success: false, error: 'Error checking for existing user.' };
+  }
+  if (exists) {
+    return { success: false, error: 'A user with this email already exists.' };
+  }
+
+  // Get Supabase admin client
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { success: false, error: 'Server configuration error.' };
+  }
+  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+  // Get admin role id
+  const { data: rolesData, error: rolesError } = await adminSupabase
+    .from('roles')
+    .select('id')
+    .eq('name', 'admin')
+    .single();
+  if (rolesError || !rolesData?.id) {
+    return { success: false, error: 'Could not find admin role id.' };
+  }
+  const ADMIN_ROLE_ID = rolesData.id;
+
+  // Create user with admin role, no password, email not confirmed
+  const { data: createdUser, error: userError } = await adminSupabase.auth.admin.createUser({
+    email,
+    email_confirm: false,
+    user_metadata: {
+      first_name: firstName,
+      last_name: lastName,
+      role: 'admin',
+      role_id: ADMIN_ROLE_ID,
+    },
+  });
+
+  if (userError) {
+    return { success: false, error: userError.message };
+  }
+
+
+  // Send a password-reset (magic) link to the invited user so they can set their password.
+  // Use the admin client to trigger Supabase's reset password email which contains the secure link.
+  const { error: resetError } = await adminSupabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${getURL()}auth/reset-password?invited=true`,
+  });
+
+  if (resetError) {
+    console.error('inviteAdminAction: failed to send reset/invite email', resetError);
+    // Optionally, you could remove the created user here via adminSupabase.auth.admin.deleteUser(createdUser?.id)
+    return { success: false, error: 'Failed to send invitation email.' };
+  }
+
+  return { success: true, user: createdUser };
 }
 
 /**

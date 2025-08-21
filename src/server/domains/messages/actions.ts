@@ -26,10 +26,11 @@ export async function getConversations(conversationId?: string): Promise<{
       user_uuid: user.id,
     });
 
-    // Get conversations for current user
+    // Get only general conversations for current user
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('*')
+      .eq('purpose', 'general') // Only show general conversations
       .or(isProfessional 
         ? `professional_id.eq.${user.id}`
         : `client_id.eq.${user.id}`
@@ -405,12 +406,13 @@ export async function createOrGetConversationEnhanced(
       return { success: false, error: 'Conversations can only be created between clients and professionals' };
     }
 
-    // Check if conversation already exists
+    // Check if general conversation already exists
     const { data: existingConversation } = await supabase
       .from('conversations')
       .select('*')
       .eq('client_id', clientId)
       .eq('professional_id', professionalId)
+      .eq('purpose', 'general')
       .single();
 
     if (existingConversation) {
@@ -446,6 +448,7 @@ export async function createOrGetConversationEnhanced(
         .insert({
           client_id: clientId,
           professional_id: professionalId,
+          purpose: 'general'
         })
         .select()
         .single();
@@ -484,6 +487,7 @@ export async function createOrGetConversationEnhanced(
       .insert({
         client_id: clientId,
         professional_id: professionalId,
+        purpose: 'general'
       })
       .select()
       .single();
@@ -593,10 +597,11 @@ export async function getRecentConversations(): Promise<{
       user_uuid: user.id,
     });
 
-    // Get recent conversations for current user (limit to 2 for dashboard)
+    // Get recent general conversations for current user (limit to 2 for dashboard)
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('*')
+      .eq('purpose', 'general') // Only show general conversations
       .or(isProfessional 
         ? `professional_id.eq.${user.id}`
         : `client_id.eq.${user.id}`

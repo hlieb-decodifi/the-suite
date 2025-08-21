@@ -18,6 +18,7 @@ import {
   useServicesState,
   useURLSync,
 } from './hooks';
+import { useUserDefaultLocation } from './useUserDefaultLocation';
 import { useSearch } from '@/stores/searchStore';
 
 type ClientServicesContainerProps = {
@@ -83,7 +84,7 @@ function useServerSearch(
       setIsLoading(true);
 
       // Update URL without navigation
-      const params = new URLSearchParams(searchParams.toString());
+  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
       if (searchTerm.trim()) {
         params.set('search', searchTerm.trim());
       } else {
@@ -183,6 +184,7 @@ export function ClientServicesContainer({
   initialSortBy = 'name-asc',
   authStatus,
 }: ClientServicesContainerProps) {
+  const userDefaultLocation = useUserDefaultLocation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const { resetSearch } = useSearch();
@@ -202,6 +204,7 @@ export function ClientServicesContainer({
     initialSearchTerm,
     initialLocation,
     initialSortBy,
+    userDefaultLocation
   );
 
   // Set up server-side search without page reload

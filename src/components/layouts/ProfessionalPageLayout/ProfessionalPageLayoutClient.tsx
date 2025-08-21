@@ -44,7 +44,7 @@ export function ProfessionalPageLayoutClient({
     return 'profile';
   };
 
-  const activeTab = getActiveTabFromPath(pathname);
+  const activeTab = getActiveTabFromPath(pathname ?? '');
 
   // Create tabs array for TabNavigation component
   const tabs: TabItem[] = [

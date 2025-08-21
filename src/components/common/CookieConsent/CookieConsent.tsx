@@ -12,7 +12,7 @@ import Link from 'next/link';
 export function CookieConsent({ open, onConsentGiven }: CookieConsentProps) {
   const { user } = useAuthStore();
   const userId = user?.id;
-  const { data: profile } = useProfile(userId || '');
+  const { data: profile, isLoading: isProfileLoading } = useProfile(userId || '');
   const setCookieConsentMutation = useSetCookieConsent();
 
   // Local state to control popup visibility
@@ -26,14 +26,29 @@ export function CookieConsent({ open, onConsentGiven }: CookieConsentProps) {
       ? profile?.cookieConsent
       : getLocalConsent();
 
-  // Show popup if consent not given
+  // Show popup if consent not given, but only after loading is complete
   useEffect(() => {
+    // If explicitly controlled via open prop, use that
     if (typeof open === 'boolean') {
       setShow(open);
-    } else {
-      setShow(!consentGiven);
+      return;
     }
-  }, [open, consentGiven]);
+
+    // For logged-in users, wait for profile data to load
+    if (userId && isProfileLoading) {
+      setShow(false);
+      return;
+    }
+
+    // For guests, we can determine immediately
+    if (!userId) {
+      setShow(!getLocalConsent());
+      return;
+    }
+
+    // For logged-in users after loading, check consent
+    setShow(!consentGiven);
+  }, [open, consentGiven, userId, isProfileLoading]);
 
   // If user logs in and had previously given local consent, sync to DB
   useEffect(() => {
@@ -58,6 +73,9 @@ export function CookieConsent({ open, onConsentGiven }: CookieConsentProps) {
     }
   };
 
+  // Don't render anything while loading for logged-in users
+  if (userId && isProfileLoading) return null;
+  
   if (!show) return null;
 
   return (
