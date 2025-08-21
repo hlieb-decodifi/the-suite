@@ -42,6 +42,7 @@ export type MobileMenuProps = {
     | undefined;
   isProfessional?: boolean;
   unreadMessagesCount?: number;
+  unreadSupportRequestsCount?: number;
   onSignUpClick?: () => void;
   onSignInClick?: () => void;
   onSearch?: (term: string) => void;
@@ -52,6 +53,7 @@ export function MobileMenu({
   userInfo,
   isProfessional = false,
   unreadMessagesCount = 0,
+  unreadSupportRequestsCount = 0,
   onSignUpClick,
   onSignInClick,
   onSearch,
@@ -121,6 +123,7 @@ export function MobileMenu({
               userInfo={userInfo}
               isProfessional={isProfessional}
               unreadMessagesCount={unreadMessagesCount}
+              unreadSupportRequestsCount={unreadSupportRequestsCount}
               onSignUpClick={handleSignUpClick}
               onSignInClick={handleSignInClick}
             />

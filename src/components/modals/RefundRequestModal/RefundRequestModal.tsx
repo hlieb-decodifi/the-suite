@@ -53,12 +53,14 @@ export function RefundRequestModal({
     setIsSubmitting(true);
 
     try {
-      const { createRefundRequest } = await import(
-        '@/server/domains/refunds/actions'
+      // Refunds are now handled through support requests
+      // Redirect to create a support request instead
+      const { createSupportRequest } = await import(
+        '@/server/domains/support-requests/client-actions'
       );
-      const result = await createRefundRequest({
+      const result = await createSupportRequest({
         appointment_id: appointmentId,
-        reason: reason.trim(),
+        reason: `Refund request: ${reason.trim()}`,
       });
 
       if (!result.success) {
@@ -66,9 +68,9 @@ export function RefundRequestModal({
       }
 
       toast({
-        title: 'Refund request submitted',
+        title: 'Support request submitted',
         description:
-          'Your refund request has been sent to the professional for review.',
+          'Your refund request has been created as a support request. You can track its progress in the Support Requests section.',
       });
 
       onSuccess();

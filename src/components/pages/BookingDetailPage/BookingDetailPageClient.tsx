@@ -4,7 +4,7 @@ import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
 import { LeafletMap } from '@/components/common/LeafletMap';
 import { AddAdditionalServicesModal, NoShowModal } from '@/components/modals';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
-import { RefundRequestModal } from '@/components/modals/RefundRequestModal/RefundRequestModal';
+import { SupportRequestModal } from '@/components/modals/SupportRequestModal/SupportRequestModal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DetailedAppointmentType } from './BookingDetailPage';
 
 export type BookingDetailPageClientProps = {
@@ -110,9 +110,42 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
+  const [existingSupportRequest, setExistingSupportRequest] = useState<{ id: string; status: string; category?: string } | null>(null);
+  const [isLoadingSupportRequest, setIsLoadingSupportRequest] = useState(true);
 
   const router = useRouter();
   const { toast } = useToast();
+
+  // Check for existing support request for this appointment
+  useEffect(() => {
+    const checkExistingSupportRequest = async () => {
+      try {
+        setIsLoadingSupportRequest(true);
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+
+        const { data: supportRequest, error } = await supabase
+          .from('support_requests')
+          .select('id, status, title, created_at, category')
+          .eq('appointment_id', appointment.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!error && supportRequest) {
+          setExistingSupportRequest(supportRequest);
+        }
+      } catch (error) {
+        console.error('Error checking existing support request:', error);
+      } finally {
+        setIsLoadingSupportRequest(false);
+      }
+    };
+
+    if (appointment.id) {
+      checkExistingSupportRequest();
+    }
+  }, [appointment.id]);
 
   // Get date from start_time
   const startDateTime = new Date(appointment.start_time);
@@ -281,9 +314,11 @@ export function BookingDetailPageClient({
     return true;
   };
 
-  const handleRefundSuccess = () => {
-    // Refresh the page to show updated status
-    router.refresh();
+  const handleSupportRequestSuccess = () => {
+    // Navigate to support requests dashboard to see the new request
+    router.push('/dashboard/support-requests');
+    // Close the modal
+    setIsRefundModalOpen(false);
   };
 
   const handleAddServicesSuccess = (result: {
@@ -859,8 +894,8 @@ export function BookingDetailPageClient({
               <CardContent className="space-y-6">
                 {/* Client Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
-                    <AvatarImage src={getOtherPartyProfileData().avatar_url || ''} />
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
+                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -944,8 +979,8 @@ export function BookingDetailPageClient({
               <CardContent className="space-y-6">
                 {/* Professional Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
-                    <AvatarImage src={getOtherPartyProfileData().avatar_url || ''} />
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
+                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -1113,7 +1148,12 @@ export function BookingDetailPageClient({
           {canUpdateStatus() && (
             <Card className="shadow-sm">
               <CardHeader>
-                <CardTitle className="text-xl">Actions</CardTitle>
+                <CardTitle className="text-xl">
+                  {appointmentData.computed_status === 'completed' || appointmentData.status === 'completed'
+                    ? 'Questions about this appointment'
+                    : 'Actions'
+                  }
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {getAvailableStatuses().map((statusOption) => (
@@ -1156,16 +1196,36 @@ export function BookingDetailPageClient({
                   </Button>
                 )}
 
-                {/* Refund Request Button */}
+                {/* Support Request Button or Reference */}
                 {canRequestRefund() && (
-                  <Button
-                    onClick={() => setIsRefundModalOpen(true)}
-                    variant="destructiveOutline"
-                    className="w-full"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Request Refund
-                  </Button>
+                  existingSupportRequest ? (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full relative"
+                    >
+                      <Link href={`/support-request/${existingSupportRequest.id}`}>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center">
+                            <FileTextIcon className="h-4 w-4 mr-2" />
+                            {existingSupportRequest.category === 'refund_request' 
+                              ? 'View Refund Request' 
+                              : 'View Support Request'}
+                          </div>
+                        </div>
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => setIsRefundModalOpen(true)}
+                      variant="destructiveOutline"
+                      className="w-full"
+                      disabled={isLoadingSupportRequest}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      {isLoadingSupportRequest ? 'Checking...' : 'Support Request'}
+                    </Button>
+                  )
                 )}
 
                 {/* No Show Button - Professional only, for completed appointments */}
@@ -1334,20 +1394,16 @@ export function BookingDetailPageClient({
         currentServices={appointmentData.bookings.booking_services}
       />
 
-      {/* Refund Request Modal */}
+      {/* Support Request Modal */}
       {canRequestRefund() && (
-        <RefundRequestModal
+        <SupportRequestModal
           isOpen={isRefundModalOpen}
           onClose={() => setIsRefundModalOpen(false)}
           appointmentId={appointment.id}
           serviceName={appointment.bookings.booking_services
             .map((bs) => bs.services.name)
             .join(', ')}
-          totalAmount={
-            (appointment.bookings.booking_payments?.amount || 0) +
-            (appointment.bookings.booking_payments?.tip_amount || 0)
-          }
-          onSuccess={handleRefundSuccess}
+          onSuccess={handleSupportRequestSuccess}
         />
       )}
 

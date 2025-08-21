@@ -422,6 +422,7 @@ export type Database = {
           created_at: string
           id: string
           professional_id: string
+          purpose: string | null
           updated_at: string
         }
         Insert: {
@@ -429,6 +430,7 @@ export type Database = {
           created_at?: string
           id?: string
           professional_id: string
+          purpose?: string | null
           updated_at?: string
         }
         Update: {
@@ -436,6 +438,7 @@ export type Database = {
           created_at?: string
           id?: string
           professional_id?: string
+          purpose?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -960,102 +963,6 @@ export type Database = {
           },
         ]
       }
-      refunds: {
-        Row: {
-          appointment_id: string
-          booking_payment_id: string
-          client_id: string
-          created_at: string
-          declined_reason: string | null
-          id: string
-          original_amount: number
-          processed_at: string | null
-          professional_id: string
-          professional_notes: string | null
-          reason: string
-          refund_amount: number | null
-          requested_amount: number | null
-          status: string
-          stripe_refund_id: string | null
-          transaction_fee: number
-          updated_at: string
-        }
-        Insert: {
-          appointment_id: string
-          booking_payment_id: string
-          client_id: string
-          created_at?: string
-          declined_reason?: string | null
-          id?: string
-          original_amount: number
-          processed_at?: string | null
-          professional_id: string
-          professional_notes?: string | null
-          reason: string
-          refund_amount?: number | null
-          requested_amount?: number | null
-          status?: string
-          stripe_refund_id?: string | null
-          transaction_fee?: number
-          updated_at?: string
-        }
-        Update: {
-          appointment_id?: string
-          booking_payment_id?: string
-          client_id?: string
-          created_at?: string
-          declined_reason?: string | null
-          id?: string
-          original_amount?: number
-          processed_at?: string | null
-          professional_id?: string
-          professional_notes?: string | null
-          reason?: string
-          refund_amount?: number | null
-          requested_amount?: number | null
-          status?: string
-          stripe_refund_id?: string | null
-          transaction_fee?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "refunds_appointment_id_fkey"
-            columns: ["appointment_id"]
-            isOneToOne: true
-            referencedRelation: "appointments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refunds_appointment_id_fkey"
-            columns: ["appointment_id"]
-            isOneToOne: true
-            referencedRelation: "appointments_with_status"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refunds_booking_payment_id_fkey"
-            columns: ["booking_payment_id"]
-            isOneToOne: false
-            referencedRelation: "booking_payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refunds_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "refunds_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       reviews: {
         Row: {
           appointment_id: string
@@ -1266,6 +1173,147 @@ export type Database = {
         }
         Relationships: []
       }
+      support_requests: {
+        Row: {
+          appointment_id: string | null
+          booking_id: string | null
+          booking_payment_id: string | null
+          category: Database["public"]["Enums"]["support_request_category"]
+          client_id: string
+          conversation_id: string
+          created_at: string
+          declined_reason: string | null
+          description: string
+          id: string
+          original_amount: number | null
+          priority: Database["public"]["Enums"]["support_request_priority"]
+          processed_at: string | null
+          professional_id: string | null
+          professional_notes: string | null
+          refund_amount: number | null
+          requested_amount: number | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["support_request_status"]
+          stripe_refund_id: string | null
+          title: string
+          transaction_fee: number | null
+          updated_at: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          booking_id?: string | null
+          booking_payment_id?: string | null
+          category?: Database["public"]["Enums"]["support_request_category"]
+          client_id: string
+          conversation_id: string
+          created_at?: string
+          declined_reason?: string | null
+          description: string
+          id?: string
+          original_amount?: number | null
+          priority?: Database["public"]["Enums"]["support_request_priority"]
+          processed_at?: string | null
+          professional_id?: string | null
+          professional_notes?: string | null
+          refund_amount?: number | null
+          requested_amount?: number | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["support_request_status"]
+          stripe_refund_id?: string | null
+          title: string
+          transaction_fee?: number | null
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string | null
+          booking_id?: string | null
+          booking_payment_id?: string | null
+          category?: Database["public"]["Enums"]["support_request_category"]
+          client_id?: string
+          conversation_id?: string
+          created_at?: string
+          declined_reason?: string | null
+          description?: string
+          id?: string
+          original_amount?: number | null
+          priority?: Database["public"]["Enums"]["support_request_priority"]
+          processed_at?: string | null
+          professional_id?: string | null
+          professional_notes?: string | null
+          refund_amount?: number | null
+          requested_amount?: number | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["support_request_status"]
+          stripe_refund_id?: string | null
+          title?: string
+          transaction_fee?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_requests_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments_with_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_booking_payment_id_fkey"
+            columns: ["booking_payment_id"]
+            isOneToOne: false
+            referencedRelation: "booking_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           cookie_consent: boolean
@@ -1357,13 +1405,21 @@ export type Database = {
           should_pre_auth_now: boolean
         }[]
       }
-      can_create_refund: {
+      can_create_refund_request: {
         Args: { p_appointment_id: string; p_client_id: string }
         Returns: boolean
       }
       can_create_review: {
         Args: { p_appointment_id: string; p_client_id: string }
         Returns: boolean
+      }
+      create_support_conversation: {
+        Args: {
+          p_client_id: string
+          p_professional_id?: string
+          p_purpose?: string
+        }
+        Returns: string
       }
       get_admin_config: {
         Args: { config_key: string; default_value?: string }
@@ -1435,13 +1491,33 @@ export type Database = {
         Args: { prof_profile_id: string; new_limit: number }
         Returns: boolean
       }
+      update_support_request_status: {
+        Args: {
+          p_request_id: string
+          p_new_status: Database["public"]["Enums"]["support_request_status"]
+          p_resolved_by?: string
+          p_resolution_notes?: string
+        }
+        Returns: boolean
+      }
       user_exists: {
         Args: { p_email: string }
         Returns: boolean
       }
     }
     Enums: {
-      [_ in never]: never
+      support_request_category:
+        | "booking_issue"
+        | "payment_issue"
+        | "profile_issue"
+        | "technical_issue"
+        | "service_quality"
+        | "billing_dispute"
+        | "account_access"
+        | "refund_request"
+        | "other"
+      support_request_priority: "low" | "medium" | "high" | "urgent"
+      support_request_status: "pending" | "in_progress" | "resolved" | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1556,7 +1632,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      support_request_category: [
+        "booking_issue",
+        "payment_issue",
+        "profile_issue",
+        "technical_issue",
+        "service_quality",
+        "billing_dispute",
+        "account_access",
+        "refund_request",
+        "other",
+      ],
+      support_request_priority: ["low", "medium", "high", "urgent"],
+      support_request_status: ["pending", "in_progress", "resolved", "closed"],
+    },
   },
 } as const
 

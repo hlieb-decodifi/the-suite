@@ -32,7 +32,7 @@ export function ClientProfessionalsContainer({
   const handlePageChange = (newPage: number) => {
     startTransition(async () => {
       // Update URL with new page
-      const params = new URLSearchParams(searchParams);
+      const params = new URLSearchParams(searchParams ?? '');
       params.set('page', newPage.toString());
       router.push(`/professionals?${params.toString()}`);
 

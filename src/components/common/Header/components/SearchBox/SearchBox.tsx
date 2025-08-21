@@ -32,6 +32,7 @@ export function SearchBox({
 
   // Set initial search term from URL parameters
   useEffect(() => {
+    if (!searchParams) return;
     const urlSearchTerm = searchParams.get('search') || '';
     setSearchTerm(urlSearchTerm);
   }, []); // Empty dependency array means this only runs once on mount

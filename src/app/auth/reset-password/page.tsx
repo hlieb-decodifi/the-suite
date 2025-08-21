@@ -18,10 +18,18 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [isInvited, setIsInvited] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
   useEffect(() => {
+    // Check for ?invited=true in the URL
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('invited') === 'true') {
+        setIsInvited(true);
+      }
+    }
     const verifyPasswordResetToken = async () => {
       try {
         const supabase = createClient();
@@ -73,8 +81,25 @@ export default function ResetPasswordPage() {
           description: 'Your password has been successfully updated.',
         });
 
-        // Redirect to profile after successful password update
-        router.push('/profile');
+        // Check if user is admin and redirect accordingly
+        try {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id;
+          let isAdmin = false;
+          if (userId) {
+            const { data: adminResult } = await supabase.rpc('is_admin', { user_uuid: userId });
+            isAdmin = !!adminResult;
+          }
+          if (isAdmin) {
+            router.push('/admin');
+          } else {
+            router.push('/profile');
+          }
+        } catch {
+          // fallback to profile if any error
+          router.push('/profile');
+        }
       } else {
         toast({
           title: 'Error',
@@ -138,6 +163,16 @@ export default function ResetPasswordPage() {
     <div className="w-full flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
         <CardContent className="p-8">
+          {isInvited && (
+            <div className="mb-6 text-center">
+              <Typography variant="h2" className="text-xl font-bold">
+                Welcome! 🎉
+              </Typography>
+              <Typography className="text-muted-foreground mt-2">
+                You have been invited as an admin. Please create your password to activate your account.
+              </Typography>
+            </div>
+          )}
           <ResetPasswordForm
             onSubmit={handleSubmit}
             isLoading={isLoading}
