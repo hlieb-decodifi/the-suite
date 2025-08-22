@@ -9,7 +9,7 @@ import {
   ClientsWidget,
   ProfessionalsWidget,
   MessagesWidget,
-  RefundsWidget,
+  SupportRequestsWidget,
 } from '@/components/templates/AdminOverviewTemplate/components';
 import { formatDate } from '@/utils/formatDate';
 
@@ -23,8 +23,8 @@ type DashboardData = {
   newProfessionals: number;
   totalChats: number;
   newChats: number;
-  totalRefunds: number;
-  newRefunds: number;
+  totalSupportRequests: number;
+  newSupportRequests: number;
 };
 
 export default function AdminOverviewPageClient() {
@@ -107,10 +107,10 @@ export default function AdminOverviewPageClient() {
           dateRangeLabel={dateRangeLabel}
         />
       }
-      refunds={
-        <RefundsWidget
-          totalRefunds={dashboardData.totalRefunds}
-          newRefunds={dashboardData.newRefunds}
+      supportRequests={
+        <SupportRequestsWidget
+          totalSupportRequests={dashboardData.totalSupportRequests}
+          newSupportRequests={dashboardData.newSupportRequests}
           dateRangeLabel={dateRangeLabel}
         />
       }

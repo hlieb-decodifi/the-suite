@@ -6,12 +6,13 @@ import { Typography } from '@/components/ui/typography';
 // Used by AdminDashboardOverviewPageClient as the main layout wrapper.
 
 // Change from interface to type for ESLint compliance
+
 type AdminOverviewTemplateProps = {
   bookingsActivity: React.ReactNode;
   clients: React.ReactNode;
   professionals: React.ReactNode;
   messages: React.ReactNode;
-  refunds: React.ReactNode;
+  supportRequests: React.ReactNode;
 };
 
 export function AdminOverviewTemplate({
@@ -19,9 +20,9 @@ export function AdminOverviewTemplate({
   clients,
   professionals,
   messages,
-  refunds,
+  supportRequests,
 }: AdminOverviewTemplateProps) {
-  // Children order: BookingsActivityWidget, ClientsWidget, ProfessionalsWidget, MessagesWidget, RefundsWidget
+  // Children order: BookingsActivityWidget, ClientsWidget, ProfessionalsWidget, MessagesWidget, SupportRequestsWidget
   // We'll use grid to align as per the user's diagram
   return (
     <section className="p-4">
@@ -43,11 +44,11 @@ export function AdminOverviewTemplate({
         <div className="col-span-1 row-span-1 h-full min-h-0 flex flex-col md:h-[180px]">
           {messages}
         </div>
-        {/* RefundsWidget: bottom row, right */}
+        {/* SupportRequestsWidget: bottom row, right */}
         <div className="col-span-1 row-span-1 h-full min-h-0 flex flex-col md:h-[180px]">
-          {refunds}
+          {supportRequests}
         </div>
       </div>
     </section>
   );
-} 
+}

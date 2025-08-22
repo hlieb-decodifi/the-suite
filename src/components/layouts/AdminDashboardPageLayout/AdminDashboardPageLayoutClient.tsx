@@ -31,8 +31,8 @@ export type AdminDashboardPageLayoutClientProps = {
     newProfessionals: number;
     totalChats: number;
     newChats: number;
-    totalRefunds: number;
-    newRefunds: number;
+    totalSupportRequests: number;
+    newSupportRequests: number;
   } | undefined;
 };
 
@@ -66,7 +66,7 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
     if (path.includes('/admin/appointments')) return 'appointments';
     if (path.includes('/admin/clients')) return 'clients';
     if (path.includes('/admin/professionals')) return 'professionals';
-    if (path.includes('/admin/refunds')) return 'refunds';
+    if (path.includes('/admin/support-requests')) return 'support-requests';
     if (path.includes('/admin/messages')) return 'messages';
     if (path.includes('/admin/admins')) return 'admins';
     if (path.includes('/admin/legal')) return 'legal';
@@ -88,7 +88,7 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
     { key: 'clients', label: 'Clients', href: createTabUrl('/admin/clients'), isActive: activeTab === 'clients' },
     { key: 'professionals', label: 'Professionals', href: createTabUrl('/admin/professionals'), isActive: activeTab === 'professionals' },
     { key: 'admins', label: 'Admins', href: createTabUrl('/admin/admins'), isActive: activeTab === 'admins' },
-    { key: 'refunds', label: 'Refunds', href: createTabUrl('/admin/refunds'), isActive: activeTab === 'refunds' },
+    { key: 'support-requests', label: 'Support Requests', href: createTabUrl('/admin/support-requests'), isActive: activeTab === 'support-requests' },
     { key: 'messages', label: 'Messages', href: createTabUrl('/admin/messages'), isActive: activeTab === 'messages' },
     { key: 'legal', label: 'Legal', href: createTabUrl('/admin/legal'), isActive: activeTab === 'legal' },
   ], [activeTab, searchParams]);

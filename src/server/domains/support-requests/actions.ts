@@ -1,4 +1,117 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+/**
+ * Get a single support request with all details (admin version)
+ */
+export async function getAdminSupportRequest(id: string): Promise<{
+  success: boolean;
+  supportRequest?: SupportRequestData;
+  error?: string;
+}> {
+  try {
+    // Use regular client to check user and role
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+    // Check admin role
+    const { data: isAdmin } = await supabase.rpc('is_admin', { user_uuid: user.id });
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: 'Not authorized',
+      };
+    }
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return {
+        success: false,
+        error: 'Invalid support request ID format',
+      };
+    }
+    // Use admin client to fetch support request with all related data
+    const adminSupabase = createAdminClient();
+    const { data: supportRequest, error } = await adminSupabase
+      .from('support_requests')
+      .select(`
+        *,
+        appointments(
+          id,
+          start_time,
+          end_time,
+          status,
+          bookings(
+            id,
+            booking_services(
+              services(
+                id,
+                name,
+                description,
+                price,
+                duration
+              )
+            ),
+            booking_payments(
+              id,
+              amount,
+              tip_amount,
+              service_fee,
+              deposit_amount,
+              status,
+              stripe_payment_intent_id,
+              refunded_amount,
+              refund_reason,
+              refunded_at,
+              payment_methods(
+                name,
+                is_online
+              )
+            )
+          )
+        ),
+        client_user:users!client_id(
+          id,
+          first_name,
+          last_name,
+          profile_photos(url)
+        ),
+        professional_user:users!professional_id(
+          id,
+          first_name,
+          last_name,
+          profile_photos(url)
+        ),
+        conversations(
+          id
+        )
+      `)
+      .eq('id', id)
+      .single();
+    if (error) {
+      console.error('Error fetching support request (admin):', error);
+      return {
+        success: false,
+        error: 'Support request not found',
+      };
+    }
+    return {
+      success: true,
+      supportRequest,
+    };
+  } catch (error) {
+    console.error('Error in getAdminSupportRequest:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}
 import { processStripeRefund } from '../refunds/stripe-refund';
 
 /**
