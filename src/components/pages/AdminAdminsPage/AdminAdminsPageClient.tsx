@@ -3,23 +3,23 @@
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { useAdmins, AdminUser } from '@/hooks/useAdmins';
+import { useRouter } from 'next/navigation';
 import InviteAdminModal from '@/components/modals/InviteAdminModal';
 import { Button } from '@/components/ui/button';
 
 
-export default function AdminAdminsPageClient({ admins: initialAdmins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
+export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
   const [filterName, setFilterName] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [inviteOpen, setInviteOpen] = useState(false);
-  const { data: admins = [], mutate } = useAdmins(initialAdmins);
+  const router = useRouter();
 
   const filteredAdmins = useMemo(() => {
     let filtered = admins;
     if (filterName) {
-      filtered = filtered.filter((a: AdminUser) => a.name.toLowerCase().includes(filterName.toLowerCase()));
+      filtered = filtered.filter((a) => a.name.toLowerCase().includes(filterName.toLowerCase()));
     }
-    filtered = filtered.sort((a: AdminUser, b: AdminUser) => {
+    filtered = filtered.sort((a, b) => {
       if (sortDirection === 'asc') {
         return a.createdAt.localeCompare(b.createdAt);
       } else {
@@ -32,7 +32,7 @@ export default function AdminAdminsPageClient({ admins: initialAdmins }: { admin
   // Handler for successful invite
   const handleInvited = async () => {
     setInviteOpen(false);
-    await mutate(); // Refetch the admins list
+    router.refresh(); // Full page refresh to get latest admins
   };
 
   return (
@@ -98,7 +98,7 @@ export default function AdminAdminsPageClient({ admins: initialAdmins }: { admin
                     </td>
                   </tr>
                 ) : (
-                  filteredAdmins.map((admin: AdminUser) => (
+                  filteredAdmins.map((admin) => (
                     <tr key={admin.id} className="hover:bg-muted/50 cursor-pointer">
                       <td className="border px-2 py-1">{admin.name}</td>
                       <td className="border px-2 py-1">{admin.email}</td>
@@ -120,7 +120,7 @@ export default function AdminAdminsPageClient({ admins: initialAdmins }: { admin
                 </Typography>
               </div>
             ) : (
-              filteredAdmins.map((admin: AdminUser) => (
+              filteredAdmins.map((admin) => (
                 <div key={admin.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>

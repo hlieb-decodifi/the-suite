@@ -52,7 +52,20 @@ export default function AdminOverviewPageClient() {
   }
 
   // Compute date range label in the same format as the DateRangePicker
-  const dateRangeLabel = '(all time)';
+  let dateRangeLabel = '(all time)';
+  if (start && end) {
+    // If the range is exactly the last 30 days, show '(last 30 days)'
+    const today = new Date();
+    const thirtyDaysAgo = subDays(today, 29);
+    const startStr = formatDateFns(thirtyDaysAgo, 'yyyy-MM-dd');
+    const endStr = formatDateFns(today, 'yyyy-MM-dd');
+    if (start === startStr && end === endStr) {
+      dateRangeLabel = '(last 30 days)';
+    } else {
+      // Otherwise, show the actual range
+      dateRangeLabel = `${start} to ${end}`;
+    }
+  }
 
   useEffect(() => {
     // Only set default last 30 days on first mount if both are undefined

@@ -1,10 +1,10 @@
-export type AdminAdminsPageProps = {
-  searchParams?: Promise<Record<string, unknown>>;
-};
+
 import React from 'react';
 import { createAdminClient } from '@/lib/supabase/server';
 
+// Server action for fetching admins data (inlined, not in a separate file)
 export async function getAdminAdminsData({ start, end }: { start?: string | undefined; end?: string | undefined }) {
+  'use server';
   const adminSupabase = await createAdminClient();
   // Query roles table for admin role id
   const { data: rolesData, error: rolesError } = await adminSupabase
@@ -50,7 +50,8 @@ export async function getAdminAdminsData({ start, end }: { start?: string | unde
   return { admins };
 }
 
-export default async function AdminAdminsPage({ searchParams }: AdminAdminsPageProps) {
+// The page component now calls the server action directly
+export default async function AdminAdminsPage({ searchParams }: { searchParams?: Promise<Record<string, unknown>> }) {
   const params = searchParams ? await searchParams : {};
   const start = typeof params.start === 'string' ? params.start : undefined;
   const end = typeof params.end === 'string' ? params.end : undefined;
