@@ -583,7 +583,7 @@ export function SupportRequestDetailPageClient({
                             supportRequest.client_user.profile_photos[0]?.url || undefined : undefined,
                         }
                   }
-                  readOnly={supportRequest.status === 'resolved' || supportRequest.status === 'closed'}
+                  readOnly={isAdmin || supportRequest.status === 'resolved' || supportRequest.status === 'closed'}
                   resolvedInfo={
                     supportRequest.status === 'resolved' || supportRequest.status === 'closed'
                       ? {

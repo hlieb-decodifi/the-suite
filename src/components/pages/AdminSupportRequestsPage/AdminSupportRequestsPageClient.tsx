@@ -127,8 +127,6 @@ export function AdminSupportRequestsPageClient() {
               <tr className="bg-muted/20 hover:bg-muted/20">
                 <th className="border px-2 py-1">Created</th>
                 <th className="border px-2 py-1">Title</th>
-                <th className="border px-2 py-1">Category</th>
-                <th className="border px-2 py-1">Priority</th>
                 <th className="border px-2 py-1">Status</th>
                 <th className="border px-2 py-1">Client</th>
                 <th className="border px-2 py-1">Professional</th>
@@ -143,10 +141,6 @@ export function AdminSupportRequestsPageClient() {
                 >
                   <td className="border px-2 py-1">{format(new Date(req.created_at), 'MMM dd, yyyy')}</td>
                   <td className="border px-2 py-1">{req.title}</td>
-                  <td className="border px-2 py-1">{req.category}</td>
-                  <td className="border px-2 py-1">
-                    <Badge variant="outline" className="capitalize">{req.priority}</Badge>
-                  </td>
                   <td className="border px-2 py-1">
                     <StatusBadge status={req.status} />
                   </td>

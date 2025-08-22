@@ -124,7 +124,11 @@ export function AdminAppointmentsTemplate({
                   </tr>
                 ) : (
                   appointments.map(app => (
-                    <tr key={app.id} className="hover:bg-muted/50 cursor-pointer">
+                    <tr
+                      key={app.id}
+                      className="hover:bg-muted/50 cursor-pointer"
+                      onClick={() => window.location.href = `/bookings/${app.id}`}
+                    >
                       <td className="border px-2 py-1">
                         <div className="flex items-center">
                           <CalendarDays className="mr-1 h-3 w-3 text-muted-foreground" />
