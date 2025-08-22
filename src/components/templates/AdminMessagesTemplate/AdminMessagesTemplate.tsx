@@ -27,22 +27,8 @@ function getParticipantsLabel(conv: AdminConversation): string {
 }
 import { Typography } from '@/components/ui/typography';
 import { useAdminMessages } from './useAdminMessages';
-import { ConversationWithUser, ChatMessage } from '@/types/messages';
+import { AdminConversation, ChatMessage } from '@/types/messages';
 
-type AdminConversation = ConversationWithUser & {
-  client_user?: {
-    id: string;
-    first_name?: string;
-    last_name?: string;
-    avatar_url?: string;
-  };
-  professional_user?: {
-    id: string;
-    first_name?: string;
-    last_name?: string;
-    avatar_url?: string;
-  };
-};
 import { useEffect, useState } from 'react';
 
 type AdminMessagesTemplateProps = {

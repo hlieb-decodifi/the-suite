@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ConversationWithUser } from '@/types/messages';
+import { AdminConversation } from '@/types/messages';
 
-export function useAdminMessages(conversations: ConversationWithUser[] = []) {
+export function useAdminMessages(conversations: AdminConversation[] = []) {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const selectedConversation = conversations.find(c => c.id === selectedConversationId) || null;
+  const selectedConversation: AdminConversation | null = conversations.find(c => c.id === selectedConversationId) || null;
   return {
     selectedConversationId,
     setSelectedConversationId,
