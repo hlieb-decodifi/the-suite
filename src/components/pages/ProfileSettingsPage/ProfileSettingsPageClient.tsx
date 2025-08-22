@@ -29,6 +29,8 @@ import {
   canChangePassword,
   getOAuthProvider,
 } from '@/utils/auth';
+import { hasPassword } from '@/utils/hasPassword';
+import { SetPasswordForm } from '@/components/forms/SetPasswordForm/SetPasswordForm';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +75,7 @@ export function ProfileSettingsPageClient({
   const canUserChangeEmail = canChangeEmail(user);
   const canUserChangePassword = canChangePassword(user);
   const oauthProvider = getOAuthProvider(user);
+  const userHasPassword = hasPassword(user);
 
   const handleDepositSettingsSubmit = async (
     data: DepositSettingsFormValues,
@@ -280,19 +283,19 @@ export function ProfileSettingsPageClient({
                     </div>
                   </Button>
 
-                  {/* Password Change Button */}
+                  {/* Password/Set Password Button */}
                   <Button
                     variant="outline"
                     className="justify-start h-auto p-4"
                     onClick={() => setIsChangePasswordOpen(true)}
-                    disabled={!canUserChangePassword || !isEditable}
+                    disabled={(!canUserChangePassword && userHasPassword) || !isEditable}
                   >
                     <div className="flex items-center gap-3">
                       <Lock size={18} />
                       <div className="text-left">
-                        <div className="font-medium">Change Password</div>
+                        <div className="font-medium">{userHasPassword ? 'Change Password' : 'Set Password'}</div>
                         <div className="text-sm text-muted-foreground">
-                          Update your password
+                          {userHasPassword ? 'Update your password' : 'Set a password for email login'}
                         </div>
                       </div>
                     </div>
@@ -452,7 +455,7 @@ export function ProfileSettingsPageClient({
         </DialogContent>
       </Dialog>
 
-      {/* Change Password Dialog */}
+      {/* Change/Set Password Dialog */}
       <Dialog
         open={isChangePasswordOpen}
         onOpenChange={setIsChangePasswordOpen}
@@ -463,10 +466,14 @@ export function ProfileSettingsPageClient({
         >
           <DialogHeader>
             <DialogTitle className="text-2xl font-futura font-bold text-center">
-              Change Password
+              {userHasPassword ? 'Change Password' : 'Set Password'}
             </DialogTitle>
           </DialogHeader>
-          <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+          {userHasPassword ? (
+            <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+          ) : (
+            <SetPasswordForm userEmail={user.email || ''} />
+          )}
         </DialogContent>
       </Dialog>
     </>
