@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { inviteAdminAction } from '@/api/auth/actions';
 
 type InviteAdminModalProps = {
   isOpen: boolean;
@@ -43,12 +45,7 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch('/api/auth/invite-admin', {
-        method: 'POST',
-        body: JSON.stringify({ email, firstName, lastName }),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const result = await res.json();
+      const result = await inviteAdminAction(email, firstName, lastName);
       if (result.success) {
         setSuccess(true);
         if (onInvited) onInvited();
@@ -56,7 +53,7 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
         setError(result.error || 'Failed to invite admin.');
       }
     } catch {
-      setError('Network error.');
+      setError('Server error.');
     }
     setLoading(false);
   };

@@ -94,7 +94,8 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
     return { success: false, error: inviteError.message };
   }
 
-  // Optionally, send your own branded invitation email here
+  // Revalidate the admin list page after successful invite
+  await revalidatePath('/admin/admins');
 
   return { success: true, user: invitedUser };
 }

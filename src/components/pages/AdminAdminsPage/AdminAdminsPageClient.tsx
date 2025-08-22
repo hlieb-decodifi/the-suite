@@ -1,11 +1,14 @@
+
 "use client";
 
+import React, { useState } from 'react';
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays } from 'lucide-react';
-import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import InviteAdminModal from '@/components/modals/InviteAdminModal';
 import { Button } from '@/components/ui/button';
+
+
 
 
 export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
@@ -14,20 +17,24 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
   const [inviteOpen, setInviteOpen] = useState(false);
   const router = useRouter();
 
-  const filteredAdmins = useMemo(() => {
-    let filtered = admins;
+  // When filterName or sortDirection changes, update the URL search params to trigger a server fetch
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
     if (filterName) {
-      filtered = filtered.filter((a) => a.name.toLowerCase().includes(filterName.toLowerCase()));
+      params.set('filterName', filterName);
+    } else {
+      params.delete('filterName');
     }
-    filtered = filtered.sort((a, b) => {
-      if (sortDirection === 'asc') {
-        return a.createdAt.localeCompare(b.createdAt);
-      } else {
-        return b.createdAt.localeCompare(a.createdAt);
-      }
-    });
-    return filtered;
-  }, [admins, filterName, sortDirection]);
+    if (sortDirection) {
+      params.set('sortDirection', sortDirection);
+    } else {
+      params.delete('sortDirection');
+    }
+    // Only push if changed
+    if (window.location.search !== `?${params.toString()}`) {
+      router.replace(`?${params.toString()}`);
+    }
+  }, [filterName, sortDirection, router]);
 
   // Handler for successful invite
   const handleInvited = async () => {
@@ -44,7 +51,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
             Admins
           </Typography>
           <Typography variant="small" className="text-muted-foreground">
-            Showing {filteredAdmins.length} admins
+            Showing {admins.length} admins
           </Typography>
         </div>
         <div className="p-4">
@@ -85,7 +92,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                 </tr>
               </thead>
               <tbody>
-                {filteredAdmins.length === 0 ? (
+                {admins.length === 0 ? (
                   <tr>
                     <td colSpan={3}>
                       <div className="flex flex-col items-center justify-center space-y-2 py-8">
@@ -98,7 +105,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                     </td>
                   </tr>
                 ) : (
-                  filteredAdmins.map((admin) => (
+                  admins.map((admin) => (
                     <tr key={admin.id} className="hover:bg-muted/50 cursor-pointer">
                       <td className="border px-2 py-1">{admin.name}</td>
                       <td className="border px-2 py-1">{admin.email}</td>
@@ -111,7 +118,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
           </div>
           {/* Mobile card view */}
           <div className="md:hidden">
-            {filteredAdmins.length === 0 ? (
+            {admins.length === 0 ? (
               <div className="flex flex-col items-center justify-center space-y-2 py-8">
                 <CalendarDays className="h-12 w-12 text-muted-foreground" />
                 <Typography>No admins found</Typography>
@@ -120,7 +127,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                 </Typography>
               </div>
             ) : (
-              filteredAdmins.map((admin) => (
+              admins.map((admin) => (
                 <div key={admin.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="flex justify-between items-start">
                     <div>

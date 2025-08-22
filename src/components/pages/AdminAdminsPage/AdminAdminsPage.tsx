@@ -3,7 +3,7 @@ import React from 'react';
 import { createAdminClient } from '@/lib/supabase/server';
 
 // Server action for fetching admins data (inlined, not in a separate file)
-export async function getAdminAdminsData({ start, end }: { start?: string | undefined; end?: string | undefined }) {
+export async function getAdminAdminsData({ start, end, filterName, sortDirection }: { start?: string | undefined; end?: string | undefined; filterName?: string | undefined; sortDirection?: 'asc' | 'desc' }) {
   'use server';
   const adminSupabase = await createAdminClient();
   // Query roles table for admin role id
@@ -14,18 +14,34 @@ export async function getAdminAdminsData({ start, end }: { start?: string | unde
     .single();
   if (rolesError || !rolesData?.id) throw new Error('Could not find admin role id');
   const ADMIN_ROLE_ID = rolesData.id;
+
   let query = adminSupabase
     .from('users')
     .select('id, first_name, last_name, created_at, role_id')
     .eq('role_id', ADMIN_ROLE_ID);
   if (start) query = query.gte('created_at', start);
-  if (end) query = query.lte('created_at', end);
+  let endValue = end;
+  // If end is a date string (YYYY-MM-DD), append time to include the full day
+  if (end && /^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    endValue = `${end}T23:59:59.999Z`;
+  }
+  if (endValue) query = query.lte('created_at', endValue);
+  // Server-side name filtering (case-insensitive)
+  if (filterName) {
+    // Use ilike for case-insensitive partial match on first_name or last_name
+    query = query.or(`first_name.ilike.%${filterName}%,last_name.ilike.%${filterName}%`);
+  }
+  // Server-side sorting
+  if (sortDirection === 'asc' || sortDirection === 'desc') {
+    query = query.order('created_at', { ascending: sortDirection === 'asc' });
+  }
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   // Fetch emails using Supabase Admin API
-  const admins = Array.isArray(data)
+
+  let admins = Array.isArray(data)
     ? await Promise.all(
         data.map(async (u: unknown) => {
           let email = '';
@@ -47,6 +63,12 @@ export async function getAdminAdminsData({ start, end }: { start?: string | unde
       )
     : [];
 
+  // Fallback: If filterName is provided but not matched by Supabase (e.g., full name search), filter here
+  if (filterName) {
+    const filter = filterName.toLowerCase();
+    admins = admins.filter(a => a.name.toLowerCase().includes(filter));
+  }
+
   return { admins };
 }
 
@@ -55,7 +77,9 @@ export default async function AdminAdminsPage({ searchParams }: { searchParams?:
   const params = searchParams ? await searchParams : {};
   const start = typeof params.start === 'string' ? params.start : undefined;
   const end = typeof params.end === 'string' ? params.end : undefined;
-  const { admins } = await getAdminAdminsData({ start, end });
+  const filterName = typeof params.filterName === 'string' ? params.filterName : undefined;
+  const sortDirection = params.sortDirection === 'desc' ? 'desc' : 'asc';
+  const { admins } = await getAdminAdminsData({ start, end, filterName, sortDirection });
   // Direct import for client component
   // @ts-ignore
   const AdminAdminsPageClient = (await import('./AdminAdminsPageClient')).default;
