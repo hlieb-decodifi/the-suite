@@ -1,7 +1,7 @@
 import * as Brevo from '@getbrevo/brevo';
 import nodemailer from 'nodemailer';
 import { initEmailSender, getEmailMethod, getTemplateContent } from './config';
-import { 
+import {
   EmailRecipient,
   EmailResult,
   BookingCancellationClientParams,
@@ -25,6 +25,7 @@ import {
 } from './types';
 import { TEMPLATE_IDS } from './constants';
 
+// Generic function to send a template email (used by most email functions)
 async function sendTemplateEmail<T extends Record<string, unknown>>(
   templateId: number,
   to: EmailRecipient[],
@@ -37,15 +38,14 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
     if (method === 'local') {
       // For local development, use nodemailer
       const transporter = sender as nodemailer.Transporter;
-      
+
       // Try to get the actual template content
       const templateContent = await getTemplateContent(templateId, params);
-      
+
       // Prepare email content - either from template or fallback
       const emailContent = templateContent || {
         subject: `Test Email - Template ${templateId}`,
-        html: `<h1>Test Email - Template ${templateId}</h1>
-               <pre>${JSON.stringify(params, null, 2)}</pre>`
+        html: `<h1>Test Email - Template ${templateId}</h1><pre>${JSON.stringify(params, null, 2)}</pre>`
       };
 
       const info = await transporter.sendMail({
@@ -56,7 +56,6 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
         // Include plain text version for better email client compatibility
         text: emailContent.html.replace(/<[^>]*>/g, '')
       });
-
       return {
         success: true,
         messageId: info.messageId
@@ -69,13 +68,12 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
       sendSmtpEmail.templateId = templateId;
       sendSmtpEmail.to = to;
       sendSmtpEmail.params = params;
-      sendSmtpEmail.sender = { 
+      sendSmtpEmail.sender = {
         email: process.env.BREVO_SENDER_EMAIL || 'support@the-suite.com',
         name: 'The Suite Team'
       };
 
       await apiInstance.sendTransacEmail(sendSmtpEmail);
-      
       return {
         success: true,
         messageId: `${templateId}-${Date.now()}`
