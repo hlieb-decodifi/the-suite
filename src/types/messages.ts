@@ -1,3 +1,23 @@
+// For admin messages tab: matches the structure returned by getAllGeneralConversationsForAdmin
+export type AdminConversation = {
+  id: string;
+  client_id: string;
+  professional_id: string;
+  created_at: string;
+  updated_at: string;
+  purpose?: string | null;
+  last_message: ChatMessage;
+  client_user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  } | null;
+  professional_user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  } | null;
+};
 export type MessageAttachment = {
   id: string;
   message_id: string;
