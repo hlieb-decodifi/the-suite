@@ -440,6 +440,7 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
     const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('id')
+      .eq('purpose', 'general')
       .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
 
     if (conversationsError || !conversations) {
