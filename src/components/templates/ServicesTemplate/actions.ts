@@ -105,13 +105,14 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
   const professional: Professional = {
     id: user?.id || 'unknown',
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
-    avatar: profilePhoto,
+    avatar: profilePhoto ?? '', // Ensure avatar is always a string
     address: displayAddress,
     rating,
     reviewCount,
     profile_id: professionalProfile?.id, // Include the professional profile ID
     hide_full_address: hideFullAddress,
     address_data: address,
+    is_subscribed: professionalProfile?.is_subscribed === true, // Add subscription status
   };
 
   // Return mapped service data
@@ -397,8 +398,12 @@ export async function getFilteredServices(
         return matches;
       });
 
-      // Prioritize services with non-null addresses
+      // Prioritize subscribed professionals first, then those with non-null addresses
       filteredServices = filteredServices.sort((a, b) => {
+        const aSubscribed = !!a.professional_profile?.is_subscribed;
+        const bSubscribed = !!b.professional_profile?.is_subscribed;
+        if (aSubscribed !== bSubscribed) return aSubscribed ? -1 : 1;
+
         const aHasAddress = !!a.professional_profile?.address;
         const bHasAddress = !!b.professional_profile?.address;
         if (aHasAddress === bHasAddress) return 0;

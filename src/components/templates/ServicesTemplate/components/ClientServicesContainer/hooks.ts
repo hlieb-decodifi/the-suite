@@ -56,6 +56,7 @@ export function useServicesState(
   initialSearchTerm: string,
   initialLocation: string = '',
   initialSortBy: SortOption = 'name-asc',
+  userDefaultLocation?: { latitude: number; longitude: number } | null
 ) {
   const [services, setServices] = useState<ServiceListItem[]>(initialServices);
   const [pagination, setPagination] = useState<PaginationInfo>(initialPagination);
@@ -70,21 +71,27 @@ export function useServicesState(
   const filteredServices = useMemo(
     () => {
       const filtered = filterServices(services, filters);
-      return sortServices(filtered, filters.sortBy);
+      // Pass userDefaultLocation only if location filter is empty
+      const locationArg = !filters.location ? userDefaultLocation : undefined;
+      return sortServices(filtered, filters.sortBy, locationArg);
     },
-    [services, filters],
+    [services, filters, userDefaultLocation],
   );
 
   // Get services to display
   const displayedServices = useMemo(
-    () => getServicesForDisplay(
-      initialServices,
-      filteredServices,
-      filters,
-      pagination.currentPage,
-      pagination.pageSize
-    ),
-    [initialServices, filteredServices, filters, pagination]
+    () => {
+      const locationArg = !filters.location ? userDefaultLocation : undefined;
+      return getServicesForDisplay(
+        initialServices,
+        filteredServices,
+        filters,
+        pagination.currentPage,
+        pagination.pageSize,
+        locationArg
+      );
+    },
+    [initialServices, filteredServices, filters, pagination, userDefaultLocation]
   );
 
   return {
