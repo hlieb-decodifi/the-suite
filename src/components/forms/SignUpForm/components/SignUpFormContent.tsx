@@ -28,10 +28,8 @@ export function SignUpFormContent({
     handleSubmit,
     formState: { errors },
     control,
-    watch,
   } = form;
 
-  const selectedRole = watch('userType');
 
   return (
     <div className="w-full">
@@ -42,8 +40,8 @@ export function SignUpFormContent({
           <GoogleOAuthButton
             mode="signup"
             redirectTo={redirectTo}
-            role={selectedRole}
-            disabled={!selectedRole}
+            // No role prop for Google sign up
+            disabled={false}
           />
         </div>
 

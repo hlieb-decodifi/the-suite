@@ -36,6 +36,8 @@ import {
   canChangePassword,
   getOAuthProvider,
 } from '@/utils/auth';
+import { hasPassword } from '@/utils/hasPassword';
+import { SetPasswordForm } from '@/components/forms/SetPasswordForm/SetPasswordForm';
 import { User } from '@supabase/supabase-js';
 import {
   Edit2,
@@ -82,6 +84,7 @@ function InlineAccountSection({
   const canUserChangeEmail = canChangeEmail(user);
   const canUserChangePassword = canChangePassword(user);
   const oauthProvider = getOAuthProvider(user);
+  const userHasPassword = hasPassword(user);
 
   const handleEmailChangeSuccess = () => {
     setIsChangeEmailOpen(false);
@@ -164,16 +167,16 @@ function InlineAccountSection({
                 Change Email
               </Button>
 
-              {/* Password Change Button */}
+              {/* Password/Set Password Button */}
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
                 onClick={() => setIsChangePasswordOpen(true)}
-                disabled={!canUserChangePassword}
+                disabled={!canUserChangePassword && userHasPassword}
               >
                 <Lock size={14} className="mr-2 text-primary" />
-                Change Password
+                {userHasPassword ? 'Change Password' : 'Set Password'}
               </Button>
             </div>
 
@@ -201,7 +204,7 @@ function InlineAccountSection({
         </DialogContent>
       </Dialog>
 
-      {/* Change Password Dialog */}
+      {/* Change/Set Password Dialog */}
       <Dialog
         open={isChangePasswordOpen}
         onOpenChange={setIsChangePasswordOpen}
@@ -212,10 +215,14 @@ function InlineAccountSection({
         >
           <DialogHeader>
             <DialogTitle className="text-2xl font-futura font-bold text-center">
-              Change Password
+              {userHasPassword ? 'Change Password' : 'Set Password'}
             </DialogTitle>
           </DialogHeader>
-          <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+          {userHasPassword ? (
+            <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+          ) : (
+            <SetPasswordForm userEmail={user.email || ''} />
+          )}
         </DialogContent>
       </Dialog>
     </>
