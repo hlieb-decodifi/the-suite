@@ -1179,3 +1179,85 @@ BEGIN
     RAISE NOTICE '6. Future appointment with pre-auth scheduled';
     
 END $$;
+
+-- Create admin user
+DO $$
+DECLARE
+    admin_user_id uuid := gen_random_uuid();
+    admin_role_id uuid;
+BEGIN
+    -- Create the auth user for admin
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        recovery_sent_at,
+        last_sign_in_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at,
+        confirmation_token,
+        email_change,
+        email_change_token_new,
+        recovery_token
+    ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        admin_user_id,
+        'authenticated',
+        'authenticated',
+        'admin@mail.com',
+        crypt('secret', gen_salt('bf')),
+        current_timestamp,
+        current_timestamp,
+        current_timestamp,
+        '{"provider":"email","providers":["email"]}',
+        '{"first_name": "Admin", "last_name": "User", "role": "admin"}',
+        current_timestamp,
+        current_timestamp,
+        '',
+        '',
+        '',
+        ''
+    );
+    
+    -- Create email identity for the admin user
+    INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider_id,
+        provider,
+        last_sign_in_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        gen_random_uuid(),
+        admin_user_id,
+        format('{"sub":"%s","email":"%s"}', admin_user_id::text, 'admin@mail.com')::jsonb,
+        admin_user_id,
+        'email',
+        current_timestamp,
+        current_timestamp,
+        current_timestamp
+    );
+    
+    -- Get the admin role ID
+    SELECT id INTO admin_role_id FROM roles WHERE name = 'admin';
+    
+    -- Update the user record created by the trigger to have admin role
+    UPDATE users 
+    SET role_id = admin_role_id 
+    WHERE id = admin_user_id;
+    
+    RAISE NOTICE 'Admin user created successfully!';
+    RAISE NOTICE 'Admin User ID: %', admin_user_id;
+    RAISE NOTICE 'Email: admin@mail.com';
+    RAISE NOTICE 'Password: secret';
+    RAISE NOTICE 'Role: admin';
+    
+END $$;

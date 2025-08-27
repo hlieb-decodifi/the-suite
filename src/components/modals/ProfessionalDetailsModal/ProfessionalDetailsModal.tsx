@@ -51,14 +51,11 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/professionals/${professional.id}/max-services`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxServices }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Failed to update');
+      // Dynamically import the server action
+      const { updateProfessionalMaxServicesAction } = await import('@/server/domains/professionals/actions');
+      const result = await updateProfessionalMaxServicesAction(professional.id, maxServices);
+      if (!result.success) {
+        setError(result.error || 'Failed to update');
       }
     } catch (e: unknown) {
       if (typeof e === 'object' && e !== null && 'message' in e && typeof (e as { message?: unknown }).message === 'string') {

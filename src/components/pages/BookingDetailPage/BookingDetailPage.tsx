@@ -117,13 +117,23 @@ export async function BookingDetailPage({ id }: { id: string }) {
     redirect('/');
   }
 
-  const appointment = await getAppointmentById(id);
+  // Check if user is admin (via Supabase RPC)
+  let isAdmin = false;
+  try {
+    const { data } = await supabase.rpc('is_admin', {
+      user_uuid: user.id,
+    });
+    isAdmin = !!data;
+  } catch {
+    isAdmin = false;
+  }
 
-  const isProfessional =
-    appointment.bookings.professionals?.user_id === user.id;
+  const appointment = await getAppointmentById(id, isAdmin);
+
+  const isProfessional = appointment.bookings.professionals?.user_id === user.id;
   const isClient = appointment.bookings.client_id === user.id;
 
-  if (!isProfessional && !isClient) {
+  if (!isProfessional && !isClient && !isAdmin) {
     notFound();
   }
 
@@ -140,9 +150,13 @@ export async function BookingDetailPage({ id }: { id: string }) {
 // Get appointment details by ID with enhanced data
 export async function getAppointmentById(
   appointmentId: string,
+  isAdmin: boolean = false,
 ): Promise<DetailedAppointmentType> {
   try {
-    const supabase = await createClient();
+    // Use admin client for admin users, else regular client
+    const supabase = isAdmin
+      ? (await import('@/lib/supabase/server')).createAdminClient()
+      : await createClient();
 
     // Fetch the appointment with all related data
     const { data, error } = await supabase

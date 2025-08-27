@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { SupportRequestDetailPageClient } from './SupportRequestDetailPageClient';
-import { getSupportRequest } from '@/server/domains/support-requests/actions';
+import { getSupportRequest, getAdminSupportRequest } from '@/server/domains/support-requests/actions';
 
 export type SupportRequestDetailPageProps = {
   id: string;
@@ -28,9 +28,20 @@ export async function SupportRequestDetailPage({
     user_uuid: user.id,
   });
 
-  // Fetch the support request details
-  const result = await getSupportRequest(id);
-  
+  // Check if user is admin (via Supabase RPC)
+  const { data: isAdmin } = await supabase.rpc('is_admin', {
+    user_uuid: user.id,
+  });
+
+  let result;
+  if (isAdmin) {
+    result = await getAdminSupportRequest(id);
+  } else if (isProfessional) {
+    result = await getSupportRequest(id);
+  } else {
+    redirect('/');
+  }
+
   if (!result.success || !result.supportRequest) {
     redirect('/dashboard/support-requests');
   }
@@ -40,6 +51,7 @@ export async function SupportRequestDetailPage({
       supportRequest={result.supportRequest}
       isProfessional={!!isProfessional}
       currentUserId={user.id}
+      isAdmin={!!isAdmin}
     />
   );
 }

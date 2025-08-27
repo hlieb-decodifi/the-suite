@@ -12,6 +12,7 @@ export type ResetPasswordFormContentProps = {
   isPending: boolean;
   onSubmit: (data: ResetPasswordFormValues) => void;
   userEmail?: string | undefined;
+  showHeadingAndDescription?: boolean;
 };
 
 export function ResetPasswordFormContent({
@@ -19,10 +20,12 @@ export function ResetPasswordFormContent({
   isPending,
   onSubmit,
   userEmail,
+  showHeadingAndDescription = true,
 }: ResetPasswordFormContentProps) {
   return (
     <div className="space-y-8">
       {/* Header */}
+      {showHeadingAndDescription && (
       <div className="text-center space-y-2">
         <Typography variant="h2" className="text-2xl font-bold">
           Reset Your Password
@@ -38,6 +41,7 @@ export function ResetPasswordFormContent({
           )}
         </Typography>
       </div>
+      )}
 
       {/* Form */}
       <Form {...form}>

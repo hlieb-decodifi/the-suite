@@ -32,43 +32,91 @@ export function filterServices(
 /**
  * Sorts services based on the selected sort option
  */
+
+/**
+ * Sorts services based on the selected sort option, including distance-based sorting for location-asc.
+ * @param services List of services
+ * @param sortBy Sort option
+ * @param userLocation Optional user location { latitude, longitude }
+ */
 export function sortServices(
   services: ServiceListItem[],
   sortBy: SortOption,
+  userLocation?: { latitude: number; longitude: number } | null
 ): ServiceListItem[] {
   const sortedServices = [...services];
-  
+  let result: ServiceListItem[];
   switch (sortBy) {
     case 'name-asc':
-      return sortedServices.sort((a, b) => a.name.localeCompare(b.name));
-    
+      result = sortedServices.sort((a, b) => a.name.localeCompare(b.name));
+      break;
     case 'name-desc':
-      return sortedServices.sort((a, b) => b.name.localeCompare(a.name));
-    
+      result = sortedServices.sort((a, b) => b.name.localeCompare(a.name));
+      break;
     case 'location-asc': {
-      // First, sort by city and name as before
-      const citySorted = sortedServices.sort((a, b) => {
-        const locationA = a.professional.address_data?.city || a.professional.address || '';
-        const locationB = b.professional.address_data?.city || b.professional.address || '';
-        const cityComparison = locationA.localeCompare(locationB);
-        if (cityComparison !== 0) {
-          return cityComparison;
-        }
-        // If cities are the same, sort by service name
-        return a.name.localeCompare(b.name);
-      });
-      // Then, move all with non-null address_data to the top, preserving order
-      return citySorted.sort((a, b) => {
-        const aHasAddress = !!a.professional.address_data;
-        const bHasAddress = !!b.professional.address_data;
-        if (aHasAddress === bHasAddress) return 0;
-        return aHasAddress ? -1 : 1;
-      });
+      // If no user location, fallback to alphabetical by city
+      if (!userLocation) {
+        result = sortedServices.sort((a, b) => {
+          const locationA = a.professional.address_data?.city || a.professional.address || '';
+          const locationB = b.professional.address_data?.city || b.professional.address || '';
+          const cityComparison = locationA.localeCompare(locationB);
+          if (cityComparison !== 0) {
+            return cityComparison;
+          }
+          return a.name.localeCompare(b.name);
+        });
+      } else {
+        // Sort by distance to user location
+        result = sortedServices.sort((a, b) => {
+          const distA = getDistanceFromUser(userLocation, a.professional.address_data || undefined);
+          const distB = getDistanceFromUser(userLocation, b.professional.address_data || undefined);
+          if (distA === distB) {
+            return a.name.localeCompare(b.name);
+          }
+          return distA - distB;
+        });
+      }
+      break;
     }
-    
     default:
-      return sortedServices;
+      result = sortedServices;
+      break;
   }
+
+  // Final sort: subscribed professionals first, then those with addresses
+  return result.sort((a, b) => {
+    const aSubscribed = !!a.professional.is_subscribed;
+    const bSubscribed = !!b.professional.is_subscribed;
+    if (aSubscribed !== bSubscribed) return aSubscribed ? -1 : 1;
+
+    const aHasAddress = !!a.professional.address_data;
+    const bHasAddress = !!b.professional.address_data;
+    if (aHasAddress === bHasAddress) return 0;
+    return aHasAddress ? -1 : 1;
+  });
+}
+
+/**
+ * Calculates the distance (in meters) between the user and a service's address using the Haversine formula.
+ * Returns Infinity if address_data is missing or invalid.
+ */
+function getDistanceFromUser(
+  userLoc: { latitude: number; longitude: number },
+  addressData?: { latitude?: number; longitude?: number }
+): number {
+  if (!addressData?.latitude || !addressData?.longitude) return Infinity;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371e3; // meters
+  const φ1 = toRad(userLoc.latitude);
+  const φ2 = toRad(addressData.latitude!);
+  const Δφ = toRad(addressData.latitude! - userLoc.latitude);
+  const Δλ = toRad(addressData.longitude! - userLoc.longitude);
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) *
+    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 /**
@@ -113,7 +161,8 @@ export function getServicesForDisplay(
   filteredServices: ServiceListItem[],
   filters: ServicesFilters,
   currentPage: number,
-  pageSize: number
+  pageSize: number,
+  userLocation?: { latitude: number; longitude: number } | null
 ): ServiceListItem[] {
   // If location filter is applied, use server results directly
   // Server-side location filtering is more comprehensive and handles complex address matching
@@ -124,7 +173,7 @@ export function getServicesForDisplay(
   // If no filters are applied, use the services as is (already paginated from server)
   if (filters.searchTerm === '') {
     // Always apply the selected sort to the initial results
-    return sortServices(initialServices, filters.sortBy);
+    return sortServices(initialServices, filters.sortBy, userLocation);
   }
 
   // Otherwise, apply pagination on client-side filtered results (search only)

@@ -1,40 +1,45 @@
-import React, { useEffect, useState } from 'react';
+"use client";
+import React, { useState } from 'react';
 import { Typography } from '@/components/ui/typography';
 import TiptapLegalEditor from './TiptapLegalEditor';
-import { fetchLegalDocument, saveLegalDocument } from './legalApi';
+// updateLegalDocument will be passed as a prop
 
-export default function AdminLegalTemplate() {
+import type { LegalDoc } from '@/types/legal_documents';
+type AdminLegalTemplateProps = {
+  initialTerms: LegalDoc;
+  initialPrivacy: LegalDoc;
+  updateLegalDocument: (type: 'terms' | 'privacy', content: string, effectiveDate: string) => Promise<boolean>;
+};
+
+function AdminLegalTemplate({
+  initialTerms,
+  initialPrivacy,
+  updateLegalDocument,
+}: AdminLegalTemplateProps) {
   const [activeTab, setActiveTab] = useState<'terms' | 'privacy'>('terms');
-  const [content, setContent] = useState(''); // HTML string
-  const [effectiveDate, setEffectiveDate] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [content, setContent] = useState(initialTerms.content);
+  const [effectiveDate, setEffectiveDate] = useState(initialTerms.effectiveDate);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    setLoading(true);
-    fetchLegalDocument(activeTab)
-      .then(doc => {
-        setContent(doc.content || '');
-        // Ensure date is in YYYY-MM-DD format
-        const formatDate = (dateStr: string) => {
-          if (!dateStr) return new Date().toISOString().slice(0, 10);
-          const d = new Date(dateStr);
-          if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
-          return d.toISOString().slice(0, 10);
-        };
-        setEffectiveDate(formatDate(doc.effectiveDate));
-        setError('');
-      })
-      .catch(() => setError('Failed to fetch document.'))
-      .finally(() => setLoading(false));
-  }, [activeTab]);
+  // Switch content/effectiveDate when tab changes
+  React.useEffect(() => {
+    if (activeTab === 'terms') {
+      setContent(initialTerms.content);
+      setEffectiveDate(initialTerms.effectiveDate);
+    } else {
+      setContent(initialPrivacy.content);
+      setEffectiveDate(initialPrivacy.effectiveDate);
+    }
+    setError('');
+  }, [activeTab, initialTerms, initialPrivacy]);
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      await saveLegalDocument(activeTab, content, effectiveDate);
+      const success = await updateLegalDocument(activeTab, content, effectiveDate);
+      if (!success) throw new Error();
     } catch {
       setError('Failed to save document.');
     }
@@ -54,31 +59,30 @@ export default function AdminLegalTemplate() {
           onClick={() => setActiveTab('privacy')}
         >Privacy Policy</button>
       </div>
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <>
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Effective Date</label>
-            <input
-              type="date"
-              value={effectiveDate}
-              onChange={e => setEffectiveDate(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Document Content</label>
-            <TiptapLegalEditor value={content} onChange={setContent} />
-          </div>
-          {error && <div className="text-red-500 mb-2">{error}</div>}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-primary text-white px-4 py-2 rounded"
-          >{saving ? 'Saving...' : 'Save'}</button>
-        </>
-      )}
+      <>
+        <div className="mb-4">
+          <label className="block mb-1 font-medium">Effective Date</label>
+          <input
+            type="date"
+            value={effectiveDate}
+            onChange={e => setEffectiveDate(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block mb-1 font-medium">Document Content</label>
+          <TiptapLegalEditor value={content} onChange={setContent} />
+        </div>
+        {error && <div className="text-red-500 mb-2">{error}</div>}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-primary text-white px-4 py-2 rounded"
+        >{saving ? 'Saving...' : 'Save'}</button>
+      </>
     </div>
   );
 }
+
+export default AdminLegalTemplate;
+

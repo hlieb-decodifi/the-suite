@@ -9,6 +9,7 @@ export type ResetPasswordFormProps = {
   className?: string;
   isLoading?: boolean;
   userEmail?: string | undefined;
+  showHeadingAndDescription?: boolean;
 };
 
 export function ResetPasswordForm({
@@ -16,6 +17,7 @@ export function ResetPasswordForm({
   className = '',
   isLoading = false,
   userEmail,
+  showHeadingAndDescription = true,
 }: ResetPasswordFormProps) {
   const {
     form,
@@ -33,6 +35,7 @@ export function ResetPasswordForm({
         isPending={isPending}
         onSubmit={handleSubmit}
         userEmail={userEmail}
+        showHeadingAndDescription={showHeadingAndDescription}
       />
     </div>
   );
