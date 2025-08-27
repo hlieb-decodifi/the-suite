@@ -136,7 +136,7 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
     const professional = {
       id: user?.id || 'unknown',
       name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
-      avatar: profilePhotoUrl, // Will be undefined if no photo exists
+      avatar: profilePhotoUrl ?? '', // Ensure avatar is always a string
       address: displayAddress || professionalProfile?.location || 'Location not specified',
       rating: 4.5, // Mock data, would come from reviews table
       reviewCount: 0, // Mock data, would come from reviews count

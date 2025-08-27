@@ -9,8 +9,8 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
-    process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
     process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
+    process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
     'http://localhost:3000/'
   // Make sure to include `https://` when not localhost.
   console.log('url', url);
@@ -79,36 +79,25 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   }
   const ADMIN_ROLE_ID = rolesData.id;
 
-  // Create user with admin role, no password, email not confirmed
-  const { data: createdUser, error: userError } = await adminSupabase.auth.admin.createUser({
-    email,
-    email_confirm: false,
-    user_metadata: {
+  // Use Supabase's inviteUserByEmail to invite the admin
+  const { data: invitedUser, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+    data: {
       first_name: firstName,
       last_name: lastName,
       role: 'admin',
       role_id: ADMIN_ROLE_ID,
     },
+    redirectTo: `${getURL()}auth/set-password`,
   });
 
-  if (userError) {
-    return { success: false, error: userError.message };
+  if (inviteError) {
+    return { success: false, error: inviteError.message };
   }
 
+  // Revalidate the admin list page after successful invite
+  await revalidatePath('/admin/admins');
 
-  // Send a password-reset (magic) link to the invited user so they can set their password.
-  // Use the admin client to trigger Supabase's reset password email which contains the secure link.
-  const { error: resetError } = await adminSupabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${getURL()}auth/reset-password?invited=true`,
-  });
-
-  if (resetError) {
-    console.error('inviteAdminAction: failed to send reset/invite email', resetError);
-    // Optionally, you could remove the created user here via adminSupabase.auth.admin.deleteUser(createdUser?.id)
-    return { success: false, error: 'Failed to send invitation email.' };
-  }
-
-  return { success: true, user: createdUser };
+  return { success: true, user: invitedUser };
 }
 
 /**
