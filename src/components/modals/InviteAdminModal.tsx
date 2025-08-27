@@ -1,5 +1,17 @@
 
+
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { inviteAdminAction } from '@/api/auth/actions';
 
 type InviteAdminModalProps = {
   isOpen: boolean;
@@ -27,17 +39,13 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
     }
   }, [isOpen]);
 
-  const handleInvite = async () => {
+  const handleInvite = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch('/api/auth/invite-admin', {
-        method: 'POST',
-        body: JSON.stringify({ email, firstName, lastName }),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const result = await res.json();
+      const result = await inviteAdminAction(email, firstName, lastName);
       if (result.success) {
         setSuccess(true);
         if (onInvited) onInvited();
@@ -45,50 +53,73 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
         setError(result.error || 'Failed to invite admin.');
       }
     } catch {
-      setError('Network error.');
+      setError('Server error.');
     }
     setLoading(false);
   };
 
-  if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Invite New Admin</h2>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Invite New Admin</DialogTitle>
+        </DialogHeader>
         {success ? (
-          <div className="text-green-600 mb-4">Invitation sent!</div>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+              <span className="text-green-600 text-2xl">✓</span>
+            </div>
+            <h3 className="text-lg font-medium">Invitation sent!</h3>
+            <p className="text-sm text-muted-foreground mt-2">The admin has been invited successfully.</p>
+          </div>
         ) : (
-          <>
-            <input
-              type="email"
-              placeholder="Admin Email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full mb-2 p-2 border rounded"
-            />
-            <input
-              type="text"
-              placeholder="First Name"
-              value={firstName}
-              onChange={e => setFirstName(e.target.value)}
-              className="w-full mb-2 p-2 border rounded"
-            />
-            <input
-              type="text"
-              placeholder="Last Name"
-              value={lastName}
-              onChange={e => setLastName(e.target.value)}
-              className="w-full mb-2 p-2 border rounded"
-            />
-            {error && <div className="text-red-600 mb-2">{error}</div>}
-            <button onClick={handleInvite} disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded mr-2">
-              {loading ? 'Inviting...' : 'Send Invite'}
-            </button>
-            <button onClick={onClose} className="bg-gray-300 px-4 py-2 rounded">Cancel</button>
-          </>
+          <form onSubmit={handleInvite} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-admin-email">Admin Email <span className="text-destructive">*</span></Label>
+              <Input
+                id="invite-admin-email"
+                type="email"
+                placeholder="admin@email.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-admin-firstname">First Name</Label>
+              <Input
+                id="invite-admin-firstname"
+                type="text"
+                placeholder="First Name"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-admin-lastname">Last Name</Label>
+              <Input
+                id="invite-admin-lastname"
+                type="text"
+                placeholder="Last Name"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            {error && <div className="text-destructive text-sm mt-2">{error}</div>}
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading || !email}>
+                {loading ? 'Inviting...' : 'Send Invite'}
+              </Button>
+            </DialogFooter>
+          </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
