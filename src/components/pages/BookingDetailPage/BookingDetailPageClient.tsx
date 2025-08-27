@@ -50,6 +50,7 @@ export type BookingDetailPageClientProps = {
   isClient: boolean;
   isProfessional: boolean;
   userId: string;
+  isAdmin?: boolean;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -101,6 +102,7 @@ export function BookingDetailPageClient({
   isClient,
   isProfessional,
   userId,
+  isAdmin = false,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -501,7 +503,7 @@ export function BookingDetailPageClient({
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-6">
           <Link
-            href="/dashboard/appointments"
+            href={isAdmin ? "/admin/appointments" : "/dashboard/appointments"}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeftIcon className="h-4 w-4" />
@@ -1197,7 +1199,7 @@ export function BookingDetailPageClient({
                 )}
 
                 {/* Support Request Button or Reference */}
-                {canRequestRefund() && (
+                {canRequestRefund() && !isAdmin && (
                   existingSupportRequest ? (
                     <Button
                       asChild

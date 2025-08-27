@@ -143,6 +143,7 @@ export async function BookingDetailPage({ id }: { id: string }) {
       isProfessional={isProfessional}
       isClient={isClient}
       userId={user.id}
+      isAdmin={isAdmin}
     />
   );
 }
