@@ -3,6 +3,7 @@
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
 import { convertTimeToClientTimezone, getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 /**
  * Calculate the total price for a booking
@@ -320,28 +321,19 @@ export async function getAvailableTimeSlots(
   const supabase = await createClient();
 
   try {
-    // Create date objects for the start and end of the day in professional's timezone
-    const professionalDate = new Date(date);
-    
-    // Calculate timezone offset between professional's timezone and UTC
-    const professionalOffsetMinutes = -new Date(date).getTimezoneOffset();
-    const targetTimezoneOffsetHours = professionalOffsetMinutes / 60;
+  // Create date objects for the start and end of the day in professional's timezone
+  // Use zonedTimeToUtc for accurate conversion (handles DST and IANA timezones)
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
 
-    console.log('Timezone info:', {
-      professionalTimezone,
-      offsetMinutes: professionalOffsetMinutes,
-      offsetHours: targetTimezoneOffsetHours
-    });
-    
-    // Adjust the date to professional's timezone for querying
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+  // Convert professional's local day start/end to UTC using fromZonedTime
+  const queryStartTime = fromZonedTime(startOfDay, professionalTimezone);
+  const queryEndTime = fromZonedTime(endOfDay, professionalTimezone);
 
-    // Convert to UTC for database query
-    const queryStartTime = new Date(startOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
-    const queryEndTime = new Date(endOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
+  // For dayOfWeek calculation, get the date in the professional's timezone
+  const professionalDate = toZonedTime(startOfDay, professionalTimezone);
 
     // Get working hours
     const { data: workingHoursData, error: workingHoursError } = await supabase
@@ -396,6 +388,7 @@ export async function getAvailableTimeSlots(
       console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
+
     // Convert working hours to minutes for easier comparison
     const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
     const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
@@ -412,28 +405,22 @@ export async function getAvailableTimeSlots(
       const slotDate = new Date(date);
       slotDate.setHours(hour, minute, 0, 0);
 
-      // Convert slot times to UTC for comparison
-      const slotStartTime = new Date(slotDate.getTime());
-      const slotEndTime = new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000));
+      // Convert slot times to UTC for comparison using professional's timezone
+      const slotStartTime = fromZonedTime(slotDate, professionalTimezone);
+      const slotEndTime = fromZonedTime(new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000)), professionalTimezone);
 
-      // Check if this slot (for the full required duration) overlaps with any existing appointments
-      let isAvailable = true;
-
-      for (const appointment of appointments || []) {
-        if (!appointment.start_time || !appointment.end_time) continue;
-
-        if (isSlotOverlapping(
+      // Refactored: Use Array.some for overlap check
+      const hasOverlap = (appointments || []).some(appointment => {
+        if (!appointment.start_time || !appointment.end_time) return false;
+        return isSlotOverlapping(
           slotStartTime.toISOString(),
           slotEndTime.toISOString(),
           appointment.start_time,
           appointment.end_time
-        )) {
-          isAvailable = false;
-          break;
-        }
-      }
+        );
+      });
 
-      if (isAvailable) {
+      if (!hasOverlap) {
         slots.push(timeString);
       }
     }

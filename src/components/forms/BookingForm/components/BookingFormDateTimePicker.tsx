@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar } from '@/components/ui/calendar';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils';
+import { convertTimeToClientTimezone } from '@/utils/timezone';
 import { formatDuration } from '@/utils/formatDuration';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
@@ -232,6 +233,9 @@ function useProcessedTimeSlots(
   selectedDate: Date | undefined,
   selectedTimeSlot: string | undefined,
   requiredSlots: number,
+  professionalTimezone?: string,
+  clientTimezone?: string,
+  backendReturnedProfessionalTimezone?: boolean,
 ): {
   timeSlots: TimeSlot[];
   validationStatus: ValidationStatus;
@@ -261,24 +265,41 @@ function useProcessedTimeSlots(
       };
     }
 
-    // Create indexed time slots
-    const indexedSlots = availableTimeSlots.map((slot) => ({
-      id: slot,
-      time: slot,
-      minutes: timeToMinutes(slot),
-      isSelected: slot === selectedTimeSlot,
-      isDisabled: false,
-      isHighlighted: false,
-    }));
+    // Only convert if backendReturnedProfessionalTimezone is true
+    let convertedSlots: { id: string; time: string; minutes: number; isSelected: boolean; isDisabled: boolean; isHighlighted: boolean; original: string }[] = [];
+    if (backendReturnedProfessionalTimezone && professionalTimezone && clientTimezone && professionalTimezone !== clientTimezone) {
+      convertedSlots = availableTimeSlots.map((slot) => {
+        const { time } = convertTimeToClientTimezone(slot, professionalTimezone, clientTimezone, selectedDate);
+        return {
+          id: slot,
+          time,
+          minutes: timeToMinutes(time),
+          isSelected: time === selectedTimeSlot,
+          isDisabled: false,
+          isHighlighted: false,
+          original: slot,
+        };
+      });
+    } else {
+      convertedSlots = availableTimeSlots.map((slot) => ({
+        id: slot,
+        time: slot,
+        minutes: timeToMinutes(slot),
+        isSelected: slot === selectedTimeSlot,
+        isDisabled: false,
+        isHighlighted: false,
+        original: slot,
+      }));
+    }
 
     // Sort slots by time
-    indexedSlots.sort((a, b) => a.minutes - b.minutes);
+    convertedSlots.sort((a, b) => a.minutes - b.minutes);
 
     // Find selected slot index
-    const selectedIndex = indexedSlots.findIndex((slot) => slot.isSelected);
+    const selectedIndex = convertedSlots.findIndex((slot) => slot.isSelected);
 
     // Disable slots that don't have enough consecutive availability
-  const disabledSlots = disableInvalidTimeSlots(indexedSlots);
+    const disabledSlots = disableInvalidTimeSlots(convertedSlots);
 
     // Highlight slots based on service duration
     const processedSlots = highlightSelectedTimeSlots(
@@ -298,7 +319,7 @@ function useProcessedTimeSlots(
       timeSlots: processedSlots,
       validationStatus,
     };
-  }, [availableTimeSlots, selectedDate, selectedTimeSlot, requiredSlots]);
+  }, [availableTimeSlots, selectedDate, selectedTimeSlot, requiredSlots, professionalTimezone, clientTimezone, backendReturnedProfessionalTimezone]);
 }
 
 // DatePicker subcomponent
@@ -509,7 +530,8 @@ export function BookingFormDateTimePicker({
   isCalendarLoading = false,
   professionalTimezone,
   clientTimezone,
-}: BookingFormDateTimePickerProps) {
+  backendReturnedProfessionalTimezone = false,
+}: BookingFormDateTimePickerProps & { backendReturnedProfessionalTimezone?: boolean }) {
   // Use synchronized date state
   const { localDate, handleLocalDateChange } = useSynchronizedDateState(
     selectedDate,
@@ -534,6 +556,9 @@ export function BookingFormDateTimePicker({
     selectedDate,
     selectedTimeSlot,
     requiredSlots,
+    professionalTimezone,
+    clientTimezone,
+    backendReturnedProfessionalTimezone
   );
 
   // Handle slot selection
