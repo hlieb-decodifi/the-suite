@@ -61,11 +61,13 @@ async function calculateTotalPrice(
  * 
  * @param formData The booking form data
  * @param professionalProfileId The ID of the professional's profile
+ * @param clientTimezone The client's timezone for proper date conversion
  * @returns Object containing the booking ID and total price
  */
 export async function createBooking(
   formData: BookingFormValues & { dateWithTime: Date },
-  professionalProfileId: string
+  professionalProfileId: string,
+  clientTimezone: string = 'UTC'
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
   
@@ -113,22 +115,26 @@ export async function createBooking(
     // Calculate total duration
     const totalDuration = mainService.duration + extraServiceDurations.reduce((sum, duration) => sum + duration, 0);
 
-    // Convert the local date to UTC
+    // Properly convert appointment time from client timezone to UTC for database storage
     const localDate = new Date(formData.date);
     const [hoursStr, minutesStr] = formData.timeSlot.split(':');
     const hours = parseInt(hoursStr || '0', 10);
     const minutes = parseInt(minutesStr || '0', 10);
     
-    // Create the appointment start time in local timezone
-    const appointmentDate = new Date(localDate);
-    appointmentDate.setHours(hours, minutes, 0, 0);
+    // Create the appointment start time in client's local time
+    const appointmentDateInClientTz = new Date(localDate);
+    appointmentDateInClientTz.setHours(hours, minutes, 0, 0);
 
-    // Convert to UTC
-    const utcDate = new Date(appointmentDate.getTime());
+    // Import timezone utilities for proper conversion
+    const { fromZonedTime } = await import('date-fns-tz');
+    
+    // Convert from client timezone to UTC for database storage
+    const utcDate = fromZonedTime(appointmentDateInClientTz, clientTimezone);
     const utcEndDate = new Date(utcDate.getTime() + (totalDuration * 60 * 1000));
 
     console.log('Appointment times:', {
-      local: appointmentDate.toLocaleString(),
+      clientLocalTime: appointmentDateInClientTz.toLocaleString(),
+      clientTimezone,
       utcStart: utcDate.toISOString(),
       utcEnd: utcEndDate.toISOString(),
       totalDuration
@@ -307,6 +313,7 @@ function isSlotOverlapping(
 export async function getAvailableTimeSlots(
   professionalProfileId: string,
   date: string,
+  requiredDurationMinutes: number = 30,
   professionalTimezone: string = 'UTC',
   clientTimezone: string = 'UTC'
 ): Promise<string[]> {
@@ -367,7 +374,9 @@ export async function getAvailableTimeSlots(
       return [];
     }
 
-    // Get existing appointments for this day using UTC-adjusted query times
+
+    // Get all appointments that overlap with the day (not just those that start within the day)
+    // This ensures we catch appointments that start before the day but end during it
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
       .select(`
@@ -380,8 +389,8 @@ export async function getAvailableTimeSlots(
       `)
       .eq('bookings.professional_profile_id', professionalProfileId)
       .neq('bookings.status', 'cancelled')
-      .gte('start_time', queryStartTime.toISOString())
-      .lt('start_time', queryEndTime.toISOString());
+      .lt('start_time', queryEndTime.toISOString()) // appointment starts before day ends
+      .gt('end_time', queryStartTime.toISOString()); // appointment ends after day starts
 
     if (appointmentsError) {
       console.error('Error fetching appointments:', appointmentsError);
@@ -391,9 +400,10 @@ export async function getAvailableTimeSlots(
     const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
     const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
 
-    // Generate time slots every 30 minutes
+
+    // Generate time slots every 30 minutes, but check the full required duration for each slot
     const slots: string[] = [];
-    for (let minutes = workingStartMinutes; minutes < workingEndMinutes; minutes += 30) {
+    for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
       const hour = Math.floor(minutes / 60);
       const minute = minutes % 60;
       const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -401,12 +411,12 @@ export async function getAvailableTimeSlots(
       // Create datetime strings in professional's timezone
       const slotDate = new Date(date);
       slotDate.setHours(hour, minute, 0, 0);
-      
+
       // Convert slot times to UTC for comparison
       const slotStartTime = new Date(slotDate.getTime());
-      const slotEndTime = new Date(slotDate.getTime() + (30 * 60 * 1000));
+      const slotEndTime = new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000));
 
-      // Check if this slot overlaps with any existing appointments
+      // Check if this slot (for the full required duration) overlaps with any existing appointments
       let isAvailable = true;
 
       for (const appointment of appointments || []) {
