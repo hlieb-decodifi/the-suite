@@ -309,6 +309,78 @@ function isSlotOverlapping(
 }
 
 /**
+ * Generate cross-midnight slots for a specific working day
+ */
+
+type BookingAppointment = {
+  start_time: string;
+  end_time: string;
+  bookings: {
+    professional_profile_id: string;
+    status: string;
+  };
+};
+
+async function generateCrossMidnightSlots(
+  workingHours: { startTime: string; endTime: string },
+  professionalTimezone: string,
+  clientTimezone: string,
+  clientSelectedDate: string,
+  appointments: BookingAppointment[],
+  requiredDurationMinutes: number,
+  dayOffset: number
+): Promise<string[]> {
+  const slots: string[] = [];
+  
+  // Create a date for the professional's working day
+  const professionalWorkingDate = new Date(clientSelectedDate);
+  professionalWorkingDate.setDate(professionalWorkingDate.getDate() + dayOffset);
+  
+  // Generate time slots for this working day
+  const workingStartMinutes = timeToMinutes(workingHours.startTime);
+  const workingEndMinutes = timeToMinutes(workingHours.endTime);
+  
+  for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+    // Create slot in professional's timezone for their working day
+    const slotDate = new Date(professionalWorkingDate);
+    slotDate.setHours(hour, minute, 0, 0);
+
+    // Convert slot times to UTC for comparison
+    const slotStartTime = fromZonedTime(slotDate, professionalTimezone);
+    const slotEndTime = fromZonedTime(new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000)), professionalTimezone);
+
+    // Check for overlaps with existing appointments
+    const hasOverlap = (appointments || []).some(appointment => {
+      if (!appointment.start_time || !appointment.end_time) return false;
+      return isSlotOverlapping(
+        slotStartTime.toISOString(),
+        slotEndTime.toISOString(),
+        appointment.start_time,
+        appointment.end_time
+      );
+    });
+
+    if (!hasOverlap) {
+      // Convert to client timezone and check if it falls on the client's selected date
+      const slotInClientTz = convertTimeToClientTimezone(timeString, professionalTimezone, clientTimezone, slotDate);
+      const clientSlotDate = new Date(slotDate.getTime() + (slotInClientTz.dayOffset * 24 * 60 * 60 * 1000));
+      const clientSelectedDateObj = new Date(clientSelectedDate);
+      
+      // Check if this slot falls on the client's selected date
+      if (clientSlotDate.toDateString() === clientSelectedDateObj.toDateString()) {
+        slots.push(slotInClientTz.time);
+      }
+    }
+  }
+  
+  return slots;
+}
+
+/**
  * Get available time slots for a given date and professional
  */
 export async function getAvailableTimeSlots(
@@ -332,9 +404,6 @@ export async function getAvailableTimeSlots(
   const queryStartTime = fromZonedTime(startOfDay, professionalTimezone);
   const queryEndTime = fromZonedTime(endOfDay, professionalTimezone);
 
-  // For dayOfWeek calculation, get the date in the professional's timezone
-  const professionalDate = toZonedTime(startOfDay, professionalTimezone);
-
     // Get working hours
     const { data: workingHoursData, error: workingHoursError } = await supabase
       .from('professional_profiles')
@@ -350,25 +419,11 @@ export async function getAvailableTimeSlots(
     // Parse working hours with timezone conversion
     const workingHours = parseWorkingHoursFromDB(workingHoursData.working_hours, professionalTimezone);
     
-    // Get the day of the week in professional's timezone
-    const dayOfWeek = professionalDate.getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
-    const dayName = dayNames[dayOfWeek];
-
-    // Get working hours for this day
-    const dayWorkingHours = workingHours.hours.find(h => {
-      if (!dayName) return false;
-      return h.day.toLowerCase() === dayName.toLowerCase();
-    });
-
-    if (!dayWorkingHours?.enabled || !dayWorkingHours?.startTime || !dayWorkingHours?.endTime) {
-      console.log('Professional not working on this day');
-      return [];
-    }
-
-
-    // Get all appointments that overlap with the day (not just those that start within the day)
-    // This ensures we catch appointments that start before the day but end during it
+    // Get all appointments that might overlap with any day (for cross-midnight checking)
+    // Expand the query window to include adjacent days
+    const expandedStartTime = new Date(queryStartTime.getTime() - (24 * 60 * 60 * 1000)); // 1 day before
+    const expandedEndTime = new Date(queryEndTime.getTime() + (24 * 60 * 60 * 1000)); // 1 day after
+    
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
       .select(`
@@ -381,17 +436,95 @@ export async function getAvailableTimeSlots(
       `)
       .eq('bookings.professional_profile_id', professionalProfileId)
       .neq('bookings.status', 'cancelled')
-      .lt('start_time', queryEndTime.toISOString()) // appointment starts before day ends
-      .gt('end_time', queryStartTime.toISOString()); // appointment ends after day starts
+      .lt('start_time', expandedEndTime.toISOString())
+      .gt('end_time', expandedStartTime.toISOString());
 
     if (appointmentsError) {
       console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
+  
+    // Convert client's selected date to professional's timezone to get the correct day
+    const clientSelectedDate = new Date(date);
+    clientSelectedDate.setHours(12, 0, 0, 0); // Use noon to avoid DST edge cases
+    const professionalSelectedDate = toZonedTime(clientSelectedDate, professionalTimezone);
+    
+    // Get day of week in professional's timezone
+    const professionalDayOfWeek = professionalSelectedDate.getDay();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+    const professionalDayName = dayNames[professionalDayOfWeek];
+
+    // Get working hours for the professional's day
+    const professionalDayWorkingHours = workingHours.hours.find(h => {
+      if (!professionalDayName) return false;
+      return h.day.toLowerCase() === professionalDayName.toLowerCase();
+    });
+
+    // Check if professional is working on their corresponding day
+    if (!professionalDayWorkingHours?.enabled || !professionalDayWorkingHours?.startTime || !professionalDayWorkingHours?.endTime) {
+      // Professional is not working on this day in their timezone
+      // Check for cross-midnight availability from adjacent days
+      console.log(`Professional not working on ${professionalDayName} in their timezone. Checking for cross-midnight availability...`);
+      
+      const crossMidnightSlots: string[] = [];
+      
+      // Check previous day for late working hours that might extend into current client day
+      const previousDayIndex = (professionalDayOfWeek - 1 + 7) % 7;
+      const previousDayName = dayNames[previousDayIndex];
+      const previousDayHours = workingHours.hours.find(h => h.day.toLowerCase() === previousDayName?.toLowerCase());
+      
+      if (previousDayHours?.enabled && previousDayHours.startTime && previousDayHours.endTime) {
+        console.log(`Checking ${previousDayName} working hours for cross-midnight slots...`);
+        
+        // Generate slots for the previous day and see which ones fall on client's selected date
+        const prevDaySlots = await generateCrossMidnightSlots(
+          { startTime: previousDayHours.startTime, endTime: previousDayHours.endTime },
+          professionalTimezone,
+          clientTimezone,
+          date,
+          appointments,
+          requiredDurationMinutes,
+          -1 // previous day offset
+        );
+        crossMidnightSlots.push(...prevDaySlots);
+      }
+      
+      // Check next day for early working hours that might start in current client day
+      const nextDayIndex = (professionalDayOfWeek + 1) % 7;
+      const nextDayName = dayNames[nextDayIndex];
+      const nextDayHours = workingHours.hours.find(h => h.day.toLowerCase() === nextDayName?.toLowerCase());
+      
+      if (nextDayHours?.enabled && nextDayHours.startTime && nextDayHours.endTime) {
+        console.log(`Checking ${nextDayName} working hours for cross-midnight slots...`);
+        
+        // Generate slots for the next day and see which ones fall on client's selected date
+        const nextDaySlots = await generateCrossMidnightSlots(
+          { startTime: nextDayHours.startTime, endTime: nextDayHours.endTime },
+          professionalTimezone,
+          clientTimezone,
+          date,
+          appointments,
+          requiredDurationMinutes,
+          1 // next day offset
+        );
+        crossMidnightSlots.push(...nextDaySlots);
+      }
+      
+      if (crossMidnightSlots.length === 0) {
+        console.log('No cross-midnight availability found');
+        return [];
+      }
+      
+      console.log(`Found ${crossMidnightSlots.length} cross-midnight slots for client date`);
+      return crossMidnightSlots;
+    }
+
+    // Professional is working on this day, proceed with normal slot generation
+    const dayWorkingHours = professionalDayWorkingHours;
 
     // Convert working hours to minutes for easier comparison
-    const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
-    const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
+    const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime!);
+    const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime!);
 
 
     // Generate time slots every 30 minutes, but check the full required duration for each slot
