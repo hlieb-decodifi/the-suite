@@ -394,12 +394,12 @@ export async function getAppointmentById(
       },
     };
 
-    console.log('Fetched appointment:', {
-      id: transformedData.id,
-      status: transformedData.status,
-      computed_status: transformedData.computed_status,
-      raw: data,
-    });
+    // console.log('Fetched appointment:', {
+    //   id: transformedData.id,
+    //   status: transformedData.status,
+    //   computed_status: transformedData.computed_status,
+    //   raw: data,
+    // });
 
     return transformedData;
   } catch (error) {

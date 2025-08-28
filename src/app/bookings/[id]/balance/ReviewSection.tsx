@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 type ReviewSectionProps = {
   bookingId: string;
   professionalName: string;
+  isAdmin?: boolean;
 };
 
 type ReviewData = {
@@ -31,6 +32,7 @@ type ReviewStatus = {
 export function ReviewSection({
   bookingId,
   professionalName,
+  isAdmin = false,
 }: ReviewSectionProps) {
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export function ReviewSection({
         const { getReviewStatus } = await import(
           '@/server/domains/reviews/actions'
         );
-        const result = await getReviewStatus(bookingId);
+        const result = await getReviewStatus(bookingId, isAdmin);
 
         if (result.success && result.reviewStatus) {
           setReviewStatus(result.reviewStatus);
@@ -65,7 +67,7 @@ export function ReviewSection({
     };
 
     fetchReviewStatus();
-  }, [bookingId]);
+  }, [bookingId, isAdmin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,7 +134,7 @@ export function ReviewSection({
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Your rating:</span>
+          <span className="text-sm text-muted-foreground">Rating:</span>
           <div className="flex items-center">
             {[1, 2, 3, 4, 5].map((star) => (
               <Star
@@ -147,7 +149,7 @@ export function ReviewSection({
           </div>
         </div>
         <div>
-          <p className="text-sm text-muted-foreground mb-2">Your review:</p>
+          <p className="text-sm text-muted-foreground mb-2">Review:</p>
           <p className="text-sm bg-muted/50 p-3 rounded-lg border">
             {reviewStatus.review.message}
           </p>
@@ -160,7 +162,7 @@ export function ReviewSection({
     );
   }
 
-  // Show review form if can review
+  // Show review form if can review (only for clients)
   if (reviewStatus.canReview) {
     return (
       <div className="space-y-4">
@@ -223,6 +225,17 @@ export function ReviewSection({
     );
   }
 
-  // Cannot review (appointment not completed, etc.)
+  // Show "no review yet" message for professionals/admins when appointment is completed but no review exists
+  if (!reviewStatus.canReview && !reviewStatus.hasReview) {
+    return (
+      <div className="text-center py-6 space-y-3">
+        <Star className="h-8 w-8 text-muted-foreground mx-auto" />
+        <p className="text-muted-foreground text-sm">
+          No review has been submitted for this appointment yet.
+        </p>
+      </div>
+    );
+  }
+  
   return null;
 }

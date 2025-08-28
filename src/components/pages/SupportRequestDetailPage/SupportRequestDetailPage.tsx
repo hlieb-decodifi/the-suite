@@ -43,11 +43,9 @@ export async function SupportRequestDetailPage({ id }: SupportRequestDetailPageP
       initialMessages = messagesResult.messages;
       usersMap = messagesResult.users;
     }
-  } else if (isProfessional) {
+  } else {
     result = await getSupportRequest(id);
     // Optionally: fetch messages for professionals here if needed
-  } else {
-    redirect('/');
   }
 
   if (!result.success || !result.supportRequest) {

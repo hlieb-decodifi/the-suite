@@ -112,7 +112,11 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
-  const [existingSupportRequest, setExistingSupportRequest] = useState<{ id: string; status: string; category?: string } | null>(null);
+  const [existingSupportRequest, setExistingSupportRequest] = useState<{
+    id: string;
+    status: string;
+    category?: string;
+  } | null>(null);
   const [isLoadingSupportRequest, setIsLoadingSupportRequest] = useState(true);
 
   const router = useRouter();
@@ -235,7 +239,7 @@ export function BookingDetailPageClient({
       appointmentData.computed_status || appointmentData.status;
 
     // Professionals can update status for upcoming appointments
-    if (isProfessional) {
+    if (isProfessional || isAdmin) {
       return computedStatus === 'upcoming';
     }
 
@@ -301,7 +305,7 @@ export function BookingDetailPageClient({
       appointmentData.computed_status || appointmentData.status;
 
     // Only clients can request refunds
-    if (isProfessional) return false;
+    if (isProfessional || isAdmin) return false;
 
     // Only for completed appointments
     if (computedStatus !== 'completed') return false;
@@ -503,7 +507,7 @@ export function BookingDetailPageClient({
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-6">
           <Link
-            href={isAdmin ? "/admin/appointments" : "/dashboard/appointments"}
+            href={isAdmin ? '/admin/appointments' : '/dashboard/appointments'}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeftIcon className="h-4 w-4" />
@@ -897,7 +901,10 @@ export function BookingDetailPageClient({
                 {/* Client Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
-                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
+                    <AvatarImage
+                      className="object-cover"
+                      src={getOtherPartyProfileData().avatar_url || ''}
+                    />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -982,7 +989,10 @@ export function BookingDetailPageClient({
                 {/* Professional Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
-                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
+                    <AvatarImage
+                      className="object-cover"
+                      src={getOtherPartyProfileData().avatar_url || ''}
+                    />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -1015,21 +1025,23 @@ export function BookingDetailPageClient({
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        handleMessageClick(
-                          appointment.bookings.professionals!.user_id,
-                        )
-                      }
-                      disabled={isMessageLoading}
-                      className="flex items-center gap-2 sm:min-w-[140px]"
-                    >
-                      <MessageCircleIcon className="h-4 w-4" />
-                      {isMessageLoading
-                        ? 'Starting...'
-                        : 'Message Professional'}
-                    </Button>
+                    {!isAdmin && (
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          handleMessageClick(
+                            appointment.bookings.professionals!.user_id,
+                          )
+                        }
+                        disabled={isMessageLoading}
+                        className="flex items-center gap-2 sm:min-w-[140px]"
+                      >
+                        <MessageCircleIcon className="h-4 w-4" />
+                        {isMessageLoading
+                          ? 'Starting...'
+                          : 'Message Professional'}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       asChild
@@ -1147,14 +1159,14 @@ export function BookingDetailPageClient({
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Status & Actions */}
-          {canUpdateStatus() && (
+          {canUpdateStatus() && !isAdmin && (
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl">
-                  {appointmentData.computed_status === 'completed' || appointmentData.status === 'completed'
+                  {appointmentData.computed_status === 'completed' ||
+                  appointmentData.status === 'completed'
                     ? 'Questions about this appointment'
-                    : 'Actions'
-                  }
+                    : 'Actions'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1199,19 +1211,23 @@ export function BookingDetailPageClient({
                 )}
 
                 {/* Support Request Button or Reference */}
-                {canRequestRefund() && !isAdmin && (
-                  existingSupportRequest ? (
+                {canRequestRefund() &&
+                  !isAdmin &&
+                  (existingSupportRequest ? (
                     <Button
                       asChild
                       variant="outline"
                       className="w-full relative"
                     >
-                      <Link href={`/support-request/${existingSupportRequest.id}`}>
+                      <Link
+                        href={`/support-request/${existingSupportRequest.id}`}
+                      >
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center">
                             <FileTextIcon className="h-4 w-4 mr-2" />
-                            {existingSupportRequest.category === 'refund_request' 
-                              ? 'View Refund Request' 
+                            {existingSupportRequest.category ===
+                            'refund_request'
+                              ? 'View Refund Request'
                               : 'View Support Request'}
                           </div>
                         </div>
@@ -1225,10 +1241,11 @@ export function BookingDetailPageClient({
                       disabled={isLoadingSupportRequest}
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      {isLoadingSupportRequest ? 'Checking...' : 'Support Request'}
+                      {isLoadingSupportRequest
+                        ? 'Checking...'
+                        : 'Support Request'}
                     </Button>
-                  )
-                )}
+                  ))}
 
                 {/* No Show Button - Professional only, for completed appointments */}
                 {isProfessional &&
@@ -1318,24 +1335,24 @@ export function BookingDetailPageClient({
             </Card>
           )}
 
-          {/* Review Section - Show for completed appointments when user is client */}
-          {!isProfessional &&
-            appointmentData.computed_status === 'completed' && (
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <Star className="h-5 w-5 text-muted-foreground" />
-                    Review
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ReviewSection
-                    bookingId={appointment.booking_id}
-                    professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
-                  />
-                </CardContent>
-              </Card>
-            )}
+          {/* Review Section - Show for completed appointments when user is client or admin */}
+          {appointmentData.computed_status === 'completed' && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Star className="h-5 w-5 text-muted-foreground" />
+                  Review
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ReviewSection
+                  bookingId={appointment.booking_id}
+                  professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                  isAdmin={isAdmin}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Booking Details */}
           <Card className="shadow-sm">
