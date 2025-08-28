@@ -3,15 +3,14 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { SupportRequestDetailPageClient } from './SupportRequestDetailPageClient';
-import { getSupportRequest, getAdminSupportRequest } from '@/server/domains/support-requests/actions';
+import { getSupportRequest, getAdminSupportRequest, getAdminSupportRequestMessages } from '@/server/domains/support-requests/actions';
 
 export type SupportRequestDetailPageProps = {
   id: string;
 };
 
-export async function SupportRequestDetailPage({
-  id,
-}: SupportRequestDetailPageProps) {
+
+export async function SupportRequestDetailPage({ id }: SupportRequestDetailPageProps) {
   const supabase = await createClient();
 
   // Get the current user
@@ -34,12 +33,19 @@ export async function SupportRequestDetailPage({
   });
 
   let result;
+  let initialMessages = undefined;
+  let usersMap = undefined;
   if (isAdmin) {
     result = await getAdminSupportRequest(id);
-  } else if (isProfessional) {
-    result = await getSupportRequest(id);
+    // Fetch messages as admin
+    const messagesResult = await getAdminSupportRequestMessages(id);
+    if (messagesResult.success && 'messages' in messagesResult) {
+      initialMessages = messagesResult.messages;
+      usersMap = messagesResult.users;
+    }
   } else {
-    redirect('/');
+    result = await getSupportRequest(id);
+    // Optionally: fetch messages for professionals here if needed
   }
 
   if (!result.success || !result.supportRequest) {
@@ -52,6 +58,8 @@ export async function SupportRequestDetailPage({
       isProfessional={!!isProfessional}
       currentUserId={user.id}
       isAdmin={!!isAdmin}
+      initialMessages={initialMessages ?? []}
+      usersMap={usersMap ?? {}}
     />
   );
 }
