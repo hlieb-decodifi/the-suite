@@ -8,12 +8,21 @@ import { submitReview } from '@/server/domains/reviews/actions';
 import { format } from 'date-fns';
 import { Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 type ReviewSectionProps = {
   bookingId: string;
   professionalName: string;
-  isAdmin?: boolean;
+  reviewStatus?: {
+    canReview: boolean;
+    hasReview: boolean;
+    review: {
+      id: string;
+      score: number;
+      message: string;
+      createdAt: string;
+    } | null;
+  } | null;
 };
 
 type ReviewData = {
@@ -32,42 +41,15 @@ type ReviewStatus = {
 export function ReviewSection({
   bookingId,
   professionalName,
-  isAdmin = false,
+  reviewStatus: initialReviewStatus = null,
 }: ReviewSectionProps) {
-  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(initialReviewStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [message, setMessage] = useState('');
+  const [rating, setRating] = useState(initialReviewStatus?.review?.score || 0);
+  const [message, setMessage] = useState(initialReviewStatus?.review?.message || '');
   const [hoveredStar, setHoveredStar] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
-
-  // Fetch review status
-  useEffect(() => {
-    const fetchReviewStatus = async () => {
-      try {
-        const { getReviewStatus } = await import(
-          '@/server/domains/reviews/actions'
-        );
-        const result = await getReviewStatus(bookingId, isAdmin);
-
-        if (result.success && result.reviewStatus) {
-          setReviewStatus(result.reviewStatus);
-          if (result.reviewStatus.review) {
-            setRating(result.reviewStatus.review.score);
-            setMessage(result.reviewStatus.review.message);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching review status:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReviewStatus();
-  }, [bookingId, isAdmin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,14 +98,6 @@ export function ReviewSection({
       setIsSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        <p className="text-muted-foreground">Loading review status...</p>
-      </div>
-    );
-  }
 
   if (!reviewStatus) {
     return null;

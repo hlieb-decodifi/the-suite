@@ -137,6 +137,12 @@ export async function BookingDetailPage({ id }: { id: string }) {
     notFound();
   }
 
+  // Fetch existing support request for this appointment
+  const existingSupportRequest = await getExistingSupportRequest(id, isAdmin);
+  
+  // Fetch review status for this appointment
+  const reviewStatus = await getReviewStatusForAppointment(appointment.booking_id, isAdmin);
+
   return (
     <BookingDetailPageClient
       appointment={appointment}
@@ -144,6 +150,8 @@ export async function BookingDetailPage({ id }: { id: string }) {
       isClient={isClient}
       userId={user.id}
       isAdmin={isAdmin}
+      existingSupportRequest={existingSupportRequest}
+      reviewStatus={reviewStatus}
     />
   );
 }
@@ -475,5 +483,75 @@ export async function updateAppointmentStatus(
           ? error.message
           : 'Failed to update appointment status',
     };
+  }
+}
+
+// Get existing support request for an appointment
+async function getExistingSupportRequest(
+  appointmentId: string,
+  isAdmin: boolean = false
+): Promise<{
+  id: string;
+  status: string;
+  category?: string;
+} | null> {
+  try {
+    // Use admin client for admin users, else regular client
+    const supabase = isAdmin
+      ? (await import('@/lib/supabase/server')).createAdminClient()
+      : await createClient();
+
+    const { data: supportRequest, error } = await supabase
+      .from('support_requests')
+      .select('id, status, title, created_at, category')
+      .eq('appointment_id', appointmentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !supportRequest) {
+      return null;
+    }
+
+    return {
+      id: supportRequest.id,
+      status: supportRequest.status,
+      category: supportRequest.category,
+    };
+  } catch (error) {
+    console.error('Error fetching existing support request:', error);
+    return null;
+  }
+}
+
+// Get review status for a booking
+async function getReviewStatusForAppointment(
+  bookingId: string,
+  isAdmin: boolean = false
+): Promise<{
+  canReview: boolean;
+  hasReview: boolean;
+  review: {
+    id: string;
+    score: number;
+    message: string;
+    createdAt: string;
+  } | null;
+} | null> {
+  try {
+    const { getReviewStatus } = await import('@/server/domains/reviews/actions');
+    const result = await getReviewStatus(bookingId, isAdmin);
+    
+    console.log('Review status result:', { bookingId, isAdmin, result });
+    
+    if (result.success && result.reviewStatus) {
+      return result.reviewStatus;
+    }
+    
+    console.log('Review status returned null:', result.error || 'No review status data');
+    return null;
+  } catch (error) {
+    console.error('Error fetching review status:', error);
+    return null;
   }
 }

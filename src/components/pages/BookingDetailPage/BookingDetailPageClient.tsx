@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DetailedAppointmentType } from './BookingDetailPage';
 
 export type BookingDetailPageClientProps = {
@@ -51,6 +51,21 @@ export type BookingDetailPageClientProps = {
   isProfessional: boolean;
   userId: string;
   isAdmin?: boolean;
+  existingSupportRequest?: {
+    id: string;
+    status: string;
+    category?: string;
+  } | null;
+  reviewStatus?: {
+    canReview: boolean;
+    hasReview: boolean;
+    review: {
+      id: string;
+      score: number;
+      message: string;
+      createdAt: string;
+    } | null;
+  } | null;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -103,6 +118,8 @@ export function BookingDetailPageClient({
   isProfessional,
   userId,
   isAdmin = false,
+  existingSupportRequest = null,
+  reviewStatus = null,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -112,46 +129,9 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
-  const [existingSupportRequest, setExistingSupportRequest] = useState<{
-    id: string;
-    status: string;
-    category?: string;
-  } | null>(null);
-  const [isLoadingSupportRequest, setIsLoadingSupportRequest] = useState(true);
 
   const router = useRouter();
   const { toast } = useToast();
-
-  // Check for existing support request for this appointment
-  useEffect(() => {
-    const checkExistingSupportRequest = async () => {
-      try {
-        setIsLoadingSupportRequest(true);
-        const { createClient } = await import('@/lib/supabase/client');
-        const supabase = createClient();
-
-        const { data: supportRequest, error } = await supabase
-          .from('support_requests')
-          .select('id, status, title, created_at, category')
-          .eq('appointment_id', appointment.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (!error && supportRequest) {
-          setExistingSupportRequest(supportRequest);
-        }
-      } catch (error) {
-        console.error('Error checking existing support request:', error);
-      } finally {
-        setIsLoadingSupportRequest(false);
-      }
-    };
-
-    if (appointment.id) {
-      checkExistingSupportRequest();
-    }
-  }, [appointment.id]);
 
   // Get date from start_time
   const startDateTime = new Date(appointment.start_time);
@@ -318,6 +298,11 @@ export function BookingDetailPageClient({
     if (payment.refunded_amount > 0 || payment.refunded_at) return false;
 
     return true;
+  };
+
+  // Check if support/refund request can be viewed
+  const canViewRefund = () => {
+    return existingSupportRequest;
   };
 
   const handleSupportRequestSuccess = () => {
@@ -1158,111 +1143,112 @@ export function BookingDetailPageClient({
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Status & Actions */}
-          {canUpdateStatus() && !isAdmin && (
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-xl">
-                  {appointmentData.computed_status === 'completed' ||
-                  appointmentData.status === 'completed'
-                    ? 'Questions about this appointment'
-                    : 'Actions'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {getAvailableStatuses().map((statusOption) => (
-                  <Button
-                    key={statusOption.value}
-                    onClick={() => handleStatusUpdate(statusOption.value)}
-                    disabled={isUpdating}
-                    variant={
-                      statusOption.value === 'cancelled'
-                        ? 'destructiveOutline'
-                        : 'default'
-                    }
-                    className="w-full"
-                  >
-                    {isUpdating ? 'Updating...' : statusOption.label}
-                  </Button>
-                ))}
-
-                {/* Add Additional Services Button */}
-                {isProfessional &&
-                  appointmentData.computed_status === 'ongoing' && (
+          {/* Actions Card */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl">
+                {appointmentData.computed_status === 'completed' ||
+                appointmentData.status === 'completed'
+                  ? 'Questions about this appointment'
+                  : 'Actions'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Status Update Buttons - Only show if user can update status and is not admin */}
+              {canUpdateStatus() && !isAdmin && (
+                <>
+                  {getAvailableStatuses().map((statusOption) => (
                     <Button
-                      onClick={() => setIsAddServicesModalOpen(true)}
-                      variant="outline"
+                      key={statusOption.value}
+                      onClick={() => handleStatusUpdate(statusOption.value)}
+                      disabled={isUpdating}
+                      variant={
+                        statusOption.value === 'cancelled'
+                          ? 'destructiveOutline'
+                          : 'default'
+                      }
                       className="w-full"
                     >
-                      <Plus className="h-4 w-4" />
-                      Add Additional Services
+                      {isUpdating ? 'Updating...' : statusOption.label}
                     </Button>
-                  )}
+                  ))}
+                </>
+              )}
 
-                {/* Cancel Booking Button */}
-                {canCancelBooking() && (
+              {/* Add Additional Services Button */}
+              {isProfessional &&
+                appointmentData.computed_status === 'ongoing' && (
                   <Button
-                    onClick={() => setIsCancellationModalOpen(true)}
-                    variant="destructiveOutline"
+                    onClick={() => setIsAddServicesModalOpen(true)}
+                    variant="outline"
                     className="w-full"
                   >
-                    Cancel Booking
+                    <Plus className="h-4 w-4" />
+                    Add Additional Services
                   </Button>
                 )}
 
-                {/* Support Request Button or Reference */}
-                {canRequestRefund() &&
-                  !isAdmin &&
-                  (existingSupportRequest ? (
-                    <Button
-                      asChild
-                      variant="outline"
-                      className="w-full relative"
-                    >
-                      <Link
-                        href={`/support-request/${existingSupportRequest.id}`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center">
-                            <FileTextIcon className="h-4 w-4 mr-2" />
-                            {existingSupportRequest.category ===
-                            'refund_request'
-                              ? 'View Refund Request'
-                              : 'View Support Request'}
-                          </div>
-                        </div>
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => setIsRefundModalOpen(true)}
-                      variant="destructiveOutline"
-                      className="w-full"
-                      disabled={isLoadingSupportRequest}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      {isLoadingSupportRequest
-                        ? 'Checking...'
-                        : 'Support Request'}
-                    </Button>
-                  ))}
+              {/* Cancel Booking Button */}
+              {canCancelBooking() && (
+                <Button
+                  onClick={() => setIsCancellationModalOpen(true)}
+                  variant="destructiveOutline"
+                  className="w-full"
+                >
+                  Cancel Booking
+                </Button>
+              )}
 
-                {/* No Show Button - Professional only, for completed appointments */}
-                {isProfessional &&
-                  appointmentData.status === 'completed' &&
-                  appointment.bookings.booking_payments?.payment_methods
-                    ?.is_online && (
-                    <Button
-                      onClick={() => setIsNoShowModalOpen(true)}
-                      variant="destructiveOutline"
-                      className="w-full"
-                    >
-                      Mark as No Show
-                    </Button>
-                  )}
-              </CardContent>
-            </Card>
-          )}
+              {/* View Support Request Button - For professionals and admins */}
+              {canViewRefund() && existingSupportRequest && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="w-full relative"
+                >
+                  <Link
+                    href={`/support-request/${existingSupportRequest.id}`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center">
+                        <FileTextIcon className="h-4 w-4 mr-2" />
+                        {existingSupportRequest.category ===
+                        'refund_request'
+                          ? 'View Refund Request'
+                          : 'View Support Request'}
+                      </div>
+                    </div>
+                  </Link>
+                </Button>
+              )}
+
+              {/* Support Request Button - For clients */}
+              {canRequestRefund() && !existingSupportRequest && (
+                  <Button
+                    onClick={() => setIsRefundModalOpen(true)}
+                    variant="destructiveOutline"
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Support Request
+                  </Button>
+              )}
+
+              {/* No Show Button - Professional only, for completed appointments */}
+              {isProfessional &&
+                appointmentData.status === 'completed' &&
+                appointment.bookings.booking_payments?.payment_methods
+                  ?.is_online && (
+                  <Button
+                    onClick={() => setIsNoShowModalOpen(true)}
+                    variant="destructiveOutline"
+                    className="w-full"
+                  >
+                    Mark as No Show
+                  </Button>
+                )}
+            </CardContent>
+          </Card>
 
           {/* Payment Information */}
           {appointment.bookings.booking_payments && (
@@ -1336,7 +1322,7 @@ export function BookingDetailPageClient({
           )}
 
           {/* Review Section - Show for completed appointments when user is client or admin */}
-          {appointmentData.computed_status === 'completed' && (
+          {appointmentData.computed_status === 'completed' && reviewStatus && (
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -1348,7 +1334,7 @@ export function BookingDetailPageClient({
                 <ReviewSection
                   bookingId={appointment.booking_id}
                   professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
-                  isAdmin={isAdmin}
+                  reviewStatus={reviewStatus}
                 />
               </CardContent>
             </Card>
