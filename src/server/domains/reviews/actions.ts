@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 type ReviewData = {
   id: string;
@@ -183,17 +183,20 @@ export async function submitReview(
  * Get review status for a booking
  */
 export async function getReviewStatus(
-  bookingId: string
+  bookingId: string,
+  isAdmin: boolean = false
 ): Promise<{
   success: boolean;
   reviewStatus?: ReviewStatus;
   error?: string;
 }> {
   try {
-    const supabase = await createClient();
+    // Use admin client for admin queries to bypass RLS
+    const supabase = isAdmin ? createAdminClient() : await createClient();
     
-    // Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    // Get the current user (always from regular client for user context)
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) {
       return {
         success: false,
@@ -201,57 +204,69 @@ export async function getReviewStatus(
       };
     }
 
-    // Get booking and appointment details with existing review
-    const { data: booking, error: bookingError } = await supabase
-      .from('bookings')
+    // First, get the appointment details to check review status
+    const { data: appointment, error: appointmentError } = await supabase
+      .from('appointments')
       .select(`
         id,
-        client_id,
-        appointments_with_status (
+        status,
+        start_time,
+        end_time,
+        booking_id,
+        bookings!inner (
           id,
-          status,
-          computed_status,
-          reviews (
-            id,
-            score,
-            message,
-            created_at
+          client_id,
+          professional_profile_id,
+          professional_profiles!inner (
+            user_id
           )
+        ),
+        reviews (
+          id,
+          score,
+          message,
+          created_at
         )
       `)
-      .eq('id', bookingId)
+      .eq('booking_id', bookingId)
       .single();
 
-    if (bookingError || !booking) {
+    if (appointmentError || !appointment) {
       return {
         success: false,
-        error: 'Booking not found'
+        error: 'Appointment not found'
       };
     }
 
-    // Verify the user owns this booking
-    if (booking.client_id !== user.id) {
-      return {
-        success: false,
-        error: 'Unauthorized'
-      };
-    }
+    const booking = appointment.bookings;
+    const professionalUserId = booking.professional_profiles.user_id;
 
-    const appointment = Array.isArray(booking.appointments_with_status) 
-      ? booking.appointments_with_status[0] 
-      : booking.appointments_with_status;
+    // Check user authorization
+    const isClient = booking.client_id === user.id;
+    const isProfessional = professionalUserId === user.id;
     
-    if (!appointment) {
+    if (!isClient && !isProfessional && !isAdmin) {
       return {
         success: false,
-        error: 'No appointment found'
+        error: 'Unauthorized - You can only view reviews for your own appointments'
       };
     }
 
-    const existingReview = appointment.reviews;
+    // Get computed status using the function from schema
+    const { data: computedStatusData } = await supabase.rpc('get_appointment_computed_status', {
+      p_start_time: appointment.start_time,
+      p_end_time: appointment.end_time,
+      p_status: appointment.status
+    });
+
+    const computedStatus = computedStatusData || appointment.status;
+    const existingReview = Array.isArray(appointment.reviews) && appointment.reviews.length > 0 
+      ? appointment.reviews[0] 
+      : appointment.reviews || null;
 
     const reviewStatus: ReviewStatus = {
-      canReview: appointment.computed_status === 'completed' && !existingReview,
+      // Only clients can create reviews, and only for completed appointments without existing reviews
+      canReview: isClient && computedStatus === 'completed' && !existingReview,
       hasReview: !!existingReview,
       review: existingReview ? {
         id: existingReview.id,

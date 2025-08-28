@@ -185,6 +185,7 @@ export async function getServices(
   }
   
   // Create a query builder that we can modify based on search parameters
+  // Add explicit ordering for consistent pagination
   let query = supabase
     .from('services')
     .select(`
@@ -218,7 +219,8 @@ export async function getServices(
         )
       )
     `)
-    .in('professional_profile_id', publishedProfileIds);
+    .in('professional_profile_id', publishedProfileIds)
+    .order('id', { ascending: true });
   
   // If there's a search term, add it to the query
   if (search && search.trim() !== '') {
@@ -341,7 +343,8 @@ export async function getFilteredServices(
           )
         )
       `)
-      .in('professional_profile_id', publishedProfileIds);
+      .in('professional_profile_id', publishedProfileIds)
+      .order('id', { ascending: true });
     
     // Add service name filter if provided
     if (serviceName && serviceName.trim() !== '') {

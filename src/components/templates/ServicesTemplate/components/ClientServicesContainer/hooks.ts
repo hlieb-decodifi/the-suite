@@ -82,8 +82,9 @@ export function useServicesState(
   const displayedServices = useMemo(
     () => {
       const locationArg = !filters.location ? userDefaultLocation : undefined;
+      // Use current services state for display, not initialServices
       return getServicesForDisplay(
-        initialServices,
+        services,
         filteredServices,
         filters,
         pagination.currentPage,
@@ -91,7 +92,7 @@ export function useServicesState(
         locationArg
       );
     },
-    [initialServices, filteredServices, filters, pagination, userDefaultLocation]
+    [services, filteredServices, filters, pagination, userDefaultLocation]
   );
 
   return {

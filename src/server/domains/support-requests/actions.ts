@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+export { getAdminSupportRequestMessages } from './admin-actions';
 /**
  * Get a single support request with all details (admin version)
  */
