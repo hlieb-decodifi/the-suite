@@ -64,27 +64,45 @@ export type BookingCancellationProfessionalParams = {
 
 // Booking Confirmation
 export type BookingConfirmationClientParams = {
+  appointment_url: string;
+  booking_id: string;
   client_name: string;
+  date_and_time: string;
+  home_url: string;
+  message_url: string;
+  price_subtotal: number;
+  price_tax: number;
+  price_tip: number;
+  price_total_paid: number;
+  professional_address: string;
   professional_name: string;
-  subtotal: number;
-  service_fee: number;
-  tip_amount?: number;
-  total: number;
-  payment_method: string;
-  is_card_payment: boolean;
-  deposit_amount?: number;
-  balance_due?: number;
-  balance_due_date?: string;
-} & BaseBookingParams
+  professional_phone: string;
+  services: {
+    duration: number;
+    name: string;
+    price: number;
+  }[];
+}
 
 export type BookingConfirmationProfessionalParams = {
+  address: string;
+  appointment_url: string;
+  booking_id: string;
   client_name: string;
-  client_phone?: string;
+  client_phone: string;
+  date_and_time: string;
+  home_url: string;
+  message_url: string;
+  price_subtotal: number;
+  price_tip: number;
+  price_total_paid: number;
   professional_name: string;
-  subtotal: number;
-  tip_amount?: number;
-  professional_total: number;
-} & BaseBookingParams
+  services: {
+    duration: number;
+    name: string;
+    price: number;
+  }[];
+}
 
 // Payment Related
 export type PaymentConfirmationClientParams = {

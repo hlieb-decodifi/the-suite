@@ -2674,19 +2674,15 @@ create trigger handle_updated_at before update on appointments
 
 /**
 * EMAIL TEMPLATES
-* Stores email template configurations for various system notifications
+* Stores email template configurations with references to Brevo templates
 */
 create table email_templates (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   description text,
   tag text not null,
-  sender_name text not null,
-  sender_email text not null,
-  reply_to text,
-  subject text not null,
-  html_content text not null,
-  to_field text not null,
+  brevo_template_id integer not null,
+  dynamic_params jsonb default '[]'::jsonb not null,
   is_active boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -2698,6 +2694,7 @@ alter table email_templates enable row level security;
 
 -- Create indexes for better performance
 create index if not exists idx_email_templates_tag on email_templates(tag);
+create index if not exists idx_email_templates_brevo_template_id on email_templates(brevo_template_id);
 create index if not exists idx_email_templates_is_active on email_templates(is_active);
 
 -- RLS policies for email templates
