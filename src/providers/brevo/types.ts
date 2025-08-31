@@ -70,8 +70,8 @@ export type BookingConfirmationClientParams = {
   date_and_time: string;
   home_url: string;
   message_url: string;
+  price_service_fee: number;
   price_subtotal: number;
-  price_tax: number;
   price_tip: number;
   price_total_paid: number;
   professional_address: string;

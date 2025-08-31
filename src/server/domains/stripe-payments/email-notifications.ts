@@ -28,6 +28,118 @@ function createSupabaseAdminClient() {
 // Global set to track which bookings have had emails sent in this session
 const emailsSentTracker = new Set<string>();
 
+// Helper function to format address like in booking page
+function formatAddress(address: {
+  street_address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+} | null): string {
+  if (!address) return '';
+  const parts = [
+    address.street_address,
+    address.city,
+    address.state,
+    address.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : '';
+}
+
+// Helper function to generate message URL for email notifications
+async function generateMessageURL(currentUserId: string, targetUserId: string): Promise<string> {
+  try {
+    const adminSupabase = createSupabaseAdminClient();
+    
+    // Determine who is client and who i`s professional
+    const { data: isCurrentUserClient } = await adminSupabase.rpc('is_client', {
+      user_uuid: currentUserId,
+    });
+    const { data: isCurrentUserProfessional } = await adminSupabase.rpc('is_professional', {
+      user_uuid: currentUserId,
+    });
+    const { data: isTargetClient } = await adminSupabase.rpc('is_client', {
+      user_uuid: targetUserId,
+    });
+    const { data: isTargetProfessional } = await adminSupabase.rpc('is_professional', {
+      user_uuid: targetUserId,
+    });
+
+    let clientId: string;
+    let professionalId: string;
+
+    if (isCurrentUserClient && isTargetProfessional) {
+      clientId = currentUserId;
+      professionalId = targetUserId;
+    } else if (isCurrentUserProfessional && isTargetClient) {
+      clientId = targetUserId;
+      professionalId = currentUserId;
+    } else {
+      // Fallback to general messages if roles can't be determined
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+    }
+
+    // Check if conversation already exists
+    const { data: existingConversation } = await adminSupabase
+      .from('conversations')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('professional_id', professionalId)
+      .eq('purpose', 'general')
+      .single();
+
+    if (existingConversation) {
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages?conversation=${existingConversation.id}`;
+    }
+
+    // Get professional profile ID for booking check
+    const { data: professionalProfile } = await adminSupabase
+      .from('professional_profiles')
+      .select('id')
+      .eq('user_id', professionalId)
+      .single();
+
+    if (!professionalProfile) {
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+    }
+
+    // Check if they have shared appointments (they should since this is a booking confirmation)
+    const { data: sharedAppointments } = await adminSupabase
+      .from('bookings')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('professional_profile_id', professionalProfile.id)
+      .limit(1);
+
+    const hasSharedAppointments = sharedAppointments && sharedAppointments.length > 0;
+
+    if (hasSharedAppointments) {
+      // Create the conversation using admin client
+      const { data: newConversation, error: createError } = await adminSupabase
+        .from('conversations')
+        .insert({
+          client_id: clientId,
+          professional_id: professionalId,
+          purpose: 'general'
+        })
+        .select('id')
+        .single();
+
+      if (createError) {
+        console.error('Error creating conversation for email:', createError);
+        return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+      }
+
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages?conversation=${newConversation.id}`;
+    }
+
+    // Fallback to general messages page
+    return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+  } catch (error) {
+    console.error('Error generating message URL for email:', error);
+    return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+  }
+}
+
 /**
  * Send booking confirmation emails to both client and professional
  */
@@ -119,7 +231,7 @@ export async function sendBookingConfirmationEmails(
         user_id,
         phone_number,
         location,
-        addresses (
+        address:address_id(
           street_address,
           city,
           state,
@@ -164,6 +276,21 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Missing required booking data' };
     }
 
+    // Format address for professional
+    const professionalAddress = formatAddress(professionalData.address);
+
+    // Prepare services array for email templates
+    const servicesForEmail = services.map(service => ({
+      name: service.services?.name || '',
+      description: service.services?.description || '',
+      duration: service.duration || 0,
+      price: service.price || 0
+    }));
+
+    // Generate message URLs
+    const clientMessageUrl = await generateMessageURL(bookingData.client_id, professionalData.user_id);
+    const professionalMessageUrl = await generateMessageURL(professionalData.user_id, bookingData.client_id);
+
     // Format appointment date and time
     const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -197,18 +324,18 @@ export async function sendBookingConfirmationEmails(
         [{ email: professionalAuth.user.email, name: `${professional.first_name} ${professional.last_name}` }],
         {
           client_name: `${clientData.first_name} ${clientData.last_name}`,
-          client_phone: clientProfile?.phone_number || undefined,
+          client_phone: clientProfile?.phone_number || '',
           professional_name: `${professional.first_name} ${professional.last_name}`,
-          subtotal,
-          tip_amount: tipAmount,
-          professional_total: professionalTotal,
+          price_subtotal: subtotal,
+          price_tip: tipAmount,
+          price_total_paid: professionalTotal,
           booking_id: bookingId,
-          appointment_id: appointmentId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
+          appointment_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
+          date_and_time: `${appointmentDate} at ${appointmentTime}`,
+          address: professionalAddress,
+          home_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          message_url: professionalMessageUrl,
+          services: servicesForEmail
         }
       );
 
@@ -228,23 +355,23 @@ export async function sendBookingConfirmationEmails(
       isUncaptured
     });
 
-    // Get payment details including payment method
-    const { data: paymentData, error: paymentError } = await adminSupabase
-      .from('booking_payments')
-      .select(`
-        *,
-        payment_method:payment_methods(
-          name,
-          is_online
-        )
-      `)
-      .eq('booking_id', bookingId)
-      .single();
+    // TODO: Add payment details when needed for email templates
+    // const { data: paymentData, error: paymentError } = await adminSupabase
+    //   .from('booking_payments')
+    //   .select(`
+    //     *,
+    //     payment_method:payment_methods(
+    //       name,
+    //       is_online
+    //     )
+    //   `)
+    //   .eq('booking_id', bookingId)
+    //   .single();
 
-    if (paymentError) {
-      console.error('Error fetching payment details:', paymentError);
-      throw new Error('Failed to fetch payment details');
-    }
+    // if (paymentError) {
+    //   console.error('Error fetching payment details:', paymentError);
+    //   throw new Error('Failed to fetch payment details');
+    // }
 
     // Send client email
     try {
@@ -253,22 +380,18 @@ export async function sendBookingConfirmationEmails(
         {
           client_name: `${clientData.first_name} ${clientData.last_name}`,
           professional_name: `${professional.first_name} ${professional.last_name}`,
-          subtotal,
-          service_fee: serviceFee,
-          tip_amount: tipAmount,
-          total: totalPaid,
-          payment_method: paymentData.payment_method.name,
-          is_card_payment: paymentData.payment_method.is_online,
-          deposit_amount: payment.deposit_amount || 0,
-          balance_due: paymentData.payment_method.name.toLowerCase() === 'cash' ? subtotal : 0,
-          balance_due_date: appointmentDate,
+          price_subtotal: subtotal,
+          price_service_fee: serviceFee,
+          price_tip: tipAmount,
+          price_total_paid: totalPaid,
           booking_id: bookingId,
-          appointment_id: appointmentId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
+          appointment_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
+          date_and_time: `${appointmentDate} at ${appointmentTime}`,
+          home_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          message_url: clientMessageUrl,
+          professional_address: professionalAddress,
+          professional_phone: professionalData.phone_number || '',
+          services: servicesForEmail
         }
       );
 
