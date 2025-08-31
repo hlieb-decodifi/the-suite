@@ -170,17 +170,17 @@ INSERT INTO public.email_templates (
   'Contact Inquiry - Admin Notification',
   'Email sent to admin when contact form is submitted',
   'ContactInquiryAdmin',
-  0,
+  40,
   '[]'::jsonb,
-  false
+  true
 ),
 (
   'Contact Inquiry - Confirmation',
   'Email sent to confirm contact form submission',
   'ContactInquiryConfirmation',
-  0,
+  39,
   '[]'::jsonb,
-  false
+  true
 ),
 
 -- Policy related templates

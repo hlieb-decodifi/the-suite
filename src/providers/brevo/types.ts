@@ -181,24 +181,20 @@ export type ReviewTipNotificationParams = {
 
 // Contact Related
 export type ContactInquiryAdminParams = {
-  name: string;
   email: string;
-  phone?: string;
-  subject: string;
+  full_name: string;
   message: string;
-  inquiry_id: string;
-  submitted_at: string;
-  urgency: string;
-  urgency_color: string;
-  dashboard_url: string;
+  phone: string;
+  topic: string;
 }
 
 export type ContactInquiryConfirmationParams = {
-  name: string;
   email: string;
-  subject: string;
+  first_name: string;
+  full_name: string;
   message: string;
-  inquiry_id: string;
+  phone: string;
+  topic: string;
 }
 
 // Policy Related
