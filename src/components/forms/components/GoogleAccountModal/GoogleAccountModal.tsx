@@ -76,7 +76,7 @@ export function GoogleAccountModal({
             className={
               `w-full px-4 py-2 rounded-md font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition bg-primary text-primary-foreground hover:bg-primary/90`
             }
-            onClick={handleGoogleOAuth}
+            onClick={isSignIn ? onSecondary : handleGoogleOAuth}
             type="button"
             disabled={isLoading}
           >

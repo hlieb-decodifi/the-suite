@@ -50,7 +50,7 @@ export function SignInForm({
 
   const handleClose = () => {
     setModalOpen(false);
-    router.replace('/login');
+    router.replace('/');
   };
 
   return (

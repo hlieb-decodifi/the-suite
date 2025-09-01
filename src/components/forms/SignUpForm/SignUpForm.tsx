@@ -45,13 +45,13 @@ export function SignUpForm({
 
   const handleSecondary = () => {
     // Switch to login form, pre-fill email
-    router.replace(`/login?email=${encodeURIComponent(email)}`);
+    router.replace(`/?email=${encodeURIComponent(email)}`);
     setModalOpen(false);
   };
 
   const handleClose = () => {
     setModalOpen(false);
-    router.replace('/signup');
+    router.replace('/');
   };
 
   return (
