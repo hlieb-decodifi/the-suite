@@ -1,5 +1,6 @@
 'use client';
 
+import { getDisplayName } from '@/utils/getDisplayName';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { SupportRequestChatWidget } from './SupportRequestChatWidget';
+import { ChatMessage } from '@/types/messages';
 import { RefundModal } from './RefundModal';
 import { ResolutionModal } from './ResolutionModal';
 import { SupportRequestData } from '@/server/domains/support-requests/actions';
@@ -28,6 +30,9 @@ type SupportRequestDetailPageClientProps = {
   supportRequest: SupportRequestData;
   isProfessional: boolean;
   currentUserId: string;
+  isAdmin?: boolean;
+  initialMessages?: ChatMessage[];
+  usersMap?: Record<string, { id: string; first_name: string; last_name: string; profile_photo_url?: string }>;
 };
 
 // Helper component to render the status badge
@@ -74,11 +79,15 @@ function SupportRequestStatusBadge({ status }: { status: string }) {
   }
 }
 
-export function SupportRequestDetailPageClient({
-  supportRequest,
-  isProfessional,
-  currentUserId,
-}: SupportRequestDetailPageClientProps) {
+export function SupportRequestDetailPageClient(props: SupportRequestDetailPageClientProps) {
+  const {
+    supportRequest,
+    isProfessional,
+    currentUserId,
+    isAdmin = false,
+    initialMessages,
+    usersMap,
+  } = props;
   const router = useRouter();
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
@@ -114,14 +123,34 @@ export function SupportRequestDetailPageClient({
     };
   }, []);
 
-  // Extract data from support request
-  const clientName = supportRequest.client_user
-    ? `${supportRequest.client_user.first_name || ''} ${supportRequest.client_user.last_name || ''}`.trim()
-    : 'Client';
-
-  const professionalName = supportRequest.professional_user
-    ? `${supportRequest.professional_user.first_name || ''} ${supportRequest.professional_user.last_name || ''}`.trim()
-    : 'Professional';
+  // Use getDisplayName utility for admin user name display
+  let clientName = '';
+  let professionalName = '';
+  if (isAdmin) {
+    clientName = getDisplayName(
+      supportRequest.client_user || { id: supportRequest.client_id },
+      'Unknown Client'
+    );
+    professionalName = getDisplayName(
+      supportRequest.professional_user || { id: supportRequest.professional_id },
+      'Unknown Professional'
+    );
+  } else {
+    if (supportRequest.client_user) {
+      const fn = supportRequest.client_user.first_name || '';
+      const ln = supportRequest.client_user.last_name || '';
+      clientName = `${fn} ${ln}`.trim() || 'Client';
+    } else {
+      clientName = 'Client';
+    }
+    if (supportRequest.professional_user) {
+      const fn = supportRequest.professional_user.first_name || '';
+      const ln = supportRequest.professional_user.last_name || '';
+      professionalName = `${fn} ${ln}`.trim() || 'Professional';
+    } else {
+      professionalName = 'Professional';
+    }
+  }
 
   // Directly access the appointment from the supportRequest
   const appointment = supportRequest.appointments;
@@ -235,8 +264,7 @@ export function SupportRequestDetailPageClient({
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Link
-            href="/dashboard/support-requests"
-            // className="text-muted-foreground hover:text-foreground"
+            href={isAdmin ? "/admin/support-requests" : "/dashboard/support-requests"}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -582,7 +610,8 @@ export function SupportRequestDetailPageClient({
                             supportRequest.client_user.profile_photos[0]?.url || undefined : undefined,
                         }
                   }
-                  readOnly={supportRequest.status === 'resolved' || supportRequest.status === 'closed'}
+                  usersMap={usersMap}
+                  readOnly={isAdmin || supportRequest.status === 'resolved' || supportRequest.status === 'closed'}
                   resolvedInfo={
                     supportRequest.status === 'resolved' || supportRequest.status === 'closed'
                       ? {
@@ -593,6 +622,7 @@ export function SupportRequestDetailPageClient({
                         }
                       : undefined
                   }
+                  initialMessages={initialMessages}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full">

@@ -5,7 +5,15 @@ import { Typography } from '@/components/ui/typography';
 import { CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { ProfessionalDetailsModal } from '@/components/modals/ProfessionalDetailsModal/ProfessionalDetailsModal';
+
 import type { ProfessionalDetails as ServerProfessionalDetails } from '@/lib/admin/fetchProfessionalDetails';
+
+// Helper to call server action from client
+async function fetchProfessionalDetailsFromServer(userId: string) {
+  // Dynamic import to avoid SSR issues
+  const { getProfessionalDetailsAction } = await import('@/server/domains/professionals/actions');
+  return getProfessionalDetailsAction(userId);
+}
 
 
 
@@ -34,20 +42,26 @@ export default function AdminProfessionalsPageClient({ professionals }: { profes
   }, [professionals, filterName, sortDirection]);
 
 
-  // Fetch full professional details from API
+  // Fetch full professional details using server action
   async function handleProfessionalClick(professional: { id: string; name: string; isPublished: boolean }) {
     setModalLoading(true);
     setModalOpen(true);
     setSelectedProfessional(null);
     try {
-      const res = await fetch(`/api/admin/professionals/${professional.id}/details`);
-      if (!res.ok) throw new Error('Failed to fetch details');
-      const data = await res.json();
+      const result = await fetchProfessionalDetailsFromServer(professional.id);
+      if (!result || result.error || !result.data) throw new Error(result?.error || 'Failed to fetch details');
+      const data = result.data;
+      // Ensure all required fields are present for ModalProfessionalDetails
       setSelectedProfessional({
-        ...data,
-        name: professional.name, // fallback to list name if needed
+        id: data.id ?? professional.id,
+        name: professional.name,
+        email: data.email ?? '',
+        professionalProfileId: data.professionalProfileId ?? null,
         isPublished: professional.isPublished,
-        createdAt: data.createdAt !== undefined && data.createdAt !== null ? String(data.createdAt) : '', // Always provide a string
+        services: data.services ?? [],
+        appointments: data.appointments ?? [],
+        maxServices: data.maxServices ?? null,
+        createdAt: data.createdAt !== undefined && data.createdAt !== null ? String(data.createdAt) : '',
       });
     } catch {
       setSelectedProfessional(null);

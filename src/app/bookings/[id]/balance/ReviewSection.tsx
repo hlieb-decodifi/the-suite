@@ -8,11 +8,21 @@ import { submitReview } from '@/server/domains/reviews/actions';
 import { format } from 'date-fns';
 import { Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 type ReviewSectionProps = {
   bookingId: string;
   professionalName: string;
+  reviewStatus?: {
+    canReview: boolean;
+    hasReview: boolean;
+    review: {
+      id: string;
+      score: number;
+      message: string;
+      createdAt: string;
+    } | null;
+  } | null;
 };
 
 type ReviewData = {
@@ -31,41 +41,15 @@ type ReviewStatus = {
 export function ReviewSection({
   bookingId,
   professionalName,
+  reviewStatus: initialReviewStatus = null,
 }: ReviewSectionProps) {
-  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(initialReviewStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [message, setMessage] = useState('');
+  const [rating, setRating] = useState(initialReviewStatus?.review?.score || 0);
+  const [message, setMessage] = useState(initialReviewStatus?.review?.message || '');
   const [hoveredStar, setHoveredStar] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
-
-  // Fetch review status
-  useEffect(() => {
-    const fetchReviewStatus = async () => {
-      try {
-        const { getReviewStatus } = await import(
-          '@/server/domains/reviews/actions'
-        );
-        const result = await getReviewStatus(bookingId);
-
-        if (result.success && result.reviewStatus) {
-          setReviewStatus(result.reviewStatus);
-          if (result.reviewStatus.review) {
-            setRating(result.reviewStatus.review.score);
-            setMessage(result.reviewStatus.review.message);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching review status:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReviewStatus();
-  }, [bookingId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,14 +99,6 @@ export function ReviewSection({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <p className="text-muted-foreground">Loading review status...</p>
-      </div>
-    );
-  }
-
   if (!reviewStatus) {
     return null;
   }
@@ -132,7 +108,7 @@ export function ReviewSection({
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Your rating:</span>
+          <span className="text-sm text-muted-foreground">Rating:</span>
           <div className="flex items-center">
             {[1, 2, 3, 4, 5].map((star) => (
               <Star
@@ -147,7 +123,7 @@ export function ReviewSection({
           </div>
         </div>
         <div>
-          <p className="text-sm text-muted-foreground mb-2">Your review:</p>
+          <p className="text-sm text-muted-foreground mb-2">Review:</p>
           <p className="text-sm bg-muted/50 p-3 rounded-lg border">
             {reviewStatus.review.message}
           </p>
@@ -160,7 +136,7 @@ export function ReviewSection({
     );
   }
 
-  // Show review form if can review
+  // Show review form if can review (only for clients)
   if (reviewStatus.canReview) {
     return (
       <div className="space-y-4">
@@ -223,6 +199,17 @@ export function ReviewSection({
     );
   }
 
-  // Cannot review (appointment not completed, etc.)
+  // Show "no review yet" message for professionals/admins when appointment is completed but no review exists
+  if (!reviewStatus.canReview && !reviewStatus.hasReview) {
+    return (
+      <div className="text-center py-6 space-y-3">
+        <Star className="h-8 w-8 text-muted-foreground mx-auto" />
+        <p className="text-muted-foreground text-sm">
+          No review has been submitted for this appointment yet.
+        </p>
+      </div>
+    );
+  }
+  
   return null;
 }
