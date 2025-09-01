@@ -217,6 +217,48 @@ INSERT INTO public.email_templates (
   0,
   '[]'::jsonb,
   false
+),
+
+-- Support Request related templates
+(
+  'Support Request - Creation',
+  'Email sent to professional when support request is created',
+  'SupportRequestCreation',
+  41,
+  '[]'::jsonb,
+  true
+),
+(
+  'Support Request - Refunded - Client',
+  'Email sent to client when support request results in refund',
+  'SupportRequestRefundedClient',
+  42,
+  '[]'::jsonb,
+  true
+),
+(
+  'Support Request - Refunded - Professional',
+  'Email sent to professional when support request results in refund',
+  'SupportRequestRefundedProfessional',
+  43,
+  '[]'::jsonb,
+  true
+),
+(
+  'Support Request - Resolved - Client',
+  'Email sent to client when support request is resolved without refund',
+  'SupportRequestResolvedClient',
+  44,
+  '[]'::jsonb,
+  true
+),
+(
+  'Support Request - Resolved - Professional',
+  'Email sent to professional when support request is resolved without refund',
+  'SupportRequestResolvedProfessional',
+  45,
+  '[]'::jsonb,
+  true
 );
 
 /**

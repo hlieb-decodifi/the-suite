@@ -229,3 +229,40 @@ export type NoShowNotificationProfessionalParams = {
   professional_name: string;
   no_show_fee: number;
 } & BaseBookingParams
+
+// Support Request Related
+export type SupportRequestCreationParams = {
+  professional_name: string;
+  support_request_url: string;
+}
+
+export type SupportRequestRefundedClientParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_and_time: string;
+  professional_name: string;
+  refund_amount: number;
+  refund_method: string;
+}
+
+export type SupportRequestRefundedProfessionalParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_and_time: string;
+  professional_name: string;
+  refund_amount: number;
+}
+
+export type SupportRequestResolvedClientParams = {
+  booking_id: string;
+  client_name: string;
+  professional_name: string;
+}
+
+export type SupportRequestResolvedProfessionalParams = {
+  booking_id: string;
+  client_name: string;
+  professional_name: string;
+}

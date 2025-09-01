@@ -22,6 +22,11 @@ import {
   CancellationPolicyChargeProfessionalParams,
   NoShowNotificationClientParams,
   NoShowNotificationProfessionalParams,
+  SupportRequestCreationParams,
+  SupportRequestRefundedClientParams,
+  SupportRequestRefundedProfessionalParams,
+  SupportRequestResolvedClientParams,
+  SupportRequestResolvedProfessionalParams,
 } from './types';
 import { EMAIL_TEMPLATE_TAGS } from './constants';
 import { createClient } from '@/lib/supabase/client';
@@ -253,4 +258,40 @@ export async function sendNoShowNotificationProfessional(
   params: NoShowNotificationProfessionalParams
 ): Promise<EmailResult> {
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.NO_SHOW_NOTIFICATION_PROFESSIONAL, to, params);
+}
+
+// Support Request Related
+export async function sendSupportRequestCreation(
+  to: EmailRecipient[],
+  params: SupportRequestCreationParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.SUPPORT_REQUEST_CREATION, to, params);
+}
+
+export async function sendSupportRequestRefundedClient(
+  to: EmailRecipient[],
+  params: SupportRequestRefundedClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.SUPPORT_REQUEST_REFUNDED_CLIENT, to, params);
+}
+
+export async function sendSupportRequestRefundedProfessional(
+  to: EmailRecipient[],
+  params: SupportRequestRefundedProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.SUPPORT_REQUEST_REFUNDED_PROFESSIONAL, to, params);
+}
+
+export async function sendSupportRequestResolvedClient(
+  to: EmailRecipient[],
+  params: SupportRequestResolvedClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.SUPPORT_REQUEST_RESOLVED_CLIENT, to, params);
+}
+
+export async function sendSupportRequestResolvedProfessional(
+  to: EmailRecipient[],
+  params: SupportRequestResolvedProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.SUPPORT_REQUEST_RESOLVED_PROFESSIONAL, to, params);
 }

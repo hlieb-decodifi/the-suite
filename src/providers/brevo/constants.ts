@@ -30,4 +30,11 @@ export const EMAIL_TEMPLATE_TAGS = {
   // Incident related
   NO_SHOW_NOTIFICATION_CLIENT: 'NoShowNotificationClient',
   NO_SHOW_NOTIFICATION_PROFESSIONAL: 'NoShowNotificationProfessional',
+  
+  // Support Request related
+  SUPPORT_REQUEST_CREATION: 'SupportRequestCreation',
+  SUPPORT_REQUEST_REFUNDED_CLIENT: 'SupportRequestRefundedClient',
+  SUPPORT_REQUEST_REFUNDED_PROFESSIONAL: 'SupportRequestRefundedProfessional',
+  SUPPORT_REQUEST_RESOLVED_CLIENT: 'SupportRequestResolvedClient',
+  SUPPORT_REQUEST_RESOLVED_PROFESSIONAL: 'SupportRequestResolvedProfessional',
 } as const; 

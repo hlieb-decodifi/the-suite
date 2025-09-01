@@ -1,7 +1,11 @@
 import Stripe from 'stripe';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
+import { 
+  sendSupportRequestRefundedClient,
+  sendSupportRequestRefundedProfessional
+} from '@/providers/brevo/templates';
 
 // Initialize Stripe with API key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
@@ -512,6 +516,11 @@ async function updateSupportRequestWithRefund(
         console.log('[WEBHOOK] Success message added to conversation');
       }
     }
+    
+    // Send refund email notifications if refund succeeded
+    if (refund.status === 'succeeded') {
+      await sendSupportRequestRefundedEmails(supportRequest.id, (refund.amount || 0) / 100);
+    }
   }
   
   console.log(`[WEBHOOK] Updating support request with:`, JSON.stringify(updates));
@@ -582,5 +591,140 @@ async function updateBookingPaymentWithRefund(
     }
   } catch (error) {
     console.error('[WEBHOOK] Error updating booking payment:', error);
+  }
+}
+
+/**
+ * Send support request refunded emails to both client and professional
+ */
+async function sendSupportRequestRefundedEmails(supportRequestId: string, refundAmount: number) {
+  try {
+    const adminSupabase = await createAdminClient();
+
+    // Get support request data with appointment, booking and user info
+    const { data: supportRequest, error: supportRequestError } = await adminSupabase
+      .from('support_requests')
+      .select(`
+        id,
+        booking_id,
+        client_id,
+        professional_id,
+        appointment_id,
+        appointments (
+          start_time
+        ),
+        bookings (
+          id,
+          professional_profile_id,
+          clients:users!client_id (
+            first_name,
+            last_name
+          ),
+          professional_profiles (
+            address:address_id (
+              street_address,
+              city,
+              state,
+              country
+            ),
+            users (
+              first_name,
+              last_name
+            )
+          )
+        )
+      `)
+      .eq('id', supportRequestId)
+      .single();
+
+    if (supportRequestError || !supportRequest) {
+      console.error('Failed to get support request data for email:', supportRequestError);
+      return;
+    }
+
+    const booking = supportRequest.bookings;
+    if (!booking) {
+      console.error('Missing booking data');
+      return;
+    }
+
+    const client = booking.clients;
+    const professional = booking.professional_profiles?.users;
+    const address = booking.professional_profiles?.address;
+    const appointment = supportRequest.appointments;
+
+    if (!client || !professional || !appointment) {
+      console.error('Missing required data for refund emails');
+      return;
+    }
+
+    if (!supportRequest.client_id || !supportRequest.professional_id) {
+      console.error('Missing client or professional ID');
+      return;
+    }
+
+    // Format address
+    const formattedAddress = address 
+      ? [address.street_address, address.city, address.state, address.country].filter(Boolean).join(', ')
+      : '';
+
+    // Format appointment date and time
+    const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    const dateAndTime = `${appointmentDate} at ${appointmentTime}`;
+
+    // Get email addresses using admin client
+    const { data: clientAuth, error: clientAuthError } = await adminSupabase.auth.admin.getUserById(supportRequest.client_id);
+    const { data: professionalAuth, error: professionalAuthError } = await adminSupabase.auth.admin.getUserById(supportRequest.professional_id);
+
+    if (clientAuthError || !clientAuth.user?.email || professionalAuthError || !professionalAuth.user?.email) {
+      console.error('Failed to get email addresses for refund emails');
+      return;
+    }
+
+    const clientName = `${client.first_name} ${client.last_name}`;
+    const professionalName = `${professional.first_name} ${professional.last_name}`;
+
+    // Send emails
+    await Promise.all([
+      sendSupportRequestRefundedClient(
+        [{ email: clientAuth.user.email, name: clientName }],
+        {
+          address: formattedAddress,
+          booking_id: supportRequest.booking_id || '',
+          client_name: clientName,
+          date_and_time: dateAndTime,
+          professional_name: professionalName,
+          refund_amount: refundAmount,
+          refund_method: 'Credit Card'
+        }
+      ),
+      sendSupportRequestRefundedProfessional(
+        [{ email: professionalAuth.user.email, name: professionalName }],
+        {
+          address: formattedAddress,
+          booking_id: supportRequest.booking_id || '',
+          client_name: clientName,
+          date_and_time: dateAndTime,
+          professional_name: professionalName,
+          refund_amount: refundAmount
+        }
+      )
+    ]);
+
+    console.log('✅ Support request refunded emails sent');
+  } catch (error) {
+    console.error('❌ Error sending support request refunded emails:', error);
   }
 }

@@ -19,7 +19,12 @@ import {
   sendCancellationPolicyChargeClient,
   sendCancellationPolicyChargeProfessional,
   sendNoShowNotificationClient,
-  sendNoShowNotificationProfessional
+  sendNoShowNotificationProfessional,
+  sendSupportRequestCreation,
+  sendSupportRequestResolvedClient,
+  sendSupportRequestResolvedProfessional,
+  sendSupportRequestRefundedClient,
+  sendSupportRequestRefundedProfessional
 } from '@/providers/brevo/templates';
 import { type EmailResult, type EmailRecipient } from '@/providers/brevo/types';
 
@@ -72,6 +77,11 @@ const emailFunctionMap = {
   'CancellationPolicyChargeProfessional': sendCancellationPolicyChargeProfessional,
   'NoShowNotificationClient': sendNoShowNotificationClient,
   'NoShowNotificationProfessional': sendNoShowNotificationProfessional,
+  'SupportRequestCreation': sendSupportRequestCreation,
+  'SupportRequestResolvedClient': sendSupportRequestResolvedClient,
+  'SupportRequestResolvedProfessional': sendSupportRequestResolvedProfessional,
+  'SupportRequestRefundedClient': sendSupportRequestRefundedClient,
+  'SupportRequestRefundedProfessional': sendSupportRequestRefundedProfessional,
 } as const;
 
 // Note: brevo_template_id is now fetched directly from the database
@@ -264,6 +274,21 @@ export async function generateSampleParams(dynamicParams: string[]): Promise<Rec
           status: 'processed'
         };
         break;
+      
+      // Support Request parameters
+      case 'support_request_url':
+        sampleData[param] = 'https://thesuite.example.com/support-request/sr-123456';
+        break;
+      case 'address':
+        sampleData[param] = '123 Main St, New York, NY 10001, USA';
+        break;
+      case 'date_and_time':
+        sampleData[param] = 'Monday, December 25, 2023 at 2:00 PM';
+        break;
+      case 'refund_method':
+        sampleData[param] = 'Credit Card';
+        break;
+        
       default:
         sampleData[param] = `Sample ${param.replace(/_/g, ' ')}`;
     }
