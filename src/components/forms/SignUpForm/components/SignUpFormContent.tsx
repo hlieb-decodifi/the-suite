@@ -31,7 +31,9 @@ export function SignUpFormContent({
     watch,
   } = form;
 
-  const selectedRole = watch('userType');
+  // Watch the userType field to determine if Google OAuth should be enabled
+  const selectedUserType = watch('userType');
+
 
   return (
     <div className="w-full">
@@ -42,8 +44,8 @@ export function SignUpFormContent({
           <GoogleOAuthButton
             mode="signup"
             redirectTo={redirectTo}
-            role={selectedRole}
-            disabled={!selectedRole}
+            role={selectedUserType}
+            disabled={!selectedUserType}
           />
         </div>
 
