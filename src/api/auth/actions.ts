@@ -491,6 +491,101 @@ export async function googleOAuthFormAction(formData: FormData) {
 }
 
 /**
+ * Server action to convert OAuth user to email/password user
+ * This adds an email identity while keeping the OAuth identity
+ */
+export async function convertOAuthToEmailAction(newEmail: string, newPassword: string) {
+  const supabase = await createClient();
+  
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return {
+        success: false,
+        error: "No user found",
+      };
+    }
+
+    // Check if user is OAuth user
+    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    if (!isOAuth) {
+      return {
+        success: false,
+        error: "This feature is only available for OAuth users",
+      };
+    }
+
+    // Check if user already has email identity
+    const hasEmailIdentity = user.identities?.some(identity => identity.provider === 'email');
+    if (hasEmailIdentity) {
+      return {
+        success: false,
+        error: "User already has email authentication enabled",
+      };
+    }
+
+    // Check if the new email is already in use
+    const { exists, error: userCheckError } = await userExistsByEmail(newEmail);
+    if (userCheckError) {
+      return {
+        success: false,
+        error: 'Error checking for existing user. Please try again later.',
+      };
+    }
+    if (exists) {
+      return {
+        success: false,
+        error: 'An account with this email already exists.',
+      };
+    }
+
+    // Use admin client to update user with email and password
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return {
+        success: false,
+        error: 'Server configuration error',
+      };
+    }
+
+    const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+    // Update user with new email and password
+    const { error: updateError } = await adminSupabase.auth.admin.updateUserById(
+      user.id,
+      {
+        email: newEmail,
+        password: newPassword,
+        email_confirm: true, // Auto-confirm the email
+      }
+    );
+
+    if (updateError) {
+      console.error('Error converting OAuth user:', updateError);
+      return {
+        success: false,
+        error: updateError.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Successfully added email authentication. You can now sign in with either Google or email/password.',
+    };
+  } catch (error) {
+    console.error('Error converting OAuth user:', error);
+    return {
+      success: false,
+      error: "Failed to convert account. Please try again.",
+    };
+  }
+}
+
+/**
  * Server action to get Google OAuth URL (without redirecting)
  */
 export async function getGoogleOAuthUrlAction(

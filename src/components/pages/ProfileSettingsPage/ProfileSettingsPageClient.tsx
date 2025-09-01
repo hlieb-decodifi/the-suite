@@ -24,6 +24,7 @@ import type {
 } from '@/components/forms';
 import { ChangeEmailForm } from '@/components/forms/ChangeEmailForm';
 import { ChangePasswordForm } from '@/components/forms/ChangePasswordForm';
+import { ConvertOAuthToEmailForm } from '@/components/forms/ConvertOAuthToEmailForm';
 import {
   canChangeEmail,
   canChangePassword,
@@ -67,6 +68,7 @@ export function ProfileSettingsPageClient({
     useState(false);
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isConvertOAuthOpen, setIsConvertOAuthOpen] = useState(false);
   const { toast } = useToast();
   const [messagingSettingsState, setMessagingSettingsState] = useState(
     messagingSettings ?? { allow_messages: false }
@@ -120,6 +122,10 @@ export function ProfileSettingsPageClient({
 
   const handlePasswordChangeSuccess = () => {
     setIsChangePasswordOpen(false);
+  };
+
+  const handleConvertOAuthSuccess = () => {
+    setIsConvertOAuthOpen(false);
   };
 
   const handleMessagingToggle = async (allowMessages: boolean) => {
@@ -248,8 +254,8 @@ export function ProfileSettingsPageClient({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* OAuth Information */}
-                {oauthProvider && (
+                {/* Show OAuth status only if user has both OAuth and email authentication */}
+                {oauthProvider && canUserChangeEmail && (
                   <div className="p-3 bg-muted rounded-md">
                     <Typography
                       variant="small"
@@ -257,49 +263,70 @@ export function ProfileSettingsPageClient({
                     >
                       Signed in with{' '}
                       {oauthProvider === 'google' ? 'Google' : oauthProvider}.
-                      Email and password changes are managed by your{' '}
-                      {oauthProvider === 'google' ? 'Google' : oauthProvider}{' '}
-                      account.
+                      You also have email/password authentication enabled.
                     </Typography>
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Email Change Button */}
-                  <Button
-                    variant="outline"
-                    className="justify-start h-auto p-4"
-                    onClick={() => setIsChangeEmailOpen(true)}
-                    disabled={!canUserChangeEmail || !isEditable}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Mail size={18} />
-                      <div className="text-left">
-                        <div className="font-medium">Change Email</div>
-                        <div className="text-sm text-muted-foreground">
-                          Update your email address
+                  {/* Email Change or Add Email Authentication Button */}
+                  {!canUserChangeEmail && oauthProvider ? (
+                    /* Add Email Authentication Button for OAuth users */
+                    <Button
+                      variant="outline"
+                      className="justify-start h-auto p-4"
+                      onClick={() => setIsConvertOAuthOpen(true)}
+                      disabled={!isEditable}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Mail size={18} />
+                        <div className="text-left">
+                          <div className="font-medium">Add Email Authentication</div>
+                          <div className="text-sm text-muted-foreground">
+                            Enable email changes and password login
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Button>
+                    </Button>
+                  ) : (
+                    /* Regular Email Change Button */
+                    <Button
+                      variant="outline"
+                      className="justify-start h-auto p-4"
+                      onClick={() => setIsChangeEmailOpen(true)}
+                      disabled={!canUserChangeEmail || !isEditable}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Mail size={18} />
+                        <div className="text-left">
+                          <div className="font-medium">Change Email</div>
+                          <div className="text-sm text-muted-foreground">
+                            Update your email address
+                          </div>
+                        </div>
+                      </div>
+                    </Button>
+                  )}
 
-                  {/* Password/Set Password Button */}
-                  <Button
-                    variant="outline"
-                    className="justify-start h-auto p-4"
-                    onClick={() => setIsChangePasswordOpen(true)}
-                    disabled={(!canUserChangePassword && userHasPassword) || !isEditable}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Lock size={18} />
-                      <div className="text-left">
-                        <div className="font-medium">{userHasPassword ? 'Change Password' : 'Set Password'}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {userHasPassword ? 'Update your password' : 'Set a password for email login'}
+                  {/* Password/Set Password Button - Hide for OAuth-only users */}
+                  {(canUserChangePassword || userHasPassword || !oauthProvider) && (
+                    <Button
+                      variant="outline"
+                      className="justify-start h-auto p-4"
+                      onClick={() => setIsChangePasswordOpen(true)}
+                      disabled={(!canUserChangePassword && userHasPassword) || !isEditable}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Lock size={18} />
+                        <div className="text-left">
+                          <div className="font-medium">{userHasPassword ? 'Change Password' : 'Set Password'}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {userHasPassword ? 'Update your password' : 'Set a password for email login'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Button>
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -474,6 +501,19 @@ export function ProfileSettingsPageClient({
           ) : (
             <SetPasswordForm userEmail={user.email || ''} />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert OAuth to Email Modal */}
+      <Dialog open={isConvertOAuthOpen} onOpenChange={setIsConvertOAuthOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Email Authentication</DialogTitle>
+          </DialogHeader>
+          <ConvertOAuthToEmailForm
+            onSuccess={handleConvertOAuthSuccess}
+            onCancel={() => setIsConvertOAuthOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </>
