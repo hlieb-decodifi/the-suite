@@ -62,6 +62,26 @@ export type BookingCancellationProfessionalParams = {
   refund_info?: RefundInfo;
 } & BaseBookingParams
 
+export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
+  address: string;
+  booking_id: string;
+  cancellation_reason: string;
+  client_name: string;
+  date_time: string;
+  professional_name: string;
+  timezone: string;
+}  & BaseBookingParams
+
+export type BookingCancellationWithinAcceptedTimePeriodClientParams = {
+  address: string;
+  booking_id: string;
+  cancellation_reason: string;
+  client_name: string;
+  date_time: string;
+  professional_name: string;
+  timezone: string;
+} & BaseBookingParams
+
 // Booking Confirmation
 export type BookingConfirmationClientParams = {
   appointment_url: string;
@@ -103,6 +123,29 @@ export type BookingConfirmationProfessionalParams = {
     price: number;
   }[];
 }
+
+export type AppointmentCompletion2hafterClientParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  professional_name: string;
+  service_amount: number;
+  timezone: string;
+  total_paid: number;
+} & BaseBookingParams
+
+export type AppointmentCompletion2hafterProfessionalParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  payment_method: string;
+  professional_name: string;
+  service_amount: number;
+  timezone: string;
+  total_amount: number;
+} & BaseBookingParams
 
 // Payment Related
 export type PaymentConfirmationClientParams = {
@@ -217,17 +260,57 @@ export type CancellationPolicyChargeProfessionalParams = {
   policy_info: PolicyInfo;
 } & BaseBookingParams
 
-// Incident Related
-export type NoShowNotificationClientParams = {
+export type BookingCancellationLessthan24h48hclientParams = {
+  address: string;
+  booking_id: string;
+  cancellation_reason: string;
   client_name: string;
+  date_time: string;
+  fee: string;
+  policy_rate: string;
   professional_name: string;
-  no_show_fee: number;
+  service_amount: number;
+  time_until_appointment: string;
+  timezone: string;
 } & BaseBookingParams
 
-export type NoShowNotificationProfessionalParams = {
+export type BookingCancellationLessthan24h48hprofessionalParams = {
+  address: string;
+  booking_id: string;
+  cancellation_reason: string;
   client_name: string;
+  date_time: string;
+  fee: string;
+  policy_rate: string;
   professional_name: string;
-  no_show_fee: number;
+  service_amount: number;
+  time_until_appointment: string;
+  timezone: string;
+} & BaseBookingParams
+
+// Incident Related
+export type BookingCancellationNoShowClientParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  fee: string;
+  policy_rate: string;
+  professional_name: string;
+  service_amount: number;
+  timezone: string;
+} & BaseBookingParams
+
+export type BookingCancellationNoShowProfessionalParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  fee: string;
+  policy_rate: string;
+  professional_name: string;
+  service_amount: number;
+  timezone: string;
 } & BaseBookingParams
 
 // Support Request Related

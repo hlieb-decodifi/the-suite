@@ -2,9 +2,13 @@ export const EMAIL_TEMPLATE_TAGS = {
   // Booking related
   BOOKING_CANCELLATION_CLIENT: 'BookingCancellationClient',
   BOOKING_CANCELLATION_PROFESSIONAL: 'BookingCancellationProfessional',
+  BOOKING_CANCELLATION_WITHIN_ACCEPTED_TIME_PERIOD_PROFESSIONAL: 'BookingCancellationWithinAcceptedTimePeriodProfessional',
+  BOOKING_CANCELLATION_WITHIN_ACCEPTED_TIME_PERIOD_CLIENT: 'BookingCancellationWithinAcceptedTimePeriodClient',
   BOOKING_CONFIRMATION_CLIENT: 'BookingConfirmationClient',
   BOOKING_CONFIRMATION_PROFESSIONAL: 'BookingConfirmationProfessional',
-  
+  APPOINTMENT_COMPLETION_2H_AFTER_CLIENT: 'AppointmentCompletion2hafterClient',
+  APPOINTMENT_COMPLETION_2H_AFTER_PROFESSIONAL: 'AppointmentCompletion2hafterProfessional',
+
   // Payment related
   PAYMENT_CONFIRMATION_CLIENT: 'PaymentConfirmationClient',
   PAYMENT_CONFIRMATION_PROFESSIONAL: 'PaymentConfirmationProfessional',
@@ -24,12 +28,12 @@ export const EMAIL_TEMPLATE_TAGS = {
   CONTACT_INQUIRY_CONFIRMATION: 'ContactInquiryConfirmation',
   
   // Policy related
-  CANCELLATION_POLICY_CHARGE_CLIENT: 'CancellationPolicyChargeClient',
-  CANCELLATION_POLICY_CHARGE_PROFESSIONAL: 'CancellationPolicyChargeProfessional',
-  
+  BOOKING_CANCELLATION_LESS_THAN_24H_48H_CLIENT: 'BookingCancellationLessthan24h48hclient',
+  BOOKING_CANCELLATION_LESS_THAN_24H_48H_PROFESSIONAL: 'BookingCancellationLessthan24h48hprofessional',
+
   // Incident related
-  NO_SHOW_NOTIFICATION_CLIENT: 'NoShowNotificationClient',
-  NO_SHOW_NOTIFICATION_PROFESSIONAL: 'NoShowNotificationProfessional',
+  NO_SHOW_NOTIFICATION_CLIENT: 'BookingCancellationNoShowClient',
+  NO_SHOW_NOTIFICATION_PROFESSIONAL: 'BookingCancellationNoShowProfessional',
   
   // Support Request related
   SUPPORT_REQUEST_CREATION: 'SupportRequestCreation',

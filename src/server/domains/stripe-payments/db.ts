@@ -794,6 +794,9 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   client_email: string;
   client_name: string;
   professional_name: string;
+  professional_email: string;
+  professional_address: string;
+  professional_timezone: string;
   start_time: string;
   total_amount: number;
   service_fee: number;
@@ -901,56 +904,85 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     const clientIds = bookings.map(b => b.client_id);
     const professionalProfileIds = bookings.map(b => b.professional_profile_id);
 
-    const [clientsResult, professionalsResult] = await Promise.all([
-      supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }), // Get auth users for emails
-      supabase
-        .from('professional_profiles')
-        .select('id, user_id')
-        .in('id', professionalProfileIds)
-    ]);
-
+    // Get client auth users (for email)
+    const clientsResult = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
     const authUsers = clientsResult.data?.users || [];
-    const professionalProfiles = professionalsResult.data || [];
 
+    // Get professional profiles with address and timezone
+    const { data: professionalProfiles, error: professionalsError } = await supabase
+      .from('professional_profiles')
+      .select('id, user_id, address:address_id(street_address, apartment, city, state, country), timezone')
+      .in('id', professionalProfileIds);
+    if (professionalsError || !professionalProfiles) {
+      console.error('Error fetching professional profiles:', professionalsError);
+      return [];
+    }
+
+    // Get users table for names and timezones
     const { data: allUsers, error: usersError } = await supabase
       .from('users')
-      .select('id, first_name, last_name')
+      .select('id, first_name, last_name, client_profiles(*)')
       .in('id', [...clientIds, ...professionalProfiles.map(p => p.user_id)]);
-
     if (usersError || !allUsers) {
       console.error('Error fetching users:', usersError);
       return [];
     }
 
     // Build the final result
-    return eligiblePayments.map(payment => {
-      const appointment = eligibleAppointments.find(a => a.booking_id === payment.booking_id)!;
-      const booking = bookings.find(b => b.id === payment.booking_id)!;
-      const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
-      
-      // Find client details
-      const clientUser = allUsers.find(u => u.id === booking.client_id)!;
-      const clientAuth = authUsers.find(u => u.id === booking.client_id);
-      
-      // Find professional details
-      const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
-      const professionalUser = allUsers.find(u => u.id === professionalProfile.user_id)!;
+      // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
+      function ianaToAbbreviation(iana: string | undefined): string {
+        if (!iana) return '';
+        try {
+          const dtf = new Intl.DateTimeFormat('en-US', {
+            timeZone: iana,
+            timeZoneName: 'short'
+          });
+          const parts = dtf.formatToParts(new Date());
+          const tzPart = parts.find(p => p.type === 'timeZoneName');
+          return tzPart ? tzPart.value : iana;
+        } catch {
+          return iana;
+        }
+      }
 
-      return {
-        booking_id: payment.booking_id,
-        client_email: clientAuth?.email || '',
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        start_time: appointment.start_time,
-        total_amount: payment.amount,
-        service_fee: payment.service_fee,
-        deposit_amount: payment.deposit_amount,
-        balance_amount: payment.balance_amount,
-        tip_amount: payment.tip_amount || 0,
-        payment_method_name: paymentMethod.name,
-        is_cash_payment: !paymentMethod.is_online
-      };
-    });
+      return eligiblePayments.map(payment => {
+        const appointment = eligibleAppointments.find(a => a.booking_id === payment.booking_id)!;
+        const booking = bookings.find(b => b.id === payment.booking_id)!;
+        const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
+
+        // Find client details
+        const clientUser = allUsers.find(u => u.id === booking.client_id)!;
+        const clientAuth = authUsers.find(u => u.id === booking.client_id);
+
+        // Find professional details
+        const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
+        const professionalUser = allUsers.find(u => u.id === professionalProfile.user_id)!;
+        const professionalAuth = authUsers.find(u => u.id === professionalProfile.user_id);
+        const professionalAddress = professionalProfile.address
+          ? [professionalProfile.address.street_address, professionalProfile.address.apartment, professionalProfile.address.city, professionalProfile.address.state, professionalProfile.address.country].filter(Boolean).join(', ')
+          : '';
+        const professionalTimezone = professionalProfile.timezone || '';
+        const professionalTimezoneAbbr = ianaToAbbreviation(professionalTimezone);
+
+        return {
+          booking_id: payment.booking_id,
+          client_email: clientAuth?.email || '',
+          client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+          // Only use professional's timezone for notifications
+          professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+          professional_email: professionalAuth?.email || '',
+          professional_address: professionalAddress,
+          professional_timezone: professionalTimezoneAbbr,
+          start_time: appointment.start_time,
+          total_amount: payment.amount,
+          service_fee: payment.service_fee,
+          deposit_amount: payment.deposit_amount,
+          balance_amount: payment.balance_amount,
+          tip_amount: payment.tip_amount || 0,
+          payment_method_name: paymentMethod.name,
+          is_cash_payment: !paymentMethod.is_online
+        };
+      });
   } catch (error) {
     console.error('Error in getAppointmentsNeedingBalanceNotification:', error);
     return [];

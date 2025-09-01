@@ -63,12 +63,28 @@ INSERT INTO public.email_templates (
   false
 ),
 (
+  'Booking Cancellation -  Within Accepted Time Period - Professional',
+  'Email sent to professionals when a booking is cancelled with accepted time period',
+  'BookingCancellationWithinAcceptedTimePeriodProfessional',
+  32,
+  '[]'::jsonb,
+  true
+),
+(
   'Booking Cancellation - Client Notification',
   'Email sent to clients when a booking is cancelled',
   'BookingCancellationClient',
   0,
   '[]'::jsonb,
   false
+),
+(
+  'Booking Cancellation -  Within Accepted Time Period - Client',
+  'Email sent to clients when a booking is cancelled with accepted time period',
+  'BookingCancellationWithinAcceptedTimePeriodClient',
+  31,
+  '[]'::jsonb,
+  true
 ),
 (
   'Booking Confirmation Email - Client',
@@ -83,6 +99,22 @@ INSERT INTO public.email_templates (
   'Email sent to professionals when a new booking is made',
   'BookingConfirmationProfessional',
   26,
+  '[]'::jsonb,
+  true
+),
+(
+  'Appointment Completion - 2h after - Client',
+  'Email sent to clients 2 hours after their appointment is completed',
+  'AppointmentCompletion2hafterClient',
+  35,
+  '[]'::jsonb,
+  true
+),
+(
+  'Appointment Completion -  2h after - Professional',
+  'Email sent to professionals 2 hours after their appointment is completed',
+  'AppointmentCompletion2hafterProfessional',
+  36,
   '[]'::jsonb,
   true
 ),
@@ -185,36 +217,36 @@ INSERT INTO public.email_templates (
 
 -- Policy related templates
 (
-  'Cancellation Policy Charge - Client',
+  'Booking Cancellation - Less than 24h /48h - Client',
   'Email sent to clients when cancellation fee is charged',
-  'CancellationPolicyChargeClient',
-  0,
+  'BookingCancellationLessthan24h48hclient',
+  27,
   '[]'::jsonb,
-  false
+  true
 ),
 (
-  'Cancellation Policy Charge - Professional',
+  'Booking Cancellation - Less than 24h /48h - Professional',
   'Email sent to professionals when cancellation fee is applied',
-  'CancellationPolicyChargeProfessional',
-  0,
+  'BookingCancellationLessthan24h48hprofessional',
+  30,
   '[]'::jsonb,
-  false
+  true
 ),
 
 -- Incident related templates
 (
-  'No Show Notification - Client',
+  'Booking Cancellation - No Show - Client',
   'Email sent to clients when marked as no-show',
-  'NoShowNotificationClient',
-  0,
+  'BookingCancellationNoShowClient',
+  33,
   '[]'::jsonb,
   false
 ),
 (
-  'No Show Notification - Professional',
+  'Booking Cancellation - No Show - Professional',
   'Email sent to professionals when client is marked as no-show',
-  'NoShowNotificationProfessional',
-  0,
+  'BookingCancellationNoShowProfessional',
+  34,
   '[]'::jsonb,
   false
 ),

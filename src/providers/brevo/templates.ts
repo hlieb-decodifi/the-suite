@@ -6,10 +6,14 @@ import {
   EmailResult,
   BookingCancellationClientParams,
   BookingCancellationProfessionalParams,
+  BookingCancellationWithinAcceptedTimePeriodProfessionalParams,
+  BookingCancellationWithinAcceptedTimePeriodClientParams,
   BookingConfirmationClientParams,
   BookingConfirmationProfessionalParams,
   PaymentConfirmationClientParams,
   PaymentConfirmationProfessionalParams,
+  AppointmentCompletion2hafterClientParams,
+  AppointmentCompletion2hafterProfessionalParams,
   BalanceNotificationParams,
   RefundRequestProfessionalParams,
   RefundCompletionClientParams,
@@ -18,10 +22,10 @@ import {
   ReviewTipNotificationParams,
   ContactInquiryAdminParams,
   ContactInquiryConfirmationParams,
-  CancellationPolicyChargeClientParams,
-  CancellationPolicyChargeProfessionalParams,
-  NoShowNotificationClientParams,
-  NoShowNotificationProfessionalParams,
+  BookingCancellationLessthan24h48hclientParams,
+  BookingCancellationLessthan24h48hprofessionalParams,
+  BookingCancellationNoShowClientParams,
+  BookingCancellationNoShowProfessionalParams,
   SupportRequestCreationParams,
   SupportRequestRefundedClientParams,
   SupportRequestRefundedProfessionalParams,
@@ -141,6 +145,22 @@ export async function sendBookingCancellationProfessional(
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_PROFESSIONAL, to, params);
 }
 
+export async function sendBookingCancellationWithinAcceptedTimePeriodProfessional(
+  to: EmailRecipient[],
+  params: BookingCancellationWithinAcceptedTimePeriodProfessionalParams
+): Promise<EmailResult> {
+  console.log('CANCELLATION WITHIN ACCEPTED TIME PERIOD PROFESSIONAL', {to, params});
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_WITHIN_ACCEPTED_TIME_PERIOD_PROFESSIONAL, to, params);
+}
+
+export async function sendBookingCancellationWithinAcceptedTimePeriodClient(
+  to: EmailRecipient[],
+  params: BookingCancellationWithinAcceptedTimePeriodClientParams
+): Promise<EmailResult> {
+  console.log('CANCELLATION WITHIN ACCEPTED TIME PERIOD CLIENT', {to, params});
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_WITHIN_ACCEPTED_TIME_PERIOD_CLIENT, to, params);
+}
+
 export async function sendBookingConfirmationClient(
   to: EmailRecipient[],
   params: BookingConfirmationClientParams
@@ -154,6 +174,20 @@ export async function sendBookingConfirmationProfessional(
 ): Promise<EmailResult> {
   console.log('BOOKING CONFIRMATION PROFESSIONAL', {to, params});
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CONFIRMATION_PROFESSIONAL, to, params);
+}
+
+export async function sendAppointmentCompletion2hafterClient(
+  to: EmailRecipient[],
+  params: AppointmentCompletion2hafterClientParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.APPOINTMENT_COMPLETION_2H_AFTER_CLIENT, to, params);
+}
+
+export async function sendAppointmentCompletion2hafterProfessional(
+  to: EmailRecipient[],
+  params: AppointmentCompletion2hafterProfessionalParams
+): Promise<EmailResult> {
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.APPOINTMENT_COMPLETION_2H_AFTER_PROFESSIONAL, to, params);
 }
 
 // Payment Related
@@ -231,31 +265,31 @@ export async function sendContactInquiryConfirmation(
 }
 
 // Policy Related
-export async function sendCancellationPolicyChargeClient(
+export async function sendBookingCancellationLessthan24h48hclient(
   to: EmailRecipient[],
-  params: CancellationPolicyChargeClientParams
+  params: BookingCancellationLessthan24h48hclientParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.CANCELLATION_POLICY_CHARGE_CLIENT, to, params);
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_LESS_THAN_24H_48H_CLIENT, to, params);
 }
 
-export async function sendCancellationPolicyChargeProfessional(
+export async function sendBookingCancellationLessthan24h48hprofessional(
   to: EmailRecipient[],
-  params: CancellationPolicyChargeProfessionalParams
+  params: BookingCancellationLessthan24h48hprofessionalParams
 ): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.CANCELLATION_POLICY_CHARGE_PROFESSIONAL, to, params);
+  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_LESS_THAN_24H_48H_PROFESSIONAL, to, params);
 }
 
 // Incident Related
-export async function sendNoShowNotificationClient(
+export async function sendBookingCancellationNoShowClient(
   to: EmailRecipient[],
-  params: NoShowNotificationClientParams
+  params: BookingCancellationNoShowClientParams
 ): Promise<EmailResult> {
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.NO_SHOW_NOTIFICATION_CLIENT, to, params);
 }
 
-export async function sendNoShowNotificationProfessional(
+export async function sendBookingCancellationNoShowProfessional(
   to: EmailRecipient[],
-  params: NoShowNotificationProfessionalParams
+  params: BookingCancellationNoShowProfessionalParams
 ): Promise<EmailResult> {
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.NO_SHOW_NOTIFICATION_PROFESSIONAL, to, params);
 }

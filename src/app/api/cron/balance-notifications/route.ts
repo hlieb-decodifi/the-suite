@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAppointmentsNeedingBalanceNotification, markBalanceNotificationSent } from '@/server/domains/stripe-payments/db';
-import { sendBalanceNotification, sendReviewTipNotification } from '@/providers/brevo/templates';
+import { sendAppointmentCompletion2hafterClient, sendAppointmentCompletion2hafterProfessional} from '@/providers/brevo/templates';
 import { EmailRecipient } from '@/providers/brevo/types';
 
 export const runtime = 'nodejs';
@@ -54,10 +54,10 @@ export async function GET() {
 
         // Calculate payment amounts (already in dollars from DB)
         const totalAmount = appointment.total_amount;
-        const depositPaid = appointment.deposit_amount;
-        const balanceAmount = appointment.balance_amount;
-        const currentTip = appointment.tip_amount || 0;
-        const totalDue = balanceAmount + currentTip;
+  // const depositPaid = appointment.deposit_amount; // removed unused variable
+  // const balanceAmount = appointment.balance_amount; // removed unused variable
+  // const currentTip = appointment.tip_amount || 0; // removed unused variable
+  // const totalDue = balanceAmount + currentTip; // removed unused variable
 
         // Create recipient object
         const recipient: EmailRecipient = {
@@ -65,45 +65,53 @@ export async function GET() {
           name: appointment.client_name
         };
 
-        if (appointment.is_cash_payment) {
-          // For cash payments: send review + tip notification (no balance due)
-          await sendReviewTipNotification([recipient], {
-            client_name: appointment.client_name,
-            professional_name: appointment.professional_name,
-            payment_method: appointment.payment_method_name,
-            service_amount: totalAmount,
-            service_fee: appointment.service_fee,
-            total_amount: totalAmount,
-            review_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}/review`,
-            appointment_id: appointment.booking_id,
-            appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-            date: appointmentDate,
-            time: appointmentTime,
-            website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-            support_email: process.env.SUPPORT_EMAIL || ''
-          });
-          
-          console.log(`[CRON] Successfully sent review/tip notification for cash payment booking: ${appointment.booking_id}`);
-        } else {
-          // For card payments: send balance notification
-          await sendBalanceNotification([recipient], {
-            professional_name: appointment.professional_name,
-            total_amount: totalAmount,
-            ...(depositPaid ? { deposit_paid: depositPaid } : {}),
-            balance_amount: balanceAmount,
-            ...(currentTip > 0 ? { current_tip: currentTip } : {}),
-            total_due: totalDue,
-            balance_payment_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}/payment`,
-            appointment_id: appointment.booking_id,
-            appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-            date: appointmentDate,
-            time: appointmentTime,
-            website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-            support_email: process.env.SUPPORT_EMAIL || ''
-          });
-          
-          console.log(`[CRON] Successfully sent balance notification for card payment booking: ${appointment.booking_id}`);
-        }
+        // Send appointment completion emails to both client and professional
+        const appointmentCompletionClientParams = {
+          address: appointment.professional_address || '',
+          booking_id: appointment.booking_id,
+          client_name: appointment.client_name,
+          date_time: `${appointmentDate} ${appointmentTime}`,
+          professional_name: appointment.professional_name,
+          service_amount: totalAmount,
+          timezone: appointment.professional_timezone || '',
+          total_paid: totalAmount,
+          appointment_id: appointment.booking_id,
+          appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
+          date: appointmentDate,
+          time: appointmentTime,
+          website_url: process.env.NEXT_PUBLIC_APP_URL || '',
+          support_email: process.env.SUPPORT_EMAIL || ''
+        };
+
+        const appointmentCompletionProfessionalParams = {
+          address: appointment.professional_address || '',
+          booking_id: appointment.booking_id,
+          client_name: appointment.client_name,
+          date_time: `${appointmentDate} ${appointmentTime}`,
+          payment_method: appointment.payment_method_name || '',
+          professional_name: appointment.professional_name,
+          service_amount: totalAmount,
+          timezone: appointment.professional_timezone || '',
+          total_amount: totalAmount,
+          appointment_id: appointment.booking_id,
+          appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
+          date: appointmentDate,
+          time: appointmentTime,
+          website_url: process.env.NEXT_PUBLIC_APP_URL || '',
+          support_email: process.env.SUPPORT_EMAIL || ''
+        };
+
+        await Promise.all([
+          sendAppointmentCompletion2hafterClient([recipient], appointmentCompletionClientParams),
+          sendAppointmentCompletion2hafterProfessional([
+            {
+              email: appointment.professional_email,
+              name: appointment.professional_name
+            }
+          ], appointmentCompletionProfessionalParams)
+        ]);
+
+        console.log(`[CRON] Successfully sent appointment completion emails for booking: ${appointment.booking_id}`);
 
         // Mark notification as sent in database
         await markBalanceNotificationSent(appointment.booking_id);

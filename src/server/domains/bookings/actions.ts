@@ -5,15 +5,21 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
 import {
-  sendBookingCancellationClient,
-  sendBookingCancellationProfessional,
-  sendCancellationPolicyChargeClient,
-  sendCancellationPolicyChargeProfessional,
-  sendNoShowNotificationClient,
-  sendNoShowNotificationProfessional,
+  sendBookingCancellationNoShowClient,
+  sendBookingCancellationNoShowProfessional,
+  sendBookingCancellationLessthan24h48hclient,
+  sendBookingCancellationLessthan24h48hprofessional,
+  sendBookingCancellationWithinAcceptedTimePeriodClient,
+  sendBookingCancellationWithinAcceptedTimePeriodProfessional,
+  sendAppointmentCompletion2hafterClient,
+  sendAppointmentCompletion2hafterProfessional
 } from '@/providers/brevo/templates';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { Database } from '@supabase/types';
+import {
+  AppointmentCompletion2hafterClientParams,
+  AppointmentCompletion2hafterProfessionalParams
+} from '@/providers/brevo/types';
 
 
 function createSupabaseAdminClient() {
@@ -50,6 +56,15 @@ type ProfessionalProfile = {
   stripe_account_id?: string;
   cancellation_24h_charge_percentage: number;
   cancellation_48h_charge_percentage: number;
+  address_id?: string;
+  address?: {
+    street_address: string;
+    apartment?: string;
+    city: string;
+    state: string;
+    country: string;
+  };
+  timezone?: string;
   users: {
     id: string;
     first_name: string;
@@ -97,6 +112,7 @@ type BookingQueryResult = {
     first_name: string;
     last_name: string;
     email: string;
+    client_profiles?: Array<{ timezone?: string }>;
   };
   booking_services: BookingService[];
   booking_payments?: BookingPayment[];
@@ -139,6 +155,8 @@ export async function cancelBookingAction(
   bookingId: string,
   cancellationReason: string
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number; message?: string }> {
+  // Use admin client only for booking data fetch
+  const adminSupabase = createSupabaseAdminClient();
   const supabase = await createClient();
 
   console.log('[Cancellation] Starting cancellation process for booking:', bookingId);
@@ -153,8 +171,8 @@ export async function cancelBookingAction(
 
     console.log('[Cancellation] 👤 User authenticated:', user.id);
 
-    // Get booking with all related data
-    const { data: booking, error } = await supabase
+  // Get booking with all related data using admin client
+  const { data: booking, error } = await adminSupabase
       .from('bookings')
       .select(`
         *,
@@ -165,7 +183,18 @@ export async function cancelBookingAction(
         ),
         professional_profiles!inner(
           cancellation_policy_enabled,
+          cancellation_24h_charge_percentage,
+          cancellation_48h_charge_percentage,
           stripe_account_id,
+          address_id,
+          address:address_id(
+            street_address,
+            apartment,
+            city,
+            state,
+            country
+          ),
+          timezone,
           users!inner(id, first_name, last_name)
         ),
         clients:users!client_id(id, first_name, last_name, client_profiles(*)),
@@ -437,10 +466,40 @@ export async function cancelBookingAction(
       console.log('[Cancellation] ℹ️ No payment record or payment intent to process');
     }
 
-    // Send email notifications
-    console.log('[Cancellation] 📧 Sending cancellation emails');
-    await sendCancellationEmails(booking as any, cancellationReason);
-    console.log('[Cancellation] ✅ Cancellation emails sent');
+    // Determine cancellation scenario and send appropriate emails
+  const appointmentEnd = new Date(appointment.start_time);
+    const now = new Date();
+    const hoursUntilAppointment = (appointmentEnd.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const hasPolicy = professionalProfile.cancellation_policy_enabled;
+    let scenario = 'standard';
+    let chargeAmount = 0;
+    let chargePercentage = 0;
+
+    if (isClient && hasPolicy) {
+      if (hoursUntilAppointment < 24) {
+        scenario = 'policy_24h';
+  chargePercentage = professionalProfile.cancellation_24h_charge_percentage || 0;
+      } else if (hoursUntilAppointment < 48) {
+        scenario = 'policy_48h';
+  chargePercentage = professionalProfile.cancellation_48h_charge_percentage || 0;
+      }
+      if (chargePercentage > 0) {
+        const totalServiceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
+        chargeAmount = (totalServiceAmount * chargePercentage) / 100;
+      }
+    }
+
+    if (scenario === 'standard' || chargePercentage === 0) {
+      // Send standard cancellation emails
+      console.log('[Cancellation] 📧 Sending standard cancellation emails');
+      await sendCancellationEmails(booking as any, cancellationReason);
+      console.log('[Cancellation] ✅ Standard cancellation emails sent');
+    } else {
+      // Send cancellation policy charge emails
+      console.log('[Cancellation] 📧 Sending cancellation policy charge emails');
+      await sendCancellationPolicyEmails(booking as any, cancellationReason, chargeAmount, chargePercentage);
+      console.log('[Cancellation] ✅ Cancellation policy charge emails sent');
+    }
 
     // Revalidate the booking detail page
     revalidatePath(`/bookings/${appointment.id}`);
@@ -545,14 +604,14 @@ export async function canCancelBookingAction(
  * Send cancellation email notifications
  */
 async function sendCancellationEmails(booking: BookingQueryResult, cancellationReason: string): Promise<void> {
-  const adminSupabase = createSupabaseAdminClient(); 
+  const adminSupabase = createSupabaseAdminClient();
 
-  const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(booking.clients.id);     
+  const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(booking.clients.id);
   const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(booking.professional_profiles.users.id);
 
   const appointment = booking.appointments[0];
   if (!appointment) throw new Error('Appointment not found');
-  
+
   const professionalUser = booking.professional_profiles.users;
   const clientUser = booking.clients;
 
@@ -568,43 +627,71 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
     hour12: true
   });
 
+  // Build professional address string
+  let professionalAddress = '';
+  if (booking.professional_profiles.address) {
+    const addr = booking.professional_profiles.address;
+    professionalAddress = [
+      addr.street_address,
+      addr.apartment,
+      addr.city,
+      addr.state,
+      addr.country
+    ].filter(Boolean).join(', ');
+  }
+
+  const dateTime = `${appointmentDate} ${appointmentTime}`;
+
+  // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
+  function ianaToAbbreviation(iana: string | undefined): string {
+    if (!iana) return '';
+    try {
+      const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: iana,
+        timeZoneName: 'short'
+      });
+      const parts = dtf.formatToParts(new Date());
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      return tzPart?.value || '';
+    } catch {
+      return '';
+    }
+  }
+
+  // Get timezones
+  const professionalTimezone = (booking.professional_profiles as any)?.timezone;
+
   const baseParams = {
+    address: professionalAddress,
     booking_id: booking.id,
-    appointment_id: appointment.id,
-    date: appointmentDate,
-    time: appointmentTime,
+    cancellation_reason: cancellationReason,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: dateTime,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    timezone: ianaToAbbreviation(professionalTimezone),
     appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
     website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-    support_email: process.env.BREVO_ADMIN_EMAIL!
+    support_email: process.env.BREVO_ADMIN_EMAIL!,
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime
   };
 
-  console.log('APPOINTMENT', baseParams.appointment_details_url);
-
-  // Send cancellation emails to both client and professional
+  // Send cancellation emails to both client and professional using new functions
   await Promise.all([
-    sendBookingCancellationClient(
-      [{ 
-        email: clientAuth.user?.email || '', 
-        name: `${clientUser.first_name} ${clientUser.last_name}` 
+    sendBookingCancellationWithinAcceptedTimePeriodClient(
+      [{
+        email: clientAuth.user?.email || '',
+        name: `${clientUser.first_name} ${clientUser.last_name}`
       }],
-      {
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        cancellation_reason: cancellationReason,
-        ...baseParams
-      }
+      baseParams
     ),
-    sendBookingCancellationProfessional(
-      [{ 
-        email: professionalAuth.user?.email || '', 
-        name: `${professionalUser.first_name} ${professionalUser.last_name}` 
+    sendBookingCancellationWithinAcceptedTimePeriodProfessional(
+      [{
+        email: professionalAuth.user?.email || '',
+        name: `${professionalUser.first_name} ${professionalUser.last_name}`
       }],
-      {
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        cancellation_reason: cancellationReason,
-        ...baseParams
-      }
+      baseParams
     )
   ]);
 }
@@ -616,6 +703,8 @@ export async function markNoShowAction(
   appointmentId: string,
   chargePercentage: number // 0-100
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number; message?: string }> {
+  // Use admin client for appointment data fetch
+  const adminSupabase = createSupabaseAdminClient();
   const supabase = await createClient();
 
   try {
@@ -625,8 +714,8 @@ export async function markNoShowAction(
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Get appointment with booking and professional data
-    const { data: appointmentData, error } = await supabase
+    // Get appointment with booking and professional data, including address and timezone, using admin client
+    const { data: appointmentData, error } = await adminSupabase
       .from('appointments')
       .select(`
         *,
@@ -634,6 +723,15 @@ export async function markNoShowAction(
           *,
           professional_profiles!inner(
             user_id,
+            address_id,
+            address:address_id(
+              street_address,
+              apartment,
+              city,
+              state,
+              country
+            ),
+            timezone,
             users!inner(id, first_name, last_name)
           ),
           clients:users!client_id(id, first_name, last_name, client_profiles(*)),
@@ -774,6 +872,8 @@ export async function cancelWithPolicyAction(
   bookingId: string,
   cancellationReason: string
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number }> {
+  // Use admin client for booking data fetch
+  const adminSupabase = createSupabaseAdminClient();
   const supabase = await createClient();
 
   try {
@@ -783,21 +883,50 @@ export async function cancelWithPolicyAction(
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Get booking with all related data including cancellation policy
-    const { data: booking, error } = await supabase
+    // Get booking with all related data including address, timezone, and cancellation policy using admin client
+    const { data: booking, error } = await adminSupabase
       .from('bookings')
       .select(`
         *,
-        appointments!inner(*),
+        appointments!inner(
+          id,
+          status,
+          start_time,
+          end_time
+        ),
         professional_profiles!inner(
           cancellation_policy_enabled,
           stripe_account_id,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
+          address_id,
+          address:address_id(
+            street_address,
+            apartment,
+            city,
+            state,
+            country
+          ),
+          timezone,
           users!inner(id, first_name, last_name)
         ),
-        clients:users!client_id(id, first_name, last_name),
-        booking_services(price)
+        clients:users!client_id(id, first_name, last_name, client_profiles(*)),
+        booking_services(
+          id,
+          price,
+          services(name)
+        ),
+        booking_payments!inner(
+          id,
+          amount,
+          tip_amount,
+          service_fee,
+          deposit_amount,
+          status,
+          stripe_payment_intent_id,
+          stripe_payment_method_id,
+          payment_methods!inner(is_online)
+        )
       `)
       .eq('id', bookingId)
       .single() as { data: BookingQueryResult | null; error: any };
@@ -1028,8 +1157,10 @@ export async function cancelWithPolicyAction(
       }
     }
 
+    console.log("Booking: ", booking);
+
     // Send cancellation policy notification emails
-    await sendCancellationPolicyEmails(booking, cancellationReason, chargeAmount, chargePercentage);
+    await sendCancellationPolicyEmails(booking, cancellationReason, chargeAmount, chargePercentage, booking.professional_profiles);
 
     // Revalidate the booking detail page
     const firstAppointment = Array.isArray(booking.appointments) ? booking.appointments[0] : booking.appointments;
@@ -1230,8 +1361,71 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
     hour12: true
   });
 
-  const baseParams = {
+  // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
+  function ianaToAbbreviation(iana: string | undefined): string {
+    if (!iana) return '';
+    try {
+      const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: iana,
+        timeZoneName: 'short'
+      });
+      const parts = dtf.formatToParts(new Date());
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      return tzPart?.value || '';
+    } catch {
+      return '';
+    }
+  }
+
+  // Get timezones
+  const professionalTimezone = (booking.professional_profiles as any)?.timezone;
+  const clientTimezone = (booking.clients as any)?.client_profiles?.[0]?.timezone || (booking.clients as any)?.client_profiles?.timezone;
+
+  // Build professional address string
+  let professionalAddress = '';
+  const profProfile = booking.professional_profiles as any;
+  if (profProfile.address) {
+    const addr = profProfile.address;
+    professionalAddress = [
+      addr.street_address,
+      addr.apartment,
+      addr.city,
+      addr.state,
+      addr.country
+    ].filter(Boolean).join(', ');
+  }
+
+  const dateTime = `${appointmentDate} ${appointmentTime}`;
+  const serviceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
+  // No-show emails use the professional's 24hr cancellation percentage
+  const policyRate = `${(booking.professional_profiles as any)?.cancellation_24h_charge_percentage || 0}%`;
+  const clientParams = {
+    address: professionalAddress,
     booking_id: booking.id,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: dateTime,
+    fee: chargeAmount.toFixed(2),
+    policy_rate: policyRate,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    service_amount: serviceAmount,
+    timezone: ianaToAbbreviation(clientTimezone),
+    appointment_id: appointment.id,
+    date: appointmentDate,
+    time: appointmentTime,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
+    support_email: process.env.BREVO_ADMIN_EMAIL!
+  };
+  const professionalParams = {
+    address: professionalAddress,
+    booking_id: booking.id,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: dateTime,
+    fee: chargeAmount.toFixed(2),
+    policy_rate: policyRate,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    service_amount: serviceAmount,
+    timezone: ianaToAbbreviation(professionalTimezone),
     appointment_id: appointment.id,
     date: appointmentDate,
     time: appointmentTime,
@@ -1241,23 +1435,13 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
   };
 
   await Promise.all([
-    sendNoShowNotificationClient(
+    sendBookingCancellationNoShowClient(
       [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
-      {
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        no_show_fee: chargeAmount,
-        ...baseParams
-      }
+      clientParams
     ),
-    sendNoShowNotificationProfessional(
+    sendBookingCancellationNoShowProfessional(
       [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
-      {
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        no_show_fee: chargeAmount,
-        ...baseParams
-      }
+      professionalParams
     )
   ]);
 }
@@ -1269,11 +1453,18 @@ async function sendCancellationPolicyEmails(
   booking: BookingQueryResult,
   reason: string,
   chargeAmount: number,
-  chargePercentage: number
+  chargePercentage: number,
+  professionalProfile?: ProfessionalProfile
 ): Promise<void> {
+  // Use Supabase admin client for reliable user data
+  const adminSupabase = createSupabaseAdminClient();
   const appointment = booking.appointments[0];
   if (!appointment) throw new Error('Appointment not found');
-  
+
+  // Fetch client and professional user auth data for emails
+  const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(booking.clients.id);
+  const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(booking.professional_profiles.users.id);
+
   const professionalUser = booking.professional_profiles.users;
   const clientUser = booking.clients;
   const serviceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
@@ -1295,35 +1486,227 @@ async function sendCancellationPolicyEmails(
     date: appointmentDate,
     time: appointmentTime,
     appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
-    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-    support_email: process.env.BREVO_ADMIN_EMAIL!
+    website_url: process.env.NEXT_PUBLIC_BASE_URL || '',
+    support_email: process.env.BREVO_ADMIN_EMAIL || 'support@yourdomain.com'
   };
 
-  const policyInfo = {
-    charge_amount: chargeAmount,
-    charge_percentage: chargePercentage,
+  let timeDescription = '';
+  if (chargePercentage === 0) {
+    timeDescription = 'More than 48 hours';
+  } else if (professionalProfile && chargePercentage === professionalProfile.cancellation_24h_charge_percentage) {
+    timeDescription = 'Less than 24 hours';
+  } else if (professionalProfile && chargePercentage === professionalProfile.cancellation_48h_charge_percentage) {
+    timeDescription = 'Less than 48 hours';
+  }
+
+  let professionalAddress = '';
+  if (professionalProfile?.address) {
+    const addr = professionalProfile.address;
+    professionalAddress = [
+      addr.street_address,
+      addr.apartment,
+      addr.city,
+      addr.state,
+      addr.country
+    ].filter(Boolean).join(', ');
+  }
+
+  // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
+  function ianaToAbbreviation(iana: string | undefined): string {
+    if (!iana) return '';
+    try {
+      const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: iana,
+        timeZoneName: 'short'
+      });
+      const parts = dtf.formatToParts(new Date());
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      return tzPart?.value || '';
+    } catch {
+      return '';
+    }
+  }
+
+  // Get timezones
+  const professionalTimezone = (professionalProfile as any)?.timezone;
+  const clientTimezone = (clientUser as any)?.client_profiles?.[0]?.timezone || (clientUser as any)?.client_profiles?.timezone;
+
+  const clientParams = {
+    address: professionalAddress,
+    cancellation_reason: reason,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: `${appointmentDate} ${appointmentTime}`,
+    fee: chargeAmount.toFixed(2),
+    policy_rate: `${chargePercentage}%`,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     service_amount: serviceAmount,
-    time_description: 'Less than 24 hours' // TODO: Calculate this based on appointment time
+    time_until_appointment: timeDescription,
+    timezone: ianaToAbbreviation(clientTimezone),
+    ...baseParams
+  };
+  const professionalParams = {
+    address: professionalAddress,
+    cancellation_reason: reason,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: `${appointmentDate} ${appointmentTime}`,
+    fee: chargeAmount.toFixed(2),
+    policy_rate: `${chargePercentage}%`,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    service_amount: serviceAmount,
+    time_until_appointment: timeDescription,
+    timezone: ianaToAbbreviation(professionalTimezone),
+    ...baseParams
+  };
+
+  // Use admin user emails for recipients
+  await Promise.all([
+    sendBookingCancellationLessthan24h48hclient(
+      [{ email: clientAuth.user?.email || clientUser.email || '', name: `${clientUser.first_name} ${clientUser.last_name}` }],
+      clientParams
+    ),
+    sendBookingCancellationLessthan24h48hprofessional(
+      [{ email: professionalAuth.user?.email || professionalUser.email || '', name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      professionalParams
+    )
+  ]);
+}
+
+/**
+ * Send appointment completion emails to both client and professional (2h after completion)
+ */
+
+export async function sendAppointmentCompletedEmails(
+  appointment: AppointmentQueryResult
+): Promise<void> {
+  const booking = appointment.bookings as BookingQueryResult;
+  if (!booking) throw new Error('Booking not found');
+
+  // Use runtime checks to ensure properties exist
+  const professionalProfile = booking.professional_profiles as ProfessionalProfile;
+  const professionalUser = professionalProfile?.users;
+  const clientUser = booking.clients;
+
+  // Get timezone and address safely
+  const professionalTimezone = professionalProfile?.timezone;
+  const professionalAddress = getProfessionalAddress(professionalProfile);
+  const clientProfiles = clientUser?.client_profiles as Array<{ timezone?: string }> | undefined;
+  const clientTimezone = clientProfiles && Array.isArray(clientProfiles)
+    ? clientProfiles[0]?.timezone
+    : undefined;
+
+  const { dateTime } = getAppointmentDateTime(appointment);
+  const serviceAmount = getServiceAmount(booking);
+  const totalPaid = booking.booking_payments?.[0]?.amount || 0;
+  const paymentMethod = booking.booking_payments?.[0]?.payment_methods?.name || '';
+  const baseParams = getBaseAppointmentParams(appointment);
+
+  const clientParams: AppointmentCompletion2hafterClientParams = {
+    address: professionalAddress,
+    booking_id: booking.id,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: dateTime,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    service_amount: serviceAmount,
+    timezone: getTimezoneAbbreviation(clientTimezone),
+    total_paid: totalPaid,
+    ...baseParams
+  };
+
+  const professionalParams: AppointmentCompletion2hafterProfessionalParams = {
+    address: professionalAddress,
+    booking_id: booking.id,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: dateTime,
+    payment_method: paymentMethod,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    service_amount: serviceAmount,
+    timezone: getTimezoneAbbreviation(professionalTimezone),
+    total_amount: totalPaid,
+    ...baseParams
   };
 
   await Promise.all([
-    sendCancellationPolicyChargeClient(
-      [{ email: clientUser.email, name: `${clientUser.first_name} ${clientUser.last_name}` }],
-      {
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        policy_info: policyInfo,
-        ...baseParams
-      }
+    sendAppointmentCompletion2hafterClient(
+      [getRecipient(clientUser)],
+      clientParams
     ),
-    sendCancellationPolicyChargeProfessional(
-      [{ email: professionalUser.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
-      {
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        policy_info: policyInfo,
-        ...baseParams
-      }
+    sendAppointmentCompletion2hafterProfessional(
+      [getRecipient(professionalUser)],
+      professionalParams
     )
   ]);
-} 
+}
+
+// --- Shared utility functions for email param construction ---
+
+function getProfessionalAddress(profile: ProfessionalProfile | { address?: ProfessionalProfile["address"] }): string {
+  if (!profile?.address) return '';
+  const addr = profile.address;
+  return [
+    addr.street_address,
+    addr.apartment,
+    addr.city,
+    addr.state,
+    addr.country
+  ].filter(Boolean).join(', ');
+}
+
+function getAppointmentDateTime(appointment: AppointmentBase | AppointmentQueryResult): { dateTime: string } {
+  const date = new Date(appointment.start_time).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+  const time = new Date(appointment.start_time).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+  return { dateTime: `${date} ${time}` };
+}
+
+function getTimezoneAbbreviation(iana: string | undefined): string {
+  if (!iana) return '';
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: iana,
+      timeZoneName: 'short'
+    });
+    const parts = dtf.formatToParts(new Date());
+    const tzPart = parts.find(p => p.type === 'timeZoneName');
+    return tzPart?.value || '';
+  } catch {
+    return '';
+  }
+}
+
+function getServiceAmount(booking: BookingQueryResult | AppointmentQueryResult["bookings"]): number {
+  return booking.booking_services?.reduce((sum: number, bs: BookingService) => sum + bs.price, 0) || 0;
+}
+
+function getRecipient(user: { email: string; first_name: string; last_name: string }): { email: string; name: string } {
+  return { email: user.email, name: `${user.first_name} ${user.last_name}` };
+}
+
+function getBaseAppointmentParams(
+  appointment: AppointmentBase | AppointmentQueryResult
+): {
+  appointment_id: string;
+  appointment_details_url: string;
+  date: string;
+  time: string;
+  website_url: string;
+  support_email: string;
+} {
+  const dateObj = new Date(appointment.start_time);
+  const date = dateObj.toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+  const time = dateObj.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+  return {
+    appointment_id: appointment.id,
+    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL || ''}/bookings/${appointment.id}`,
+    date,
+    time,
+    website_url: process.env.NEXT_PUBLIC_BASE_URL || '',
+    support_email: process.env.BREVO_ADMIN_EMAIL || ''
+  };
+}
