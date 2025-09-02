@@ -2,8 +2,9 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { convertTimeToClientTimezone, getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
+import { getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { format } from 'date-fns';
 
 /**
  * Calculate the total price for a booking
@@ -343,7 +344,6 @@ async function generateCrossMidnightSlots(
   for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
     const hour = Math.floor(minutes / 60);
     const minute = minutes % 60;
-    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
     // Create slot in professional's timezone for their working day
     const slotDate = new Date(professionalWorkingDate);
@@ -365,14 +365,20 @@ async function generateCrossMidnightSlots(
     });
 
     if (!hasOverlap) {
-      // Convert to client timezone and check if it falls on the client's selected date
-      const slotInClientTz = convertTimeToClientTimezone(timeString, professionalTimezone, clientTimezone, slotDate);
-      const clientSlotDate = new Date(slotDate.getTime() + (slotInClientTz.dayOffset * 24 * 60 * 60 * 1000));
-      const clientSelectedDateObj = new Date(clientSelectedDate);
+      // Convert the slot to the client's timezone
+      const slotInClientTz = toZonedTime(slotStartTime, clientTimezone);
       
       // Check if this slot falls on the client's selected date
-      if (clientSlotDate.toDateString() === clientSelectedDateObj.toDateString()) {
-        slots.push(slotInClientTz.time);
+      const slotClientDate = new Date(slotInClientTz);
+      slotClientDate.setHours(0, 0, 0, 0);
+      
+      const clientSelectedDateObj = new Date(clientSelectedDate);
+      clientSelectedDateObj.setHours(0, 0, 0, 0);
+      
+      if (slotClientDate.getTime() === clientSelectedDateObj.getTime()) {
+        // Format the time in client timezone
+        const clientTime = format(slotInClientTz, 'HH:mm');
+        slots.push(clientTime);
       }
     }
   }
@@ -444,128 +450,63 @@ export async function getAvailableTimeSlots(
       return [];
     }
   
-    // Convert client's selected date to professional's timezone to get the correct day
-    const clientSelectedDate = new Date(date);
-    clientSelectedDate.setHours(12, 0, 0, 0); // Use noon to avoid DST edge cases
-    const professionalSelectedDate = toZonedTime(clientSelectedDate, professionalTimezone);
+    // Parse client's selected date
+    const clientSelectedDateObj = new Date(date);
+    clientSelectedDateObj.setHours(0, 0, 0, 0);
     
-    // Get day of week in professional's timezone
-    const professionalDayOfWeek = professionalSelectedDate.getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
-    const professionalDayName = dayNames[professionalDayOfWeek];
-
-    // Get working hours for the professional's day
-    const professionalDayWorkingHours = workingHours.hours.find(h => {
-      if (!professionalDayName) return false;
-      return h.day.toLowerCase() === professionalDayName.toLowerCase();
-    });
-
-    // Check if professional is working on their corresponding day
-    if (!professionalDayWorkingHours?.enabled || !professionalDayWorkingHours?.startTime || !professionalDayWorkingHours?.endTime) {
-      // Professional is not working on this day in their timezone
-      // Check for cross-midnight availability from adjacent days
-      console.log(`Professional not working on ${professionalDayName} in their timezone. Checking for cross-midnight availability...`);
+    // We need to check all professional working days to see which ones have slots 
+    // that fall on the client's selected date (due to timezone differences)
+    const allSlots: string[] = [];
+    
+    // Check all enabled working days for the professional
+    for (const dayWorkingHours of workingHours.hours) {
+      if (!dayWorkingHours.enabled || !dayWorkingHours.startTime || !dayWorkingHours.endTime) {
+        continue;
+      }
       
-      const crossMidnightSlots: string[] = [];
+      console.log(`Checking ${dayWorkingHours.day} working hours (${dayWorkingHours.startTime} - ${dayWorkingHours.endTime}) for client date ${date}`);
       
-      // Check previous day for late working hours that might extend into current client day
-      const previousDayIndex = (professionalDayOfWeek - 1 + 7) % 7;
-      const previousDayName = dayNames[previousDayIndex];
-      const previousDayHours = workingHours.hours.find(h => h.day.toLowerCase() === previousDayName?.toLowerCase());
-      
-      if (previousDayHours?.enabled && previousDayHours.startTime && previousDayHours.endTime) {
-        console.log(`Checking ${previousDayName} working hours for cross-midnight slots...`);
+      // We need to check multiple professional dates around the client's selected date
+      // because timezone conversion can shift dates
+      for (let dayOffset = -1; dayOffset <= 1; dayOffset++) {
+        const professionalDate = new Date(clientSelectedDateObj);
+        professionalDate.setDate(professionalDate.getDate() + dayOffset);
         
-        // Generate slots for the previous day and see which ones fall on client's selected date
-        const prevDaySlots = await generateCrossMidnightSlots(
-          { startTime: previousDayHours.startTime, endTime: previousDayHours.endTime },
+        const professionalDayOfWeek = professionalDate.getDay();
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const professionalDayName = dayNames[professionalDayOfWeek];
+        
+        if (dayWorkingHours.day.toLowerCase() !== professionalDayName?.toLowerCase()) {
+          continue;
+        }
+        
+        console.log(`Generating slots for professional ${dayWorkingHours.day} (offset ${dayOffset}) that fall on client date ${date}`);
+        
+        // Generate slots for this professional working day
+        const daySlots = await generateCrossMidnightSlots(
+          { startTime: dayWorkingHours.startTime, endTime: dayWorkingHours.endTime },
           professionalTimezone,
           clientTimezone,
           date,
           appointments,
           requiredDurationMinutes,
-          -1 // previous day offset
+          dayOffset
         );
-        crossMidnightSlots.push(...prevDaySlots);
-      }
-      
-      // Check next day for early working hours that might start in current client day
-      const nextDayIndex = (professionalDayOfWeek + 1) % 7;
-      const nextDayName = dayNames[nextDayIndex];
-      const nextDayHours = workingHours.hours.find(h => h.day.toLowerCase() === nextDayName?.toLowerCase());
-      
-      if (nextDayHours?.enabled && nextDayHours.startTime && nextDayHours.endTime) {
-        console.log(`Checking ${nextDayName} working hours for cross-midnight slots...`);
         
-        // Generate slots for the next day and see which ones fall on client's selected date
-        const nextDaySlots = await generateCrossMidnightSlots(
-          { startTime: nextDayHours.startTime, endTime: nextDayHours.endTime },
-          professionalTimezone,
-          clientTimezone,
-          date,
-          appointments,
-          requiredDurationMinutes,
-          1 // next day offset
-        );
-        crossMidnightSlots.push(...nextDaySlots);
-      }
-      
-      if (crossMidnightSlots.length === 0) {
-        console.log('No cross-midnight availability found');
-        return [];
-      }
-      
-      console.log(`Found ${crossMidnightSlots.length} cross-midnight slots for client date`);
-      return crossMidnightSlots;
-    }
-
-    // Professional is working on this day, proceed with normal slot generation
-    const dayWorkingHours = professionalDayWorkingHours;
-
-    // Convert working hours to minutes for easier comparison
-    const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime!);
-    const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime!);
-
-
-    // Generate time slots every 30 minutes, but check the full required duration for each slot
-    const slots: string[] = [];
-    for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-
-      // Create datetime strings in professional's timezone
-      const slotDate = new Date(date);
-      slotDate.setHours(hour, minute, 0, 0);
-
-      // Convert slot times to UTC for comparison using professional's timezone
-      const slotStartTime = fromZonedTime(slotDate, professionalTimezone);
-      const slotEndTime = fromZonedTime(new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000)), professionalTimezone);
-
-      // Refactored: Use Array.some for overlap check
-      const hasOverlap = (appointments || []).some(appointment => {
-        if (!appointment.start_time || !appointment.end_time) return false;
-        return isSlotOverlapping(
-          slotStartTime.toISOString(),
-          slotEndTime.toISOString(),
-          appointment.start_time,
-          appointment.end_time
-        );
-      });
-
-      if (!hasOverlap) {
-        slots.push(timeString);
+        allSlots.push(...daySlots);
       }
     }
-
-    // Convert slots to client timezone
-    const targetDate = new Date(date);
-    const convertedSlots = slots.map(slot => {
-      const { time } = convertTimeToClientTimezone(slot, professionalTimezone, clientTimezone, targetDate);
-      return time;
+    
+    // Remove duplicates and sort
+    const uniqueSlots = Array.from(new Set(allSlots));
+    uniqueSlots.sort((a, b) => {
+      const [aHour, aMin] = a.split(':').map(Number);
+      const [bHour, bMin] = b.split(':').map(Number);
+      return ((aHour || 0) * 60 + (aMin || 0)) - ((bHour || 0) * 60 + (bMin || 0));
     });
-
-    return convertedSlots;
+    
+    console.log(`Found ${uniqueSlots.length} available slots for client date ${date}`);
+    return uniqueSlots;
   } catch (error) {
     console.error('Error in getAvailableTimeSlots:', error);
     return [];
