@@ -16,27 +16,35 @@ export type DateRangeContextType = {
   setDateRange: (range: DateRange | undefined) => void;
 };
 
-export const DateRangeContext = createContext<DateRangeContextType | undefined>(undefined);
+export const DateRangeContext = createContext<DateRangeContextType | undefined>(
+  undefined,
+);
 
 export type AdminDashboardPageLayoutClientProps = {
   user: User;
   children: React.ReactNode;
-  dashboardData?: {
-    totalBookings: number;
-    newBookings: number;
-    bookingsPerDay: Record<string, number>;
-    totalClients: number;
-    newClients: number;
-    totalProfessionals: number;
-    newProfessionals: number;
-    totalChats: number;
-    newChats: number;
-    totalSupportRequests: number;
-    newSupportRequests: number;
-  } | undefined;
+  dashboardData?:
+    | {
+        totalBookings: number;
+        newBookings: number;
+        bookingsPerDay: Record<string, number>;
+        totalClients: number;
+        newClients: number;
+        totalProfessionals: number;
+        newProfessionals: number;
+        totalChats: number;
+        newChats: number;
+        totalSupportRequests: number;
+        newSupportRequests: number;
+      }
+    | undefined;
 };
 
-export function AdminDashboardPageLayoutClient({ user, children, dashboardData }: AdminDashboardPageLayoutClientProps) {
+export function AdminDashboardPageLayoutClient({
+  user,
+  children,
+  dashboardData,
+}: AdminDashboardPageLayoutClientProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { start, end, setDateRange } = useDateRange();
@@ -70,6 +78,7 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
     if (path.includes('/admin/messages')) return 'messages';
     if (path.includes('/admin/admins')) return 'admins';
     if (path.includes('/admin/legal')) return 'legal';
+    if (path.includes('/admin/analytics')) return 'analytics';
     return 'overview';
   };
 
@@ -77,32 +86,82 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
 
   // Helper to create tab URLs with preserved query params
   const createTabUrl = (basePath: string): string => {
-  if (!searchParams) return basePath;
-  const params = searchParams.toString();
-  return params ? `${basePath}?${params}` : basePath;
+    if (!searchParams) return basePath;
+    const params = searchParams.toString();
+    return params ? `${basePath}?${params}` : basePath;
   };
 
-  const tabs: TabItem[] = useMemo(() => [
-    { key: 'overview', label: 'Overview', href: createTabUrl('/admin'), isActive: activeTab === 'overview' },
-    { key: 'appointments', label: 'Appointments', href: createTabUrl('/admin/appointments'), isActive: activeTab === 'appointments' },
-    { key: 'clients', label: 'Clients', href: createTabUrl('/admin/clients'), isActive: activeTab === 'clients' },
-    { key: 'professionals', label: 'Professionals', href: createTabUrl('/admin/professionals'), isActive: activeTab === 'professionals' },
-    { key: 'admins', label: 'Admins', href: createTabUrl('/admin/admins'), isActive: activeTab === 'admins' },
-    { key: 'support-requests', label: 'Support Requests', href: createTabUrl('/admin/support-requests'), isActive: activeTab === 'support-requests' },
-    { key: 'messages', label: 'Messages', href: createTabUrl('/admin/messages'), isActive: activeTab === 'messages' },
-    { key: 'legal', label: 'Legal', href: createTabUrl('/admin/legal'), isActive: activeTab === 'legal' },
-  ], [activeTab, searchParams]);
+  const tabs: TabItem[] = useMemo(
+    () => [
+      {
+        key: 'overview',
+        label: 'Overview',
+        href: createTabUrl('/admin'),
+        isActive: activeTab === 'overview',
+      },
+      {
+        key: 'appointments',
+        label: 'Appointments',
+        href: createTabUrl('/admin/appointments'),
+        isActive: activeTab === 'appointments',
+      },
+      {
+        key: 'clients',
+        label: 'Clients',
+        href: createTabUrl('/admin/clients'),
+        isActive: activeTab === 'clients',
+      },
+      {
+        key: 'professionals',
+        label: 'Professionals',
+        href: createTabUrl('/admin/professionals'),
+        isActive: activeTab === 'professionals',
+      },
+      {
+        key: 'admins',
+        label: 'Admins',
+        href: createTabUrl('/admin/admins'),
+        isActive: activeTab === 'admins',
+      },
+      {
+        key: 'support-requests',
+        label: 'Support Requests',
+        href: createTabUrl('/admin/support-requests'),
+        isActive: activeTab === 'support-requests',
+      },
+      {
+        key: 'messages',
+        label: 'Messages',
+        href: createTabUrl('/admin/messages'),
+        isActive: activeTab === 'messages',
+      },
+      {
+        key: 'legal',
+        label: 'Legal',
+        href: createTabUrl('/admin/legal'),
+        isActive: activeTab === 'legal',
+      },
+      {
+        key: 'analytics',
+        label: 'Analytics',
+        href: createTabUrl('/admin/analytics'),
+        isActive: activeTab === 'analytics',
+      },
+    ],
+    [activeTab, searchParams],
+  );
 
-  const displayName = [user.user_metadata?.first_name, user.user_metadata?.last_name]
-    .filter(Boolean)
-    .join(' ') || user.email;
+  const displayName =
+    [user.user_metadata?.first_name, user.user_metadata?.last_name]
+      .filter(Boolean)
+      .join(' ') || user.email;
 
   // Helper to update URL params on date range change
   function handleDateRangeChange(range: DateRange | undefined) {
     if (range?.from || range?.to) {
       setDateRange(
         range?.from ? formatDateLocalYYYYMMDD(range.from) : undefined,
-        range?.to ? formatDateLocalYYYYMMDD(range.to) : undefined
+        range?.to ? formatDateLocalYYYYMMDD(range.to) : undefined,
       );
     } else {
       setDateRange(undefined, undefined);
@@ -111,7 +170,7 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
   }
 
   // Propagate dashboardData to children if they are valid React elements
-  const childrenWithDashboardData = React.Children.map(children, child => {
+  const childrenWithDashboardData = React.Children.map(children, (child) => {
     if (
       React.isValidElement(child) &&
       typeof child.type === 'function' &&
@@ -119,11 +178,13 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
     ) {
       return React.cloneElement(
         child as React.ReactElement<{ dashboardData?: typeof dashboardData }>,
-        { dashboardData }
+        { dashboardData },
       );
     }
     return child;
   });
+
+  const showDateRangePicker = activeTab !== 'analytics';
 
   return (
     <div className="w-full mx-auto space-y-4 lg:space-y-6">
@@ -144,14 +205,15 @@ export function AdminDashboardPageLayoutClient({ user, children, dashboardData }
       {/* Tab navigation and date picker row */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 mb-4 lg:mb-6">
         <div className="overflow-x-auto flex-1 min-w-0">
-          <TabNavigation
-            tabs={tabs}
-            variant="link"
-            className="min-w-max"
-          />
+          <TabNavigation tabs={tabs} variant="link" className="min-w-max" />
         </div>
         <div className="w-full md:w-auto md:ml-4 flex-shrink-0">
-          <DateRangePicker dateRange={dateRange} onDateRangeChange={handleDateRangeChange} />
+          {showDateRangePicker && (
+            <DateRangePicker
+              dateRange={dateRange}
+              onDateRangeChange={handleDateRangeChange}
+            />
+          )}
         </div>
       </div>
       {/* Main content */}

@@ -20,7 +20,9 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     posthog.init(posthogKey, {
       api_host: '/ingest',
       ui_host: 'https://us.posthog.com',
-      defaults: '2025-05-24',
+      person_profiles: 'always', // Essential for tracking unique visitors
+      capture_pageview: true, // Enable automatic pageview with UTM capture
+      capture_pageleave: true, // Track when users leave pages
       capture_exceptions: true,
       debug: process.env.NODE_ENV === 'development',
     });

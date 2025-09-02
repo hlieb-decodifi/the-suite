@@ -22,21 +22,23 @@ export const metadata: Metadata = {
   description: 'Premium services at your fingertips',
 };
 
-const RootLayout = ({ children }: { children: React.ReactNode }) => (
-  <html lang="en" suppressHydrationWarning>
-    <body
-      className={cn(
-        'min-h-screen bg-background font-sans antialiased',
-        titillium.variable,
-        inter.variable,
-      )}
-    >
-      <Providers>
-        <RootLayoutTemplate>{children}</RootLayoutTemplate>
-        <Toaster />
-      </Providers>
-    </body>
-  </html>
-);
+const RootLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={cn(
+          'min-h-screen bg-background font-sans antialiased',
+          titillium.variable,
+          inter.variable,
+        )}
+      >
+        <Providers>
+          <RootLayoutTemplate>{children}</RootLayoutTemplate>
+          <Toaster />
+        </Providers>
+      </body>
+    </html>
+  );
+};
 
 export default RootLayout;
