@@ -7,7 +7,7 @@ export const serviceSchema = z.object({
       required_error: 'Price is required',
       invalid_type_error: 'Price must be a number',
     })
-    .positive('Price must be a positive number'),
+    .min(1, 'Price must be at least $1'),
   durationHours: z.coerce
     .number({
       invalid_type_error: 'Hours must be a whole number',
