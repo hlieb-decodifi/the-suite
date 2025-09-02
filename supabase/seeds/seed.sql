@@ -55,28 +55,12 @@ INSERT INTO public.email_templates (
 ) VALUES
 -- Booking related templates
 (
-  'Booking Cancellation - Professional Notification',
-  'Email sent to professionals when a booking is cancelled',
-  'BookingCancellationProfessional',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
   'Booking Cancellation -  Within Accepted Time Period - Professional',
   'Email sent to professionals when a booking is cancelled with accepted time period',
   'BookingCancellationWithinAcceptedTimePeriodProfessional',
   32,
   '[]'::jsonb,
   true
-),
-(
-  'Booking Cancellation - Client Notification',
-  'Email sent to clients when a booking is cancelled',
-  'BookingCancellationClient',
-  0,
-  '[]'::jsonb,
-  false
 ),
 (
   'Booking Cancellation -  Within Accepted Time Period - Client',
@@ -119,101 +103,6 @@ INSERT INTO public.email_templates (
   true
 ),
 
--- Payment related templates
-(
-  'Payment Confirmation - Client',
-  'Email sent to clients when a payment is processed',
-  'PaymentConfirmationClient',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
-  'Payment Confirmation - Professional',
-  'Email sent to professionals when a payment is received',
-  'PaymentConfirmationProfessional',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
-  'Balance Payment Notification',
-  'Email sent to remind about outstanding balance payment',
-  'BalanceNotification',
-  0,
-  '[]'::jsonb,
-  false
-),
-
--- Refund related templates
-(
-  'Refund Request - Professional',
-  'Email sent to professionals when a refund is requested',
-  'RefundRequestProfessional',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
-  'Refund Completion - Client',
-  'Email sent to clients when a refund is processed',
-  'RefundCompletionClient',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
-  'Refund Completion - Professional',
-  'Email sent to professionals when a refund is processed',
-  'RefundCompletionProfessional',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
-  'Refund Decline - Client',
-  'Email sent to clients when a refund is declined',
-  'RefundDeclineClient',
-  0,
-  '[]'::jsonb,
-  false
-),
-(
-  'Refund Decline - Professional',
-  'Email sent to professionals when a refund is declined',
-  'RefundDeclineProfessional',
-  0,
-  '[]'::jsonb,
-  false
-),
-
--- Review related templates
-(
-  'Review & Tip Notification',
-  'Email sent to request review and optional tip',
-  'ReviewTipNotification',
-  0,
-  '[]'::jsonb,
-  false
-),
-
--- Contact related templates
-(
-  'Contact Inquiry - Admin Notification',
-  'Email sent to admin when contact form is submitted',
-  'ContactInquiryAdmin',
-  40,
-  '[]'::jsonb,
-  true
-),
-(
-  'Contact Inquiry - Confirmation',
-  'Email sent to confirm contact form submission',
-  'ContactInquiryConfirmation',
-  39,
-  '[]'::jsonb,
-  true
-),
 
 -- Policy related templates
 (
@@ -250,6 +139,26 @@ INSERT INTO public.email_templates (
   '[]'::jsonb,
   false
 ),
+
+
+-- Contact related templates
+(
+  'Contact Inquiry - Admin Notification',
+  'Email sent to admin when contact form is submitted',
+  'ContactInquiryAdmin',
+  40,
+  '[]'::jsonb,
+  true
+),
+(
+  'Contact Inquiry - Confirmation',
+  'Email sent to confirm contact form submission',
+  'ContactInquiryConfirmation',
+  39,
+  '[]'::jsonb,
+  true
+),
+
 
 -- Support Request related templates
 (
