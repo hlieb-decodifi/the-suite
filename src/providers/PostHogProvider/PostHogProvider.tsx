@@ -21,8 +21,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       api_host:
         process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
       person_profiles: 'always',
-      capture_pageview: false, // Disable automatic pageview capture, we'll do it manually
-      capture_pageleave: true, // Capture when user leaves the page
+      defaults: '2025-05-24',
     });
   }, []);
 
