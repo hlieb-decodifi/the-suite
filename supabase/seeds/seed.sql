@@ -129,7 +129,7 @@ INSERT INTO public.email_templates (
   'BookingCancellationNoShowClient',
   33,
   '[]'::jsonb,
-  false
+  true
 ),
 (
   'Booking Cancellation - No Show - Professional',
@@ -137,7 +137,7 @@ INSERT INTO public.email_templates (
   'BookingCancellationNoShowProfessional',
   34,
   '[]'::jsonb,
-  false
+  true
 ),
 
 

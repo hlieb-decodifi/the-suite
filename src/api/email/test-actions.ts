@@ -13,10 +13,7 @@ import {
   sendAppointmentCompletion2hafterClient,
   sendAppointmentCompletion2hafterProfessional,
   sendBalanceNotification,
-  sendRefundRequestProfessional,
-  sendRefundCompletionClient,
-  sendRefundCompletionProfessional,
-  sendRefundDeclineClient,
+
   sendReviewTipNotification,
   sendContactInquiryAdmin,
   sendContactInquiryConfirmation,
@@ -74,10 +71,7 @@ const emailFunctionMap = {
   'AppointmentCompletion2hafterClient': sendAppointmentCompletion2hafterClient,
   'AppointmentCompletion2hafterProfessional': sendAppointmentCompletion2hafterProfessional,
   'BalanceNotification': sendBalanceNotification,
-  'RefundRequestProfessional': sendRefundRequestProfessional,
-  'RefundCompletionClient': sendRefundCompletionClient,
-  'RefundCompletionProfessional': sendRefundCompletionProfessional,
-  'RefundDeclineClient': sendRefundDeclineClient,
+
   'ReviewTipNotification': sendReviewTipNotification,
   'ContactInquiryAdmin': sendContactInquiryAdmin,
   'ContactInquiryConfirmation': sendContactInquiryConfirmation,

@@ -1,7 +1,9 @@
 export const EMAIL_TEMPLATE_TAGS = {
   // Booking related
+  // Delete below
   BOOKING_CANCELLATION_CLIENT: 'BookingCancellationClient',
   BOOKING_CANCELLATION_PROFESSIONAL: 'BookingCancellationProfessional',
+  
   BOOKING_CANCELLATION_WITHIN_ACCEPTED_TIME_PERIOD_PROFESSIONAL: 'BookingCancellationWithinAcceptedTimePeriodProfessional',
   BOOKING_CANCELLATION_WITHIN_ACCEPTED_TIME_PERIOD_CLIENT: 'BookingCancellationWithinAcceptedTimePeriodClient',
   BOOKING_CONFIRMATION_CLIENT: 'BookingConfirmationClient',
@@ -10,17 +12,13 @@ export const EMAIL_TEMPLATE_TAGS = {
   APPOINTMENT_COMPLETION_2H_AFTER_PROFESSIONAL: 'AppointmentCompletion2hafterProfessional',
 
   // Payment related
+  // Delete below
   PAYMENT_CONFIRMATION_CLIENT: 'PaymentConfirmationClient',
   PAYMENT_CONFIRMATION_PROFESSIONAL: 'PaymentConfirmationProfessional',
   BALANCE_NOTIFICATION: 'BalanceNotification',
   
-  // Refund related
-  REFUND_REQUEST_PROFESSIONAL: 'RefundRequestProfessional',
-  REFUND_COMPLETION_CLIENT: 'RefundCompletionClient',
-  REFUND_COMPLETION_PROFESSIONAL: 'RefundCompletionProfessional',
-  REFUND_DECLINE_CLIENT: 'RefundDeclineClient',
-  
   // Review related
+  // Delete below
   REVIEW_TIP_NOTIFICATION: 'ReviewTipNotification',
   
   // Contact related

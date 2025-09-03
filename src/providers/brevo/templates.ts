@@ -15,10 +15,7 @@ import {
   AppointmentCompletion2hafterClientParams,
   AppointmentCompletion2hafterProfessionalParams,
   BalanceNotificationParams,
-  RefundRequestProfessionalParams,
-  RefundCompletionClientParams,
-  RefundCompletionProfessionalParams,
-  RefundDeclineClientParams,
+
   ReviewTipNotificationParams,
   ContactInquiryAdminParams,
   ContactInquiryConfirmationParams,
@@ -212,34 +209,7 @@ export async function sendBalanceNotification(
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BALANCE_NOTIFICATION, to, params);
 }
 
-// Refund Related
-export async function sendRefundRequestProfessional(
-  to: EmailRecipient[],
-  params: RefundRequestProfessionalParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.REFUND_REQUEST_PROFESSIONAL, to, params);
-}
-
-export async function sendRefundCompletionClient(
-  to: EmailRecipient[],
-  params: RefundCompletionClientParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.REFUND_COMPLETION_CLIENT, to, params);
-}
-
-export async function sendRefundCompletionProfessional(
-  to: EmailRecipient[],
-  params: RefundCompletionProfessionalParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.REFUND_COMPLETION_PROFESSIONAL, to, params);
-}
-
-export async function sendRefundDeclineClient(
-  to: EmailRecipient[],
-  params: RefundDeclineClientParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.REFUND_DECLINE_CLIENT, to, params);
-}
+// Refund Related functions have been removed as they are not implemented
 
 // Review Related
 export async function sendReviewTipNotification(
