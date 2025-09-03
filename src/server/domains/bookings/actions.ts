@@ -76,6 +76,7 @@ type ProfessionalProfile = {
 type BookingService = {
   id: string;
   price: number;
+  duration: number;
   services?: {
     name: string;
   };
@@ -627,18 +628,7 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
     hour12: true
   });
 
-  // Build professional address string
-  let professionalAddress = '';
-  if (booking.professional_profiles.address) {
-    const addr = booking.professional_profiles.address;
-    professionalAddress = [
-      addr.street_address,
-      addr.apartment,
-      addr.city,
-      addr.state,
-      addr.country
-    ].filter(Boolean).join(', ');
-  }
+  // Address not needed for these email templates
 
   const dateTime = `${appointmentDate} ${appointmentTime}`;
 
@@ -661,20 +651,32 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
   // Get timezones
   const professionalTimezone = (booking.professional_profiles as any)?.timezone;
 
-  const baseParams = {
-    address: professionalAddress,
+  // Create services array from booking services
+  const services = booking.booking_services.map(bs => ({
+    duration: bs.duration,
+    name: bs.services?.name || 'Unknown Service',
+    price: bs.price
+  }));
+
+  const clientParams = {
+    booking_id: booking.id,
+    cancellation_reason: cancellationReason,
+    client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+    date_time: dateTime,
+    professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    services_page_url: `${process.env.NEXT_PUBLIC_BASE_URL}/services`,
+    timezone: ianaToAbbreviation(professionalTimezone),
+    services
+  };
+
+  const professionalParams = {
     booking_id: booking.id,
     cancellation_reason: cancellationReason,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: dateTime,
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     timezone: ianaToAbbreviation(professionalTimezone),
-    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
-    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-    support_email: process.env.BREVO_ADMIN_EMAIL!,
-    appointment_id: appointment.id,
-    date: appointmentDate,
-    time: appointmentTime
+    services
   };
 
   // Send cancellation emails to both client and professional using new functions
@@ -684,14 +686,14 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
         email: clientAuth.user?.email || '',
         name: `${clientUser.first_name} ${clientUser.last_name}`
       }],
-      baseParams
+      clientParams
     ),
     sendBookingCancellationWithinAcceptedTimePeriodProfessional(
       [{
         email: professionalAuth.user?.email || '',
         name: `${professionalUser.first_name} ${professionalUser.last_name}`
       }],
-      baseParams
+      professionalParams
     )
   ]);
 }
@@ -1381,57 +1383,43 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
   const professionalTimezone = (booking.professional_profiles as any)?.timezone;
   const clientTimezone = (booking.clients as any)?.client_profiles?.[0]?.timezone || (booking.clients as any)?.client_profiles?.timezone;
 
-  // Build professional address string
-  let professionalAddress = '';
-  const profProfile = booking.professional_profiles as any;
-  if (profProfile.address) {
-    const addr = profProfile.address;
-    professionalAddress = [
-      addr.street_address,
-      addr.apartment,
-      addr.city,
-      addr.state,
-      addr.country
-    ].filter(Boolean).join(', ');
-  }
+  // Address not needed for no-show email templates
 
   const dateTime = `${appointmentDate} ${appointmentTime}`;
   const serviceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
   // No-show emails use the professional's 24hr cancellation percentage
   const policyRate = `${(booking.professional_profiles as any)?.cancellation_24h_charge_percentage || 0}%`;
+  
+  // Create services array from booking services
+  const services = booking.booking_services.map(bs => ({
+    duration: bs.duration,
+    name: bs.services?.name || 'Unknown Service',
+    price: bs.price
+  }));
+
   const clientParams = {
-    address: professionalAddress,
     booking_id: booking.id,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: dateTime,
-    fee: chargeAmount.toFixed(2),
+    fee: chargeAmount,
+    message_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`,
     policy_rate: policyRate,
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     service_amount: serviceAmount,
+    services_page_url: `${process.env.NEXT_PUBLIC_BASE_URL}/services`,
     timezone: ianaToAbbreviation(clientTimezone),
-    appointment_id: appointment.id,
-    date: appointmentDate,
-    time: appointmentTime,
-    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
-    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-    support_email: process.env.BREVO_ADMIN_EMAIL!
+    services
   };
   const professionalParams = {
-    address: professionalAddress,
     booking_id: booking.id,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: dateTime,
-    fee: chargeAmount.toFixed(2),
+    fee: chargeAmount,
     policy_rate: policyRate,
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     service_amount: serviceAmount,
     timezone: ianaToAbbreviation(professionalTimezone),
-    appointment_id: appointment.id,
-    date: appointmentDate,
-    time: appointmentTime,
-    appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}`,
-    website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-    support_email: process.env.BREVO_ADMIN_EMAIL!
+    services
   };
 
   await Promise.all([
@@ -1531,17 +1519,25 @@ async function sendCancellationPolicyEmails(
   const professionalTimezone = (professionalProfile as any)?.timezone;
   const clientTimezone = (clientUser as any)?.client_profiles?.[0]?.timezone || (clientUser as any)?.client_profiles?.timezone;
 
+  // Create services array from booking services
+  const services = booking.booking_services.map(bs => ({
+    duration: bs.duration,
+    name: bs.services?.name || 'Unknown Service',
+    price: bs.price
+  }));
+
   const clientParams = {
     address: professionalAddress,
     cancellation_reason: reason,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: `${appointmentDate} ${appointmentTime}`,
-    fee: chargeAmount.toFixed(2),
+    fee: chargeAmount,
     policy_rate: `${chargePercentage}%`,
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     service_amount: serviceAmount,
     time_until_appointment: timeDescription,
     timezone: ianaToAbbreviation(clientTimezone),
+    services,
     ...baseParams
   };
   const professionalParams = {
@@ -1549,12 +1545,13 @@ async function sendCancellationPolicyEmails(
     cancellation_reason: reason,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: `${appointmentDate} ${appointmentTime}`,
-    fee: chargeAmount.toFixed(2),
+    fee: chargeAmount,
     policy_rate: `${chargePercentage}%`,
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     service_amount: serviceAmount,
     time_until_appointment: timeDescription,
     timezone: ianaToAbbreviation(professionalTimezone),
+    services,
     ...baseParams
   };
 
@@ -1586,9 +1583,8 @@ export async function sendAppointmentCompletedEmails(
   const professionalUser = professionalProfile?.users;
   const clientUser = booking.clients;
 
-  // Get timezone and address safely
+  // Get timezone safely
   const professionalTimezone = professionalProfile?.timezone;
-  const professionalAddress = getProfessionalAddress(professionalProfile);
   const clientProfiles = clientUser?.client_profiles as Array<{ timezone?: string }> | undefined;
   const clientTimezone = clientProfiles && Array.isArray(clientProfiles)
     ? clientProfiles[0]?.timezone
@@ -1598,22 +1594,27 @@ export async function sendAppointmentCompletedEmails(
   const serviceAmount = getServiceAmount(booking);
   const totalPaid = booking.booking_payments?.[0]?.amount || 0;
   const paymentMethod = booking.booking_payments?.[0]?.payment_methods?.name || '';
-  const baseParams = getBaseAppointmentParams(appointment);
+
+  // Create services array from booking services
+  const services = booking.booking_services?.map(bs => ({
+    duration: bs.duration,
+    name: bs.services?.name || 'Unknown Service',
+    price: bs.price
+  })) || [];
 
   const clientParams: AppointmentCompletion2hafterClientParams = {
-    address: professionalAddress,
     booking_id: booking.id,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: dateTime,
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+    review_tip_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.id}?showReviewPrompt=true`,
     service_amount: serviceAmount,
     timezone: getTimezoneAbbreviation(clientTimezone),
     total_paid: totalPaid,
-    ...baseParams
+    services
   };
 
   const professionalParams: AppointmentCompletion2hafterProfessionalParams = {
-    address: professionalAddress,
     booking_id: booking.id,
     client_name: `${clientUser.first_name} ${clientUser.last_name}`,
     date_time: dateTime,
@@ -1622,7 +1623,7 @@ export async function sendAppointmentCompletedEmails(
     service_amount: serviceAmount,
     timezone: getTimezoneAbbreviation(professionalTimezone),
     total_amount: totalPaid,
-    ...baseParams
+    services
   };
 
   await Promise.all([
@@ -1639,6 +1640,7 @@ export async function sendAppointmentCompletedEmails(
 
 // --- Shared utility functions for email param construction ---
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getProfessionalAddress(profile: ProfessionalProfile | { address?: ProfessionalProfile["address"] }): string {
   if (!profile?.address) return '';
   const addr = profile.address;
@@ -1684,6 +1686,7 @@ function getRecipient(user: { email: string; first_name: string; last_name: stri
   return { email: user.email, name: `${user.first_name} ${user.last_name}` };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getBaseAppointmentParams(
   appointment: AppointmentBase | AppointmentQueryResult
 ): {

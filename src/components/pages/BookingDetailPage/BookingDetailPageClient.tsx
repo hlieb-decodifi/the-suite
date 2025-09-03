@@ -1,8 +1,13 @@
 'use client';
 
 import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
+import { TipSection } from '@/app/bookings/[id]/balance/TipSection';
 import { LeafletMap } from '@/components/common/LeafletMap';
-import { AddAdditionalServicesModal, NoShowModal } from '@/components/modals';
+import {
+  AddAdditionalServicesModal,
+  NoShowModal,
+  ReviewPromptModal,
+} from '@/components/modals';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
 import { SupportRequestModal } from '@/components/modals/SupportRequestModal/SupportRequestModal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -67,6 +72,7 @@ export type BookingDetailPageClientProps = {
       createdAt: string;
     } | null;
   } | null;
+  showReviewPrompt?: boolean;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -121,6 +127,7 @@ export function BookingDetailPageClient({
   isAdmin = false,
   existingSupportRequest = null,
   reviewStatus = null,
+  showReviewPrompt = false,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -130,6 +137,8 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
+  const [isReviewPromptModalOpen, setIsReviewPromptModalOpen] =
+    useState(showReviewPrompt);
   const [userTimezone, setUserTimezone] = useState<string>('UTC');
 
   const router = useRouter();
@@ -1341,13 +1350,37 @@ export function BookingDetailPageClient({
                       )}
                   </Typography>
                 </div>
+
+                {/* Tip Section - Show for completed appointments */}
+                {appointmentData.computed_status === 'completed' && (
+                  <>
+                    <Separator />
+                    <div>
+                      <Typography className="font-medium text-foreground mb-4">
+                        Tip
+                      </Typography>
+                      <TipSection
+                        bookingId={appointment.booking_id}
+                        professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                        currentTipAmount={
+                          appointment.bookings.booking_payments?.tip_amount || 0
+                        }
+                        serviceAmount={appointment.bookings.booking_services.reduce(
+                          (sum, service) => sum + service.price,
+                          0,
+                        )}
+                        isClient={isClient}
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
 
           {/* Review Section - Show for completed appointments when user is client or admin */}
           {appointmentData.computed_status === 'completed' && reviewStatus && (
-            <Card className="shadow-sm">
+            <Card className="shadow-sm" id="review-section">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
                   <Star className="h-5 w-5 text-muted-foreground" />
@@ -1459,6 +1492,21 @@ export function BookingDetailPageClient({
         )}
         onSuccess={handleNoShowSuccess}
       />
+
+      {/* Review Prompt Modal */}
+      {isClient &&
+        appointmentData.computed_status === 'completed' &&
+        !reviewStatus?.hasReview && (
+          <ReviewPromptModal
+            isOpen={isReviewPromptModalOpen}
+            onClose={() => setIsReviewPromptModalOpen(false)}
+            professionalName={getOtherPartyName()}
+            serviceName={
+              appointment.bookings.booking_services[0]?.services?.name ||
+              'Service'
+            }
+          />
+        )}
     </div>
   );
 }

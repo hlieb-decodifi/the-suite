@@ -54,10 +54,7 @@ export async function GET() {
 
         // Calculate payment amounts (already in dollars from DB)
         const totalAmount = appointment.total_amount;
-  // const depositPaid = appointment.deposit_amount; // removed unused variable
-  // const balanceAmount = appointment.balance_amount; // removed unused variable
-  // const currentTip = appointment.tip_amount || 0; // removed unused variable
-  // const totalDue = balanceAmount + currentTip; // removed unused variable
+        const serviceAmount = totalAmount - appointment.tip_amount - appointment.service_fee;
 
         // Create recipient object
         const recipient: EmailRecipient = {
@@ -65,40 +62,32 @@ export async function GET() {
           name: appointment.client_name
         };
 
+        // Create review/tip URL for client - using appointment ID from the database
+        const reviewTipUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.appointment_id}?showReviewPrompt=true`;
+
         // Send appointment completion emails to both client and professional
         const appointmentCompletionClientParams = {
-          address: appointment.professional_address || '',
           booking_id: appointment.booking_id,
           client_name: appointment.client_name,
           date_time: `${appointmentDate} ${appointmentTime}`,
           professional_name: appointment.professional_name,
-          service_amount: totalAmount,
+          review_tip_url: reviewTipUrl,
+          service_amount: serviceAmount,
           timezone: appointment.professional_timezone || '',
           total_paid: totalAmount,
-          appointment_id: appointment.booking_id,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-          date: appointmentDate,
-          time: appointmentTime,
-          website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-          support_email: process.env.SUPPORT_EMAIL || ''
+          services: appointment.services || []
         };
 
         const appointmentCompletionProfessionalParams = {
-          address: appointment.professional_address || '',
           booking_id: appointment.booking_id,
           client_name: appointment.client_name,
           date_time: `${appointmentDate} ${appointmentTime}`,
           payment_method: appointment.payment_method_name || '',
           professional_name: appointment.professional_name,
-          service_amount: totalAmount,
+          service_amount: serviceAmount,
           timezone: appointment.professional_timezone || '',
-          total_amount: totalAmount,
-          appointment_id: appointment.booking_id,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-          date: appointmentDate,
-          time: appointmentTime,
-          website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-          support_email: process.env.SUPPORT_EMAIL || ''
+          total_amount: serviceAmount + appointment.tip_amount, // Professional gets services + tips (no service fee)
+          services: appointment.services || []
         };
 
         await Promise.all([

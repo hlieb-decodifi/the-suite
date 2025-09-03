@@ -794,6 +794,7 @@ export async function markPaymentCaptured(
  * Get appointments needing balance notifications (includes both card and cash payments)
  */
 export async function getAppointmentsNeedingBalanceNotification(limit: number = 50): Promise<{
+  appointment_id: string;
   booking_id: string;
   client_email: string;
   client_name: string;
@@ -809,6 +810,11 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   tip_amount: number;
   payment_method_name: string;
   is_cash_payment: boolean;
+  services: {
+    duration: number;
+    name: string;
+    price: number;
+  }[];
 }[]> {
   const supabase = createSupabaseAdminClient();
   
@@ -821,7 +827,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     // First get completed appointments
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
-      .select('booking_id, start_time, end_time')
+      .select('id, booking_id, start_time, end_time')
       .eq('status', 'completed')
       .limit(limit);
 
@@ -895,7 +901,18 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
       .select(`
         id,
         client_id,
-        professional_profile_id
+        professional_profile_id,
+        booking_services(
+          id,
+          service_id,
+          price,
+          duration,
+          services(
+            id,
+            name,
+            description
+          )
+        )
       `)
       .in('id', finalBookingIds);
 
@@ -968,7 +985,19 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         const professionalTimezone = professionalProfile.timezone || '';
         const professionalTimezoneAbbr = ianaToAbbreviation(professionalTimezone);
 
+        // Format services data for email templates
+        const services = (booking.booking_services || []).map((bs: { 
+          duration: number; 
+          services?: { name?: string }; 
+          price: number; 
+        }) => ({
+          duration: bs.duration,
+          name: bs.services?.name || 'Unknown Service',
+          price: bs.price
+        }));
+
         return {
+          appointment_id: appointment.id,
           booking_id: payment.booking_id,
           client_email: clientAuth?.email || '',
           client_name: `${clientUser.first_name} ${clientUser.last_name}`,
@@ -978,13 +1007,14 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
           professional_address: professionalAddress,
           professional_timezone: professionalTimezoneAbbr,
           start_time: appointment.start_time,
-          total_amount: payment.amount,
+          total_amount: payment.amount + (payment.tip_amount || 0) + payment.service_fee,
           service_fee: payment.service_fee,
           deposit_amount: payment.deposit_amount,
           balance_amount: payment.balance_amount,
           tip_amount: payment.tip_amount || 0,
           payment_method_name: paymentMethod.name,
-          is_cash_payment: !paymentMethod.is_online
+          is_cash_payment: !paymentMethod.is_online,
+          services: services
         };
       });
   } catch (error) {

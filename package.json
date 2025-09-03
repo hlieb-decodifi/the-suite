@@ -29,7 +29,8 @@
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
-    "test:codegen": "playwright codegen"
+    "test:codegen": "playwright codegen",
+    "cron:balance-notifications": "curl http://localhost:3000/api/cron/balance-notifications"
   },
   "dependencies": {
     "@getbrevo/brevo": "^2.5.0",
