@@ -235,25 +235,33 @@ export function convertTimeToClientTimezone(
   targetDate: Date = new Date()
 ): { time: string; dayOffset: number } {
   try {
-    // Create a date object for the time in the professional's timezone
+    // Create a base date in the professional's timezone for the target date
     const baseDate = new Date(targetDate);
     baseDate.setHours(0, 0, 0, 0);
     
+    // Parse the time components
     const timeParts = timeString.split(':');
     const hours = parseInt(timeParts[0] || '0', 10);
     const minutes = parseInt(timeParts[1] || '0', 10);
-    baseDate.setHours(hours, minutes, 0, 0);
     
-    // Convert to professional's timezone first (this gives us the actual moment in time)
-    const timeInProfTz = fromZonedTime(baseDate, professionalTimezone);
+    // Create the professional's local time on their date
+    const professionalLocalTime = new Date(baseDate);
+    professionalLocalTime.setHours(hours, minutes, 0, 0);
     
-    // Convert to client's timezone
-    const timeInClientTz = toZonedTime(timeInProfTz, clientTimezone);
+    // Convert the professional's local time to UTC
+    const timeInUTC = fromZonedTime(professionalLocalTime, professionalTimezone);
     
-    // Calculate day offset (how many days the time shifted)
-    const originalDay = baseDate.getDate();
-    const convertedDay = timeInClientTz.getDate();
-    const dayOffset = convertedDay - originalDay;
+    // Convert from UTC to client's timezone
+    const timeInClientTz = toZonedTime(timeInUTC, clientTimezone);
+    
+    // Calculate day offset by comparing dates properly
+    const professionalDate = new Date(targetDate);
+    professionalDate.setHours(0, 0, 0, 0);
+    
+    const clientDate = new Date(timeInClientTz);
+    clientDate.setHours(0, 0, 0, 0);
+    
+    const dayOffset = Math.round((clientDate.getTime() - professionalDate.getTime()) / (24 * 60 * 60 * 1000));
     
     return {
       time: format(timeInClientTz, 'HH:mm'),
@@ -392,8 +400,7 @@ export function convertWorkingHoursToClientTimezone(
  */
 export function getAvailableDaysWithTimezoneConversion(
   professionalHours: TimezoneAwareWorkingHours,
-  clientTimezone: string,
-  targetDate: Date = new Date()
+  clientTimezone: string
 ): string[] {
   // If timezones are the same, return enabled days as-is
   if (professionalHours.timezone === clientTimezone) {
@@ -405,27 +412,14 @@ export function getAvailableDaysWithTimezoneConversion(
   const dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const availableDays = new Set<string>();
 
+  // For each enabled working day, find which client days have availability
   professionalHours.hours.forEach(dayHours => {
     if (!dayHours.enabled || !dayHours.startTime || !dayHours.endTime) {
       return;
     }
 
-    // Convert start and end times to detect day shifts
-    const startConversion = convertTimeToClientTimezone(
-      dayHours.startTime,
-      professionalHours.timezone,
-      clientTimezone,
-      targetDate
-    );
-    
-    const endConversion = convertTimeToClientTimezone(
-      dayHours.endTime,
-      professionalHours.timezone,
-      clientTimezone,
-      targetDate
-    );
-
-    // Determine which day(s) this working period covers in the client timezone
+    // Create a test date for this professional working day
+    const today = new Date();
     const originalDayIndex = dayOrder.indexOf(dayHours.day.toLowerCase());
     
     if (originalDayIndex === -1) {
@@ -433,21 +427,42 @@ export function getAvailableDaysWithTimezoneConversion(
       return;
     }
 
-    // Add the day where the working hours start
-    const startDayIndex = (originalDayIndex + startConversion.dayOffset + 7) % 7;
-    const startDayName = dayOrder[startDayIndex];
-    if (startDayName) {
-      availableDays.add(startDayName);
-    }
+    // Find next occurrence of this day to use as reference
+    const daysUntilThisDay = (originalDayIndex - today.getDay() + 7) % 7;
+    const referenceDate = new Date(today);
+    referenceDate.setDate(today.getDate() + daysUntilThisDay);
+    referenceDate.setHours(0, 0, 0, 0);
 
-    // If end time shifted to a different day, add that day too
-    if (endConversion.dayOffset !== startConversion.dayOffset) {
-      const endDayIndex = (originalDayIndex + endConversion.dayOffset + 7) % 7;
-      const endDayName = dayOrder[endDayIndex];
-      if (endDayName) {
-        availableDays.add(endDayName);
+    // Test both start and end times to see what client days they fall on
+    const testStartTime = `${referenceDate.getFullYear()}-${(referenceDate.getMonth() + 1).toString().padStart(2, '0')}-${referenceDate.getDate().toString().padStart(2, '0')}T${dayHours.startTime}:00`;
+    const testEndTime = `${referenceDate.getFullYear()}-${(referenceDate.getMonth() + 1).toString().padStart(2, '0')}-${referenceDate.getDate().toString().padStart(2, '0')}T${dayHours.endTime}:00`;
+
+    try {
+      // Create professional timezone dates
+      const professionalStartTime = fromZonedTime(new Date(testStartTime), professionalHours.timezone);
+      const professionalEndTime = fromZonedTime(new Date(testEndTime), professionalHours.timezone);
+
+      // Convert to client timezone
+      const clientStartTime = toZonedTime(professionalStartTime, clientTimezone);
+      const clientEndTime = toZonedTime(professionalEndTime, clientTimezone);
+
+      // Determine which client days these times fall on
+      const startDayOfWeek = clientStartTime.getDay();
+      const endDayOfWeek = clientEndTime.getDay();
+
+      const startDayName = dayOrder[startDayOfWeek];
+      const endDayName = dayOrder[endDayOfWeek];
+
+      if (startDayName) {
+        availableDays.add(startDayName);
       }
       
+      // If end time is on a different day, add that too
+      if (startDayOfWeek !== endDayOfWeek && endDayName) {
+        availableDays.add(endDayName);
+      }
+    } catch (error) {
+      console.error('Error converting working hours for day:', dayHours.day, error);
     }
   });
 
@@ -473,6 +488,42 @@ export function formatTimeInTimezone(
     return format(timeInTz, 'h:mm a');
   } catch {
     return timeString;
+  }
+}
+
+/**
+ * Format a Date object (like appointment start/end time) in a specific timezone
+ */
+export function formatDateTimeInTimezone(
+  date: Date | string,
+  timezone: string,
+  dateFormat: string = 'EEEE, MMMM d, yyyy',
+  timeFormat: string = 'h:mm a'
+): { date: string; time: string; dateTime: string } {
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (!isValid(dateObj)) {
+      return { 
+        date: 'Invalid Date', 
+        time: 'Invalid Time', 
+        dateTime: 'Invalid DateTime' 
+      };
+    }
+
+    const zonedDate = toZonedTime(dateObj, timezone);
+    
+    return {
+      date: format(zonedDate, dateFormat),
+      time: format(zonedDate, timeFormat),
+      dateTime: format(zonedDate, `${dateFormat} 'at' ${timeFormat}`)
+    };
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error);
+    return { 
+      date: 'Format Error', 
+      time: 'Format Error', 
+      dateTime: 'Format Error' 
+    };
   }
 }
 
