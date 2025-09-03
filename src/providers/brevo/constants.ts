@@ -12,9 +12,6 @@ export const EMAIL_TEMPLATE_TAGS = {
   APPOINTMENT_COMPLETION_2H_AFTER_PROFESSIONAL: 'AppointmentCompletion2hafterProfessional',
 
   // Payment related
-  // Delete below
-  PAYMENT_CONFIRMATION_CLIENT: 'PaymentConfirmationClient',
-  PAYMENT_CONFIRMATION_PROFESSIONAL: 'PaymentConfirmationProfessional',
   BALANCE_NOTIFICATION: 'BalanceNotification',
   
   // Contact related

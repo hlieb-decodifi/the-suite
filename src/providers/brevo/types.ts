@@ -148,23 +148,6 @@ export type AppointmentCompletion2hafterProfessionalParams = {
 }
 
 // Payment Related
-export type PaymentConfirmationClientParams = {
-  client_name: string;
-  professional_name: string;
-  payment_method: string;
-  subtotal: number;
-  tip_amount?: number;
-  total: number;
-} & BaseBookingParams
-
-export type PaymentConfirmationProfessionalParams = {
-  client_name: string;
-  professional_name: string;
-  payment_method: string;
-  subtotal: number;
-  tip_amount?: number;
-  professional_total: number;
-} & BaseBookingParams
 
 export type BalanceNotificationParams = {
   professional_name: string;

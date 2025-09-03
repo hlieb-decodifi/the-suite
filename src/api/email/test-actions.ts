@@ -7,8 +7,7 @@ import {
   sendBookingCancellationWithinAcceptedTimePeriodClient,
   sendBookingConfirmationClient,
   sendBookingConfirmationProfessional,
-  sendPaymentConfirmationClient,
-  sendPaymentConfirmationProfessional,
+
   sendAppointmentCompletion2hafterClient,
   sendAppointmentCompletion2hafterProfessional,
   sendBalanceNotification,
@@ -63,8 +62,7 @@ const emailFunctionMap = {
   'BookingCancellationWithinAcceptedTimePeriodClient': sendBookingCancellationWithinAcceptedTimePeriodClient,
   'BookingConfirmationClient': sendBookingConfirmationClient,
   'BookingConfirmationProfessional': sendBookingConfirmationProfessional,
-  'PaymentConfirmationClient': sendPaymentConfirmationClient,
-  'PaymentConfirmationProfessional': sendPaymentConfirmationProfessional,
+
   'AppointmentCompletion2hafterClient': sendAppointmentCompletion2hafterClient,
   'AppointmentCompletion2hafterProfessional': sendAppointmentCompletion2hafterProfessional,
   'BalanceNotification': sendBalanceNotification,

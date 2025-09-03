@@ -3,10 +3,8 @@ import { Database } from '@/../supabase/types';
 import { 
   sendBookingConfirmationClient,
   sendBookingConfirmationProfessional,
-  sendPaymentConfirmationClient,
-  sendPaymentConfirmationProfessional
+
 } from '@/providers/brevo/templates';
-import { getBookingDetailsForConfirmation } from './db';
 
 // Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
@@ -418,102 +416,4 @@ export async function sendBookingConfirmationEmails(
   }
 }
 
-/**
- * Send payment confirmation emails to both client and professional
- */
-export async function sendPaymentConfirmationEmails(
-  bookingId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Get booking details
-    const { booking, error: bookingError } = await getBookingDetailsForConfirmation(bookingId);
-
-    if (bookingError || !booking) {
-      console.error('Failed to fetch booking data for payment confirmation:', bookingError);
-      return { success: false, error: 'Failed to fetch booking data' };
-    }
-
-    const {
-      clientEmail,
-      clientName,
-      professionalEmail,
-      professionalName,
-      appointmentDate,
-      appointmentTime,
-      totalAmount: subtotal,
-      tipAmount,
-      capturedAmount: totalPaid,
-    } = booking;
-
-    const professionalTotal = subtotal + (tipAmount || 0);
-    let emailsSentSuccessfully = 0;
-
-    // Send client email
-    try {
-      const result = await sendPaymentConfirmationClient(
-        [{ email: clientEmail, name: clientName }],
-        {
-          client_name: clientName,
-          professional_name: professionalName,
-          payment_method: 'Credit Card',
-          subtotal,
-          tip_amount: tipAmount || 0,
-          total: totalPaid,
-          booking_id: bookingId,
-          appointment_id: bookingId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${bookingId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
-        }
-      );
-
-      if (result.success) {
-        emailsSentSuccessfully++;
-        console.log('✅ Client payment confirmation email sent:', result.messageId);
-      } else {
-        console.error('❌ Failed to send client payment confirmation email:', result.error);
-      }
-    } catch (error) {
-      console.error('❌ Error sending client payment confirmation email:', error);
-    }
-
-    // Send professional email
-    try {
-      const result = await sendPaymentConfirmationProfessional(
-        [{ email: professionalEmail, name: professionalName }],
-        {
-          client_name: clientName,
-          professional_name: professionalName,
-          payment_method: 'Credit Card',
-          subtotal,
-          tip_amount: tipAmount || 0,
-          professional_total: professionalTotal,
-          booking_id: bookingId,
-          appointment_id: bookingId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${bookingId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
-        }
-      );
-
-      if (result.success) {
-        emailsSentSuccessfully++;
-        console.log('✅ Professional payment confirmation email sent:', result.messageId);
-      } else {
-        console.error('❌ Failed to send professional payment confirmation email:', result.error);
-      }
-    } catch (error) {
-      console.error('❌ Error sending professional payment confirmation email:', error);
-    }
-
-    return { success: emailsSentSuccessfully > 0 };
-
-  } catch (error) {
-    console.error('❌ Error in sendPaymentConfirmationEmails:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-} 
+// Payment confirmation emails have been removed 

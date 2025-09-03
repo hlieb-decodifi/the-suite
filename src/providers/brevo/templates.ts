@@ -9,8 +9,7 @@ import {
   BookingCancellationWithinAcceptedTimePeriodClientParams,
   BookingConfirmationClientParams,
   BookingConfirmationProfessionalParams,
-  PaymentConfirmationClientParams,
-  PaymentConfirmationProfessionalParams,
+
   AppointmentCompletion2hafterClientParams,
   AppointmentCompletion2hafterProfessionalParams,
   BalanceNotificationParams,
@@ -171,19 +170,6 @@ export async function sendAppointmentCompletion2hafterProfessional(
 }
 
 // Payment Related
-export async function sendPaymentConfirmationClient(
-  to: EmailRecipient[],
-  params: PaymentConfirmationClientParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.PAYMENT_CONFIRMATION_CLIENT, to, params);
-}
-
-export async function sendPaymentConfirmationProfessional(
-  to: EmailRecipient[],
-  params: PaymentConfirmationProfessionalParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.PAYMENT_CONFIRMATION_PROFESSIONAL, to, params);
-}
 
 export async function sendBalanceNotification(
   to: EmailRecipient[],
