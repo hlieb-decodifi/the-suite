@@ -2,7 +2,9 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient } from '@/lib/supabase/server';
-import { convertTimeToClientTimezone, getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
+import { getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { format } from 'date-fns';
 
 /**
  * Calculate the total price for a booking
@@ -61,11 +63,13 @@ async function calculateTotalPrice(
  * 
  * @param formData The booking form data
  * @param professionalProfileId The ID of the professional's profile
+ * @param clientTimezone The client's timezone for proper date conversion
  * @returns Object containing the booking ID and total price
  */
 export async function createBooking(
   formData: BookingFormValues & { dateWithTime: Date },
-  professionalProfileId: string
+  professionalProfileId: string,
+  clientTimezone: string = 'UTC'
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
   
@@ -113,22 +117,26 @@ export async function createBooking(
     // Calculate total duration
     const totalDuration = mainService.duration + extraServiceDurations.reduce((sum, duration) => sum + duration, 0);
 
-    // Convert the local date to UTC
+    // Properly convert appointment time from client timezone to UTC for database storage
     const localDate = new Date(formData.date);
     const [hoursStr, minutesStr] = formData.timeSlot.split(':');
     const hours = parseInt(hoursStr || '0', 10);
     const minutes = parseInt(minutesStr || '0', 10);
     
-    // Create the appointment start time in local timezone
-    const appointmentDate = new Date(localDate);
-    appointmentDate.setHours(hours, minutes, 0, 0);
+    // Create the appointment start time in client's local time
+    const appointmentDateInClientTz = new Date(localDate);
+    appointmentDateInClientTz.setHours(hours, minutes, 0, 0);
 
-    // Convert to UTC
-    const utcDate = new Date(appointmentDate.getTime());
+    // Import timezone utilities for proper conversion
+    const { fromZonedTime } = await import('date-fns-tz');
+    
+    // Convert from client timezone to UTC for database storage
+    const utcDate = fromZonedTime(appointmentDateInClientTz, clientTimezone);
     const utcEndDate = new Date(utcDate.getTime() + (totalDuration * 60 * 1000));
 
     console.log('Appointment times:', {
-      local: appointmentDate.toLocaleString(),
+      clientLocalTime: appointmentDateInClientTz.toLocaleString(),
+      clientTimezone,
       utcStart: utcDate.toISOString(),
       utcEnd: utcEndDate.toISOString(),
       totalDuration
@@ -302,39 +310,105 @@ function isSlotOverlapping(
 }
 
 /**
+ * Generate cross-midnight slots for a specific working day
+ */
+
+type BookingAppointment = {
+  start_time: string;
+  end_time: string;
+  bookings: {
+    professional_profile_id: string;
+    status: string;
+  };
+};
+
+async function generateCrossMidnightSlots(
+  workingHours: { startTime: string; endTime: string },
+  professionalTimezone: string,
+  clientTimezone: string,
+  clientSelectedDate: string,
+  appointments: BookingAppointment[],
+  requiredDurationMinutes: number,
+  dayOffset: number
+): Promise<string[]> {
+  const slots: string[] = [];
+  
+  // Create a date for the professional's working day
+  const professionalWorkingDate = new Date(clientSelectedDate);
+  professionalWorkingDate.setDate(professionalWorkingDate.getDate() + dayOffset);
+  
+  // Generate time slots for this working day
+  const workingStartMinutes = timeToMinutes(workingHours.startTime);
+  const workingEndMinutes = timeToMinutes(workingHours.endTime);
+  
+  for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+
+    // Create slot in professional's timezone for their working day
+    const slotDate = new Date(professionalWorkingDate);
+    slotDate.setHours(hour, minute, 0, 0);
+
+    // Convert slot times to UTC for comparison
+    const slotStartTime = fromZonedTime(slotDate, professionalTimezone);
+    const slotEndTime = fromZonedTime(new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000)), professionalTimezone);
+
+    // Check for overlaps with existing appointments
+    const hasOverlap = (appointments || []).some(appointment => {
+      if (!appointment.start_time || !appointment.end_time) return false;
+      return isSlotOverlapping(
+        slotStartTime.toISOString(),
+        slotEndTime.toISOString(),
+        appointment.start_time,
+        appointment.end_time
+      );
+    });
+
+    if (!hasOverlap) {
+      // Convert the slot to the client's timezone
+      const slotInClientTz = toZonedTime(slotStartTime, clientTimezone);
+      
+      // Check if this slot falls on the client's selected date
+      const slotClientDate = new Date(slotInClientTz);
+      slotClientDate.setHours(0, 0, 0, 0);
+      
+      const clientSelectedDateObj = new Date(clientSelectedDate);
+      clientSelectedDateObj.setHours(0, 0, 0, 0);
+      
+      if (slotClientDate.getTime() === clientSelectedDateObj.getTime()) {
+        // Format the time in client timezone
+        const clientTime = format(slotInClientTz, 'HH:mm');
+        slots.push(clientTime);
+      }
+    }
+  }
+  
+  return slots;
+}
+
+/**
  * Get available time slots for a given date and professional
  */
 export async function getAvailableTimeSlots(
   professionalProfileId: string,
   date: string,
+  requiredDurationMinutes: number = 30,
   professionalTimezone: string = 'UTC',
   clientTimezone: string = 'UTC'
 ): Promise<string[]> {
   const supabase = await createClient();
 
   try {
-    // Create date objects for the start and end of the day in professional's timezone
-    const professionalDate = new Date(date);
-    
-    // Calculate timezone offset between professional's timezone and UTC
-    const professionalOffsetMinutes = -new Date(date).getTimezoneOffset();
-    const targetTimezoneOffsetHours = professionalOffsetMinutes / 60;
+  // Create date objects for the start and end of the day in professional's timezone
+  // Use zonedTimeToUtc for accurate conversion (handles DST and IANA timezones)
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
 
-    console.log('Timezone info:', {
-      professionalTimezone,
-      offsetMinutes: professionalOffsetMinutes,
-      offsetHours: targetTimezoneOffsetHours
-    });
-    
-    // Adjust the date to professional's timezone for querying
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Convert to UTC for database query
-    const queryStartTime = new Date(startOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
-    const queryEndTime = new Date(endOfDay.getTime() - (professionalOffsetMinutes * 60 * 1000));
+  // Convert professional's local day start/end to UTC using fromZonedTime
+  const queryStartTime = fromZonedTime(startOfDay, professionalTimezone);
+  const queryEndTime = fromZonedTime(endOfDay, professionalTimezone);
 
     // Get working hours
     const { data: workingHoursData, error: workingHoursError } = await supabase
@@ -351,23 +425,11 @@ export async function getAvailableTimeSlots(
     // Parse working hours with timezone conversion
     const workingHours = parseWorkingHoursFromDB(workingHoursData.working_hours, professionalTimezone);
     
-    // Get the day of the week in professional's timezone
-    const dayOfWeek = professionalDate.getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
-    const dayName = dayNames[dayOfWeek];
-
-    // Get working hours for this day
-    const dayWorkingHours = workingHours.hours.find(h => {
-      if (!dayName) return false;
-      return h.day.toLowerCase() === dayName.toLowerCase();
-    });
-
-    if (!dayWorkingHours?.enabled || !dayWorkingHours?.startTime || !dayWorkingHours?.endTime) {
-      console.log('Professional not working on this day');
-      return [];
-    }
-
-    // Get existing appointments for this day using UTC-adjusted query times
+    // Get all appointments that might overlap with any day (for cross-midnight checking)
+    // Expand the query window to include adjacent days
+    const expandedStartTime = new Date(queryStartTime.getTime() - (24 * 60 * 60 * 1000)); // 1 day before
+    const expandedEndTime = new Date(queryEndTime.getTime() + (24 * 60 * 60 * 1000)); // 1 day after
+    
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
       .select(`
@@ -380,62 +442,71 @@ export async function getAvailableTimeSlots(
       `)
       .eq('bookings.professional_profile_id', professionalProfileId)
       .neq('bookings.status', 'cancelled')
-      .gte('start_time', queryStartTime.toISOString())
-      .lt('start_time', queryEndTime.toISOString());
+      .lt('start_time', expandedEndTime.toISOString())
+      .gt('end_time', expandedStartTime.toISOString());
 
     if (appointmentsError) {
       console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
-    // Convert working hours to minutes for easier comparison
-    const workingStartMinutes = timeToMinutes(dayWorkingHours.startTime);
-    const workingEndMinutes = timeToMinutes(dayWorkingHours.endTime);
-
-    // Generate time slots every 30 minutes
-    const slots: string[] = [];
-    for (let minutes = workingStartMinutes; minutes < workingEndMinutes; minutes += 30) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-
-      // Create datetime strings in professional's timezone
-      const slotDate = new Date(date);
-      slotDate.setHours(hour, minute, 0, 0);
-      
-      // Convert slot times to UTC for comparison
-      const slotStartTime = new Date(slotDate.getTime());
-      const slotEndTime = new Date(slotDate.getTime() + (30 * 60 * 1000));
-
-      // Check if this slot overlaps with any existing appointments
-      let isAvailable = true;
-
-      for (const appointment of appointments || []) {
-        if (!appointment.start_time || !appointment.end_time) continue;
-
-        if (isSlotOverlapping(
-          slotStartTime.toISOString(),
-          slotEndTime.toISOString(),
-          appointment.start_time,
-          appointment.end_time
-        )) {
-          isAvailable = false;
-          break;
-        }
+  
+    // Parse client's selected date
+    const clientSelectedDateObj = new Date(date);
+    clientSelectedDateObj.setHours(0, 0, 0, 0);
+    
+    // We need to check all professional working days to see which ones have slots 
+    // that fall on the client's selected date (due to timezone differences)
+    const allSlots: string[] = [];
+    
+    // Check all enabled working days for the professional
+    for (const dayWorkingHours of workingHours.hours) {
+      if (!dayWorkingHours.enabled || !dayWorkingHours.startTime || !dayWorkingHours.endTime) {
+        continue;
       }
-
-      if (isAvailable) {
-        slots.push(timeString);
+      
+      console.log(`Checking ${dayWorkingHours.day} working hours (${dayWorkingHours.startTime} - ${dayWorkingHours.endTime}) for client date ${date}`);
+      
+      // We need to check multiple professional dates around the client's selected date
+      // because timezone conversion can shift dates
+      for (let dayOffset = -1; dayOffset <= 1; dayOffset++) {
+        const professionalDate = new Date(clientSelectedDateObj);
+        professionalDate.setDate(professionalDate.getDate() + dayOffset);
+        
+        const professionalDayOfWeek = professionalDate.getDay();
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const professionalDayName = dayNames[professionalDayOfWeek];
+        
+        if (dayWorkingHours.day.toLowerCase() !== professionalDayName?.toLowerCase()) {
+          continue;
+        }
+        
+        console.log(`Generating slots for professional ${dayWorkingHours.day} (offset ${dayOffset}) that fall on client date ${date}`);
+        
+        // Generate slots for this professional working day
+        const daySlots = await generateCrossMidnightSlots(
+          { startTime: dayWorkingHours.startTime, endTime: dayWorkingHours.endTime },
+          professionalTimezone,
+          clientTimezone,
+          date,
+          appointments,
+          requiredDurationMinutes,
+          dayOffset
+        );
+        
+        allSlots.push(...daySlots);
       }
     }
-
-    // Convert slots to client timezone
-    const targetDate = new Date(date);
-    const convertedSlots = slots.map(slot => {
-      const { time } = convertTimeToClientTimezone(slot, professionalTimezone, clientTimezone, targetDate);
-      return time;
+    
+    // Remove duplicates and sort
+    const uniqueSlots = Array.from(new Set(allSlots));
+    uniqueSlots.sort((a, b) => {
+      const [aHour, aMin] = a.split(':').map(Number);
+      const [bHour, bMin] = b.split(':').map(Number);
+      return ((aHour || 0) * 60 + (aMin || 0)) - ((bHour || 0) * 60 + (bMin || 0));
     });
-
-    return convertedSlots;
+    
+    console.log(`Found ${uniqueSlots.length} available slots for client date ${date}`);
+    return uniqueSlots;
   } catch (error) {
     console.error('Error in getAvailableTimeSlots:', error);
     return [];

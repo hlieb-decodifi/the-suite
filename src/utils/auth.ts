@@ -12,17 +12,19 @@ export function isOAuthUser(user: User | null): boolean {
 }
 
 /**
- * Check if a user can change their email (not OAuth users)
+ * Check if a user can change their email (has email identity)
  */
 export function canChangeEmail(user: User | null): boolean {
-  return !isOAuthUser(user);
+  if (!user?.identities) return false;
+  return user.identities.some(identity => identity.provider === 'email');
 }
 
 /**
- * Check if a user can change their password (not OAuth users)
+ * Check if a user can change their password (has email identity)
  */
 export function canChangePassword(user: User | null): boolean {
-  return !isOAuthUser(user);
+  if (!user?.identities) return false;
+  return user.identities.some(identity => identity.provider === 'email');
 }
 
 /**

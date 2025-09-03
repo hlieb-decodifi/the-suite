@@ -115,7 +115,6 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
     is_subscribed: professionalProfile?.is_subscribed === true, // Add subscription status
   };
 
-  // Return mapped service data
   return {
     id: serviceData.id,
     name: serviceData.name,
@@ -152,13 +151,13 @@ async function getPublishedProfileIds() {
  */
 function createEmptyPaginationResult(page: number, pageSize: number): ServicesWithPagination {
   return { 
-    services: [], 
-    pagination: { 
-      currentPage: page, 
-      totalPages: 0, 
-      totalItems: 0, 
-      pageSize 
-    } 
+     services: [],
+     pagination: {
+       currentPage: page,
+       totalPages: 0,
+       totalItems: 0,
+       pageSize
+     }
   };
 }
 
@@ -175,18 +174,84 @@ export async function getServices(
   if (location && location.trim() !== '') {
     return getFilteredServices(page, pageSize, search, location);
   }
-  
+
   const supabase = await createClient();
-  
+
   // Get published profile IDs
   const publishedProfileIds = await getPublishedProfileIds();
   if (publishedProfileIds.length === 0) {
     return createEmptyPaginationResult(page, pageSize);
   }
-  
-  // Create a query builder that we can modify based on search parameters
-  // Add explicit ordering for consistent pagination
-  let query = supabase
+
+  // If there's a search term, fetch paginated results server-side
+  if (search && search.trim() !== '') {
+    const trimmedSearch = search.trim();
+  const query = supabase
+      .from('services')
+      .select(`
+        id, 
+        name, 
+        description, 
+        duration,
+        price,
+        professional_profile:professional_profile_id(
+          id,
+          location,
+          is_subscribed,
+          hide_full_address,
+          address:address_id(
+            id,
+            country,
+            state,
+            city,
+            street_address,
+            apartment,
+            latitude,
+            longitude
+          ),
+          user:user_id(
+            id,
+            first_name,
+            last_name,
+            profile_photo:profile_photos(
+              url
+            )
+          )
+        )
+      `)
+      .in('professional_profile_id', publishedProfileIds)
+      .order('id', { ascending: true })
+      .or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
+
+    const { data: allServices, error } = await query;
+    if (error) {
+      console.error('Error fetching services with search:', error);
+      return createEmptyPaginationResult(page, pageSize);
+    }
+
+    const totalCount = (allServices || []).length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedResults = (allServices || []).slice(start, end);
+
+    const pagination: PaginationInfo = {
+      currentPage: page,
+      totalPages,
+      totalItems: totalCount,
+      pageSize,
+    };
+
+    const mappedServices = await Promise.all(paginatedResults.map(mapServiceData));
+
+    return {
+      services: mappedServices,
+      pagination,
+    };
+  }
+
+  // No search term: use server-side pagination
+  const query = supabase
     .from('services')
     .select(`
       id, 
@@ -221,58 +286,46 @@ export async function getServices(
     `)
     .in('professional_profile_id', publishedProfileIds)
     .order('id', { ascending: true });
-  
-  // If there's a search term, add it to the query
-  if (search && search.trim() !== '') {
-    const trimmedSearch = search.trim();
-    query = query.or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
-  }
-  
-  // Get total count for pagination with same filters as main query
-  let countQuery = supabase
+
+  // Get total count for pagination
+  const countQuery = supabase
     .from('services')
     .select('*', { count: 'exact', head: true })
     .in('professional_profile_id', publishedProfileIds);
-  
-  // Apply the same search filter to count query
-  if (search && search.trim() !== '') {
-    const trimmedSearch = search.trim();
-    countQuery = countQuery.or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
-  }
-  
+
   const { count, error: countError } = await countQuery;
-  
+
   if (countError) {
     console.error('Error counting services:', countError);
     return createEmptyPaginationResult(page, pageSize);
   }
-  
+
   const totalCount = count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
-  
+
   // Apply pagination
   const start = (page - 1) * pageSize;
   const end = start + pageSize - 1;
-  
-  query = query.range(start, end);
-  
-  const { data: services, error } = await query;
-  
+
+  const paginatedQuery = query.range(start, end);
+
+  const { data: services, error } = await paginatedQuery;
+
   if (error) {
     console.error('Error fetching services:', error);
     return createEmptyPaginationResult(page, pageSize);
   }
-  
+
   const pagination: PaginationInfo = {
     currentPage: page,
     totalPages,
     totalItems: totalCount,
     pageSize,
   };
-  
+
   // Map the services to the expected format
   const mappedServices = await Promise.all((services || []).map(mapServiceData));
-  
+
   return {
     services: mappedServices,
     pagination,
