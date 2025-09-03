@@ -169,15 +169,15 @@ export function getServicesForDisplay(
   if (filters.location !== '') {
     return initialServices;
   }
-  
+
   // If no filters are applied, use the services as is (already paginated from server)
   if (filters.searchTerm === '') {
     // Always apply the selected sort to the initial results
     return sortServices(initialServices, filters.sortBy, userLocation);
   }
 
-  // Otherwise, apply pagination on client-side filtered results (search only)
-  return getPaginatedServices(filteredServices, currentPage, pageSize);
+  // If search term is present, use backend paginated results directly
+  return initialServices;
 }
 
 /**
