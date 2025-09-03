@@ -9,41 +9,6 @@ export type EmailResult = {
   error?: string;
 }
 
-// Common types used across multiple templates
-type PaymentMethod = {
-  name: string;
-  is_online: boolean;
-}
-
-type Payment = {
-  method: PaymentMethod;
-}
-
-
-
-type Service = {
-  name: string;
-  price: number;
-  duration?: number;
-}
-
-type BaseAppointmentParams = {
-  appointment_id: string;
-  appointment_details_url: string;
-  date: string;
-  time: string;
-  website_url: string;
-  support_email: string;
-}
-
-type BaseBookingParams = {
-  booking_id: string;
-  payment?: Payment;
-  services?: Service[];
-} & BaseAppointmentParams
-
-// Booking Cancellation
-
 export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
   booking_id: string;
   cancellation_reason: string;
@@ -52,7 +17,7 @@ export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
   professional_name: string;
   timezone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -67,7 +32,7 @@ export type BookingCancellationWithinAcceptedTimePeriodClientParams = {
   services_page_url: string;
   timezone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -89,7 +54,7 @@ export type BookingConfirmationClientParams = {
   professional_name: string;
   professional_phone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -109,7 +74,7 @@ export type BookingConfirmationProfessionalParams = {
   price_total_paid: number;
   professional_name: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -125,7 +90,7 @@ export type AppointmentCompletion2hafterClientParams = {
   timezone: string;
   total_paid: number;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -141,14 +106,14 @@ export type AppointmentCompletion2hafterProfessionalParams = {
   timezone: string;
   total_amount: number;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
 }
 
 // Payment Related
-
+// Legacy template - to be replaced
 export type BalanceNotificationParams = {
   professional_name: string;
   total_amount: number;
@@ -157,53 +122,13 @@ export type BalanceNotificationParams = {
   current_tip?: number;
   total_due: number;
   balance_payment_url: string;
-} & BaseAppointmentParams
-
-// Refund Related
-export type RefundRequestProfessionalParams = {
-  professional_name: string;
-  client_name: string;
-  service_name: string;
-  original_amount: number;
-  reason: string;
-  review_url: string;
-} & BaseAppointmentParams
-
-export type RefundCompletionClientParams = {
-  client_name: string;
-  professional_name: string;
-  original_amount: number;
-  refund_amount: number;
-  reason?: string;
-} & BaseBookingParams
-
-export type RefundCompletionProfessionalParams = {
-  client_name: string;
-  professional_name: string;
-  original_amount: number;
-  refund_amount: number;
-  platform_fee: number;
-  net_refund: number;
-  reason?: string;
-} & BaseBookingParams
-
-export type RefundDeclineClientParams = {
-  client_name: string;
-  professional_name: string;
-  original_amount: number;
-  decline_reason: string;
-} & BaseBookingParams
-
-// Review Related
-export type ReviewTipNotificationParams = {
-  client_name: string;
-  professional_name: string;
-  payment_method: string;
-  service_amount: number;
-  service_fee: number;
-  total_amount: number;
-  review_url: string;
-} & BaseAppointmentParams
+  appointment_id: string;
+  appointment_details_url: string;
+  date: string;
+  time: string;
+  website_url: string;
+  support_email: string;
+}
 
 // Contact Related
 export type ContactInquiryAdminParams = {
@@ -235,7 +160,7 @@ export type BookingCancellationLessthan24h48hclientParams = {
   time_until_appointment: string;
   timezone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -253,7 +178,7 @@ export type BookingCancellationLessthan24h48hprofessionalParams = {
   time_until_appointment: string;
   timezone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -272,7 +197,7 @@ export type BookingCancellationNoShowClientParams = {
   services_page_url: string;
   timezone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -288,7 +213,7 @@ export type BookingCancellationNoShowProfessionalParams = {
   service_amount: number;
   timezone: string;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];

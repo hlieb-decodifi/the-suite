@@ -5,6 +5,7 @@ import type {
   PaymentCalculation,
   BookingPaymentWithStripe
 } from './types';
+import { formatDuration } from '@/utils/formatDuration';
 
 // Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
@@ -811,7 +812,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   payment_method_name: string;
   is_cash_payment: boolean;
   services: {
-    duration: number;
+    duration: string; // Formatted duration like "1h 30m"
     name: string;
     price: number;
   }[];
@@ -991,7 +992,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
           services?: { name?: string }; 
           price: number; 
         }) => ({
-          duration: bs.duration,
+          duration: formatDuration(bs.duration),
           name: bs.services?.name || 'Unknown Service',
           price: bs.price
         }));

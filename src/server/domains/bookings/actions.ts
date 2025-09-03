@@ -20,6 +20,7 @@ import {
   AppointmentCompletion2hafterClientParams,
   AppointmentCompletion2hafterProfessionalParams
 } from '@/providers/brevo/types';
+import { formatDuration } from '@/utils/formatDuration';
 
 
 function createSupabaseAdminClient() {
@@ -653,7 +654,7 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
 
   // Create services array from booking services
   const services = booking.booking_services.map(bs => ({
-    duration: bs.duration,
+    duration: formatDuration(bs.duration),
     name: bs.services?.name || 'Unknown Service',
     price: bs.price
   }));
@@ -1392,7 +1393,7 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
   
   // Create services array from booking services
   const services = booking.booking_services.map(bs => ({
-    duration: bs.duration,
+    duration: formatDuration(bs.duration),
     name: bs.services?.name || 'Unknown Service',
     price: bs.price
   }));
@@ -1521,7 +1522,7 @@ async function sendCancellationPolicyEmails(
 
   // Create services array from booking services
   const services = booking.booking_services.map(bs => ({
-    duration: bs.duration,
+    duration: formatDuration(bs.duration),
     name: bs.services?.name || 'Unknown Service',
     price: bs.price
   }));
@@ -1597,7 +1598,7 @@ export async function sendAppointmentCompletedEmails(
 
   // Create services array from booking services
   const services = booking.booking_services?.map(bs => ({
-    duration: bs.duration,
+    duration: formatDuration(bs.duration),
     name: bs.services?.name || 'Unknown Service',
     price: bs.price
   })) || [];

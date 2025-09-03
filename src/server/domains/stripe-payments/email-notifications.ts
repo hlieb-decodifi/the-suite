@@ -277,11 +277,12 @@ export async function sendBookingConfirmationEmails(
     // Format address for professional
     const professionalAddress = formatAddress(professionalData.address);
 
-    // Prepare services array for email templates
+    // Prepare services array for email templates (import formatDuration if needed)
+    const { formatDuration } = await import('@/utils/formatDuration');
     const servicesForEmail = services.map(service => ({
       name: service.services?.name || '',
       description: service.services?.description || '',
-      duration: service.duration || 0,
+      duration: formatDuration(service.duration || 0),
       price: service.price || 0
     }));
 
