@@ -19,11 +19,7 @@ type Payment = {
   method: PaymentMethod;
 }
 
-type RefundInfo = {
-  original_amount: number;
-  refund_amount?: number;
-  status: string;
-}
+
 
 type Service = {
   name: string;
@@ -47,20 +43,6 @@ type BaseBookingParams = {
 } & BaseAppointmentParams
 
 // Booking Cancellation
-export type BookingCancellationClientParams = {
-  client_name: string;
-  professional_name: string;
-  cancellation_reason?: string;
-  refund_info?: RefundInfo;
-} & BaseBookingParams
-
-export type BookingCancellationProfessionalParams = {
-  client_name: string;
-  client_phone?: string;
-  professional_name: string;
-  cancellation_reason?: string;
-  refund_info?: RefundInfo;
-} & BaseBookingParams
 
 export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
   booking_id: string;

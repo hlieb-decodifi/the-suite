@@ -4,8 +4,7 @@ import { initEmailSender, getEmailMethod, getTemplateContent } from './config';
 import {
   EmailRecipient,
   EmailResult,
-  BookingCancellationClientParams,
-  BookingCancellationProfessionalParams,
+
   BookingCancellationWithinAcceptedTimePeriodProfessionalParams,
   BookingCancellationWithinAcceptedTimePeriodClientParams,
   BookingConfirmationClientParams,
@@ -16,7 +15,6 @@ import {
   AppointmentCompletion2hafterProfessionalParams,
   BalanceNotificationParams,
 
-  ReviewTipNotificationParams,
   ContactInquiryAdminParams,
   ContactInquiryConfirmationParams,
   BookingCancellationLessthan24h48hclientParams,
@@ -126,21 +124,6 @@ async function sendTemplateEmail<T extends Record<string, unknown>>(
 }
 
 // Booking Related
-export async function sendBookingCancellationClient(
-  to: EmailRecipient[],
-  params: BookingCancellationClientParams
-): Promise<EmailResult> {
-  console.log('CANCELLATION CLIENT', {to, params});
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_CLIENT, to, params);
-}
-
-export async function sendBookingCancellationProfessional(
-  to: EmailRecipient[],
-  params: BookingCancellationProfessionalParams
-): Promise<EmailResult> {
-  console.log('CANCELLATION PROFESSIONAL', {to, params});
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BOOKING_CANCELLATION_PROFESSIONAL, to, params);
-}
 
 export async function sendBookingCancellationWithinAcceptedTimePeriodProfessional(
   to: EmailRecipient[],
@@ -207,16 +190,6 @@ export async function sendBalanceNotification(
   params: BalanceNotificationParams
 ): Promise<EmailResult> {
   return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.BALANCE_NOTIFICATION, to, params);
-}
-
-// Refund Related functions have been removed as they are not implemented
-
-// Review Related
-export async function sendReviewTipNotification(
-  to: EmailRecipient[],
-  params: ReviewTipNotificationParams
-): Promise<EmailResult> {
-  return sendTemplateEmail(EMAIL_TEMPLATE_TAGS.REVIEW_TIP_NOTIFICATION, to, params);
 }
 
 // Contact Related

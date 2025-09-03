@@ -2,8 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import {
-  sendBookingCancellationClient,
-  sendBookingCancellationProfessional,
+
   sendBookingCancellationWithinAcceptedTimePeriodProfessional,
   sendBookingCancellationWithinAcceptedTimePeriodClient,
   sendBookingConfirmationClient,
@@ -14,7 +13,6 @@ import {
   sendAppointmentCompletion2hafterProfessional,
   sendBalanceNotification,
 
-  sendReviewTipNotification,
   sendContactInquiryAdmin,
   sendContactInquiryConfirmation,
   sendBookingCancellationLessthan24h48hclient,
@@ -60,8 +58,7 @@ export type SendTestEmailResult = {
 
 // Mapping of template tags to their typed email functions
 const emailFunctionMap = {
-  'BookingCancellationClient': sendBookingCancellationClient,
-  'BookingCancellationProfessional': sendBookingCancellationProfessional,
+
   'BookingCancellationWithinAcceptedTimePeriodProfessional': sendBookingCancellationWithinAcceptedTimePeriodProfessional,
   'BookingCancellationWithinAcceptedTimePeriodClient': sendBookingCancellationWithinAcceptedTimePeriodClient,
   'BookingConfirmationClient': sendBookingConfirmationClient,
@@ -72,7 +69,6 @@ const emailFunctionMap = {
   'AppointmentCompletion2hafterProfessional': sendAppointmentCompletion2hafterProfessional,
   'BalanceNotification': sendBalanceNotification,
 
-  'ReviewTipNotification': sendReviewTipNotification,
   'ContactInquiryAdmin': sendContactInquiryAdmin,
   'ContactInquiryConfirmation': sendContactInquiryConfirmation,
   'BookingCancellationLessthan24h48hclient': sendBookingCancellationLessthan24h48hclient,
