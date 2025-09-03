@@ -36,6 +36,7 @@ type SupportRequestChatWidgetProps = {
     last_name: string;
     profile_photo_url?: string | undefined;
   };
+  usersMap?: Record<string, { id: string; first_name: string; last_name: string; profile_photo_url?: string }> | undefined;
   readOnly?: boolean;
   resolvedInfo?: {
     status: string;
@@ -43,6 +44,7 @@ type SupportRequestChatWidgetProps = {
     resolvedBy?: string | null;
     resolutionNotes?: string | null;
   } | undefined;
+  initialMessages?: ChatMessage[] | undefined;
 };
 
 // Image compression utility
@@ -123,14 +125,17 @@ const compressImage = async (file: File, quality = 0.8): Promise<File> => {
   }
 };
 
-export function SupportRequestChatWidget({
-  conversationId,
-  currentUserId,
-  otherUser,
-  readOnly = false,
-  resolvedInfo,
-}: SupportRequestChatWidgetProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function SupportRequestChatWidget(props: SupportRequestChatWidgetProps) {
+  const {
+    conversationId,
+    currentUserId,
+    otherUser,
+    usersMap,
+    readOnly = false,
+    resolvedInfo,
+    initialMessages,
+  } = props;
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || []);
   const [conversation, setConversation] = useState<{
     id: string;
     other_user: {
@@ -543,13 +548,17 @@ export function SupportRequestChatWidget({
                   {message.sender_id !== currentUserId && (
                     <Avatar className="h-5 w-5 lg:h-6 lg:w-6 mb-1 hidden sm:block">
                       <AvatarImage
-                        src={conversation?.other_user.profile_photo_url}
+                        src={usersMap && usersMap[message.sender_id]?.profile_photo_url ? usersMap[message.sender_id]?.profile_photo_url : conversation?.other_user.profile_photo_url}
                       />
                       <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
-                        {conversation ? getInitials(
-                          conversation.other_user.first_name,
-                          conversation.other_user.last_name,
-                        ) : ''}
+                        {usersMap?.[message.sender_id]?.first_name && usersMap?.[message.sender_id]?.last_name
+                          ? getInitials(
+                              usersMap[message.sender_id]?.first_name ?? '',
+                              usersMap[message.sender_id]?.last_name ?? ''
+                            )
+                          : conversation
+                          ? getInitials(conversation.other_user.first_name, conversation.other_user.last_name)
+                          : ''}
                       </AvatarFallback>
                     </Avatar>
                   )}

@@ -100,12 +100,16 @@ export function calculatePaymentAmounts(
   if (deposit_type === 'percentage') {
     // Calculate deposit based on service amount only (excluding fee)
     depositAmount = Math.round(serviceAmount * (deposit_value / 100));
+    // Enforce minimum deposit of $1 (100 cents) for percentage deposits
+    depositAmount = Math.max(depositAmount, 100);
   } else {
     // Fixed amount deposit - if it's bigger than service amount, cap it
     depositAmount = Math.min(
       Math.round(deposit_value * 100), // Convert to cents
       serviceAmount // Cap at service amount
     );
+    // Enforce minimum deposit of $1 (100 cents) for fixed deposits
+    depositAmount = Math.max(depositAmount, 100);
   }
 
   // Service fee is always charged with the remaining balance

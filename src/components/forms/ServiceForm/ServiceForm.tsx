@@ -60,6 +60,7 @@ export function ServiceForm({
               type="text"
               inputMode="decimal"
               placeholder="e.g., 50.00"
+              min="1"
               numericOnly
               allowDecimal
               {...field}

@@ -5,7 +5,7 @@ import { ProfileData, HeaderFormValues } from '@/types/profiles';
 export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   const supabase = await createClient();
   
-  // Fetch user, role, and profile info
+  // Fetch user, role, and profile info (including both client and professional profiles)
   const { data, error } = await supabase
     .from('users')
     .select(`
@@ -24,6 +24,9 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
         tiktok_url,
         is_published
       ),
+      client_profiles (
+        phone_number
+      ),
       profile_photos (url)
     `)
     .eq('id', userId)
@@ -32,6 +35,15 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   if (error) throw new Error(`Database error: ${error.message}`);
   if (!data) throw new Error('Profile not found');
 
+  // Determine if user is professional or client based on role
+  const userRole = data.roles?.name;
+  const isProfessional = userRole === 'professional';
+  
+  // Get phone number from appropriate profile type
+  const phoneNumber = isProfessional 
+    ? data.professional_profiles?.phone_number 
+    : data.client_profiles?.phone_number;
+
   // Transform from snake_case DB model to camelCase client model
   return {
     id: data.id,
@@ -39,7 +51,7 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
     lastName: data.last_name,
     profession: data.professional_profiles?.profession ?? null,
     description: data.professional_profiles?.description ?? null,
-    phoneNumber: data.professional_profiles?.phone_number ?? null,
+    phoneNumber: phoneNumber ?? null,
     facebookUrl: data.professional_profiles?.facebook_url ?? null,
     instagramUrl: data.professional_profiles?.instagram_url ?? null,
     tiktokUrl: data.professional_profiles?.tiktok_url ?? null,
