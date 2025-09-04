@@ -472,8 +472,54 @@ BEGIN
         profession = 'Professional Services',
         appointment_requirements = 'Please arrive 10 minutes early for your appointment. Bring any necessary documentation.',
         phone_number = '+1-555-0123',
-        working_hours = '{"monday": {"start": "09:00", "end": "17:00"}, "tuesday": {"start": "09:00", "end": "17:00"}, "wednesday": {"start": "09:00", "end": "17:00"}, "thursday": {"start": "09:00", "end": "17:00"}, "friday": {"start": "09:00", "end": "17:00"}, "saturday": {"start": "10:00", "end": "15:00"}, "sunday": {"start": "10:00", "end": "15:00"}}'::jsonb,
-        timezone = 'America/Los_Angeles',
+        working_hours = '{
+  "hours": [
+    {
+      "day": "Monday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Tuesday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Wednesday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Thursday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Friday",
+      "enabled": true,
+      "endTime": "18:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Saturday",
+      "enabled": true,
+      "endTime": "18:00",
+      "startTime": "07:30"
+    },
+    {
+      "day": "Sunday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "08:30"
+    }
+  ],
+  "timezone": "Europe/Warsaw"
+}'::jsonb,
+        timezone = 'Europe/Warsaw',
         location = 'San Francisco, CA',
         address_id = dummy_address_id,
         facebook_url = 'https://facebook.com/johndoe',
@@ -481,7 +527,7 @@ BEGIN
         tiktok_url = 'https://tiktok.com/@johndoe',
         is_published = true,
         is_subscribed = true,
-        stripe_account_id = 'acct_1Rps2uPtT7haMfhy',
+        stripe_account_id = 'acct_1S2DSiLv1JUObFBA',
         stripe_connect_status = 'complete',
         stripe_connect_updated_at = NOW(),
         requires_deposit = true,
@@ -566,7 +612,7 @@ BEGIN
     RAISE NOTICE 'Profile ID: %', dummy_profile_id;
     RAISE NOTICE 'Email: professional@mail.com';
     RAISE NOTICE 'Password: secret';
-    RAISE NOTICE 'Stripe Account: acct_1Rps2uPtT7haMfhy';
+    RAISE NOTICE 'Stripe Account: acct_1S2DSiLv1JUObFBA';
     
 END $$;
 

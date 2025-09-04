@@ -252,25 +252,32 @@ export async function createUncapturedPaymentIntent(
     const serviceFee = await getServiceFeeFromConfig();
     const serviceAmount = amount - serviceFee; // Professional gets this amount minus Stripe fees
     
+    // Check if this is a cash payment where we're only charging the suite fee
+    const isCashPaymentSuiteFeeOnly = metadata.payment_method_type === 'cash' && amount === serviceFee;
+    
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
       currency: 'usd',
       customer: customerId,
       capture_method: 'manual', // This creates an uncaptured payment intent
       confirmation_method: 'automatic',
-      // Professional receives service amount minus Stripe processing fees
-      transfer_data: {
-        amount: serviceAmount, // Only transfer the service amount (total - suite fee)
-        destination: professionalStripeAccountId
-      },
-      // The remaining amount (suite fee) stays in the platform account
-      on_behalf_of: professionalStripeAccountId, // Professional pays the processing fees
       metadata: {
         ...metadata,
         booking_id: metadata.booking_id || 'unknown',
         payment_type: 'deposit_scheduled'
       }
     };
+
+    // Only add transfer_data if there's actually an amount to transfer to professional
+    if (!isCashPaymentSuiteFeeOnly && serviceAmount > 0) {
+      paymentIntentData.transfer_data = {
+        amount: serviceAmount, // Only transfer the service amount (total - suite fee)
+        destination: professionalStripeAccountId
+      };
+      // The remaining amount (suite fee) stays in the platform account
+      paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
+    }
+    // For cash payments suite fee only: no transfer_data, entire amount stays with platform
 
     // If payment method is provided, set it and confirm
     if (paymentMethodId) {
@@ -603,13 +610,48 @@ export async function createEnhancedCheckoutSession(
       
       // Get payment method type from metadata to customize message
       const isServiceFeeAndDepositOnly = metadata.is_service_fee_and_deposit_only === 'true';
+      const isDepositFlow = metadata.payment_flow === 'setup_for_deposit_and_balance';
+      const depositAmount = metadata.deposit_amount;
+      const balanceAmount = metadata.balance_amount;
       
       let customMessage: string;
-      if (isServiceFeeAndDepositOnly) {
+      
+      if (isDepositFlow && depositAmount && balanceAmount) {
+        // Deposit flow - different messages based on timing and payment method
+        const depositAmountInDollars = (parseInt(depositAmount) / 100).toFixed(2);
+        const balanceAmountInDollars = (parseInt(balanceAmount) / 100).toFixed(2);
+        const appointmentTiming = metadata.appointment_timing;
+        const paymentMethodType = metadata.payment_method_type;
+        const isOnlinePayment = paymentMethodType === 'card';
+        
+        if (isOnlinePayment) {
+          // Card payment with deposit
+          if (appointmentTiming === 'more_than_6_days') {
+            // Appointment > 6 days away with deposit (card)
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. The remaining balance of $${balanceAmountInDollars} will be authorized 6 days before your appointment and charged after service completion.`;
+          } else {
+            // Appointment ≤ 6 days away with deposit (card)
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. The remaining balance of $${balanceAmountInDollars} will be authorized now and charged after service completion.`;
+          }
+        } else {
+          // Cash payment with deposit
+          const serviceFeeInDollars = "1.00"; // $1 service fee
+          // Calculate service amount (balance - service fee)
+          const serviceAmountInDollars = (parseInt(balanceAmount) / 100 - 1).toFixed(2);
+          
+          if (appointmentTiming === 'more_than_6_days') {
+            // Appointment > 6 days away with deposit (cash)
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. Service fee of $${serviceFeeInDollars} will be authorized 6 days before your appointment. The remaining balance of $${serviceAmountInDollars} will be paid in cash at the appointment.`;
+          } else {
+            // Appointment ≤ 6 days away with deposit (cash)
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. Service fee of $${serviceFeeInDollars} will be authorized now. The remaining balance of $${serviceAmountInDollars} will be paid in cash at the appointment.`;
+          }
+        }
+      } else if (isServiceFeeAndDepositOnly) {
         // Cash payment - only service fee and deposit will be charged
         customMessage = `Save your payment method for your upcoming appointment. Service fee and deposit: $${(amount / 100).toFixed(2)} will be charged 6 days before your appointment. The remaining balance will be paid in cash at the appointment. No payment will be taken today.`;
       } else {
-        // Card payment - full amount will be charged
+        // Regular setup intent - full amount will be charged
         customMessage = `Save your payment method for your upcoming appointment. Total service cost: $${(amount / 100).toFixed(2)}. Payment will be authorized 6 days before your appointment and charged after service completion. No payment will be taken today.`;
       }
       

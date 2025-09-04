@@ -131,6 +131,7 @@ export type Database = {
           captured_at: string | null
           created_at: string
           deposit_amount: number
+          deposit_payment_intent_id: string | null
           id: string
           payment_method_id: string
           payment_type: string
@@ -160,6 +161,7 @@ export type Database = {
           captured_at?: string | null
           created_at?: string
           deposit_amount?: number
+          deposit_payment_intent_id?: string | null
           id?: string
           payment_method_id: string
           payment_type?: string
@@ -189,6 +191,7 @@ export type Database = {
           captured_at?: string | null
           created_at?: string
           deposit_amount?: number
+          deposit_payment_intent_id?: string | null
           id?: string
           payment_method_id?: string
           payment_type?: string

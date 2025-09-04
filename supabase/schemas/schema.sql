@@ -1069,8 +1069,9 @@ create table booking_payments (
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
   status text not null check (status in ('incomplete', 'pending', 'completed', 'failed', 'refunded', 'partially_refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
-  stripe_payment_intent_id text, -- For Stripe integration
+  stripe_payment_intent_id text, -- For Stripe integration (balance payment)
   stripe_payment_method_id text, -- For stored payment methods from setup intents
+  deposit_payment_intent_id text, -- For tracking deposit payment intent separately
   -- Stripe checkout session fields
   stripe_checkout_session_id text,
   deposit_amount decimal(10, 2) default 0 not null,

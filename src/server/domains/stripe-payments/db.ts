@@ -70,7 +70,9 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
  */
 export function calculatePaymentAmounts(
   totalAmount: number, // in cents
-  professionalProfile: ProfessionalProfileForPayment
+  professionalProfile: ProfessionalProfileForPayment,
+  serviceAmount?: number, // service amount only (without tips or fees) - in cents
+  tipAmount?: number // tip amount in cents
 ): PaymentCalculation {
   const {
     requires_deposit,
@@ -81,8 +83,8 @@ export function calculatePaymentAmounts(
   // Get service fee from config
   const serviceFee = 100; // $1 in cents, TODO: get from config
 
-  // Separate service amount from total
-  const serviceAmount = totalAmount - serviceFee;
+  // Calculate service amount if not provided (backward compatibility)
+  const actualServiceAmount = serviceAmount || (totalAmount - serviceFee - (tipAmount || 0));
 
   if (!requires_deposit || !deposit_value) {
     // No deposit required - full payment
@@ -99,21 +101,21 @@ export function calculatePaymentAmounts(
   let depositAmount: number;
   
   if (deposit_type === 'percentage') {
-    // Calculate deposit based on service amount only (excluding fee)
-    depositAmount = Math.round(serviceAmount * (deposit_value / 100));
+    // Calculate deposit based on service amount only (excluding tips and fees)
+    depositAmount = Math.round(actualServiceAmount * (deposit_value / 100));
     // Enforce minimum deposit of $1 (100 cents) for percentage deposits
     depositAmount = Math.max(depositAmount, 100);
   } else {
     // Fixed amount deposit - if it's bigger than service amount, cap it
     depositAmount = Math.min(
       Math.round(deposit_value * 100), // Convert to cents
-      serviceAmount // Cap at service amount
+      actualServiceAmount // Cap at service amount
     );
     // Enforce minimum deposit of $1 (100 cents) for fixed deposits
     depositAmount = Math.max(depositAmount, 100);
   }
 
-  // Service fee is always charged with the remaining balance
+  // Service fee and tips are always charged with the remaining balance
   const balanceAmount = totalAmount - depositAmount;
 
   return {
@@ -122,7 +124,7 @@ export function calculatePaymentAmounts(
     balanceAmount,
     requiresDeposit: true,
     requiresBalancePayment: balanceAmount > 0,
-    isFullPayment: depositAmount >= serviceAmount // Only compare with service amount
+    isFullPayment: depositAmount >= actualServiceAmount // Only compare with service amount
   };
 }
 
@@ -199,6 +201,83 @@ export async function updateBookingPaymentWithSession(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentWithSession:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Update booking payment with uncaptured payment intent for balance processing
+ */
+export async function updateBookingPaymentWithUncapturedIntent(
+  bookingId: string,
+  paymentIntentId: string,
+  captureDate: Date,
+  balanceAmount: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseAdminClient();
+    
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        stripe_payment_intent_id: paymentIntentId,
+        capture_method: 'manual',
+        capture_scheduled_for: captureDate.toISOString(),
+        authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        status: 'authorized',
+        balance_amount: balanceAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating booking payment with uncaptured intent:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateBookingPaymentWithUncapturedIntent:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Update booking payment with scheduled balance payment info (to be created later in webhook)
+ */
+export async function updateBookingPaymentWithScheduledBalance(
+  bookingId: string,
+  captureDate: Date,
+  balanceAmount: number,
+  status: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseAdminClient();
+    
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        capture_scheduled_for: captureDate.toISOString(),
+        balance_amount: balanceAmount,
+        status: status, // 'pending_balance_payment' indicates balance payment intent needs to be created
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating booking payment with scheduled balance:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateBookingPaymentWithScheduledBalance:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 

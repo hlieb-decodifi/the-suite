@@ -1449,6 +1449,111 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
     if (customer) {
       console.log(`Setup intent succeeded for user ${customer.user_id}, booking ${bookingId} - payment method ${paymentMethodId} saved`);
       
+      // Check if this is a deposit setup intent
+      const depositAmount = setupIntent.metadata?.deposit_amount;
+      const balanceAmount = setupIntent.metadata?.balance_amount;
+      const professionalStripeAccountId = setupIntent.metadata?.professional_stripe_account_id;
+      
+      if (depositAmount && balanceAmount && professionalStripeAccountId) {
+        console.log(`🔍 Processing deposit + balance flow - Deposit: $${depositAmount}, Balance: $${balanceAmount}`);
+        
+        // Get payment method type from metadata to determine balance calculation
+        const paymentMethodType = setupIntent.metadata?.payment_method_type;
+        const isOnlinePayment = paymentMethodType === 'card';
+        
+        // Step 1: Immediately charge the deposit
+        try {
+          const depositPaymentIntent = await stripe.paymentIntents.create({
+            amount: parseInt(depositAmount),
+            currency: 'usd',
+            customer: customerId,
+            payment_method: paymentMethodId,
+            confirmation_method: 'automatic',
+            confirm: true,
+            off_session: true,
+            // Get service fee and calculate transfer amount for deposit
+            transfer_data: {
+              amount: parseInt(depositAmount) - 100, // Deposit minus service fee goes to professional
+              destination: professionalStripeAccountId
+            },
+            on_behalf_of: professionalStripeAccountId,
+            metadata: {
+              booking_id: bookingId,
+              payment_type: 'immediate_deposit_via_setup'
+            }
+          });
+          
+          console.log(`✅ Deposit charged: $${parseInt(depositAmount)/100} (Payment Intent: ${depositPaymentIntent.id})`);
+          
+          // Step 2: Create uncaptured payment intent for balance
+          // For cash payments: balance = only suite fee (service amount paid in cash)
+          // For card payments: balance = full remaining amount (service + tips + suite fee)
+          let uncapturedBalanceAmount: number;
+          
+          if (isOnlinePayment) {
+            // Card payment: charge full balance amount
+            uncapturedBalanceAmount = parseInt(balanceAmount);
+            console.log(`🔍 Card payment - creating uncaptured payment for full balance: $${uncapturedBalanceAmount/100}`);
+          } else {
+            // Cash payment: only charge suite fee, service amount + tips paid in cash
+            uncapturedBalanceAmount = 100; // $1 suite fee in cents
+            console.log(`🔍 Cash payment - creating uncaptured payment for suite fee only: $${uncapturedBalanceAmount/100} (service amount paid in cash)`);
+          }
+          
+          const { createUncapturedPaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
+          const uncapturedResult = await createUncapturedPaymentIntent(
+            uncapturedBalanceAmount,
+            customerId,
+            professionalStripeAccountId,
+            {
+              booking_id: bookingId,
+              payment_type: 'balance_after_deposit_setup',
+              payment_method_type: paymentMethodType || 'unknown'
+            },
+            paymentMethodId // This confirms the payment intent
+          );
+          
+          if (uncapturedResult.success && uncapturedResult.paymentIntentId) {
+            console.log(`✅ Balance payment created (uncaptured): $${uncapturedBalanceAmount/100} (Payment Intent: ${uncapturedResult.paymentIntentId})`);
+            
+            // Step 3: Update booking payment with both payment intents
+            await supabase
+              .from('booking_payments')
+              .update({
+                status: 'authorized', // Both deposit charged and balance authorized
+                stripe_payment_method_id: paymentMethodId,
+                stripe_payment_intent_id: uncapturedResult.paymentIntentId, // Balance payment for cron job
+                deposit_payment_intent_id: depositPaymentIntent.id, // Track deposit payment
+                // Update balance amount to reflect actual uncaptured amount
+                balance_amount: uncapturedBalanceAmount / 100,
+                updated_at: new Date().toISOString()
+              })
+              .eq('booking_id', bookingId);
+              
+            console.log(`✅ Updated booking payment record with both payment intents`);
+          } else {
+            console.error('❌ Failed to create balance payment intent:', uncapturedResult.error);
+          }
+          
+        } catch (error) {
+          console.error('❌ Error processing deposit + balance payments:', error);
+        }
+        
+      } else {
+        // Regular setup intent (no deposit) - just save payment method for later processing
+        console.log(`🔍 Regular setup intent - saving payment method for future payment`);
+        
+        // Update payment status to pending and save the payment method ID for cron job
+        await supabase
+          .from('booking_payments')
+          .update({
+            status: 'pending',
+            stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
+            updated_at: new Date().toISOString()
+          })
+          .eq('booking_id', bookingId);
+      }
+      
       // Update booking status to confirmed since payment method is now saved
       await supabase
         .from('bookings')
@@ -1457,16 +1562,6 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
           updated_at: new Date().toISOString()
         })
         .eq('id', bookingId);
-
-      // Update payment status to pending and save the payment method ID for cron job
-      await supabase
-        .from('booking_payments')
-        .update({
-          status: 'pending',
-          stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
-          updated_at: new Date().toISOString()
-        })
-        .eq('booking_id', bookingId);
 
       // Send booking confirmation emails
       try {
