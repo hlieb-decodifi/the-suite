@@ -1485,7 +1485,35 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
           
           console.log(`✅ Deposit charged: $${parseInt(depositAmount)/100} (Payment Intent: ${depositPaymentIntent.id})`);
           
-          // Step 2: Create uncaptured payment intent for balance
+          // Step 2: Check timing to determine if balance payment should be created now or scheduled
+          // Get appointment timing from metadata or fetch from database
+          const appointmentTiming = setupIntent.metadata?.appointment_timing;
+          let shouldPreAuthNow = false;
+          
+          if (appointmentTiming) {
+            // Use pre-calculated timing from metadata
+            shouldPreAuthNow = appointmentTiming === 'immediate';
+            console.log(`🔍 Using pre-calculated timing: ${shouldPreAuthNow ? 'immediate' : 'scheduled'}`);
+          } else {
+            // Calculate timing by fetching appointment data
+            const { data: appointmentData } = await supabase
+              .from('appointments')
+              .select('start_time, end_time')
+              .eq('booking_id', bookingId)
+              .single();
+              
+            if (appointmentData) {
+              const { schedulePaymentAuthorization } = await import('@/server/domains/stripe-payments/stripe-operations');
+              const scheduleResult = await schedulePaymentAuthorization(
+                bookingId,
+                new Date(appointmentData.start_time),
+                new Date(appointmentData.end_time)
+              );
+              shouldPreAuthNow = scheduleResult.shouldPreAuthNow || false;
+              console.log(`🔍 Calculated timing: ${shouldPreAuthNow ? 'immediate' : 'scheduled'}`);
+            }
+          }
+          
           // For cash payments: balance = only suite fee (service amount paid in cash)
           // For card payments: balance = full remaining amount (service + tips + suite fee)
           let uncapturedBalanceAmount: number;
@@ -1493,46 +1521,97 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
           if (isOnlinePayment) {
             // Card payment: charge full balance amount
             uncapturedBalanceAmount = parseInt(balanceAmount);
-            console.log(`🔍 Card payment - creating uncaptured payment for full balance: $${uncapturedBalanceAmount/100}`);
+            console.log(`🔍 Card payment - balance amount: $${uncapturedBalanceAmount/100}`);
           } else {
             // Cash payment: only charge suite fee, service amount + tips paid in cash
             uncapturedBalanceAmount = 100; // $1 suite fee in cents
-            console.log(`🔍 Cash payment - creating uncaptured payment for suite fee only: $${uncapturedBalanceAmount/100} (service amount paid in cash)`);
+            console.log(`🔍 Cash payment - balance amount (suite fee only): $${uncapturedBalanceAmount/100}`);
           }
           
-          const { createUncapturedPaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
-          const uncapturedResult = await createUncapturedPaymentIntent(
-            uncapturedBalanceAmount,
-            customerId,
-            professionalStripeAccountId,
-            {
-              booking_id: bookingId,
-              payment_type: 'balance_after_deposit_setup',
-              payment_method_type: paymentMethodType || 'unknown'
-            },
-            paymentMethodId // This confirms the payment intent
-          );
-          
-          if (uncapturedResult.success && uncapturedResult.paymentIntentId) {
-            console.log(`✅ Balance payment created (uncaptured): $${uncapturedBalanceAmount/100} (Payment Intent: ${uncapturedResult.paymentIntentId})`);
+          if (shouldPreAuthNow) {
+            // Appointment ≤6 days: Create uncaptured payment intent immediately
+            console.log(`⏰ Appointment ≤6 days - creating uncaptured balance payment immediately`);
             
-            // Step 3: Update booking payment with both payment intents
-            await supabase
-              .from('booking_payments')
-              .update({
-                status: 'authorized', // Both deposit charged and balance authorized
-                stripe_payment_method_id: paymentMethodId,
-                stripe_payment_intent_id: uncapturedResult.paymentIntentId, // Balance payment for cron job
-                deposit_payment_intent_id: depositPaymentIntent.id, // Track deposit payment
-                // Update balance amount to reflect actual uncaptured amount
-                balance_amount: uncapturedBalanceAmount / 100,
-                updated_at: new Date().toISOString()
-              })
-              .eq('booking_id', bookingId);
+            const { createUncapturedPaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
+            
+            const uncapturedResult = await createUncapturedPaymentIntent(
+              uncapturedBalanceAmount,
+              customerId,
+              professionalStripeAccountId,
+              {
+                booking_id: bookingId,
+                payment_type: 'deposit_balance_uncaptured',
+                deposit_payment_intent_id: depositPaymentIntent.id
+              },
+              paymentMethodId
+            );
+            
+            if (uncapturedResult.success && uncapturedResult.paymentIntentId) {
+              console.log(`✅ Uncaptured balance payment created: ${uncapturedResult.paymentIntentId}`);
               
-            console.log(`✅ Updated booking payment record with both payment intents`);
+              // Update booking payment with both payment intent IDs
+              await supabase
+                .from('booking_payments')
+                .update({
+                  deposit_payment_intent_id: depositPaymentIntent.id,
+                  stripe_payment_intent_id: uncapturedResult.paymentIntentId,
+                  capture_method: 'manual',
+                  status: 'deposit_paid_balance_authorized',
+                  stripe_payment_method_id: paymentMethodId,
+                  balance_amount: uncapturedBalanceAmount / 100,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('booking_id', bookingId);
+            } else {
+              console.error(`❌ Failed to create uncaptured payment for balance: ${uncapturedResult.error}`);
+            }
           } else {
-            console.error('❌ Failed to create balance payment intent:', uncapturedResult.error);
+            // Appointment >6 days: Schedule balance payment for cron job
+            console.log(`⏰ Appointment >6 days - scheduling balance payment for cron job`);
+            
+            // Update booking payment with deposit info and schedule balance payment
+            const { updateBookingPaymentWithScheduledBalance } = await import('@/server/domains/stripe-payments/db');
+            
+            // Get appointment data for scheduling
+            const { data: appointmentData } = await supabase
+              .from('appointments')
+              .select('start_time, end_time')
+              .eq('booking_id', bookingId)
+              .single();
+              
+            if (appointmentData) {
+              const { schedulePaymentAuthorization } = await import('@/server/domains/stripe-payments/stripe-operations');
+              const scheduleResult = await schedulePaymentAuthorization(
+                bookingId,
+                new Date(appointmentData.start_time),
+                new Date(appointmentData.end_time)
+              );
+              
+              if (scheduleResult.success) {
+                await updateBookingPaymentWithScheduledBalance(
+                  bookingId,
+                  scheduleResult.captureDate!,
+                  uncapturedBalanceAmount / 100, // Convert to dollars
+                  'pending_balance_payment'
+                );
+                
+                // Also update with deposit payment intent ID
+                await supabase
+                  .from('booking_payments')
+                  .update({
+                    deposit_payment_intent_id: depositPaymentIntent.id,
+                    stripe_payment_method_id: paymentMethodId, // Save for cron job
+                    pre_auth_scheduled_for: scheduleResult.preAuthDate!.toISOString(),
+                    amount: uncapturedBalanceAmount / 100, // Set amount that cron will process
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('booking_id', bookingId);
+                
+                console.log(`✅ Balance payment scheduled for ${scheduleResult.preAuthDate?.toISOString()}`);
+              } else {
+                console.error(`❌ Failed to schedule balance payment: ${scheduleResult.error}`);
+              }
+            }
           }
           
         } catch (error) {

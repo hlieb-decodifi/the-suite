@@ -178,6 +178,15 @@ export function BookingDetailPageClient({
             Upcoming
           </Badge>
         );
+      case 'ongoing':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-blue-500/10 text-blue-500 border-blue-500/20"
+          >
+            Ongoing
+          </Badge>
+        );
       case 'cancelled':
         return (
           <Badge
@@ -1265,8 +1274,7 @@ export function BookingDetailPageClient({
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl">
-                {appointmentData.computed_status === 'completed' ||
-                appointmentData.status === 'completed'
+                {appointmentData.computed_status === 'completed' && isClient
                   ? 'Questions about this appointment'
                   : 'Actions'}
               </CardTitle>
@@ -1347,7 +1355,7 @@ export function BookingDetailPageClient({
 
               {/* No Show Button - Professional only, for completed appointments */}
               {isProfessional &&
-                appointmentData.status === 'completed' &&
+                appointmentData.computed_status === 'completed' &&
                 appointment.bookings.booking_payments?.payment_methods
                   ?.is_online && (
                   <Button

@@ -1019,8 +1019,8 @@ begin
     return 'completed';
   end if;
 
-  -- If we're between start and end time, it's still considered upcoming
-  return 'upcoming';
+  -- If we're between start and end time, it's ongoing
+  return 'ongoing';
 end;
 $$ language plpgsql;
 

@@ -237,28 +237,6 @@ export async function addAdditionalServices({
       additionalAmountCents,
     });
 
-    // Add services to booking_services using service role client to bypass RLS
-    const bookingServicesData = services.map(service => ({
-      booking_id: booking.id,
-      service_id: service.id,
-      price: service.price,
-      duration: service.duration,
-    }));
-
-    const { error: insertError } = await supabase
-      .from('booking_services')
-      .insert(bookingServicesData);
-
-    if (insertError) {
-      console.error('[addAdditionalServices] Insert error:', insertError);
-      return {
-        success: false,
-        error: `Failed to add services to booking: ${insertError.message}`,
-      };
-    }
-
-    console.log('[addAdditionalServices] Successfully inserted booking services:', bookingServicesData);
-
     const bookingPayment = booking.booking_payments;
     if (!bookingPayment) {
       console.error('[addAdditionalServices] No booking payment found for booking:', booking.id);
@@ -280,43 +258,21 @@ export async function addAdditionalServices({
       newTotalDollars,
     });
 
-    // Update the booking payment amount
-    const { error: updatePaymentError, data: updatedPayment } = await supabase
-      .from('booking_payments')
-      .update({
-        amount: newTotalDollars,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', bookingPayment.id);
-
-    console.log('[addAdditionalServices] Updated payment:', updatedPayment);
-
-    if (updatePaymentError) {
-      console.error('[addAdditionalServices] Payment update error:', updatePaymentError);
-      return {
-        success: false,
-        error: 'Failed to update payment amount',
-      };
-    }
-
-    console.log('[addAdditionalServices] Successfully updated booking payment:', {
-      paymentId: bookingPayment.id,
-      newAmount: newTotalDollars,
-    });
-
-    // Handle Stripe payment updates
+    // Handle Stripe payment updates FIRST for card payments
     const paymentMethod = bookingPayment.payment_methods;
     const isCardPayment = paymentMethod?.is_online === true;
 
     if (isCardPayment && bookingPayment.stripe_payment_intent_id) {
-      console.log('[addAdditionalServices] Updating Stripe payment intent:', {
+      console.log('[addAdditionalServices] Updating Stripe payment intent BEFORE database changes:', {
         paymentIntentId: bookingPayment.stripe_payment_intent_id,
         newAmount: newTotalCents,
       });
 
-      // For card payments, update the existing uncaptured payment intent
+      // For card payments, update the existing uncaptured payment intent FIRST
       try {
-        await stripe.paymentIntents.update(bookingPayment.stripe_payment_intent_id, {
+        const { updatePaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
+        
+        await updatePaymentIntent(bookingPayment.stripe_payment_intent_id, {
           amount: newTotalCents,
           metadata: {
             additional_services_added: 'true',
@@ -329,11 +285,115 @@ export async function addAdditionalServices({
         console.error('[addAdditionalServices] Stripe payment intent update error:', stripeError);
         return {
           success: false,
-          error: 'Failed to update payment intent',
+          error: stripeError instanceof Error 
+            ? `Failed to update payment intent: ${stripeError.message}`
+            : 'Failed to update payment intent',
         };
       }
-    } else {
-      // For cash payments, we just update the database
+    }
+
+    // Now that Stripe operations are successful (or not needed), proceed with database updates
+    console.log('[addAdditionalServices] Stripe operations completed successfully, proceeding with database updates');
+
+    // Add services to booking_services
+    const bookingServicesData = services.map(service => ({
+      booking_id: booking.id,
+      service_id: service.id,
+      price: service.price,
+      duration: service.duration,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('booking_services')
+      .insert(bookingServicesData);
+
+    if (insertError) {
+      console.error('[addAdditionalServices] Insert error after Stripe update:', insertError);
+      
+      // If we already updated Stripe but DB insert fails, we need to rollback Stripe
+      if (isCardPayment && bookingPayment.stripe_payment_intent_id) {
+        console.log('[addAdditionalServices] Rolling back Stripe payment intent due to database error');
+        try {
+          const { updatePaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
+          
+          await updatePaymentIntent(bookingPayment.stripe_payment_intent_id, {
+            amount: currentAmountCents, // Revert to original amount
+            metadata: {
+              additional_services_rollback: 'true',
+              rollback_reason: 'database_insert_failed',
+            },
+          });
+          console.log('[addAdditionalServices] Successfully rolled back Stripe payment intent');
+        } catch (rollbackError) {
+          console.error('[addAdditionalServices] CRITICAL: Failed to rollback Stripe payment intent:', rollbackError);
+          // Log this as a critical error that needs manual intervention
+        }
+      }
+      
+      return {
+        success: false,
+        error: `Failed to add services to booking: ${insertError.message}`,
+      };
+    }
+
+    console.log('[addAdditionalServices] Successfully inserted booking services:', bookingServicesData);
+
+    // Update the booking payment amount
+    const { error: updatePaymentError } = await supabase
+      .from('booking_payments')
+      .update({
+        amount: newTotalDollars,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingPayment.id);
+
+    if (updatePaymentError) {
+      console.error('[addAdditionalServices] Payment update error after successful inserts:', updatePaymentError);
+      
+      // Rollback: Delete the inserted services
+      console.log('[addAdditionalServices] Rolling back inserted services due to payment update error');
+      const { error: deleteError } = await supabase
+        .from('booking_services')
+        .delete()
+        .in('service_id', services.map(s => s.id))
+        .eq('booking_id', booking.id);
+      
+      if (deleteError) {
+        console.error('[addAdditionalServices] CRITICAL: Failed to rollback inserted services:', deleteError);
+      }
+      
+      // Rollback Stripe if needed
+      if (isCardPayment && bookingPayment.stripe_payment_intent_id) {
+        console.log('[addAdditionalServices] Rolling back Stripe payment intent due to payment update error');
+        try {
+          const { updatePaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
+          
+          await updatePaymentIntent(bookingPayment.stripe_payment_intent_id, {
+            amount: currentAmountCents, // Revert to original amount
+            metadata: {
+              additional_services_rollback: 'true',
+              rollback_reason: 'payment_update_failed',
+            },
+          });
+          console.log('[addAdditionalServices] Successfully rolled back Stripe payment intent');
+        } catch (rollbackError) {
+          console.error('[addAdditionalServices] CRITICAL: Failed to rollback Stripe payment intent:', rollbackError);
+        }
+      }
+      
+      return {
+        success: false,
+        error: 'Failed to update payment amount',
+      };
+    }
+
+    console.log('[addAdditionalServices] Successfully updated booking payment:', {
+      paymentId: bookingPayment.id,
+      newAmount: newTotalDollars,
+    });
+
+    if (!isCardPayment) {
+      // For cash payments, log the additional amount to be collected
       console.log('[addAdditionalServices] Cash payment - additional amount to be collected:', {
         additionalAmount: additionalAmountCents / 100,
       });

@@ -109,12 +109,14 @@ function FilterButtons({
   activeFilter,
   setActiveFilter,
   upcomingCount,
+  ongoingCount,
   completedCount,
   cancelledCount,
 }: {
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
   upcomingCount: number;
+  ongoingCount: number;
   completedCount: number;
   cancelledCount: number;
 }) {
@@ -141,6 +143,18 @@ function FilterButtons({
         onClick={() => setActiveFilter('upcoming')}
       >
         Upcoming
+      </button>
+      <button
+        className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+          ongoingCount > 0 ? 'hover:bg-muted' : ''
+        } ${
+          activeFilter === 'ongoing'
+            ? 'bg-white shadow-sm'
+            : 'text-muted-foreground'
+        }`}
+        onClick={() => setActiveFilter('ongoing')}
+      >
+        Ongoing
       </button>
       <button
         className={`px-4 py-1.5 rounded-full text-sm font-medium ${
@@ -193,7 +207,7 @@ function AppointmentStatusBadge({
       return (
         <Badge
           variant="outline"
-          className="bg-orange-500/10 text-orange-500 border-orange-500/20"
+          className="bg-blue-500/10 text-blue-500 border-blue-500/20"
         >
           Ongoing
         </Badge>
@@ -270,7 +284,13 @@ function AppointmentTableCard({
             </Typography>
             <div className="text-muted-foreground text-sm flex items-center mt-1">
               <CalendarDays className="mr-1 h-3 w-3" />
-              {formatDateTimeInTimezone(appointment.date, userTimezone, 'MMM dd, yyyy').date}
+              {
+                formatDateTimeInTimezone(
+                  appointment.date,
+                  userTimezone,
+                  'MMM dd, yyyy',
+                ).date
+              }
               <span className="mx-1">•</span>
               <Clock className="mr-1 h-3 w-3" />
               {appointment.time}
@@ -349,7 +369,15 @@ function DashboardTemplateAppointmentsTable({
                   <div className="flex flex-col">
                     <div className="flex items-center">
                       <CalendarDays className="mr-1 h-3 w-3 text-muted-foreground" />
-                      <span>{formatDateTimeInTimezone(appointment.date, userTimezone, 'MMM dd, yyyy').date}</span>
+                      <span>
+                        {
+                          formatDateTimeInTimezone(
+                            appointment.date,
+                            userTimezone,
+                            'MMM dd, yyyy',
+                          ).date
+                        }
+                      </span>
                     </div>
                     <div className="flex items-center text-muted-foreground">
                       <Clock className="mr-1 h-3 w-3" />
@@ -425,13 +453,13 @@ export function DashboardAppointmentsPageClient({
     validAppointments as AppointmentWithBooking[]
   ).map((appointment: AppointmentWithBooking) => {
     const startTime = new Date(appointment.start_time);
-    
+
     // Format time in user's timezone
     const { time: formattedTime } = formatDateTimeInTimezone(
       startTime,
       userTimezone,
       'EEEE, MMMM d, yyyy',
-      'h:mm a'
+      'h:mm a',
     );
 
     // Get service name with additional services indicator
@@ -495,6 +523,10 @@ export function DashboardAppointmentsPageClient({
     (appointment) => appointment.status === 'upcoming',
   );
 
+  const ongoingAppointments = filteredAppointments.filter(
+    (appointment) => appointment.status === 'ongoing',
+  );
+
   const completedAppointments = filteredAppointments.filter(
     (appointment) => appointment.status === 'completed',
   );
@@ -525,6 +557,7 @@ export function DashboardAppointmentsPageClient({
             activeFilter={activeFilter}
             setActiveFilter={setActiveFilter}
             upcomingCount={upcomingAppointments.length}
+            ongoingCount={ongoingAppointments.length}
             completedCount={completedAppointments.length}
             cancelledCount={cancelledAppointments.length}
           />
@@ -535,9 +568,11 @@ export function DashboardAppointmentsPageClient({
                 ? filteredAppointments
                 : activeFilter === 'upcoming'
                   ? upcomingAppointments
-                  : filteredAppointments.filter(
-                      (a) => a.status === activeFilter,
-                    )
+                  : activeFilter === 'ongoing'
+                    ? ongoingAppointments
+                    : filteredAppointments.filter(
+                        (a) => a.status === activeFilter,
+                      )
             }
             isLoading={false}
             isProfessionalView={isProfessional}

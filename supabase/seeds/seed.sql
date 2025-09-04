@@ -1182,8 +1182,63 @@ BEGIN
     
     -- NOTE: Intentionally NOT creating a review for this appointment
     
+    -- 8. Currently ongoing appointment (for testing Add Additional Services)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'confirmed',
+        'Currently ongoing appointment - started 30 minutes ago'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() - INTERVAL '30 minutes',  -- Started 30 minutes ago
+        NOW() + INTERVAL '30 minutes',  -- Ends in 30 minutes
+        'ongoing'
+    ) RETURNING id INTO appointment_id;
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        standard_service_id,
+        150.00,
+        60
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        150.00,
+        0.00,
+        1.00,
+        'completed',
+        'pi_ongoing_' || extract(epoch from now())::text
+    );
+    
     RAISE NOTICE 'All appointments created successfully!';
-    RAISE NOTICE 'Created 7 different appointment scenarios:';
+    RAISE NOTICE 'Created 8 different appointment scenarios:';
     RAISE NOTICE '1. Past completed appointment with review';
     RAISE NOTICE '2. Past cancelled appointment with cancellation fee';
     RAISE NOTICE '3. Upcoming confirmed appointment with deposit';
@@ -1191,6 +1246,7 @@ BEGIN
     RAISE NOTICE '5. Past no-show appointment';
     RAISE NOTICE '6. Future appointment with pre-auth scheduled';
     RAISE NOTICE '7. Past completed appointment without review (for post-appointment flow testing)';
+    RAISE NOTICE '8. Currently ongoing appointment (for testing Add Additional Services)';
     
 END $$;
 

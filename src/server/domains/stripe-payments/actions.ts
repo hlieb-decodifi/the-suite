@@ -275,7 +275,7 @@ async function handleUnifiedPaymentFlow(
           balance_amount: paymentCalculation.balanceAmount.toString(),
           professional_stripe_account_id: professionalProfile.stripe_account_id,
           capture_scheduled_for: scheduleResult.captureDate!.toISOString(),
-          appointment_timing: daysUntilAppointment > 6 ? 'more_than_6_days' : 'less_than_6_days'
+          appointment_timing: scheduleResult.shouldPreAuthNow ? 'immediate' : 'scheduled'
         },
         customerEmail: userEmail
       });

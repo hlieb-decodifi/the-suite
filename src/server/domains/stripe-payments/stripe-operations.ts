@@ -1112,6 +1112,50 @@ export async function createUncapturedPayment(
   return paymentIntent;
 }
 
+/**
+ * Update an existing payment intent with new amount or metadata
+ */
+export async function updatePaymentIntent(
+  paymentIntentId: string,
+  updates: {
+    amount?: number;
+    metadata?: Record<string, string>;
+  }
+): Promise<Stripe.PaymentIntent> {
+  try {
+    console.log('[updatePaymentIntent] Updating payment intent:', {
+      paymentIntentId,
+      updates,
+    });
+
+    const updateParams: Stripe.PaymentIntentUpdateParams = {};
+    
+    if (updates.amount !== undefined) {
+      updateParams.amount = updates.amount;
+    }
+    
+    if (updates.metadata) {
+      updateParams.metadata = updates.metadata;
+    }
+
+    const updatedPaymentIntent = await stripe.paymentIntents.update(
+      paymentIntentId,
+      updateParams
+    );
+
+    console.log('[updatePaymentIntent] Successfully updated payment intent:', {
+      id: updatedPaymentIntent.id,
+      amount: updatedPaymentIntent.amount,
+      status: updatedPaymentIntent.status,
+    });
+
+    return updatedPaymentIntent;
+  } catch (error) {
+    console.error('[updatePaymentIntent] Error updating payment intent:', error);
+    throw error;
+  }
+}
+
 // Update the existing payment creation function to use createUncapturedPayment
 export async function createPaymentForBooking(
   bookingId: string,
