@@ -677,15 +677,30 @@ export async function createEnhancedCheckoutSession(
       
       sessionConfig.mode = 'payment';
       sessionConfig.payment_method_types = ['card'];
+      
+      // Check if this is a service fee only payment (cash payment without deposit)
+      const isServiceFeeOnly = metadata?.payment_flow === 'immediate_service_fee_only';
+      const isCashPayment = metadata?.payment_method_type === 'cash';
+      
+      // Determine product description based on payment type and conditions
+      let productDescription: string;
+      if (paymentType === 'deposit') {
+        productDescription = `Appointment deposit${balanceAmount ? ` (Balance: $${(balanceAmount / 100).toFixed(2)} to be paid later)` : ''}`;
+      } else {
+        if (isServiceFeeOnly || (isCashPayment && !metadata?.deposit_amount)) {
+          productDescription = 'Service fee for your booking (remaining balance to be paid in cash)';
+        } else {
+          productDescription = 'Full payment for your booking';
+        }
+      }
+      
       sessionConfig.line_items = [
         {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: paymentType === 'deposit' ? 'Service Deposit' : 'Service Payment',
-              description: paymentType === 'deposit' 
-                ? `Appointment deposit${balanceAmount ? ` (Balance: $${(balanceAmount / 100).toFixed(2)} to be paid later)` : ''}`
-                : `Full payment for your booking`
+              name: paymentType === 'deposit' ? 'Service Deposit' : (isServiceFeeOnly || (isCashPayment && !metadata?.deposit_amount) ? 'Service Fee' : 'Service Payment'),
+              description: productDescription
             },
             unit_amount: chargeAmount
           },
@@ -694,7 +709,6 @@ export async function createEnhancedCheckoutSession(
       ];
 
       // Only include transfer data if this is not a service fee only payment
-      const isServiceFeeOnly = metadata?.payment_flow === 'immediate_service_fee_only';
       
       // Use direct charge to professional's account with correct fee structure
       sessionConfig.payment_intent_data = {

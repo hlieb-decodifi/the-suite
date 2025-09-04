@@ -773,17 +773,19 @@ export function BookingDetailPageClient({
                             {formatCurrency(subtotal)}
                           </Typography>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Service Fee:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {formatCurrency(serviceFee)}
-                          </Typography>
-                        </div>
+                        {!isProfessional && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Service Fee:
+                            </Typography>
+                            <Typography variant="small" className="font-medium">
+                              {formatCurrency(serviceFee)}
+                            </Typography>
+                          </div>
+                        )}
                         {totalTips > 0 && (
                           <div className="flex justify-between items-center">
                             <Typography
@@ -819,23 +821,95 @@ export function BookingDetailPageClient({
                         )}
                         {(appointment.bookings.booking_payments
                           ?.balance_amount ?? 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <Typography
-                              variant="small"
-                              className="text-muted-foreground"
-                            >
-                              Balance Due
-                            </Typography>
-                            <Typography
-                              variant="small"
-                              className="font-medium text-amber-600"
-                            >
-                              {formatCurrency(
+                          <>
+                            {/* Check if this is a cash payment with deposit */}
+                            {(() => {
+                              const depositAmount =
                                 appointment.bookings.booking_payments
-                                  ?.balance_amount ?? 0,
-                              )}
-                            </Typography>
-                          </div>
+                                  ?.deposit_amount ?? 0;
+                              const isDeposit = depositAmount > 0;
+                              const isCashPayment =
+                                !appointment.bookings.booking_payments
+                                  ?.payment_methods?.is_online;
+                              const stripeBalance =
+                                appointment.bookings.booking_payments
+                                  ?.balance_amount ?? 0;
+
+                              if (isDeposit && isCashPayment) {
+                                // For cash payments with deposit: show both Stripe balance (suite fee) and cash balance (services + tips)
+                                const cashBalance =
+                                  subtotal + totalTips - depositAmount; // Services and tips paid in cash
+
+                                return (
+                                  <>
+                                    {/* Hide card balance for professionals when it's only suite fee */}
+                                    {!isProfessional && (
+                                      <div className="flex justify-between items-center">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground"
+                                        >
+                                          Card Balance Due (Suite Fee):
+                                        </Typography>
+                                        <Typography
+                                          variant="small"
+                                          className="font-medium text-amber-600"
+                                        >
+                                          {formatCurrency(stripeBalance)}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                    {cashBalance > 0 && (
+                                      <div className="flex justify-between items-center">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground"
+                                        >
+                                          Cash Balance Due (At Appointment):
+                                        </Typography>
+                                        <Typography
+                                          variant="small"
+                                          className="font-medium text-amber-600"
+                                        >
+                                          {formatCurrency(cashBalance)}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              } else {
+                                // Regular balance due display
+                                // For professionals, hide balance if it's only suite fee (cash payment without deposit)
+                                const isCashWithoutDeposit =
+                                  isCashPayment && !isDeposit;
+                                const shouldHideBalanceForProfessional =
+                                  isProfessional &&
+                                  (isCashWithoutDeposit ||
+                                    stripeBalance <= serviceFee);
+
+                                if (shouldHideBalanceForProfessional) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div className="flex justify-between items-center">
+                                    <Typography
+                                      variant="small"
+                                      className="text-muted-foreground"
+                                    >
+                                      Balance Due:
+                                    </Typography>
+                                    <Typography
+                                      variant="small"
+                                      className="font-medium text-amber-600"
+                                    >
+                                      {formatCurrency(stripeBalance)}
+                                    </Typography>
+                                  </div>
+                                );
+                              }
+                            })()}
+                          </>
                         )}
                         <Separator />
                         <div className="flex justify-between items-center">
@@ -843,7 +917,11 @@ export function BookingDetailPageClient({
                             Total:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
-                            {formatCurrency(subtotal + serviceFee + totalTips)}
+                            {isProfessional
+                              ? formatCurrency(subtotal + totalTips)
+                              : formatCurrency(
+                                  subtotal + serviceFee + totalTips,
+                                )}
                           </Typography>
                         </div>
                       </div>
@@ -1309,9 +1387,11 @@ export function BookingDetailPageClient({
                           Total:
                         </Typography>
                         <Typography className="font-bold text-primary text-lg">
-                          {formatCurrency(
-                            servicesTotal + serviceFee + totalTips,
-                          )}
+                          {isProfessional
+                            ? formatCurrency(servicesTotal + totalTips)
+                            : formatCurrency(
+                                servicesTotal + serviceFee + totalTips,
+                              )}
                         </Typography>
                       </div>
                     </>
