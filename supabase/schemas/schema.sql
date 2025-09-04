@@ -1025,9 +1025,10 @@ $$ language plpgsql;
 
 /**
 * View that combines appointments with their computed status
-* Note: Views in Postgres inherit the relationships of their base tables
+* Note: Uses SECURITY INVOKER to respect RLS policies of the underlying table
 */
-create or replace view appointments_with_status as
+create or replace view appointments_with_status 
+with (security_invoker = true) as
 select 
   a.id,
   a.booking_id,
