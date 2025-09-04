@@ -179,6 +179,7 @@ create table client_profiles (
   phone_number text,
   location text,
   address_id uuid references addresses,
+  timezone text default 'UTC', -- Client's timezone for appointment scheduling
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

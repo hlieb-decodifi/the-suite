@@ -5,6 +5,7 @@ import {
   sendBookingConfirmationProfessional,
 
 } from '@/providers/brevo/templates';
+import { format, toZonedTime } from 'date-fns-tz';
 
 // Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
@@ -25,6 +26,30 @@ function createSupabaseAdminClient() {
 
 // Global set to track which bookings have had emails sent in this session
 const emailsSentTracker = new Set<string>();
+
+/**
+ * Format a UTC date/time for a specific timezone
+ */
+function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string {
+  try {
+    const utcDate = new Date(utcDateTime);
+    const zonedDate = toZonedTime(utcDate, timezone);
+    return format(zonedDate, 'EEEE, MMMM d, yyyy \'at\' h:mm a zzz', { timeZone: timezone });
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error, { utcDateTime, timezone });
+    // Fallback to UTC formatting
+    return new Date(utcDateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ' UTC';
+  }
+}
 
 // Helper function to format address like in booking page
 function formatAddress(address: {
@@ -204,14 +229,15 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Failed to fetch appointment data' };
     }
 
-    // Get client data with profile for phone number
+    // Get client data with profile for phone number and timezone
     const { data: clientData, error: clientError } = await adminSupabase
       .from('users')
       .select(`
-        first_name, 
+        first_name,
         last_name,
         client_profiles (
-          phone_number
+          phone_number,
+          timezone
         )
       `)
       .eq('id', bookingData.client_id)
@@ -222,13 +248,14 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Failed to fetch client data' };
     }
 
-    // Get professional data with profile and address
+    // Get professional data with profile, address, and timezone
     const { data: professionalData, error: professionalError } = await adminSupabase
       .from('professional_profiles')
       .select(`
         user_id,
         phone_number,
         location,
+        timezone,
         address:address_id(
           street_address,
           city,
@@ -290,18 +317,20 @@ export async function sendBookingConfirmationEmails(
     const clientMessageUrl = await generateMessageURL(bookingData.client_id, professionalData.user_id);
     const professionalMessageUrl = await generateMessageURL(professionalData.user_id, bookingData.client_id);
 
-    // Format appointment date and time
-    const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    // Get timezones (fallback to UTC if not set)
+    const clientTimezone = clientProfile?.timezone || 'UTC';
+    const professionalTimezone = professionalData.timezone || 'UTC';
 
-    const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
+    // Format appointment date and time for each timezone
+    const clientAppointmentDateTime = formatDateTimeInTimezone(appointment.start_time, clientTimezone);
+    const professionalAppointmentDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
+
+    console.log('Appointment time formatting:', {
+      utcTime: appointment.start_time,
+      clientTimezone,
+      professionalTimezone,
+      clientFormatted: clientAppointmentDateTime,
+      professionalFormatted: professionalAppointmentDateTime
     });
 
     // Calculate totals
@@ -330,7 +359,7 @@ export async function sendBookingConfirmationEmails(
           price_total_paid: professionalTotal,
           booking_id: bookingId,
           appointment_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
-          date_and_time: `${appointmentDate} at ${appointmentTime}`,
+          date_and_time: professionalAppointmentDateTime,
           address: professionalAddress,
           home_url: process.env.NEXT_PUBLIC_BASE_URL!,
           message_url: professionalMessageUrl,
@@ -385,7 +414,7 @@ export async function sendBookingConfirmationEmails(
           price_total_paid: totalPaid,
           booking_id: bookingId,
           appointment_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
-          date_and_time: `${appointmentDate} at ${appointmentTime}`,
+          date_and_time: clientAppointmentDateTime,
           home_url: process.env.NEXT_PUBLIC_BASE_URL!,
           message_url: clientMessageUrl,
           professional_address: professionalAddress,

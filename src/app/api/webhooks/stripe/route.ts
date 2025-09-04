@@ -1720,6 +1720,19 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
 
     const supabase = createAdminClient();
 
+    // Check if this is a deposit flow by looking for a deposit payment intent ID
+    const { data: paymentData } = await supabase
+      .from('booking_payments')
+      .select('deposit_payment_intent_id')
+      .eq('booking_id', bookingId)
+      .single();
+
+    // If this booking has a deposit payment intent, emails were already sent in handleSetupIntentSucceeded
+    if (paymentData?.deposit_payment_intent_id) {
+      console.log(`📧 Skipping confirmation emails for booking ${bookingId} - already sent for deposit flow`);
+      return;
+    }
+
     // Get appointment details
     const { data: appointmentData, error: appointmentError } = await supabase
       .from('appointments')
@@ -1732,7 +1745,7 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
       return;
     }
 
-    // Send booking confirmation emails
+    // Send booking confirmation emails (only for regular flows, not deposit flows)
     try {
       const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
       await sendBookingConfirmationEmails(bookingId, appointmentData.id, true); // true = uncaptured payment

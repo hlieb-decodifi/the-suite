@@ -878,6 +878,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   booking_id: string;
   client_email: string;
   client_name: string;
+  client_timezone: string;
   professional_name: string;
   professional_email: string;
   professional_address: string;
@@ -1054,6 +1055,9 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         // Find client details
         const clientUser = allUsers.find(u => u.id === booking.client_id)!;
         const clientAuth = authUsers.find(u => u.id === booking.client_id);
+        const clientTimezone = Array.isArray(clientUser.client_profiles) 
+          ? clientUser.client_profiles[0]?.timezone 
+          : clientUser.client_profiles?.timezone || 'UTC';
 
         // Find professional details
         const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
@@ -1081,7 +1085,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
           booking_id: payment.booking_id,
           client_email: clientAuth?.email || '',
           client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-          // Only use professional's timezone for notifications
+          client_timezone: clientTimezone,
           professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
           professional_email: professionalAuth?.email || '',
           professional_address: professionalAddress,

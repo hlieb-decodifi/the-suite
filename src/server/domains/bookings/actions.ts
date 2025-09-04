@@ -4,6 +4,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
+import { format, toZonedTime } from 'date-fns-tz';
 import {
   sendBookingCancellationNoShowClient,
   sendBookingCancellationNoShowProfessional,
@@ -36,6 +37,30 @@ function createSupabaseAdminClient() {
   }
 
   return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
+}
+
+/**
+ * Format a UTC date/time for a specific timezone
+ */
+function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string {
+  try {
+    const utcDate = new Date(utcDateTime);
+    const zonedDate = toZonedTime(utcDate, timezone);
+    return format(zonedDate, 'EEEE, MMMM d, yyyy \'at\' h:mm a zzz', { timeZone: timezone });
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error, { utcDateTime, timezone });
+    // Fallback to UTC formatting
+    return new Date(utcDateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ' UTC';
+  }
 }
 
 // Database types
@@ -617,21 +642,14 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
   const professionalUser = booking.professional_profiles.users;
   const clientUser = booking.clients;
 
-  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  // Get professional timezone for email formatting
+  const professionalTimezone = (booking.professional_profiles as any)?.timezone || 'UTC';
 
-  // Address not needed for these email templates
+  // Format date/time for professional timezone
+  const professionalDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
 
-  const dateTime = `${appointmentDate} ${appointmentTime}`;
+  // Default to professional timezone for shared fields (backward compatibility)
+  const dateTime = professionalDateTime;
 
   // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
   function ianaToAbbreviation(iana: string | undefined): string {
@@ -648,9 +666,6 @@ async function sendCancellationEmails(booking: BookingQueryResult, cancellationR
       return '';
     }
   }
-
-  // Get timezones
-  const professionalTimezone = (booking.professional_profiles as any)?.timezone;
 
   // Create services array from booking services
   const services = booking.booking_services.map(bs => ({
@@ -1352,17 +1367,11 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
   const professionalUser = booking.professional_profiles.users;
   const clientUser = booking.clients;
 
-  const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  // Get professional timezone for email formatting
+  const professionalTimezone = (booking.professional_profiles as any)?.timezone || 'UTC';
+
+  // Format date/time for professional timezone
+  const professionalDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
 
   // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
   function ianaToAbbreviation(iana: string | undefined): string {
@@ -1380,13 +1389,8 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
     }
   }
 
-  // Get timezones
-  const professionalTimezone = (booking.professional_profiles as any)?.timezone;
-  const clientTimezone = (booking.clients as any)?.client_profiles?.[0]?.timezone || (booking.clients as any)?.client_profiles?.timezone;
-
-  // Address not needed for no-show email templates
-
-  const dateTime = `${appointmentDate} ${appointmentTime}`;
+  // Default to professional timezone for shared fields (backward compatibility)
+  const dateTime = professionalDateTime;
   const serviceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
   // No-show emails use the professional's 24hr cancellation percentage
   const policyRate = `${(booking.professional_profiles as any)?.cancellation_24h_charge_percentage || 0}%`;
@@ -1408,7 +1412,7 @@ async function sendNoShowEmails(appointment: AppointmentQueryResult, chargeAmoun
     professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
     service_amount: serviceAmount,
     services_page_url: `${process.env.NEXT_PUBLIC_BASE_URL}/services`,
-    timezone: ianaToAbbreviation(clientTimezone),
+    timezone: ianaToAbbreviation(professionalTimezone),
     services
   };
   const professionalParams = {

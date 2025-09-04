@@ -2,8 +2,33 @@ import { NextResponse } from 'next/server';
 import { getAppointmentsNeedingBalanceNotification, markBalanceNotificationSent } from '@/server/domains/stripe-payments/db';
 import { sendAppointmentCompletion2hafterClient, sendAppointmentCompletion2hafterProfessional} from '@/providers/brevo/templates';
 import { EmailRecipient } from '@/providers/brevo/types';
+import { format, toZonedTime } from 'date-fns-tz';
 
 export const runtime = 'nodejs';
+
+/**
+ * Format a UTC date/time for a specific timezone
+ */
+function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string {
+  try {
+    const utcDate = new Date(utcDateTime);
+    const zonedDate = toZonedTime(utcDate, timezone);
+    return format(zonedDate, 'EEEE, MMMM d, yyyy \'at\' h:mm a zzz', { timeZone: timezone });
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error, { utcDateTime, timezone });
+    // Fallback to UTC formatting
+    return new Date(utcDateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ' UTC';
+  }
+}
 
 /**
  * Cron job to send balance notifications to clients
@@ -38,19 +63,12 @@ export async function GET() {
       try {
         console.log(`[CRON] Sending balance notification for booking: ${appointment.booking_id}`);
 
-        // Format appointment date and time for the email
-        const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
+        // Format appointment date and time for the email using client and professional timezones
+        const clientTimezone = appointment.client_timezone || 'UTC';
+        const professionalTimezone = appointment.professional_timezone || 'UTC';
         
-        const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
+        const clientDateTime = formatDateTimeInTimezone(appointment.start_time, clientTimezone);
+        const professionalDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
 
         // Calculate payment amounts (already in dollars from DB)
         const totalAmount = appointment.total_amount;
@@ -69,11 +87,11 @@ export async function GET() {
         const appointmentCompletionClientParams = {
           booking_id: appointment.booking_id,
           client_name: appointment.client_name,
-          date_time: `${appointmentDate} ${appointmentTime}`,
+          date_time: clientDateTime,
           professional_name: appointment.professional_name,
           review_tip_url: reviewTipUrl,
           service_amount: serviceAmount,
-          timezone: appointment.professional_timezone || '',
+          timezone: clientTimezone,
           total_paid: totalAmount,
           services: appointment.services || []
         };
@@ -81,11 +99,11 @@ export async function GET() {
         const appointmentCompletionProfessionalParams = {
           booking_id: appointment.booking_id,
           client_name: appointment.client_name,
-          date_time: `${appointmentDate} ${appointmentTime}`,
+          date_time: professionalDateTime,
           payment_method: appointment.payment_method_name || '',
           professional_name: appointment.professional_name,
           service_amount: serviceAmount,
-          timezone: appointment.professional_timezone || '',
+          timezone: professionalTimezone,
           total_amount: serviceAmount + appointment.tip_amount, // Professional gets services + tips (no service fee)
           services: appointment.services || []
         };
