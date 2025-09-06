@@ -2,9 +2,9 @@
 
 import { Typography } from '@/components/ui/typography';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-// import { GoogleAnalyticsDashboard } from '@/components/common/GoogleAnalyticsDashboard/GoogleAnalyticsDashboard';
+import { GoogleAnalyticsDashboard } from '@/components/common/GoogleAnalyticsDashboard/GoogleAnalyticsDashboard';
 import { PostHogDashboard } from '@/components/common/PostHogDashboard/PostHogDashboard';
-// import { GoogleAnalyticsDebug } from '@/components/common/GoogleAnalyticsDebug/GoogleAnalyticsDebug';
+import { GoogleAnalyticsDebug } from '@/components/common/GoogleAnalyticsDebug/GoogleAnalyticsDebug';
 
 export default function AnalyticsPage() {
   return (
@@ -18,12 +18,12 @@ export default function AnalyticsPage() {
           <TabsTrigger value="google-analytics">Google Analytics</TabsTrigger>
           <TabsTrigger value="posthog">PostHog Analytics</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="google-analytics" className="space-y-4">
-          {/* <GoogleAnalyticsDebug />
-          <GoogleAnalyticsDashboard /> */}
+          <GoogleAnalyticsDebug />
+          <GoogleAnalyticsDashboard />
         </TabsContent>
-        
+
         <TabsContent value="posthog" className="space-y-4">
           <PostHogDashboard />
         </TabsContent>
