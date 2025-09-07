@@ -1156,6 +1156,74 @@ export async function updatePaymentIntent(
   }
 }
 
+/**
+ * Create and charge a payment intent immediately for no-show fees
+ */
+export async function createNoShowCharge(
+  amount: number,
+  customerId: string,
+  paymentMethodId: string,
+  professionalStripeAccountId: string,
+  metadata: Record<string, string> = {}
+): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
+  try {
+    console.log('[createNoShowCharge] Creating no-show charge:', {
+      amount,
+      customerId,
+      paymentMethodId,
+      professionalStripeAccountId,
+      metadata,
+    });
+
+    const serviceFee = await getServiceFeeFromConfig();
+    const professionalAmount = amount - serviceFee; // Professional gets this amount minus suite fee
+
+    const paymentIntentData: Stripe.PaymentIntentCreateParams = {
+      amount,
+      currency: 'usd',
+      customer: customerId,
+      payment_method: paymentMethodId,
+      confirm: true,
+      off_session: true, // This is for payments without customer present
+      metadata: {
+        ...metadata,
+        payment_type: 'no_show_charge',
+        charge_reason: 'no_show'
+      }
+    };
+
+    // Add transfer data to send professional portion
+    if (professionalAmount > 0) {
+      paymentIntentData.transfer_data = {
+        amount: professionalAmount,
+        destination: professionalStripeAccountId
+      };
+      // The remaining amount (suite fee) stays in the platform account
+      paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+    console.log('[createNoShowCharge] Successfully created no-show charge:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      status: paymentIntent.status,
+    });
+
+    return {
+      success: true,
+      paymentIntentId: paymentIntent.id
+    };
+
+  } catch (error) {
+    console.error('[createNoShowCharge] Error creating no-show charge:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error creating no-show charge'
+    };
+  }
+}
+
 // Update the existing payment creation function to use createUncapturedPayment
 export async function createPaymentForBooking(
   bookingId: string,

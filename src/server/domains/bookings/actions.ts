@@ -741,6 +741,7 @@ export async function markNoShowAction(
           *,
           professional_profiles!inner(
             user_id,
+            stripe_account_id,
             address_id,
             address:address_id(
               street_address,
@@ -819,15 +820,67 @@ export async function markNoShowAction(
       // Calculate total service amount (excluding tip and service fee)
       const totalServiceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
       chargeAmount = (totalServiceAmount * chargePercentage) / 100;
+      const chargeAmountCents = Math.round(chargeAmount * 100);
 
       try {
-        // If payment intent exists and was captured, create a new charge
-        if (payment.stripe_payment_intent_id && payment.status === 'completed') {
-          // For completed payments, we would need to create a new payment intent or charge
-          // This would require the client's saved payment method
-          console.log(`No-show charge would be: $${chargeAmount.toFixed(2)} (${chargePercentage}% of $${totalServiceAmount.toFixed(2)})`);
-          // TODO: Implement actual charging logic based on business requirements
-          chargedSuccessfully = true;
+        // We need to get the customer's payment method to charge them for the no-show
+        if (payment.stripe_payment_intent_id) {
+          // Import Stripe operations
+          const { createNoShowCharge } = await import('@/server/domains/stripe-payments/stripe-operations');
+          
+          // Get the original payment intent to retrieve customer and payment method info
+          const Stripe = (await import('stripe')).default;
+          const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!);
+          
+          const originalPaymentIntent = await stripeInstance.paymentIntents.retrieve(
+            payment.stripe_payment_intent_id
+          );
+
+          if (originalPaymentIntent.customer && originalPaymentIntent.payment_method && professionalProfile.stripe_account_id) {
+            console.log(`Processing no-show charge: $${chargeAmount.toFixed(2)} (${chargePercentage}% of $${totalServiceAmount.toFixed(2)})`);
+            
+            const chargeResult = await createNoShowCharge(
+              chargeAmountCents,
+              originalPaymentIntent.customer as string,
+              originalPaymentIntent.payment_method as string,
+              professionalProfile.stripe_account_id,
+              {
+                booking_id: booking.id,
+                appointment_id: appointmentId,
+                original_payment_intent_id: payment.stripe_payment_intent_id,
+                no_show_percentage: chargePercentage.toString(),
+                service_amount: totalServiceAmount.toString()
+              }
+            );
+
+            if (chargeResult.success) {
+              chargedSuccessfully = true;
+              console.log(`Successfully charged no-show fee: $${chargeAmount.toFixed(2)}, Payment Intent: ${chargeResult.paymentIntentId}`);
+              
+              // Update the payment record with the no-show charge information
+              await adminSupabase
+                .from('booking_payments')
+                .update({
+                  refund_reason: `No-show charge (${chargePercentage}% of service amount)`,
+                  refund_transaction_id: chargeResult.paymentIntentId || null,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', payment.id);
+            } else {
+              console.error('Failed to process no-show charge:', chargeResult.error);
+              // Continue with status update even if charge fails
+            }
+          } else {
+            if (!professionalProfile.stripe_account_id) {
+              console.error('Professional has not connected their Stripe account for no-show charge');
+            } else {
+              console.error('Missing customer or payment method information for no-show charge');
+            }
+            // Continue with status update even if charge fails
+          }
+        } else {
+          console.error('No payment intent found for no-show charge');
+          // Continue with status update even if charge fails
         }
       } catch (stripeError) {
         console.error('Failed to process no-show charge:', stripeError);

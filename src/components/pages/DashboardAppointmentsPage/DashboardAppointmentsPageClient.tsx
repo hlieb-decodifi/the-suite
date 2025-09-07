@@ -518,21 +518,21 @@ export function DashboardAppointmentsPageClient({
     return true;
   });
 
-  // Group appointments by status
+  // Group appointments by computed status for consistency
   const upcomingAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'upcoming',
+    (appointment) => appointment.computedStatus === 'upcoming',
   );
 
   const ongoingAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'ongoing',
+    (appointment) => appointment.computedStatus === 'ongoing',
   );
 
   const completedAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'completed',
+    (appointment) => appointment.computedStatus === 'completed',
   );
 
   const cancelledAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'cancelled',
+    (appointment) => appointment.computedStatus === 'cancelled',
   );
 
   // Table view with filters
@@ -571,7 +571,7 @@ export function DashboardAppointmentsPageClient({
                   : activeFilter === 'ongoing'
                     ? ongoingAppointments
                     : filteredAppointments.filter(
-                        (a) => a.status === activeFilter,
+                        (a) => a.computedStatus === activeFilter,
                       )
             }
             isLoading={false}

@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { stripe } from '@/lib/stripe/server';
 
 // Type for appointment permission check through bookings
 type AppointmentWithBooking = {

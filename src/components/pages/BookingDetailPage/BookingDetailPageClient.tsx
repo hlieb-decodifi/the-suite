@@ -32,6 +32,7 @@ import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
   ArrowLeftIcon,
   CalendarIcon,
+  Clock,
   ClockIcon,
   CopyIcon,
   CreditCardIcon,
@@ -1312,6 +1313,35 @@ export function BookingDetailPageClient({
                     <Plus className="h-4 w-4" />
                     Add Additional Services
                   </Button>
+                )}
+
+              {/* Ongoing Appointment No-Show Info */}
+              {isProfessional &&
+                appointmentData.computed_status === 'ongoing' && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 cursor-help">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span className="font-medium">Client No-Show?</span>
+                          </div>
+                          <p className="text-xs mt-1 text-blue-600">
+                            Hover for more info about no-show marking
+                          </p>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>
+                          If your client hasn't shown up for this appointment,
+                          you'll be able to mark it as a no-show after the
+                          appointment time ends. You'll have 24 hours to take
+                          this action and charge up to 100% of the service
+                          amount.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
 
               {/* Cancel Booking Button */}
