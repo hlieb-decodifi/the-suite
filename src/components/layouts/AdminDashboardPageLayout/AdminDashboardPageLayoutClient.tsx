@@ -184,8 +184,6 @@ export function AdminDashboardPageLayoutClient({
     return child;
   });
 
-  const showDateRangePicker = activeTab !== 'analytics';
-
   return (
     <div className="w-full mx-auto space-y-4 lg:space-y-6">
       {/* Page header */}
@@ -208,12 +206,10 @@ export function AdminDashboardPageLayoutClient({
           <TabNavigation tabs={tabs} variant="link" className="min-w-max" />
         </div>
         <div className="w-full md:w-auto md:ml-4 flex-shrink-0">
-          {showDateRangePicker && (
-            <DateRangePicker
-              dateRange={dateRange}
-              onDateRangeChange={handleDateRangeChange}
-            />
-          )}
+          <DateRangePicker
+            dateRange={dateRange}
+            onDateRangeChange={handleDateRangeChange}
+          />
         </div>
       </div>
       {/* Main content */}
