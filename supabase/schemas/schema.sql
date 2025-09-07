@@ -2733,6 +2733,178 @@ begin
 end;
 $$;
 
+/**
+* ACTIVITY LOG
+* Track user activities for business analytics and engagement metrics
+*/
+create table activity_log (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references users,  -- null for anonymous users, references users table instead of auth.users
+  session_id text,  -- for tracking anonymous sessions
+  activity_type text not null check (activity_type in ('page_view', 'service_view', 'professional_view', 'booking_started', 'booking_completed', 'booking_cancelled', 'search_performed')),
+  entity_type text check (entity_type in ('service', 'professional', 'booking')),
+  entity_id uuid,  -- references the relevant entity (service_id, professional_profile_id, booking_id)
+  metadata jsonb default '{}'::jsonb,  -- additional context data
+  ip_address inet,
+  user_agent text,
+  referrer text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table activity_log enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_activity_log_user_id on activity_log(user_id);
+create index if not exists idx_activity_log_session_id on activity_log(session_id);
+create index if not exists idx_activity_log_activity_type on activity_log(activity_type);
+create index if not exists idx_activity_log_entity on activity_log(entity_type, entity_id);
+create index if not exists idx_activity_log_created_at on activity_log(created_at);
+
+-- RLS policies for activity_log
+-- Only allow inserting activity log entries (for tracking)
+create policy "Anyone can insert activity log entries"
+  on activity_log for insert
+  with check (true);
+
+-- Only admins can view activity logs
+create policy "Admins can view all activity logs"
+  on activity_log for select
+  using (
+    exists (
+      select 1 from users u
+      join roles r on u.role_id = r.id
+      where u.id = auth.uid() 
+      and r.name = 'admin'
+    )
+  );
+
+/**
+* Function to get engagement analytics - users who viewed but didn't book
+*/
+create or replace function get_engagement_analytics(
+  start_date timestamptz default now() - interval '30 days',
+  end_date timestamptz default now(),
+  entity_filter_type text default null,
+  entity_filter_id uuid default null
+)
+returns table(
+  total_service_views bigint,
+  total_professional_views bigint,
+  total_bookings_started bigint,
+  total_bookings_completed bigint,
+  conversion_rate decimal(5,2),
+  engagement_rate decimal(5,2),
+  bounce_rate decimal(5,2)
+) as $$
+begin
+  return query
+  select 
+    count(case when al.activity_type = 'service_view' then 1 end) as total_service_views,
+    count(case when al.activity_type = 'professional_view' then 1 end) as total_professional_views,
+    count(case when al.activity_type = 'booking_started' then 1 end) as total_bookings_started,
+    count(case when al.activity_type = 'booking_completed' then 1 end) as total_bookings_completed,
+    case 
+      when count(case when al.activity_type in ('service_view', 'professional_view') then 1 end) > 0 
+      then round(
+        (count(case when al.activity_type = 'booking_completed' then 1 end)::decimal / 
+         count(case when al.activity_type in ('service_view', 'professional_view') then 1 end)::decimal) * 100, 
+        2
+      )
+      else 0.00
+    end as conversion_rate,
+    case 
+      when count(case when al.activity_type in ('service_view', 'professional_view') then 1 end) > 0 
+      then round(
+        (count(case when al.activity_type in ('booking_started', 'booking_completed') then 1 end)::decimal / 
+         count(case when al.activity_type in ('service_view', 'professional_view') then 1 end)::decimal) * 100, 
+        2
+      )
+      else 0.00
+    end as engagement_rate,
+    case 
+      when count(case when al.activity_type in ('service_view', 'professional_view') then 1 end) > 0 
+      then round(
+        ((count(case when al.activity_type in ('service_view', 'professional_view') then 1 end) - 
+          count(case when al.activity_type in ('booking_started', 'booking_completed') then 1 end))::decimal / 
+         count(case when al.activity_type in ('service_view', 'professional_view') then 1 end)::decimal) * 100, 
+        2
+      )
+      else 0.00
+    end as bounce_rate
+  from activity_log al
+  where al.created_at >= start_date 
+    and al.created_at <= end_date
+    and (entity_filter_type is null or al.entity_type = entity_filter_type)
+    and (entity_filter_id is null or al.entity_id = entity_filter_id);
+end;
+$$ language plpgsql security definer;
+
+/**
+* Function to get detailed engagement data - users who viewed but didn't book
+*/
+create or replace function get_non_converting_users(
+  start_date timestamptz default now() - interval '30 days',
+  end_date timestamptz default now(),
+  entity_filter_type text default null,
+  entity_filter_id uuid default null
+)
+returns table(
+  user_id uuid,
+  session_id text,
+  user_name text,
+  service_views bigint,
+  professional_views bigint,
+  bookings_started bigint,
+  bookings_completed bigint,
+  last_activity timestamp with time zone,
+  viewed_entities jsonb
+) as $$
+begin
+  return query
+  with user_activity as (
+    select 
+      al.user_id,
+      al.session_id,
+      count(case when al.activity_type = 'service_view' then 1 end) as service_views,
+      count(case when al.activity_type = 'professional_view' then 1 end) as professional_views,
+      count(case when al.activity_type = 'booking_started' then 1 end) as bookings_started,
+      count(case when al.activity_type = 'booking_completed' then 1 end) as bookings_completed,
+      max(al.created_at) as last_activity,
+      jsonb_agg(
+        distinct jsonb_build_object(
+          'type', al.entity_type,
+          'id', al.entity_id,
+          'activity', al.activity_type,
+          'timestamp', al.created_at
+        )
+      ) as viewed_entities
+    from activity_log al
+    where al.created_at >= start_date 
+      and al.created_at <= end_date
+      and (entity_filter_type is null or al.entity_type = entity_filter_type)
+      and (entity_filter_id is null or al.entity_id = entity_filter_id)
+    group by al.user_id, al.session_id
+  )
+  select 
+    ua.user_id,
+    ua.session_id,
+    case 
+      when ua.user_id is not null then concat(u.first_name, ' ', u.last_name)
+      else null
+    end as user_name,
+    ua.service_views,
+    ua.professional_views,
+    ua.bookings_started,
+    ua.bookings_completed,
+    ua.last_activity,
+    ua.viewed_entities
+  from user_activity ua
+  left join users u on ua.user_id = u.id
+  where (ua.service_views > 0 or ua.professional_views > 0)
+    and ua.bookings_completed = 0;
+end;
+$$ language plpgsql security definer;
+
 create or replace function is_admin(user_uuid uuid)
 returns boolean as $$
 declare
