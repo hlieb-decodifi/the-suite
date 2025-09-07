@@ -8,6 +8,7 @@ import { Form } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Typography } from '@/components/ui/typography';
 import { useEffect, useMemo, useState, useRef } from 'react';
+import useQueryClient from './useQueryClient';
 import {
   BookingFormDateTimePicker,
   BookingFormExtraServices,
@@ -69,6 +70,9 @@ export function BookingForm({
   const { trackBookingStarted } = useActivityTracker();
   const hasTrackedBookingStarted = useRef(false);
 
+  // QueryClient for refetching available time slots
+  const queryClient = useQueryClient();
+
   // Sync with parent when parent date changes
   useEffect(() => {
     if (selectedDate !== localSelectedDate) {
@@ -125,10 +129,17 @@ export function BookingForm({
 
       // Call the onSubmitSuccess callback with the enhanced form data and price
       onSubmitSuccess(formDataWithCombinedDate, calculateTotalPrice());
+
+      // Force refetch of available time slots after booking
+      queryClient.invalidateQueries({ queryKey: ['availableTimeSlots'] });
     },
     service,
     extraServices,
   });
+  // Refetch available time slots on mount/page reload/navigation
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['availableTimeSlots'] });
+  }, [queryClient]);
 
   // Notify parent about submission state changes
   useEffect(() => {

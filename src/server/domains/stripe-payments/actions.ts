@@ -10,7 +10,8 @@ import type { PaymentProcessingResult } from './types';
  */
 export async function createBookingWithStripePayment(
   formData: BookingFormValues,
-  professionalProfileId: string
+  professionalProfileId: string,
+  clientTimezone?: string
 ): Promise<PaymentProcessingResult> {
   try {
     const supabase = await createClient();
@@ -48,7 +49,7 @@ export async function createBookingWithStripePayment(
     const dateWithTime = new Date(formData.date);
     dateWithTime.setHours(parseInt(hours || '0', 10), parseInt(minutes || '0', 10), 0, 0);
     
-    const bookingResult = await createBooking({ ...formData, dateWithTime }, professionalProfileId);
+    const bookingResult = await createBooking({ ...formData, dateWithTime }, professionalProfileId, clientTimezone);
     
     if (!bookingResult.bookingId) {
       return {

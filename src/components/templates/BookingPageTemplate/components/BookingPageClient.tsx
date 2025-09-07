@@ -46,6 +46,7 @@ export function BookingPageClient({
   const { trackServiceView, trackProfessionalView } = useActivityTracker();
 
   // Use the existing booking state hook with the page context
+  const selectedExtraServiceIds = formData.extraServices?.map((s) => s.id) || [];
   const {
     bookingCompleted,
     bookingDetails,
@@ -69,6 +70,7 @@ export function BookingPageClient({
       // Redirect to success page or show completion state
       console.log('Booking completed:', bookingId);
     },
+    selectedExtraServiceIds,
   });
 
   // Track service view when component loads
