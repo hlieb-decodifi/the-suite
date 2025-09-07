@@ -22,6 +22,7 @@ import { createOrGetConversationEnhanced } from '@/server/domains/messages/actio
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
+import { getUserTimezone, formatDateTimeInTimezone } from '@/utils/timezone';
 import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
   ArrowLeftIcon,
@@ -42,7 +43,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DetailedAppointmentType } from './BookingDetailPage';
 
 export type BookingDetailPageClientProps = {
@@ -129,10 +130,15 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
+  const [userTimezone, setUserTimezone] = useState<string>('UTC');
 
   const router = useRouter();
   const { toast } = useToast();
 
+  // Get user's timezone on component mount
+  useEffect(() => {
+    setUserTimezone(getUserTimezone());
+  }, []);
   // Get date from start_time
   const startDateTime = new Date(appointment.start_time);
   const endDateTime = new Date(appointment.end_time);
@@ -853,12 +859,37 @@ export function BookingDetailPageClient({
                   Date & Time
                 </Typography>
                 <Typography variant="muted" className="mb-1">
-                  {format(startDateTime, 'EEEE, MMMM d, yyyy')}
+                  {
+                    formatDateTimeInTimezone(
+                      startDateTime,
+                      userTimezone,
+                      'EEEE, MMMM d, yyyy',
+                    ).date
+                  }
                 </Typography>
                 <Typography variant="muted">
-                  {format(startDateTime, 'h:mm a')} -{' '}
-                  {format(endDateTime, 'h:mm a')}
+                  {
+                    formatDateTimeInTimezone(
+                      startDateTime,
+                      userTimezone,
+                      'EEEE, MMMM d, yyyy',
+                      'h:mm a',
+                    ).time
+                  }{' '}
+                  -{' '}
+                  {
+                    formatDateTimeInTimezone(
+                      endDateTime,
+                      userTimezone,
+                      'EEEE, MMMM d, yyyy',
+                      'h:mm a',
+                    ).time
+                  }
                 </Typography>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <ClockIcon className="h-3 w-3" />
+                  <span>Times shown in your timezone ({userTimezone})</span>
+                </div>
               </div>
               {appointment.bookings.notes && (
                 <div>
@@ -1201,19 +1232,12 @@ export function BookingDetailPageClient({
 
               {/* View Support Request Button - For professionals and admins */}
               {canViewRefund() && existingSupportRequest && (
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full relative"
-                >
-                  <Link
-                    href={`/support-request/${existingSupportRequest.id}`}
-                  >
+                <Button asChild variant="outline" className="w-full relative">
+                  <Link href={`/support-request/${existingSupportRequest.id}`}>
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center">
                         <FileTextIcon className="h-4 w-4 mr-2" />
-                        {existingSupportRequest.category ===
-                        'refund_request'
+                        {existingSupportRequest.category === 'refund_request'
                           ? 'View Refund Request'
                           : 'View Support Request'}
                       </div>
@@ -1224,14 +1248,14 @@ export function BookingDetailPageClient({
 
               {/* Support Request Button - For clients */}
               {canRequestRefund() && !existingSupportRequest && (
-                  <Button
-                    onClick={() => setIsRefundModalOpen(true)}
-                    variant="destructiveOutline"
-                    className="w-full"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Support Request
-                  </Button>
+                <Button
+                  onClick={() => setIsRefundModalOpen(true)}
+                  variant="destructiveOutline"
+                  className="w-full"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Support Request
+                </Button>
               )}
 
               {/* No Show Button - Professional only, for completed appointments */}

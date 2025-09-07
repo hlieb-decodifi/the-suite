@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar } from '@/components/ui/calendar';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/utils';
+import { convertTimeToClientTimezone } from '@/utils/timezone';
 import { formatDuration } from '@/utils/formatDuration';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
@@ -75,25 +76,17 @@ function TimeSlotsPicker({
 
 // Helper function to convert time string to minutes
 function timeToMinutes(timeString: string): number {
-  const parts = timeString.split(' ');
-  if (parts.length !== 2) return 0;
-
-  const [time, period] = parts;
-  if (!time || !period) return 0;
-
-  const timeParts = time.split(':');
+  // Handle format like "10:00" (24-hour format)
+  const timeParts = timeString.split(':');
   if (timeParts.length !== 2) return 0;
 
   const [hourStr, minuteStr] = timeParts;
   if (!hourStr || !minuteStr) return 0;
 
-  let hour = parseInt(hourStr, 10);
+  const hour = parseInt(hourStr, 10);
   const minute = parseInt(minuteStr, 10);
 
-  // Convert to 24-hour format
-  if (period.toLowerCase() === 'pm' && hour < 12) hour += 12;
-  if (period.toLowerCase() === 'am' && hour === 12) hour = 0;
-
+  // Assume 24-hour format for now
   return hour * 60 + minute;
 }
 
@@ -134,40 +127,27 @@ function checkBasicValidation(
   return null;
 }
 
-// Function to find consecutive needed slots
-function findConsecutiveSlots(
-  timeSlots: TimeSlot[],
-  selectedIndex: number,
-  requiredSlots: number,
-): { neededSlots: TimeSlot[]; gapFound: boolean } {
-  const selectedSlot = timeSlots[selectedIndex];
-  if (!selectedSlot) {
-    return { neededSlots: [], gapFound: false };
+// Helper function to convert minutes back to time string
+function minutesToTimeString(minutes: number): string {
+  const hours24 = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  
+  // Convert to 12-hour format
+  let displayHour = hours24;
+  let period = 'AM';
+  
+  if (hours24 === 0) {
+    displayHour = 12; // Midnight becomes 12 AM
+  } else if (hours24 === 12) {
+    displayHour = 12; // Noon stays 12 PM
+    period = 'PM';
+  } else if (hours24 > 12) {
+    displayHour = hours24 - 12; // PM hours
+    period = 'PM';
   }
-
-  const neededSlots: TimeSlot[] = [selectedSlot];
-  let prevSlotMinutes = selectedSlot.minutes;
-  let gapFound = false;
-
-  // Check consecutive slots
-  for (
-    let i = selectedIndex + 1;
-    i < timeSlots.length && neededSlots.length < requiredSlots;
-    i++
-  ) {
-    const currentSlot = timeSlots[i];
-    if (!currentSlot) continue;
-
-    if (currentSlot.minutes - prevSlotMinutes > 30) {
-      gapFound = true;
-      break;
-    }
-
-    neededSlots.push(currentSlot);
-    prevSlotMinutes = currentSlot.minutes;
-  }
-
-  return { neededSlots, gapFound };
+  // AM hours 1-11 stay the same, period stays AM
+  
+  return `${displayHour.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')} ${period}`;
 }
 
 // Function to check if a service fits within professional's hours
@@ -180,43 +160,26 @@ function validateTimeSlotSelection(
   const basicValidation = checkBasicValidation(timeSlots, selectedIndex);
   if (basicValidation) return basicValidation;
 
-  // Find consecutive slots
-  const { neededSlots, gapFound } = findConsecutiveSlots(
-    timeSlots,
-    selectedIndex,
-    requiredSlots,
-  );
-
-  // Check if we have enough slots
-  if (neededSlots.length < requiredSlots) {
-    if (gapFound) {
-      return {
-        isValid: false,
-        message: `This service requires ${formatDuration(requiredSlots * 30)} and can't be scheduled due to a gap in availability.`,
-        type: 'error',
-      };
-    }
+  const selectedSlot = timeSlots[selectedIndex];
+  if (!selectedSlot) {
     return {
       isValid: false,
-      message: `This service requires ${formatDuration(requiredSlots * 30)} but there's not enough time available at the end of the day.`,
+      message: 'Selected time slot is not available.',
       type: 'error',
     };
   }
 
-  // Last slot in the needed slots array should exist if we made it this far
-  const lastSlot = neededSlots[neededSlots.length - 1];
-  if (!lastSlot) {
-    return {
-      isValid: false,
-      message: 'Error calculating service end time.',
-      type: 'error',
-    };
-  }
+  // Calculate the required end time based on duration
+  const serviceDurationMinutes = requiredSlots * 30;
+  const startMinutes = selectedSlot.minutes;
+  const requiredEndMinutes = startMinutes + serviceDurationMinutes;
+  const requiredEndTime = minutesToTimeString(requiredEndMinutes);
 
-  // If we got here, the selection is valid
+  // Since the backend already filtered available slots to prevent conflicts,
+  // any slot in the list should be bookable. Just return success with the end time.
   return {
     isValid: true,
-    message: `This service will take ${formatDuration(requiredSlots * 30)}, ending at ${lastSlot.time}.`,
+    message: `This service will take ${formatDuration(serviceDurationMinutes)}, ending at ${requiredEndTime}.`,
     type: 'info',
   };
 }
@@ -224,37 +187,11 @@ function validateTimeSlotSelection(
 // Function to disable time slots that don't have enough consecutive availability
 function disableInvalidTimeSlots(
   timeSlots: TimeSlot[],
-  requiredSlots: number,
 ): TimeSlot[] {
-  const updatedSlots = [...timeSlots];
-
-  // For each slot, check if there are enough consecutive slots after it
-  for (let i = 0; i < updatedSlots.length; i++) {
-    // Count available consecutive slots starting from this one
-    let availableConsecutiveSlots = 1;
-    let lastMinutes = updatedSlots[i]?.minutes || 0;
-
-    for (let j = i + 1; j < updatedSlots.length; j++) {
-      const currentSlot = updatedSlots[j];
-      // Skip if slot is undefined
-      if (!currentSlot) continue;
-
-      // Check if this slot is consecutive (within 30 min of the previous one)
-      if (currentSlot.minutes - lastMinutes <= 30) {
-        availableConsecutiveSlots++;
-        lastMinutes = currentSlot.minutes;
-      } else {
-        break; // Gap found, stop counting
-      }
-    }
-
-    // If there aren't enough consecutive slots, disable this slot
-    if (availableConsecutiveSlots < requiredSlots && updatedSlots[i]) {
-      updatedSlots[i]!.isDisabled = true;
-    }
-  }
-
-  return updatedSlots;
+  // Since the backend getAvailableTimeSlots already filters out conflicting slots,
+  // we should trust it and not disable any additional slots here.
+  // The backend knows about existing bookings and availability better than the frontend.
+  return timeSlots;
 }
 
 // Function to highlight selected time slots
@@ -268,32 +205,22 @@ function highlightSelectedTimeSlots(
   // If no selection, return as is
   if (selectedIndex < 0) return updatedSlots;
 
-  // Mark slots that would be occupied by the service
+  const selectedSlot = updatedSlots[selectedIndex];
+  if (!selectedSlot) return updatedSlots;
+
+  // Calculate the service duration and end time
+  const serviceDurationMinutes = requiredSlots * 30;
+  const startMinutes = selectedSlot.minutes;
+  const endMinutes = startMinutes + serviceDurationMinutes;
+
+  // Highlight all slots that fall within the service duration
   for (let i = 0; i < updatedSlots.length; i++) {
-    // Skip if this slot is outside the service duration window
-    if (i < selectedIndex || i >= selectedIndex + requiredSlots) {
-      continue;
-    }
-
-    // Skip if slot is undefined
-    if (!updatedSlots[i]) continue;
-
-    // Check continuity - first slot is always continuous
-    let isContinuous = i === selectedIndex;
-
-    // For subsequent slots, check gap with previous slot
-    if (!isContinuous && i > 0 && i > selectedIndex) {
-      const currentSlot = updatedSlots[i];
-      const prevSlot = updatedSlots[i - 1];
-
-      // Only if both exist and the gap is reasonable
-      if (currentSlot && prevSlot) {
-        isContinuous = currentSlot.minutes - prevSlot.minutes <= 30;
-      }
-    }
-
-    if (isContinuous) {
-      updatedSlots[i]!.isHighlighted = true;
+    const slot = updatedSlots[i];
+    if (!slot) continue;
+    
+    // Highlight this slot if it's within the service duration
+    if (slot.minutes >= startMinutes && slot.minutes < endMinutes) {
+      slot.isHighlighted = true;
     }
   }
 
@@ -306,6 +233,9 @@ function useProcessedTimeSlots(
   selectedDate: Date | undefined,
   selectedTimeSlot: string | undefined,
   requiredSlots: number,
+  professionalTimezone?: string,
+  clientTimezone?: string,
+  backendReturnedProfessionalTimezone?: boolean,
 ): {
   timeSlots: TimeSlot[];
   validationStatus: ValidationStatus;
@@ -335,24 +265,41 @@ function useProcessedTimeSlots(
       };
     }
 
-    // Create indexed time slots
-    const indexedSlots = availableTimeSlots.map((slot) => ({
-      id: slot,
-      time: slot,
-      minutes: timeToMinutes(slot),
-      isSelected: slot === selectedTimeSlot,
-      isDisabled: false,
-      isHighlighted: false,
-    }));
+    // Only convert if backendReturnedProfessionalTimezone is true
+    let convertedSlots: { id: string; time: string; minutes: number; isSelected: boolean; isDisabled: boolean; isHighlighted: boolean; original: string }[] = [];
+    if (backendReturnedProfessionalTimezone && professionalTimezone && clientTimezone && professionalTimezone !== clientTimezone) {
+      convertedSlots = availableTimeSlots.map((slot) => {
+        const { time } = convertTimeToClientTimezone(slot, professionalTimezone, clientTimezone, selectedDate);
+        return {
+          id: slot,
+          time,
+          minutes: timeToMinutes(time),
+          isSelected: time === selectedTimeSlot,
+          isDisabled: false,
+          isHighlighted: false,
+          original: slot,
+        };
+      });
+    } else {
+      convertedSlots = availableTimeSlots.map((slot) => ({
+        id: slot,
+        time: slot,
+        minutes: timeToMinutes(slot),
+        isSelected: slot === selectedTimeSlot,
+        isDisabled: false,
+        isHighlighted: false,
+        original: slot,
+      }));
+    }
 
     // Sort slots by time
-    indexedSlots.sort((a, b) => a.minutes - b.minutes);
+    convertedSlots.sort((a, b) => a.minutes - b.minutes);
 
     // Find selected slot index
-    const selectedIndex = indexedSlots.findIndex((slot) => slot.isSelected);
+    const selectedIndex = convertedSlots.findIndex((slot) => slot.isSelected);
 
     // Disable slots that don't have enough consecutive availability
-    const disabledSlots = disableInvalidTimeSlots(indexedSlots, requiredSlots);
+    const disabledSlots = disableInvalidTimeSlots(convertedSlots);
 
     // Highlight slots based on service duration
     const processedSlots = highlightSelectedTimeSlots(
@@ -372,7 +319,7 @@ function useProcessedTimeSlots(
       timeSlots: processedSlots,
       validationStatus,
     };
-  }, [availableTimeSlots, selectedDate, selectedTimeSlot, requiredSlots]);
+  }, [availableTimeSlots, selectedDate, selectedTimeSlot, requiredSlots, professionalTimezone, clientTimezone, backendReturnedProfessionalTimezone]);
 }
 
 // DatePicker subcomponent
@@ -583,7 +530,8 @@ export function BookingFormDateTimePicker({
   isCalendarLoading = false,
   professionalTimezone,
   clientTimezone,
-}: BookingFormDateTimePickerProps) {
+  backendReturnedProfessionalTimezone = false,
+}: BookingFormDateTimePickerProps & { backendReturnedProfessionalTimezone?: boolean }) {
   // Use synchronized date state
   const { localDate, handleLocalDateChange } = useSynchronizedDateState(
     selectedDate,
@@ -608,6 +556,9 @@ export function BookingFormDateTimePicker({
     selectedDate,
     selectedTimeSlot,
     requiredSlots,
+    professionalTimezone,
+    clientTimezone,
+    backendReturnedProfessionalTimezone
   );
 
   // Handle slot selection
