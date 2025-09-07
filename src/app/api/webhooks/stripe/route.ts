@@ -1201,20 +1201,8 @@ async function handlePaymentCaptureByPaymentIntentId(paymentIntentId: string) {
     
     console.log(`✅ Successfully updated payment status for booking ${payment.booking_id} - manually captured via Stripe dashboard`);
     
-    // Send payment confirmation emails
-    try {
-      const { sendPaymentConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-      const emailResult = await sendPaymentConfirmationEmails(payment.booking_id);
-      
-      if (emailResult.success) {
-        console.log(`✅ Payment confirmation emails sent for booking: ${payment.booking_id}`);
-      } else {
-        console.error(`❌ Failed to send payment confirmation emails for booking ${payment.booking_id}: ${emailResult.error}`);
-      }
-    } catch (emailError) {
-      console.error(`💥 Exception sending payment confirmation emails for booking ${payment.booking_id}:`, emailError);
-      // Don't fail the webhook for email errors
-    }
+    // Payment confirmation emails have been removed
+    console.log(`ℹ️ Payment confirmation emails are no longer sent for booking: ${payment.booking_id}`);
   } catch (error) {
     console.error(`Error handling manual capture for payment intent ${paymentIntentId}:`, error);
   }
@@ -1462,6 +1450,190 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
     if (customer) {
       console.log(`Setup intent succeeded for user ${customer.user_id}, booking ${bookingId} - payment method ${paymentMethodId} saved`);
       
+      // Check if this is a deposit setup intent
+      const depositAmount = setupIntent.metadata?.deposit_amount;
+      const balanceAmount = setupIntent.metadata?.balance_amount;
+      const professionalStripeAccountId = setupIntent.metadata?.professional_stripe_account_id;
+      
+      if (depositAmount && balanceAmount && professionalStripeAccountId) {
+        console.log(`🔍 Processing deposit + balance flow - Deposit: $${depositAmount}, Balance: $${balanceAmount}`);
+        
+        // Get payment method type from metadata to determine balance calculation
+        const paymentMethodType = setupIntent.metadata?.payment_method_type;
+        const isOnlinePayment = paymentMethodType === 'card';
+        
+        // Step 1: Immediately charge the deposit
+        try {
+          const depositPaymentIntent = await stripe.paymentIntents.create({
+            amount: parseInt(depositAmount),
+            currency: 'usd',
+            customer: customerId,
+            payment_method: paymentMethodId,
+            confirmation_method: 'automatic',
+            confirm: true,
+            off_session: true,
+            // Get service fee and calculate transfer amount for deposit
+            transfer_data: {
+              amount: parseInt(depositAmount) - 100, // Deposit minus service fee goes to professional
+              destination: professionalStripeAccountId
+            },
+            on_behalf_of: professionalStripeAccountId,
+            metadata: {
+              booking_id: bookingId,
+              payment_type: 'immediate_deposit_via_setup'
+            }
+          });
+          
+          console.log(`✅ Deposit charged: $${parseInt(depositAmount)/100} (Payment Intent: ${depositPaymentIntent.id})`);
+          
+          // Step 2: Check timing to determine if balance payment should be created now or scheduled
+          // Get appointment timing from metadata or fetch from database
+          const appointmentTiming = setupIntent.metadata?.appointment_timing;
+          let shouldPreAuthNow = false;
+          
+          if (appointmentTiming) {
+            // Use pre-calculated timing from metadata
+            shouldPreAuthNow = appointmentTiming === 'immediate';
+            console.log(`🔍 Using pre-calculated timing: ${shouldPreAuthNow ? 'immediate' : 'scheduled'}`);
+          } else {
+            // Calculate timing by fetching appointment data
+            const { data: appointmentData } = await supabase
+              .from('appointments')
+              .select('start_time, end_time')
+              .eq('booking_id', bookingId)
+              .single();
+              
+            if (appointmentData) {
+              const { schedulePaymentAuthorization } = await import('@/server/domains/stripe-payments/stripe-operations');
+              const scheduleResult = await schedulePaymentAuthorization(
+                bookingId,
+                new Date(appointmentData.start_time),
+                new Date(appointmentData.end_time)
+              );
+              shouldPreAuthNow = scheduleResult.shouldPreAuthNow || false;
+              console.log(`🔍 Calculated timing: ${shouldPreAuthNow ? 'immediate' : 'scheduled'}`);
+            }
+          }
+          
+          // For cash payments: balance = only suite fee (service amount paid in cash)
+          // For card payments: balance = full remaining amount (service + tips + suite fee)
+          let uncapturedBalanceAmount: number;
+          
+          if (isOnlinePayment) {
+            // Card payment: charge full balance amount
+            uncapturedBalanceAmount = parseInt(balanceAmount);
+            console.log(`🔍 Card payment - balance amount: $${uncapturedBalanceAmount/100}`);
+          } else {
+            // Cash payment: only charge suite fee, service amount + tips paid in cash
+            uncapturedBalanceAmount = 100; // $1 suite fee in cents
+            console.log(`🔍 Cash payment - balance amount (suite fee only): $${uncapturedBalanceAmount/100}`);
+          }
+          
+          if (shouldPreAuthNow) {
+            // Appointment ≤6 days: Create uncaptured payment intent immediately
+            console.log(`⏰ Appointment ≤6 days - creating uncaptured balance payment immediately`);
+            
+            const { createUncapturedPaymentIntent } = await import('@/server/domains/stripe-payments/stripe-operations');
+            
+            const uncapturedResult = await createUncapturedPaymentIntent(
+              uncapturedBalanceAmount,
+              customerId,
+              professionalStripeAccountId,
+              {
+                booking_id: bookingId,
+                payment_type: 'deposit_balance_uncaptured',
+                deposit_payment_intent_id: depositPaymentIntent.id
+              },
+              paymentMethodId
+            );
+            
+            if (uncapturedResult.success && uncapturedResult.paymentIntentId) {
+              console.log(`✅ Uncaptured balance payment created: ${uncapturedResult.paymentIntentId}`);
+              
+              // Update booking payment with both payment intent IDs
+              await supabase
+                .from('booking_payments')
+                .update({
+                  deposit_payment_intent_id: depositPaymentIntent.id,
+                  stripe_payment_intent_id: uncapturedResult.paymentIntentId,
+                  capture_method: 'manual',
+                  status: 'deposit_paid_balance_authorized',
+                  stripe_payment_method_id: paymentMethodId,
+                  balance_amount: uncapturedBalanceAmount / 100,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('booking_id', bookingId);
+            } else {
+              console.error(`❌ Failed to create uncaptured payment for balance: ${uncapturedResult.error}`);
+            }
+          } else {
+            // Appointment >6 days: Schedule balance payment for cron job
+            console.log(`⏰ Appointment >6 days - scheduling balance payment for cron job`);
+            
+            // Update booking payment with deposit info and schedule balance payment
+            const { updateBookingPaymentWithScheduledBalance } = await import('@/server/domains/stripe-payments/db');
+            
+            // Get appointment data for scheduling
+            const { data: appointmentData } = await supabase
+              .from('appointments')
+              .select('start_time, end_time')
+              .eq('booking_id', bookingId)
+              .single();
+              
+            if (appointmentData) {
+              const { schedulePaymentAuthorization } = await import('@/server/domains/stripe-payments/stripe-operations');
+              const scheduleResult = await schedulePaymentAuthorization(
+                bookingId,
+                new Date(appointmentData.start_time),
+                new Date(appointmentData.end_time)
+              );
+              
+              if (scheduleResult.success) {
+                await updateBookingPaymentWithScheduledBalance(
+                  bookingId,
+                  scheduleResult.captureDate!,
+                  uncapturedBalanceAmount / 100, // Convert to dollars
+                  'pending_balance_payment'
+                );
+                
+                // Also update with deposit payment intent ID
+                await supabase
+                  .from('booking_payments')
+                  .update({
+                    deposit_payment_intent_id: depositPaymentIntent.id,
+                    stripe_payment_method_id: paymentMethodId, // Save for cron job
+                    pre_auth_scheduled_for: scheduleResult.preAuthDate!.toISOString(),
+                    amount: uncapturedBalanceAmount / 100, // Set amount that cron will process
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('booking_id', bookingId);
+                
+                console.log(`✅ Balance payment scheduled for ${scheduleResult.preAuthDate?.toISOString()}`);
+              } else {
+                console.error(`❌ Failed to schedule balance payment: ${scheduleResult.error}`);
+              }
+            }
+          }
+          
+        } catch (error) {
+          console.error('❌ Error processing deposit + balance payments:', error);
+        }
+        
+      } else {
+        // Regular setup intent (no deposit) - just save payment method for later processing
+        console.log(`🔍 Regular setup intent - saving payment method for future payment`);
+        
+        // Update payment status to pending and save the payment method ID for cron job
+        await supabase
+          .from('booking_payments')
+          .update({
+            status: 'pending',
+            stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
+            updated_at: new Date().toISOString()
+          })
+          .eq('booking_id', bookingId);
+      }
+      
       // Update booking status to confirmed since payment method is now saved
       await supabase
         .from('bookings')
@@ -1470,16 +1642,6 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
           updated_at: new Date().toISOString()
         })
         .eq('id', bookingId);
-
-      // Update payment status to pending and save the payment method ID for cron job
-      await supabase
-        .from('booking_payments')
-        .update({
-          status: 'pending',
-          stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
-          updated_at: new Date().toISOString()
-        })
-        .eq('booking_id', bookingId);
 
       // Track booking completed activity
       try {
@@ -1683,6 +1845,19 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
 
     const supabase = createAdminClient();
 
+    // Check if this is a deposit flow by looking for a deposit payment intent ID
+    const { data: paymentData } = await supabase
+      .from('booking_payments')
+      .select('deposit_payment_intent_id')
+      .eq('booking_id', bookingId)
+      .single();
+
+    // If this booking has a deposit payment intent, emails were already sent in handleSetupIntentSucceeded
+    if (paymentData?.deposit_payment_intent_id) {
+      console.log(`📧 Skipping confirmation emails for booking ${bookingId} - already sent for deposit flow`);
+      return;
+    }
+
     // Get appointment details
     const { data: appointmentData, error: appointmentError } = await supabase
       .from('appointments')
@@ -1695,7 +1870,7 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
       return;
     }
 
-    // Send booking confirmation emails
+    // Send booking confirmation emails (only for regular flows, not deposit flows)
     try {
       const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
       await sendBookingConfirmationEmails(bookingId, appointmentData.id, true); // true = uncaptured payment

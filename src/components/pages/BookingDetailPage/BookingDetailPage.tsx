@@ -107,7 +107,13 @@ export type DetailedAppointmentType = {
   };
 };
 
-export async function BookingDetailPage({ id }: { id: string }) {
+export async function BookingDetailPage({
+  id,
+  showReviewPrompt = false,
+}: {
+  id: string;
+  showReviewPrompt?: boolean;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -130,7 +136,8 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
   const appointment = await getAppointmentById(id, isAdmin);
 
-  const isProfessional = appointment.bookings.professionals?.user_id === user.id;
+  const isProfessional =
+    appointment.bookings.professionals?.user_id === user.id;
   const isClient = appointment.bookings.client_id === user.id;
 
   if (!isProfessional && !isClient && !isAdmin) {
@@ -139,9 +146,12 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
   // Fetch existing support request for this appointment
   const existingSupportRequest = await getExistingSupportRequest(id, isAdmin);
-  
+
   // Fetch review status for this appointment
-  const reviewStatus = await getReviewStatusForAppointment(appointment.booking_id, isAdmin);
+  const reviewStatus = await getReviewStatusForAppointment(
+    appointment.booking_id,
+    isAdmin,
+  );
 
   return (
     <BookingDetailPageClient
@@ -152,6 +162,7 @@ export async function BookingDetailPage({ id }: { id: string }) {
       isAdmin={isAdmin}
       existingSupportRequest={existingSupportRequest}
       reviewStatus={reviewStatus}
+      showReviewPrompt={showReviewPrompt}
     />
   );
 }
@@ -366,9 +377,13 @@ export async function getAppointmentById(
                 first_name:
                   data.bookings.professionals.users.first_name ?? null,
                 last_name: data.bookings.professionals.users.last_name ?? null,
-                avatar_url: Array.isArray(data.bookings.professionals.users.profile_photos)
-                  ? (data.bookings.professionals.users.profile_photos[0]?.url ?? null)
-                  : (data.bookings.professionals.users.profile_photos?.url ?? null),
+                avatar_url: Array.isArray(
+                  data.bookings.professionals.users.profile_photos,
+                )
+                  ? (data.bookings.professionals.users.profile_photos[0]?.url ??
+                    null)
+                  : (data.bookings.professionals.users.profile_photos?.url ??
+                    null),
               },
             }
           : null,
@@ -489,7 +504,7 @@ export async function updateAppointmentStatus(
 // Get existing support request for an appointment
 async function getExistingSupportRequest(
   appointmentId: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
 ): Promise<{
   id: string;
   status: string;
@@ -527,7 +542,7 @@ async function getExistingSupportRequest(
 // Get review status for a booking
 async function getReviewStatusForAppointment(
   bookingId: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
 ): Promise<{
   canReview: boolean;
   hasReview: boolean;
@@ -539,16 +554,21 @@ async function getReviewStatusForAppointment(
   } | null;
 } | null> {
   try {
-    const { getReviewStatus } = await import('@/server/domains/reviews/actions');
+    const { getReviewStatus } = await import(
+      '@/server/domains/reviews/actions'
+    );
     const result = await getReviewStatus(bookingId, isAdmin);
-    
+
     console.log('Review status result:', { bookingId, isAdmin, result });
-    
+
     if (result.success && result.reviewStatus) {
       return result.reviewStatus;
     }
-    
-    console.log('Review status returned null:', result.error || 'No review status data');
+
+    console.log(
+      'Review status returned null:',
+      result.error || 'No review status data',
+    );
     return null;
   } catch (error) {
     console.error('Error fetching review status:', error);

@@ -110,23 +110,8 @@ export async function processCashPaymentTip(
     // This might involve creating a Stripe transfer or payment to the professional's account
     // For now, we'll just record the tip and send notification emails
 
-    // Send tip notification emails
-    try {
-      const { sendPaymentConfirmationEmails } = await import(
-        './email-notifications'
-      );
-      const emailResult = await sendPaymentConfirmationEmails(bookingId);
-
-      if (!emailResult.success) {
-        console.error(
-          `Failed to send tip confirmation emails: ${emailResult.error}`,
-        );
-        // Don't fail the tip processing for email issues
-      }
-    } catch (emailError) {
-      console.error('Error sending tip confirmation emails:', emailError);
-      // Don't fail the tip processing for email issues
-    }
+    // Tip notification emails have been removed (were using payment confirmation templates)
+    console.log(`ℹ️ Tip confirmation emails are no longer sent for booking: ${bookingId}`);
 
     return {
       success: true,

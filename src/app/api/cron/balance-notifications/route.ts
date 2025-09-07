@@ -1,9 +1,34 @@
 import { NextResponse } from 'next/server';
 import { getAppointmentsNeedingBalanceNotification, markBalanceNotificationSent } from '@/server/domains/stripe-payments/db';
-import { sendBalanceNotification, sendReviewTipNotification } from '@/providers/brevo/templates';
+import { sendAppointmentCompletion2hafterClient, sendAppointmentCompletion2hafterProfessional} from '@/providers/brevo/templates';
 import { EmailRecipient } from '@/providers/brevo/types';
+import { format, toZonedTime } from 'date-fns-tz';
 
 export const runtime = 'nodejs';
+
+/**
+ * Format a UTC date/time for a specific timezone
+ */
+function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string {
+  try {
+    const utcDate = new Date(utcDateTime);
+    const zonedDate = toZonedTime(utcDate, timezone);
+    return format(zonedDate, 'EEEE, MMMM d, yyyy \'at\' h:mm a zzz', { timeZone: timezone });
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error, { utcDateTime, timezone });
+    // Fallback to UTC formatting
+    return new Date(utcDateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ' UTC';
+  }
+}
 
 /**
  * Cron job to send balance notifications to clients
@@ -38,26 +63,16 @@ export async function GET() {
       try {
         console.log(`[CRON] Sending balance notification for booking: ${appointment.booking_id}`);
 
-        // Format appointment date and time for the email
-        const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
+        // Format appointment date and time for the email using client and professional timezones
+        const clientTimezone = appointment.client_timezone || 'UTC';
+        const professionalTimezone = appointment.professional_timezone || 'UTC';
         
-        const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
+        const clientDateTime = formatDateTimeInTimezone(appointment.start_time, clientTimezone);
+        const professionalDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
 
         // Calculate payment amounts (already in dollars from DB)
         const totalAmount = appointment.total_amount;
-        const depositPaid = appointment.deposit_amount;
-        const balanceAmount = appointment.balance_amount;
-        const currentTip = appointment.tip_amount || 0;
-        const totalDue = balanceAmount + currentTip;
+        const serviceAmount = totalAmount - appointment.tip_amount - appointment.service_fee;
 
         // Create recipient object
         const recipient: EmailRecipient = {
@@ -65,45 +80,45 @@ export async function GET() {
           name: appointment.client_name
         };
 
-        if (appointment.is_cash_payment) {
-          // For cash payments: send review + tip notification (no balance due)
-          await sendReviewTipNotification([recipient], {
-            client_name: appointment.client_name,
-            professional_name: appointment.professional_name,
-            payment_method: appointment.payment_method_name,
-            service_amount: totalAmount,
-            service_fee: appointment.service_fee,
-            total_amount: totalAmount,
-            review_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}/review`,
-            appointment_id: appointment.booking_id,
-            appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-            date: appointmentDate,
-            time: appointmentTime,
-            website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-            support_email: process.env.SUPPORT_EMAIL || ''
-          });
-          
-          console.log(`[CRON] Successfully sent review/tip notification for cash payment booking: ${appointment.booking_id}`);
-        } else {
-          // For card payments: send balance notification
-          await sendBalanceNotification([recipient], {
-            professional_name: appointment.professional_name,
-            total_amount: totalAmount,
-            ...(depositPaid ? { deposit_paid: depositPaid } : {}),
-            balance_amount: balanceAmount,
-            ...(currentTip > 0 ? { current_tip: currentTip } : {}),
-            total_due: totalDue,
-            balance_payment_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}/payment`,
-            appointment_id: appointment.booking_id,
-            appointment_details_url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${appointment.booking_id}`,
-            date: appointmentDate,
-            time: appointmentTime,
-            website_url: process.env.NEXT_PUBLIC_APP_URL || '',
-            support_email: process.env.SUPPORT_EMAIL || ''
-          });
-          
-          console.log(`[CRON] Successfully sent balance notification for card payment booking: ${appointment.booking_id}`);
-        }
+        // Create review/tip URL for client - using appointment ID from the database
+        const reviewTipUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointment.appointment_id}?showReviewPrompt=true`;
+
+        // Send appointment completion emails to both client and professional
+        const appointmentCompletionClientParams = {
+          booking_id: appointment.booking_id,
+          client_name: appointment.client_name,
+          date_time: clientDateTime,
+          professional_name: appointment.professional_name,
+          review_tip_url: reviewTipUrl,
+          service_amount: serviceAmount,
+          timezone: clientTimezone,
+          total_paid: totalAmount,
+          services: appointment.services || []
+        };
+
+        const appointmentCompletionProfessionalParams = {
+          booking_id: appointment.booking_id,
+          client_name: appointment.client_name,
+          date_time: professionalDateTime,
+          payment_method: appointment.payment_method_name || '',
+          professional_name: appointment.professional_name,
+          service_amount: serviceAmount,
+          timezone: professionalTimezone,
+          total_amount: serviceAmount + appointment.tip_amount, // Professional gets services + tips (no service fee)
+          services: appointment.services || []
+        };
+
+        await Promise.all([
+          sendAppointmentCompletion2hafterClient([recipient], appointmentCompletionClientParams),
+          sendAppointmentCompletion2hafterProfessional([
+            {
+              email: appointment.professional_email,
+              name: appointment.professional_name
+            }
+          ], appointmentCompletionProfessionalParams)
+        ]);
+
+        console.log(`[CRON] Successfully sent appointment completion emails for booking: ${appointment.booking_id}`);
 
         // Mark notification as sent in database
         await markBalanceNotificationSent(appointment.booking_id);

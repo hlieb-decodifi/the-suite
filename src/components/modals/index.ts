@@ -14,3 +14,4 @@ export { RefundRequestModal } from './RefundRequestModal/RefundRequestModal';
 export { AddAdditionalServicesModal } from './AddAdditionalServicesModal/AddAdditionalServicesModal';
 export { NoShowModal } from './NoShowModal/NoShowModal';
 export { CancellationPolicyModal } from './CancellationPolicyModal/CancellationPolicyModal';
+export { ReviewPromptModal } from './ReviewPromptModal';

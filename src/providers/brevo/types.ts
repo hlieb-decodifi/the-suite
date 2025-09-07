@@ -9,102 +9,111 @@ export type EmailResult = {
   error?: string;
 }
 
-// Common types used across multiple templates
-type PaymentMethod = {
-  name: string;
-  is_online: boolean;
-}
-
-type Payment = {
-  method: PaymentMethod;
-}
-
-type RefundInfo = {
-  original_amount: number;
-  refund_amount?: number;
-  status: string;
-}
-
-type Service = {
-  name: string;
-  price: number;
-  duration?: number;
-}
-
-type BaseAppointmentParams = {
-  appointment_id: string;
-  appointment_details_url: string;
-  date: string;
-  time: string;
-  website_url: string;
-  support_email: string;
-}
-
-type BaseBookingParams = {
+export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
   booking_id: string;
-  payment?: Payment;
-  services?: Service[];
-} & BaseAppointmentParams
-
-// Booking Cancellation
-export type BookingCancellationClientParams = {
+  cancellation_reason: string;
   client_name: string;
+  date_time: string;
   professional_name: string;
-  cancellation_reason?: string;
-  refund_info?: RefundInfo;
-} & BaseBookingParams
+  timezone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
 
-export type BookingCancellationProfessionalParams = {
+export type BookingCancellationWithinAcceptedTimePeriodClientParams = {
+  booking_id: string;
+  cancellation_reason: string;
   client_name: string;
-  client_phone?: string;
+  date_time: string;
   professional_name: string;
-  cancellation_reason?: string;
-  refund_info?: RefundInfo;
-} & BaseBookingParams
+  services_page_url: string;
+  timezone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
 
 // Booking Confirmation
 export type BookingConfirmationClientParams = {
+  appointment_url: string;
+  booking_id: string;
   client_name: string;
+  date_and_time: string;
+  home_url: string;
+  message_url: string;
+  price_service_fee: number;
+  price_subtotal: number;
+  price_tip: number;
+  price_total_paid: number;
+  professional_address: string;
   professional_name: string;
-  subtotal: number;
-  service_fee: number;
-  tip_amount?: number;
-  total: number;
-  payment_method: string;
-  is_card_payment: boolean;
-  deposit_amount?: number;
-  balance_due?: number;
-  balance_due_date?: string;
-} & BaseBookingParams
+  professional_phone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
 
 export type BookingConfirmationProfessionalParams = {
+  address: string;
+  appointment_url: string;
+  booking_id: string;
   client_name: string;
-  client_phone?: string;
+  client_phone: string;
+  date_and_time: string;
+  home_url: string;
+  message_url: string;
+  price_subtotal: number;
+  price_tip: number;
+  price_total_paid: number;
   professional_name: string;
-  subtotal: number;
-  tip_amount?: number;
-  professional_total: number;
-} & BaseBookingParams
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
+
+export type AppointmentCompletion2hafterClientParams = {
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  professional_name: string;
+  review_tip_url: string;
+  service_amount: number;
+  timezone: string;
+  total_paid: number;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
+
+export type AppointmentCompletion2hafterProfessionalParams = {
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  payment_method: string;
+  professional_name: string;
+  service_amount: number;
+  timezone: string;
+  total_amount: number;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
 
 // Payment Related
-export type PaymentConfirmationClientParams = {
-  client_name: string;
-  professional_name: string;
-  payment_method: string;
-  subtotal: number;
-  tip_amount?: number;
-  total: number;
-} & BaseBookingParams
-
-export type PaymentConfirmationProfessionalParams = {
-  client_name: string;
-  professional_name: string;
-  payment_method: string;
-  subtotal: number;
-  tip_amount?: number;
-  professional_total: number;
-} & BaseBookingParams
-
+// Legacy template - to be replaced
 export type BalanceNotificationParams = {
   professional_name: string;
   total_amount: number;
@@ -113,105 +122,136 @@ export type BalanceNotificationParams = {
   current_tip?: number;
   total_due: number;
   balance_payment_url: string;
-} & BaseAppointmentParams
-
-// Refund Related
-export type RefundRequestProfessionalParams = {
-  professional_name: string;
-  client_name: string;
-  service_name: string;
-  original_amount: number;
-  reason: string;
-  review_url: string;
-} & BaseAppointmentParams
-
-export type RefundCompletionClientParams = {
-  client_name: string;
-  professional_name: string;
-  original_amount: number;
-  refund_amount: number;
-  reason?: string;
-} & BaseBookingParams
-
-export type RefundCompletionProfessionalParams = {
-  client_name: string;
-  professional_name: string;
-  original_amount: number;
-  refund_amount: number;
-  platform_fee: number;
-  net_refund: number;
-  reason?: string;
-} & BaseBookingParams
-
-export type RefundDeclineClientParams = {
-  client_name: string;
-  professional_name: string;
-  original_amount: number;
-  decline_reason: string;
-} & BaseBookingParams
-
-// Review Related
-export type ReviewTipNotificationParams = {
-  client_name: string;
-  professional_name: string;
-  payment_method: string;
-  service_amount: number;
-  service_fee: number;
-  total_amount: number;
-  review_url: string;
-} & BaseAppointmentParams
+  appointment_id: string;
+  appointment_details_url: string;
+  date: string;
+  time: string;
+  website_url: string;
+  support_email: string;
+}
 
 // Contact Related
 export type ContactInquiryAdminParams = {
-  name: string;
   email: string;
-  phone?: string;
-  subject: string;
+  full_name: string;
   message: string;
-  inquiry_id: string;
-  submitted_at: string;
-  urgency: string;
-  urgency_color: string;
-  dashboard_url: string;
+  phone: string;
+  topic: string;
 }
 
 export type ContactInquiryConfirmationParams = {
-  name: string;
   email: string;
-  subject: string;
+  first_name: string;
+  full_name: string;
   message: string;
-  inquiry_id: string;
+  phone: string;
+  topic: string;
 }
 
-// Policy Related
-type PolicyInfo = {
-  charge_amount: number;
-  charge_percentage: number;
+export type BookingCancellationLessthan24h48hclientParams = {
+  booking_id: string;
+  cancellation_reason: string;
+  client_name: string;
+  date_time: string;
+  fee: number;
+  policy_rate: string;
+  professional_name: string;
   service_amount: number;
-  time_description: string;
+  time_until_appointment: string;
+  timezone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
 }
 
-export type CancellationPolicyChargeClientParams = {
+export type BookingCancellationLessthan24h48hprofessionalParams = {
+  booking_id: string;
+  cancellation_reason: string;
   client_name: string;
+  date_time: string;
+  fee: number;
+  policy_rate: string;
   professional_name: string;
-  policy_info: PolicyInfo;
-} & BaseBookingParams
-
-export type CancellationPolicyChargeProfessionalParams = {
-  client_name: string;
-  professional_name: string;
-  policy_info: PolicyInfo;
-} & BaseBookingParams
+  service_amount: number;
+  time_until_appointment: string;
+  timezone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
 
 // Incident Related
-export type NoShowNotificationClientParams = {
+export type BookingCancellationNoShowClientParams = {
+  booking_id: string;
   client_name: string;
+  date_time: string;
+  fee: number;
+  message_url: string;
+  policy_rate: string;
   professional_name: string;
-  no_show_fee: number;
-} & BaseBookingParams
+  service_amount: number;
+  services_page_url: string;
+  timezone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
 
-export type NoShowNotificationProfessionalParams = {
+export type BookingCancellationNoShowProfessionalParams = {
+  booking_id: string;
+  client_name: string;
+  date_time: string;
+  fee: number;
+  policy_rate: string;
+  professional_name: string;
+  service_amount: number;
+  timezone: string;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
+}
+
+// Support Request Related
+export type SupportRequestCreationParams = {
+  professional_name: string;
+  support_request_url: string;
+}
+
+export type SupportRequestRefundedClientParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_and_time: string;
+  professional_name: string;
+  refund_amount: number;
+  refund_method: string;
+}
+
+export type SupportRequestRefundedProfessionalParams = {
+  address: string;
+  booking_id: string;
+  client_name: string;
+  date_and_time: string;
+  professional_name: string;
+  refund_amount: number;
+}
+
+export type SupportRequestResolvedClientParams = {
+  booking_id: string;
   client_name: string;
   professional_name: string;
-  no_show_fee: number;
-} & BaseBookingParams
+}
+
+export type SupportRequestResolvedProfessionalParams = {
+  booking_id: string;
+  client_name: string;
+  professional_name: string;
+}

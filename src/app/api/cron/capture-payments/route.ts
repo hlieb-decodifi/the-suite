@@ -68,20 +68,8 @@ export async function GET() {
         processedCount++;
         console.log(`[CRON] Successfully captured payment for booking: ${payment.booking_id}, Amount: $${(result.capturedAmount || totalCaptureAmount) / 100}`);
 
-        // Send payment confirmation emails
-        try {
-          const { sendPaymentConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-          const emailResult = await sendPaymentConfirmationEmails(payment.booking_id);
-          
-          if (emailResult.success) {
-            console.log(`[CRON] ✅ Payment confirmation emails sent for booking: ${payment.booking_id}`);
-          } else {
-            console.error(`[CRON] ❌ Failed to send payment confirmation emails for booking ${payment.booking_id}: ${emailResult.error}`);
-          }
-        } catch (emailError) {
-          console.error(`[CRON] 💥 Exception sending payment confirmation emails for booking ${payment.booking_id}:`, emailError);
-          // Don't fail the cron job for email errors
-        }
+        // Payment confirmation emails have been removed
+        console.log(`[CRON] ℹ️ Payment confirmation emails are no longer sent for booking: ${payment.booking_id}`);
 
       } catch (error) {
         errorCount++;
