@@ -32,12 +32,14 @@ import {
   CreditCard,
   Crown,
   ExternalLink,
+  Loader2,
   PauseCircle,
 } from 'lucide-react';
 import {
   handleSubscriptionRedirectAction,
   handleStripeConnectRedirectAction,
   handleCancelSubscriptionRedirectAction,
+  preloadStripeConnectLinkAction,
 } from './ProfileSubscriptionPage';
 
 type ConnectStatus = {
@@ -61,8 +63,52 @@ export function ProfileSubscriptionPageClient({
 }: ProfileSubscriptionPageClientProps) {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [isConnectLoading, setIsConnectLoading] = useState(false);
+  const [preloadedConnectUrl, setPreloadedConnectUrl] = useState<string | null>(
+    null,
+  );
+  const [isPreloading, setIsPreloading] = useState(false);
   const router = useRouter();
   const toastsShown = useRef<Set<string>>(new Set());
+
+  // Preload Stripe Connect link when user is subscribed but not connected
+  useEffect(() => {
+    const shouldPreload =
+      userData.isProfessional &&
+      userData.subscriptionStatus &&
+      (!connectStatus || connectStatus.connectStatus !== 'complete') &&
+      !preloadedConnectUrl &&
+      !isPreloading;
+
+    if (shouldPreload) {
+      setIsPreloading(true);
+      preloadStripeConnectLinkAction({ userId: userData.id })
+        .then((result) => {
+          if (result.success && result.url) {
+            setPreloadedConnectUrl(result.url);
+            console.log('✅ Stripe Connect link preloaded');
+          } else {
+            console.error(
+              '❌ Failed to preload Stripe Connect link:',
+              result.error,
+            );
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Error preloading Stripe Connect link:', error);
+        })
+        .finally(() => {
+          setIsPreloading(false);
+        });
+    }
+  }, [
+    userData.id,
+    userData.isProfessional,
+    userData.subscriptionStatus,
+    connectStatus,
+    preloadedConnectUrl,
+    isPreloading,
+  ]);
 
   // Handle success messages as toasts
   useEffect(() => {
@@ -189,14 +235,33 @@ export function ProfileSubscriptionPageClient({
   };
 
   const handleStripeConnectRedirect = async () => {
+    setIsConnectLoading(true);
+
     try {
+      // If we have a preloaded URL, use it for instant redirect
+      if (preloadedConnectUrl) {
+        toast({
+          title: 'Redirecting to Stripe...',
+          description: 'Taking you to the secure setup page.',
+        });
+        window.location.href = preloadedConnectUrl;
+        return;
+      }
+
+      // Fallback: Show loading and create link on demand
+      toast({
+        title: 'Setting up Stripe Connect...',
+        description: 'Please wait while we prepare your secure setup link.',
+      });
+
       await handleStripeConnectRedirectAction({
         userId: userData.id,
       });
     } catch {
+      setIsConnectLoading(false);
       toast({
         title: 'Error',
-        description: 'Failed to redirect to Stripe Connect',
+        description: 'Failed to redirect to Stripe Connect. Please try again.',
         variant: 'destructive',
       });
     }
@@ -311,9 +376,9 @@ export function ProfileSubscriptionPageClient({
                           ? new Date(
                               userData.subscriptionDetails.nextBillingDate,
                             ).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
                             })
                           : 'your next billing date'}
                         . You'll continue to have access to all professional
@@ -345,9 +410,9 @@ export function ProfileSubscriptionPageClient({
                         ? new Date(
                             userData.subscriptionDetails.nextBillingDate,
                           ).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
                           })
                         : 'Not available'}
                     </Typography>
@@ -397,9 +462,23 @@ export function ProfileSubscriptionPageClient({
                           by bookmarking it or using your browser's back button.
                         </Typography>
                       </div>
-                      <Button onClick={handleStripeConnectRedirect}>
-                        <ExternalLink className="h-4 w-4 mr-1" />
-                        Continue Setup with Stripe
+                      <Button
+                        onClick={handleStripeConnectRedirect}
+                        disabled={isConnectLoading}
+                      >
+                        {isConnectLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            {preloadedConnectUrl
+                              ? 'Redirecting...'
+                              : 'Setting up...'}
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Continue Setup with Stripe
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -599,9 +678,22 @@ export function ProfileSubscriptionPageClient({
                 setShowConnectModal(false);
                 handleStripeConnectRedirect();
               }}
+              disabled={isConnectLoading}
             >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Continue Setup with Stripe
+              {isConnectLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {preloadedConnectUrl ? 'Redirecting...' : 'Setting up...'}
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Continue Setup with Stripe
+                  {preloadedConnectUrl && (
+                    <span className="ml-1 text-xs text-green-600">✓ Ready</span>
+                  )}
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

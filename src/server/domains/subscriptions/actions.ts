@@ -336,25 +336,49 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
       throw new Error('Active subscription required to connect with Stripe');
     }
     
-    // First check if the user already has a Stripe account by listing accounts
-    // and matching metadata
-    const existingAccounts = await stripe.accounts.list({
-      limit: 10, // Limit to most recent accounts
-    });
+    // Check if we have a stored Stripe account ID in our database first
+    const { data: existingConnectData } = await supabase
+      .from('professional_profiles')
+      .select('stripe_account_id')
+      .eq('user_id', userId)
+      .single();
     
     let account;
     
-    // Look for an existing account with matching metadata
-    const existingAccount = existingAccounts.data.find(acc => 
-      acc.metadata?.userId === userId || 
-      acc.metadata?.professionalProfileId === profileData.id
-    );
+    // If we have a stored account ID, try to retrieve it directly
+    if (existingConnectData?.stripe_account_id) {
+      try {
+        account = await stripe.accounts.retrieve(existingConnectData.stripe_account_id);
+        console.log('Retrieved existing Stripe account from DB:', account.id);
+      } catch (error) {
+        console.log('Stored account ID invalid, will create new account:', error);
+        // Account might have been deleted, continue to create new one
+      }
+    }
     
-    if (existingAccount) {
-      // Use the existing account
-      account = existingAccount;
-      console.log('Using existing Stripe account:', account.id);
-    } else {
+    // Fallback: search for existing account by metadata (only if no stored ID)
+    if (!account) {
+      const existingAccounts = await stripe.accounts.list({
+        limit: 10, // Limit to most recent accounts
+      });
+      
+      const existingAccount = existingAccounts.data.find(acc => 
+        acc.metadata?.userId === userId || 
+        acc.metadata?.professionalProfileId === profileData.id
+      );
+      
+      if (existingAccount) {
+        account = existingAccount;
+        // Store the account ID in our database for future use
+        await supabase
+          .from('professional_profiles')
+          .update({ stripe_account_id: account.id })
+          .eq('user_id', userId);
+        console.log('Found and stored existing Stripe account:', account.id);
+      }
+    }
+    
+    if (!account) {
       // Generate a unique account ID based on the user's profile ID
       const accountIdKey = `stripe_connect_${profileData.id}`;
       
@@ -374,7 +398,13 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
         }
       });
       
-      console.log('Created new Stripe account:', account.id);
+      // Store the new account ID in our database
+      await supabase
+        .from('professional_profiles')
+        .update({ stripe_account_id: account.id })
+        .eq('user_id', userId);
+      
+      console.log('Created and stored new Stripe account:', account.id);
     }
     
     // Create an account link for onboarding - this will allow the user to continue

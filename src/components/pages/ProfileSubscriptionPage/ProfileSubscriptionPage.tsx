@@ -139,6 +139,26 @@ export async function handleStripeConnectRedirectAction({
   redirect(redirectUrl);
 }
 
+export async function preloadStripeConnectLinkAction({
+  userId,
+}: {
+  userId: string;
+}): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const redirectUrl = await createStripeConnectLink(userId);
+    return { success: true, url: redirectUrl };
+  } catch (error) {
+    console.error('Error preloading Stripe Connect link:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to preload Stripe Connect link',
+    };
+  }
+}
+
 export async function handleCancelSubscriptionRedirectAction({
   userId,
 }: {
