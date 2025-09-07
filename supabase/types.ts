@@ -9,6 +9,56 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          activity_type: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip_address: unknown | null
+          metadata: Json | null
+          referrer: string | null
+          session_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: unknown | null
+          metadata?: Json | null
+          referrer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: unknown | null
+          metadata?: Json | null
+          referrer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       addresses: {
         Row: {
           apartment: string | null
@@ -1435,6 +1485,42 @@ export type Database = {
           p_status: string
         }
         Returns: string
+      }
+      get_engagement_analytics: {
+        Args: {
+          start_date?: string
+          end_date?: string
+          entity_filter_type?: string
+          entity_filter_id?: string
+        }
+        Returns: {
+          total_service_views: number
+          total_professional_views: number
+          total_bookings_started: number
+          total_bookings_completed: number
+          conversion_rate: number
+          engagement_rate: number
+          bounce_rate: number
+        }[]
+      }
+      get_non_converting_users: {
+        Args: {
+          start_date?: string
+          end_date?: string
+          entity_filter_type?: string
+          entity_filter_id?: string
+        }
+        Returns: {
+          user_id: string
+          session_id: string
+          user_name: string
+          service_views: number
+          professional_views: number
+          bookings_started: number
+          bookings_completed: number
+          last_activity: string
+          viewed_entities: Json
+        }[]
       }
       get_professional_rating_stats: {
         Args: { p_professional_id: string }
