@@ -1687,6 +1687,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
         console.error(`❌ Failed to track booking completion for ${bookingId}:`, trackingError);
         // Don't fail the webhook for tracking errors
       }
+
       // Send booking confirmation emails
       try {
         // Get appointment ID for the booking
