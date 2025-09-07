@@ -181,6 +181,7 @@ export type Database = {
           captured_at: string | null
           created_at: string
           deposit_amount: number
+          deposit_payment_intent_id: string | null
           id: string
           payment_method_id: string
           payment_type: string
@@ -210,6 +211,7 @@ export type Database = {
           captured_at?: string | null
           created_at?: string
           deposit_amount?: number
+          deposit_payment_intent_id?: string | null
           id?: string
           payment_method_id: string
           payment_type?: string
@@ -239,6 +241,7 @@ export type Database = {
           captured_at?: string | null
           created_at?: string
           deposit_amount?: number
+          deposit_payment_intent_id?: string | null
           id?: string
           payment_method_id?: string
           payment_type?: string
@@ -368,6 +371,7 @@ export type Database = {
           id: string
           location: string | null
           phone_number: string | null
+          timezone: string | null
           updated_at: string
           user_id: string
         }
@@ -377,6 +381,7 @@ export type Database = {
           id?: string
           location?: string | null
           phone_number?: string | null
+          timezone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -386,6 +391,7 @@ export type Database = {
           id?: string
           location?: string | null
           phone_number?: string | null
+          timezone?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -539,48 +545,36 @@ export type Database = {
       }
       email_templates: {
         Row: {
+          brevo_template_id: number
           created_at: string
           description: string | null
-          html_content: string
+          dynamic_params: Json
           id: string
           is_active: boolean
           name: string
-          reply_to: string | null
-          sender_email: string
-          sender_name: string
-          subject: string
           tag: string
-          to_field: string
           updated_at: string
         }
         Insert: {
+          brevo_template_id: number
           created_at?: string
           description?: string | null
-          html_content: string
+          dynamic_params?: Json
           id?: string
           is_active?: boolean
           name: string
-          reply_to?: string | null
-          sender_email: string
-          sender_name: string
-          subject: string
           tag: string
-          to_field: string
           updated_at?: string
         }
         Update: {
+          brevo_template_id?: number
           created_at?: string
           description?: string | null
-          html_content?: string
+          dynamic_params?: Json
           id?: string
           is_active?: boolean
           name?: string
-          reply_to?: string | null
-          sender_email?: string
-          sender_name?: string
-          subject?: string
           tag?: string
-          to_field?: string
           updated_at?: string
         }
         Relationships: []

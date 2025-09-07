@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { resolveSupportRequest } from '@/server/domains/support-requests/client-actions';
+import { resolveSupportRequestAction } from '@/server/domains/support-requests/server-actions';
 
 type ResolutionModalProps = {
   isOpen: boolean;
@@ -34,7 +34,7 @@ export const ResolutionModal: React.FC<ResolutionModalProps> = ({
     try {
       setIsSubmitting(true);
       
-      const result = await resolveSupportRequest({
+      const result = await resolveSupportRequestAction({
         support_request_id: supportRequestId,
         resolution_notes: 'Support request has been resolved by the professional.',
       });

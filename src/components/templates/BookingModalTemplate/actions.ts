@@ -83,6 +83,24 @@ export async function createBooking(
     if (authError || !user) {
       throw new Error('Not authenticated');
     }
+
+    // Update client timezone in their profile if provided
+    if (clientTimezone && clientTimezone !== 'UTC') {
+      try {
+        const { error: timezoneUpdateError } = await supabase
+          .from('client_profiles')
+          .update({ timezone: clientTimezone })
+          .eq('user_id', user.id);
+
+        if (timezoneUpdateError) {
+          console.error('Failed to update client timezone:', timezoneUpdateError);
+          // Don't fail the booking if timezone update fails
+        }
+      } catch (error) {
+        console.error('Error updating client timezone:', error);
+        // Don't fail the booking if timezone update fails
+      }
+    }
     
     // Get the main service details
     const { data: mainService, error: mainServiceError } = await supabase

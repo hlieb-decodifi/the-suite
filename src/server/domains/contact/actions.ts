@@ -4,6 +4,27 @@ import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 import { contactFormSchema, type ContactFormData } from '@/components/forms/ContactForm/schema';
 
+// Subject options mapping - must match the options in ContactFormContent.tsx
+const subjectOptions = [
+  { value: 'technical_support', label: 'Technical Support' },
+  { value: 'billing_payment', label: 'Billing/Payment Issues' },
+  { value: 'account_problems', label: 'Account Problems' },
+  { value: 'professional_application', label: 'Professional Application' },
+  { value: 'feature_request', label: 'Feature Request' },
+  { value: 'bug_report', label: 'Bug Report' },
+  { value: 'general_inquiry', label: 'General Inquiry' },
+  { value: 'complaint_feedback', label: 'Complaint/Feedback' },
+  { value: 'other', label: 'Other' },
+];
+
+/**
+ * Get subject label from value
+ */
+function getSubjectLabel(value: string): string {
+  const option = subjectOptions.find(opt => opt.value === value);
+  return option ? option.label : value; // Fallback to value if not found
+}
+
 export type ContactSubmissionResult = {
   success: boolean;
   error?: string;
@@ -67,7 +88,7 @@ export async function submitContactInquiry(
     await sendAdminNotificationEmail(inquiry.id, validatedData);
     
     // Send confirmation email to user
-    await sendUserConfirmationEmail(validatedData.email, validatedData.name, inquiry.id);
+    await sendUserConfirmationEmail(validatedData.email, validatedData.name, inquiry.id, validatedData);
     
     return {
       success: true,
@@ -214,19 +235,17 @@ async function sendAdminNotificationEmail(inquiryId: string, formData: ContactFo
   try {
     const { sendContactInquiryAdmin } = await import('@/providers/brevo/templates');
     
+    // Get subject label from value
+    const subjectLabel = getSubjectLabel(formData.subject);
+    
     const result = await sendContactInquiryAdmin(
-      [{ email: process.env.BREVO_ADMIN_EMAIL! }],
+      [{ email: process.env.BREVO_ADMIN_EMAIL!, name: 'Admin Team' }],
       {
-        inquiry_id: inquiryId,
-        urgency: 'medium',
-        urgency_color: '#f59e0b', // medium urgency color
-        subject: formData.subject,
-        name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        full_name: formData.name,
         message: formData.message,
-        submitted_at: new Date().toLocaleString(),
-        dashboard_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`
+        phone: formData.phone,
+        topic: subjectLabel
       }
     );
     
@@ -246,18 +265,25 @@ async function sendAdminNotificationEmail(inquiryId: string, formData: ContactFo
 /**
  * Send confirmation email to user
  */
-async function sendUserConfirmationEmail(email: string, name: string, inquiryId: string) {
+async function sendUserConfirmationEmail(email: string, fullName: string, inquiryId: string, formData: ContactFormData) {
   try {
     const { sendContactInquiryConfirmation } = await import('@/providers/brevo/templates');
     
+    // Split full name to get first name
+    const firstName = fullName.split(' ')[0] || fullName;
+    
+    // Get subject label from value
+    const subjectLabel = getSubjectLabel(formData.subject);
+    
     const result = await sendContactInquiryConfirmation(
-      [{ email, name }],
+      [{ email, name: fullName }],
       {
-        name,
         email,
-        subject: 'Contact Form Submission',
-        message: 'Thank you for contacting us. We will get back to you soon.',
-        inquiry_id: inquiryId
+        first_name: firstName,
+        full_name: fullName,
+        message: formData.message,
+        phone: formData.phone,
+        topic: subjectLabel
       }
     );
     

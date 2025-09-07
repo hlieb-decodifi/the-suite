@@ -1,8 +1,13 @@
 'use client';
 
 import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
+import { TipSection } from '@/app/bookings/[id]/balance/TipSection';
 import { LeafletMap } from '@/components/common/LeafletMap';
-import { AddAdditionalServicesModal, NoShowModal } from '@/components/modals';
+import {
+  AddAdditionalServicesModal,
+  NoShowModal,
+  ReviewPromptModal,
+} from '@/components/modals';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
 import { SupportRequestModal } from '@/components/modals/SupportRequestModal/SupportRequestModal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -27,6 +32,7 @@ import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
   ArrowLeftIcon,
   CalendarIcon,
+  Clock,
   ClockIcon,
   CopyIcon,
   CreditCardIcon,
@@ -67,6 +73,7 @@ export type BookingDetailPageClientProps = {
       createdAt: string;
     } | null;
   } | null;
+  showReviewPrompt?: boolean;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -121,6 +128,7 @@ export function BookingDetailPageClient({
   isAdmin = false,
   existingSupportRequest = null,
   reviewStatus = null,
+  showReviewPrompt = false,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -130,6 +138,8 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
+  const [isReviewPromptModalOpen, setIsReviewPromptModalOpen] =
+    useState(showReviewPrompt);
   const [userTimezone, setUserTimezone] = useState<string>('UTC');
 
   const router = useRouter();
@@ -167,6 +177,15 @@ export function BookingDetailPageClient({
             className="bg-primary/10 text-primary border-primary/20"
           >
             Upcoming
+          </Badge>
+        );
+      case 'ongoing':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-blue-500/10 text-blue-500 border-blue-500/20"
+          >
+            Ongoing
           </Badge>
         );
       case 'cancelled':
@@ -764,17 +783,19 @@ export function BookingDetailPageClient({
                             {formatCurrency(subtotal)}
                           </Typography>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Service Fee:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {formatCurrency(serviceFee)}
-                          </Typography>
-                        </div>
+                        {!isProfessional && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Service Fee:
+                            </Typography>
+                            <Typography variant="small" className="font-medium">
+                              {formatCurrency(serviceFee)}
+                            </Typography>
+                          </div>
+                        )}
                         {totalTips > 0 && (
                           <div className="flex justify-between items-center">
                             <Typography
@@ -810,23 +831,95 @@ export function BookingDetailPageClient({
                         )}
                         {(appointment.bookings.booking_payments
                           ?.balance_amount ?? 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <Typography
-                              variant="small"
-                              className="text-muted-foreground"
-                            >
-                              Balance Due
-                            </Typography>
-                            <Typography
-                              variant="small"
-                              className="font-medium text-amber-600"
-                            >
-                              {formatCurrency(
+                          <>
+                            {/* Check if this is a cash payment with deposit */}
+                            {(() => {
+                              const depositAmount =
                                 appointment.bookings.booking_payments
-                                  ?.balance_amount ?? 0,
-                              )}
-                            </Typography>
-                          </div>
+                                  ?.deposit_amount ?? 0;
+                              const isDeposit = depositAmount > 0;
+                              const isCashPayment =
+                                !appointment.bookings.booking_payments
+                                  ?.payment_methods?.is_online;
+                              const stripeBalance =
+                                appointment.bookings.booking_payments
+                                  ?.balance_amount ?? 0;
+
+                              if (isDeposit && isCashPayment) {
+                                // For cash payments with deposit: show both Stripe balance (suite fee) and cash balance (services + tips)
+                                const cashBalance =
+                                  subtotal + totalTips - depositAmount; // Services and tips paid in cash
+
+                                return (
+                                  <>
+                                    {/* Hide card balance for professionals when it's only suite fee */}
+                                    {!isProfessional && (
+                                      <div className="flex justify-between items-center">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground"
+                                        >
+                                          Card Balance Due (Suite Fee):
+                                        </Typography>
+                                        <Typography
+                                          variant="small"
+                                          className="font-medium text-amber-600"
+                                        >
+                                          {formatCurrency(stripeBalance)}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                    {cashBalance > 0 && (
+                                      <div className="flex justify-between items-center">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground"
+                                        >
+                                          Cash Balance Due (At Appointment):
+                                        </Typography>
+                                        <Typography
+                                          variant="small"
+                                          className="font-medium text-amber-600"
+                                        >
+                                          {formatCurrency(cashBalance)}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              } else {
+                                // Regular balance due display
+                                // For professionals, hide balance if it's only suite fee (cash payment without deposit)
+                                const isCashWithoutDeposit =
+                                  isCashPayment && !isDeposit;
+                                const shouldHideBalanceForProfessional =
+                                  isProfessional &&
+                                  (isCashWithoutDeposit ||
+                                    stripeBalance <= serviceFee);
+
+                                if (shouldHideBalanceForProfessional) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div className="flex justify-between items-center">
+                                    <Typography
+                                      variant="small"
+                                      className="text-muted-foreground"
+                                    >
+                                      Balance Due:
+                                    </Typography>
+                                    <Typography
+                                      variant="small"
+                                      className="font-medium text-amber-600"
+                                    >
+                                      {formatCurrency(stripeBalance)}
+                                    </Typography>
+                                  </div>
+                                );
+                              }
+                            })()}
+                          </>
                         )}
                         <Separator />
                         <div className="flex justify-between items-center">
@@ -834,7 +927,11 @@ export function BookingDetailPageClient({
                             Total:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
-                            {formatCurrency(subtotal + serviceFee + totalTips)}
+                            {isProfessional
+                              ? formatCurrency(subtotal + totalTips)
+                              : formatCurrency(
+                                  subtotal + serviceFee + totalTips,
+                                )}
                           </Typography>
                         </div>
                       </div>
@@ -1178,8 +1275,7 @@ export function BookingDetailPageClient({
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl">
-                {appointmentData.computed_status === 'completed' ||
-                appointmentData.status === 'completed'
+                {appointmentData.computed_status === 'completed' && isClient
                   ? 'Questions about this appointment'
                   : 'Actions'}
               </CardTitle>
@@ -1217,6 +1313,35 @@ export function BookingDetailPageClient({
                     <Plus className="h-4 w-4" />
                     Add Additional Services
                   </Button>
+                )}
+
+              {/* Ongoing Appointment No-Show Info */}
+              {isProfessional &&
+                appointmentData.computed_status === 'ongoing' && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 cursor-help">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span className="font-medium">Client No-Show?</span>
+                          </div>
+                          <p className="text-xs mt-1 text-blue-600">
+                            Hover for more info about no-show marking
+                          </p>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>
+                          If your client hasn't shown up for this appointment,
+                          you'll be able to mark it as a no-show after the
+                          appointment time ends. You'll have 24 hours to take
+                          this action and charge up to 100% of the service
+                          amount.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
 
               {/* Cancel Booking Button */}
@@ -1260,7 +1385,7 @@ export function BookingDetailPageClient({
 
               {/* No Show Button - Professional only, for completed appointments */}
               {isProfessional &&
-                appointmentData.status === 'completed' &&
+                appointmentData.computed_status === 'completed' &&
                 appointment.bookings.booking_payments?.payment_methods
                   ?.is_online && (
                   <Button
@@ -1300,9 +1425,11 @@ export function BookingDetailPageClient({
                           Total:
                         </Typography>
                         <Typography className="font-bold text-primary text-lg">
-                          {formatCurrency(
-                            servicesTotal + serviceFee + totalTips,
-                          )}
+                          {isProfessional
+                            ? formatCurrency(servicesTotal + totalTips)
+                            : formatCurrency(
+                                servicesTotal + serviceFee + totalTips,
+                              )}
                         </Typography>
                       </div>
                     </>
@@ -1341,13 +1468,37 @@ export function BookingDetailPageClient({
                       )}
                   </Typography>
                 </div>
+
+                {/* Tip Section - Show for completed appointments */}
+                {appointmentData.computed_status === 'completed' && (
+                  <>
+                    <Separator />
+                    <div>
+                      <Typography className="font-medium text-foreground mb-4">
+                        Tip
+                      </Typography>
+                      <TipSection
+                        bookingId={appointment.booking_id}
+                        professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                        currentTipAmount={
+                          appointment.bookings.booking_payments?.tip_amount || 0
+                        }
+                        serviceAmount={appointment.bookings.booking_services.reduce(
+                          (sum, service) => sum + service.price,
+                          0,
+                        )}
+                        isClient={isClient}
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
 
           {/* Review Section - Show for completed appointments when user is client or admin */}
           {appointmentData.computed_status === 'completed' && reviewStatus && (
-            <Card className="shadow-sm">
+            <Card className="shadow-sm" id="review-section">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center gap-2">
                   <Star className="h-5 w-5 text-muted-foreground" />
@@ -1459,6 +1610,21 @@ export function BookingDetailPageClient({
         )}
         onSuccess={handleNoShowSuccess}
       />
+
+      {/* Review Prompt Modal */}
+      {isClient &&
+        appointmentData.computed_status === 'completed' &&
+        !reviewStatus?.hasReview && (
+          <ReviewPromptModal
+            isOpen={isReviewPromptModalOpen}
+            onClose={() => setIsReviewPromptModalOpen(false)}
+            professionalName={getOtherPartyName()}
+            serviceName={
+              appointment.bookings.booking_services[0]?.services?.name ||
+              'Service'
+            }
+          />
+        )}
     </div>
   );
 }
