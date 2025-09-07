@@ -15,6 +15,7 @@ import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LeafletMap } from '@/components/common/LeafletMap';
+import { useActivityTracker } from '@/api/activity-log';
 
 export type BookingPageClientProps = {
   service: ServiceListItem;
@@ -41,6 +42,9 @@ export function BookingPageClient({
     extraServices: [],
   });
 
+  // Activity tracking
+  const { trackServiceView, trackProfessionalView } = useActivityTracker();
+
   // Use the existing booking state hook with the page context
   const {
     bookingCompleted,
@@ -66,6 +70,19 @@ export function BookingPageClient({
       console.log('Booking completed:', bookingId);
     },
   });
+
+  // Track service view when component loads
+  useEffect(() => {
+    trackServiceView(service.id, {
+      service_name: service.name,
+      professional_id: service.professional.id,
+      professional_name: service.professional.name,
+      price: service.price,
+      duration: service.duration,
+      source: 'booking_page',
+      ...(preselectedDate && { preselected_date: preselectedDate }),
+    });
+  }, [service, preselectedDate, trackServiceView]);
 
   // Handle preselected date from URL params
   useEffect(() => {
@@ -160,9 +177,15 @@ export function BookingPageClient({
         <Card className="cursor-pointer hover:bg-muted/50 transition-colors">
           <CardContent className="p-6">
             <div
-              onClick={() =>
-                router.push(`/professionals/${service.professional.id}`)
-              }
+              onClick={() => {
+                // Track professional view before navigation
+                trackProfessionalView(service.professional.id, {
+                  professional_name: service.professional.name,
+                  from_service: service.id,
+                  source: 'booking_page_professional_click',
+                });
+                router.push(`/professionals/${service.professional.id}`);
+              }}
               className="flex items-center gap-4 mb-4"
             >
               <Avatar className="h-16 w-16 border-2 border-primary/10">

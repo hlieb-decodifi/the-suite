@@ -4,6 +4,7 @@ import { updatePlanPriceInDb, updateStripeConnectStatus } from '@/server/domains
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
 import { revalidatePath } from 'next/cache';
+import { trackActivity } from '@/api/activity-log/actions';
 
 // Configure this API route to use Node.js Runtime for email functionality
 export const runtime = 'nodejs';
@@ -1479,6 +1480,51 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
           updated_at: new Date().toISOString()
         })
         .eq('booking_id', bookingId);
+
+      // Track booking completed activity
+      try {
+        // Get booking details for activity tracking
+        const { data: bookingData } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            client_id,
+            professional_profile_id,
+            booking_services(
+              service_id,
+              services(
+                id,
+                name,
+                price
+              )
+            )
+          `)
+          .eq('id', bookingId)
+          .single();
+
+        if (bookingData && bookingData.booking_services && bookingData.booking_services.length > 0) {
+          const mainService = bookingData.booking_services[0]?.services;
+          if (mainService) {
+            await trackActivity({
+              activityType: 'booking_completed',
+              entityType: 'booking',
+              entityId: bookingId,
+              metadata: {
+                service_id: mainService.id,
+                service_name: mainService.name,
+                service_price: mainService.price,
+                professional_profile_id: bookingData.professional_profile_id,
+                payment_method: 'setup_intent',
+                source: 'webhook_confirmation'
+              }
+            });
+            console.log(`✅ Booking completed activity tracked for booking ${bookingId}`);
+          }
+        }
+      } catch (trackingError) {
+        console.error(`❌ Failed to track booking completion for ${bookingId}:`, trackingError);
+        // Don't fail the webhook for tracking errors
+      }
 
       // Send booking confirmation emails
       try {

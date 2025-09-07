@@ -10,6 +10,7 @@ export type MetricCardProps = {
   icon: LucideIcon;
   iconColor?: string;
   className?: string;
+  description?: string;
 };
 
 export function MetricCard({
@@ -18,6 +19,7 @@ export function MetricCard({
   icon: Icon,
   iconColor = 'text-blue-500',
   className,
+  description,
 }: MetricCardProps) {
   return (
     <Card className={className}>
@@ -31,6 +33,11 @@ export function MetricCard({
         <Typography variant="h2" className="mt-2">
           {value}
         </Typography>
+        {description && (
+          <Typography variant="small" className="text-muted-foreground mt-1">
+            {description}
+          </Typography>
+        )}
       </CardContent>
     </Card>
   );
