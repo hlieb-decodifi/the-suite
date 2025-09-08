@@ -21,8 +21,8 @@ DELETE FROM public.subscription_plans;
 
 -- Insert subscription plans with Stripe price IDs
 INSERT INTO public.subscription_plans (name, description, price, interval, stripe_price_id, is_active) VALUES
-('Monthly', 'Standard monthly subscription', 19.99, 'month', 'price_1RRXNtLMOPuguC73GyfxSC26', true),
-('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true);
+('Monthly', 'Standard monthly subscription', 7.99, 'month', 'price_1S50bHLMOPuguC73nAT6QPxH', true),
+('Yearly', 'Standard yearly subscription', 75.00, 'year', 'price_1S50atLMOPuguC73Ujmb976p', true);
 
 
 /**

@@ -853,11 +853,6 @@ create table subscription_plans (
 );
 alter table subscription_plans enable row level security;
 
--- Insert default subscription plans
-insert into subscription_plans (name, description, price, interval) 
-values 
-  ('Monthly', 'Standard monthly subscription', 19.99, 'month'),
-  ('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year');
 
 /**
 * PROFESSIONAL_SUBSCRIPTIONS

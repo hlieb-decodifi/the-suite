@@ -71,6 +71,20 @@ export function ProfileSubscriptionPageClient({
   const router = useRouter();
   const toastsShown = useRef<Set<string>>(new Set());
 
+  // Calculate savings percentage for yearly plan
+  const calculateSavingsPercentage = () => {
+    const monthlyPlan = plans.find((plan) => plan.interval === 'month');
+    const yearlyPlan = plans.find((plan) => plan.interval === 'year');
+
+    if (!monthlyPlan || !yearlyPlan) return null;
+
+    const monthlyYearlyPrice = monthlyPlan.price * 12;
+    const savingsAmount = monthlyYearlyPrice - yearlyPlan.price;
+    const savingsPercentage = (savingsAmount / monthlyYearlyPrice) * 100;
+
+    return Math.round(savingsPercentage);
+  };
+
   // Preload Stripe Connect link when user is subscribed but not connected
   useEffect(() => {
     const shouldPreload =
@@ -541,9 +555,9 @@ export function ProfileSubscriptionPageClient({
                 plan.interval === 'year' && 'border-primary/20 relative',
               )}
             >
-              {plan.interval === 'year' && (
+              {plan.interval === 'year' && calculateSavingsPercentage() && (
                 <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-xs font-medium rounded-bl-md">
-                  Save 17%
+                  Save {calculateSavingsPercentage()}%
                 </div>
               )}
 
