@@ -556,7 +556,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          brevo_template_id: number
+          brevo_template_id?: number
           created_at?: string
           description?: string | null
           dynamic_params?: Json
