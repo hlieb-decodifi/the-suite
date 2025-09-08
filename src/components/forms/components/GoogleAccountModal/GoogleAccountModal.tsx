@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { getGoogleOAuthUrlAction } from '@/api/auth/actions';
 import {
@@ -8,7 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose
+  DialogClose,
 } from '@/components/ui/dialog';
 
 type GoogleAccountModalProps = {
@@ -33,12 +32,13 @@ export function GoogleAccountModal({
   const handleGoogleOAuth = async () => {
     setIsLoading(true);
     try {
-      const redirectTo = '/profile';
+      // Role-based redirect will be handled in the auth callback based on user's actual role
+      const redirectTo = '/profile'; // This will be overridden in callback based on user role
       // If user is in the modal because they tried to sign in but no account exists, they are now signing up
       // If user is in the modal because they tried to sign up but account exists, they are now logging in
       const result = await getGoogleOAuthUrlAction(
         redirectTo,
-        isSignIn ? 'signup' : 'signin'
+        isSignIn ? 'signup' : 'signin',
       );
       if (result.success && result.url) {
         window.location.href = result.url;
@@ -51,7 +51,12 @@ export function GoogleAccountModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       <DialogContent closeButton={false}>
         <DialogHeader>
           <DialogTitle>
@@ -71,11 +76,9 @@ export function GoogleAccountModal({
             </span>
           </DialogDescription>
         </DialogHeader>
-  <div className="flex flex-col gap-1 mt-3">
+        <div className="flex flex-col gap-1 mt-3">
           <button
-            className={
-              `w-full px-4 py-2 rounded-md font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition bg-primary text-primary-foreground hover:bg-primary/90`
-            }
+            className={`w-full px-4 py-2 rounded-md font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition bg-primary text-primary-foreground hover:bg-primary/90`}
             onClick={isSignIn ? onSecondary : handleGoogleOAuth}
             type="button"
             disabled={isLoading}
@@ -91,7 +94,9 @@ export function GoogleAccountModal({
             onClick={onSecondary}
             type="button"
           >
-            {isSignIn ? 'Sign up with email instead' : 'Log in with email instead'}
+            {isSignIn
+              ? 'Sign up with email instead'
+              : 'Log in with email instead'}
           </button>
         </div>
         <DialogFooter>

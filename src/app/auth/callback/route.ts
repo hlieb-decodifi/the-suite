@@ -17,10 +17,53 @@ export async function GET(request: Request) {
     const redirectTo = url.searchParams.get('redirect_to') || '/profile';
     const mode = url.searchParams.get('mode') || 'signin';
     const role = url.searchParams.get('role');
+    const type = url.searchParams.get('type'); // Added to detect email verification
 
     if (code) {
-      console.log(`[AUTH_CALLBACK] Code found, proceeding with exchange.`);
+      console.log(`[AUTH_CALLBACK] Code found, proceeding with exchange. Type: ${type}`);
       const supabase = await createClient();
+      
+      // If this is specifically an email verification, skip OAuth and go directly to email verification
+      if (type === 'email_verification') {
+        console.log('[AUTH_CALLBACK] Email verification detected, attempting email verification...');
+        
+        // For email verification, we need to exchange the code for a session first
+        const { data: sessionData, error: emailError } = await supabase.auth.exchangeCodeForSession(code);
+        
+        if (!emailError && sessionData?.session) {
+          // Email verification successful - user is now authenticated
+          console.log('[AUTH_CALLBACK] Email verification successful. User authenticated.');
+          
+          // Check user role to determine correct redirect destination
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('role_id, roles(name)')
+            .eq('id', sessionData.user.id)
+            .single();
+            
+          let finalRedirectTo = redirectTo;
+          
+          if (!userError && userData?.roles) {
+            const roleName = (userData.roles as { name: string }).name;
+            console.log('[AUTH_CALLBACK] User role:', roleName);
+            
+            // Override redirect destination based on role
+            if (roleName === 'client') {
+              finalRedirectTo = '/client-profile';
+            } else if (roleName === 'professional') {
+              finalRedirectTo = '/profile';
+            } else if (roleName === 'admin') {
+              finalRedirectTo = '/admin';
+            }
+          }
+          
+          console.log('[AUTH_CALLBACK] Redirecting to:', finalRedirectTo);
+          return NextResponse.redirect(new URL(finalRedirectTo, baseUrl));
+        } else {
+          console.error('[AUTH_CALLBACK] Email verification failed:', emailError);
+          return NextResponse.redirect(new URL('/auth/confirmed?verified=false', baseUrl));
+        }
+      }
       
       // Try to exchange the code for a session (OAuth flow)
       console.log(`[AUTH_CALLBACK] Attempting to exchange code for session...`);
@@ -90,8 +133,33 @@ export async function GET(request: Request) {
             return NextResponse.redirect(redirectUrl);
           } else {
             // User existed before, this is a normal signin
-            console.log('[AUTH_CALLBACK] User existed before signin, proceeding to profile');
-            const response = NextResponse.redirect(new URL(redirectTo, baseUrl));
+            console.log('[AUTH_CALLBACK] User existed before signin, checking role for redirect');
+            
+            // Check user role to determine correct redirect destination
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('role_id, roles(name)')
+              .eq('id', sessionData.user.id)
+              .single();
+              
+            let finalRedirectTo = redirectTo;
+            
+            if (!userError && userData?.roles) {
+              const roleName = (userData.roles as { name: string }).name;
+              console.log('[AUTH_CALLBACK] User role:', roleName);
+              
+              // Override redirect destination based on role
+              if (roleName === 'client') {
+                finalRedirectTo = '/client-profile';
+              } else if (roleName === 'professional') {
+                finalRedirectTo = '/profile';
+              } else if (roleName === 'admin') {
+                finalRedirectTo = '/admin';
+              }
+            }
+            
+            console.log('[AUTH_CALLBACK] Redirecting existing user to:', finalRedirectTo);
+            const response = NextResponse.redirect(new URL(finalRedirectTo, baseUrl));
             return response;
           }
         }
@@ -180,9 +248,32 @@ export async function GET(request: Request) {
             console.log('[AUTH_CALLBACK] Waiting for 1 second before redirect...');
             await new Promise(resolve => setTimeout(resolve, 1000));
 
-            console.log('[AUTH_CALLBACK] Redirecting to:', redirectTo);
+            // Check user role to determine correct redirect destination for new OAuth signup
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('role_id, roles(name)')
+              .eq('id', sessionData.user.id)
+              .single();
+              
+            let finalRedirectTo = redirectTo;
+            
+            if (!userError && userData?.roles) {
+              const roleName = (userData.roles as { name: string }).name;
+              console.log('[AUTH_CALLBACK] New OAuth user role:', roleName);
+              
+              // Override redirect destination based on role
+              if (roleName === 'client') {
+                finalRedirectTo = '/client-profile';
+              } else if (roleName === 'professional') {
+                finalRedirectTo = '/profile';
+              } else if (roleName === 'admin') {
+                finalRedirectTo = '/admin';
+              }
+            }
+            
+            console.log('[AUTH_CALLBACK] Redirecting new OAuth user to:', finalRedirectTo);
             // Create response and set session cookie explicitly
-            const response = NextResponse.redirect(new URL(redirectTo, baseUrl));
+            const response = NextResponse.redirect(new URL(finalRedirectTo, baseUrl));
             // Ensure session is properly set in cookies
             console.log('[AUTH_CALLBACK] Refreshing session cookie...');
             const { data: { session } } = await supabase.auth.getSession();
