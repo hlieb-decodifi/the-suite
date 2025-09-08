@@ -113,9 +113,12 @@ type BookingPayment = {
   amount: number;
   tip_amount: number;
   service_fee?: number;
+  deposit_amount?: number;
   status: 'incomplete' | 'pending' | 'completed' | 'failed' | 'refunded' | 'partially_refunded' | 'deposit_paid' | 'awaiting_balance' | 'authorized' | 'pre_auth_scheduled';
   stripe_payment_intent_id?: string;
   stripe_payment_method_id?: string;
+  pre_auth_scheduled_for?: string;
+  capture_scheduled_for?: string;
   payment_methods?: {
     name: string;
     is_online: boolean;
@@ -228,6 +231,7 @@ export async function cancelBookingAction(
         booking_services(
           id,
           price,
+          duration,
           services(name)
         ),
         booking_payments!inner(
@@ -239,6 +243,8 @@ export async function cancelBookingAction(
           status,
           stripe_payment_intent_id,
           stripe_payment_method_id,
+          pre_auth_scheduled_for,
+          capture_scheduled_for,
           payment_methods!inner(is_online)
         )
       `)
@@ -254,7 +260,9 @@ export async function cancelBookingAction(
       bookingId: booking.id,
       status: booking.status,
       appointmentCount: booking.appointments.length,
-      hasPayment: !!booking.booking_payments
+      hasPayment: !!booking.booking_payments,
+      paymentData: booking.booking_payments,
+      rawBookingData: booking
     });
 
     // Get the first appointment since we queried with !inner
@@ -267,16 +275,30 @@ export async function cancelBookingAction(
     const professionalProfile = booking.professional_profiles;
     const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
-    const payment = booking.booking_payments;
+    
+    // Handle payment - booking_payments is an array, get the first one
+    console.log('[Cancellation] 🔍 Raw payment data:', {
+      paymentsType: typeof booking.booking_payments,
+      paymentsIsArray: Array.isArray(booking.booking_payments),
+      paymentsLength: Array.isArray(booking.booking_payments) ? booking.booking_payments.length : 'not-array',
+      paymentsData: booking.booking_payments
+    });
+
+    const payment = Array.isArray(booking.booking_payments) 
+      ? booking.booking_payments[0] 
+      : booking.booking_payments;
 
     console.log('[Cancellation] 💳 Payment details:', {
+      hasPayment: !!payment,
       paymentId: payment?.id,
       paymentStatus: payment?.status,
       paymentAmount: payment?.amount,
       depositAmount: payment?.deposit_amount,
       serviceFee: payment?.service_fee,
       paymentIntentId: payment?.stripe_payment_intent_id,
-      isOnlinePayment: payment?.payment_methods?.is_online
+      isOnlinePayment: payment?.payment_methods?.is_online,
+      preAuthScheduled: payment?.pre_auth_scheduled_for,
+      captureScheduled: payment?.capture_scheduled_for
     });
 
     // Check authorization
@@ -333,10 +355,24 @@ export async function cancelBookingAction(
 
     console.log('[Cancellation] ✅ Updated appointment status to cancelled');
 
-    // Handle payment and refund if there's a payment record
-    if (payment && payment.stripe_payment_intent_id) {
+    // Debug payment record information
+    console.log('[Cancellation] 🔍 Payment record debug info:', {
+      hasPayment: !!payment,
+      paymentId: payment?.id,
+      paymentStatus: payment?.status,
+      paymentAmount: payment?.amount,
+      hasPaymentIntent: !!payment?.stripe_payment_intent_id,
+      paymentIntentId: payment?.stripe_payment_intent_id,
+      preAuthScheduled: payment?.pre_auth_scheduled_for,
+      captureScheduled: payment?.capture_scheduled_for
+    });
 
-      try {
+    // Handle payment and refund if there's a payment record
+    if (payment) {
+      // Check if this is a pending payment (no payment intent yet) or an active payment intent
+      if (payment.stripe_payment_intent_id) {
+        // Handle active payment intent
+        try {
         console.log(`[Payment Intent] 🔍 Retrieving payment intent ${payment.stripe_payment_intent_id}`);
         const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
         console.log(`[Payment Intent] Status: ${paymentIntent.status}`, {
@@ -348,84 +384,30 @@ export async function cancelBookingAction(
 
         // Handle different payment intent statuses
         if (paymentIntent.status === 'requires_capture') {
-          console.log(`[Payment Intent] 💰 Payment requires capture`);
-          const customerId = paymentIntent.customer as string;
-          console.log(`[Payment Intent] Customer ID: ${customerId}`);
+          console.log(`[Payment Intent] 💰 Payment requires capture - uncaptured payment detected`);
           
-          if (customerId && professionalProfile.stripe_account_id) {
-            console.log(`[Payment Intent] Professional stripe account: ${professionalProfile.stripe_account_id}`);
-            // Different refund logic based on who is cancelling
-            if (isProfessional) {
-              // Professional cancelling: Full refund including deposit, professional pays fees
-              const refundAmount = payment.amount + (payment.deposit_amount || 0);
-              console.log(`[Professional Cancel] 💸 Refunding full amount:`, {
-                baseAmount: payment.amount,
-                depositAmount: payment.deposit_amount,
-                totalRefund: refundAmount
-              });
-
-              const refund = await stripe.refunds.create({
-                payment_intent: payment.stripe_payment_intent_id,
-                amount: refundAmount,
-                metadata: {
-                  reason: 'Professional cancelled - full refund including deposit'
-                }
-              });
-
-              console.log(`[Professional Cancel] ✅ Full refund processed:`, {
-                refundId: refund.id,
-                refundStatus: refund.status,
-                refundAmount: refund.amount
-              });
+          // For uncaptured payments, we must CANCEL not refund
+          if (isProfessional) {
+            // Professional cancelling: Cancel uncaptured payment (full refund to client)
+            console.log(`[Professional Cancel] 🔄 Cancelling uncaptured payment - full refund to client`);
+            await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+            console.log(`[Professional Cancel] ✅ Uncaptured payment cancelled successfully`);
+          } else if (isClient) {
+            // Client cancelling: Check cancellation policy for uncaptured payments
+            if (!professionalProfile.cancellation_policy_enabled) {
+              console.log(`[Client Cancel] 🔄 No cancellation policy - cancelling uncaptured payment`);
+              await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+              console.log(`[Client Cancel] ✅ Uncaptured payment cancelled successfully`);
             } else {
-              // Client cancelling: Check cancellation policy
-              if (!professionalProfile.cancellation_policy_enabled) {
-                console.log(`[Client Cancel] No cancellation policy - processing refund`);
-                console.log(`[Client Cancel] Payment details:`, {
-                  amount: payment.amount,
-                  depositAmount: payment.deposit_amount,
-                  serviceFee: payment.service_fee,
-                  paymentIntentId: payment.stripe_payment_intent_id,
-                  paymentStatus: payment.status
-                });
-
-                // No policy - full refund including deposit, minus service fee
-                const refundAmount = payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0);
-                console.log(`[Client Cancel] 💰 Refund calculation:`, {
-                  paymentAmount: payment.amount,
-                  depositAmount: payment.deposit_amount || 0,
-                  serviceFee: payment.service_fee || 0,
-                  totalRefund: refundAmount
-                });
-
-                try {
-                  const refund = await stripe.refunds.create({
-                    payment_intent: payment.stripe_payment_intent_id,
-                    amount: refundAmount,
-                    metadata: {
-                      reason: 'Client cancelled - no cancellation policy, full refund minus service fee'
-                    }
-                  });
-                  console.log(`[Client Cancel] ✅ Refund created successfully:`, {
-                    refundId: refund.id,
-                    status: refund.status,
-                    amount: refund.amount
-                  });
-                } catch (refundError) {
-                  console.error('[Client Cancel] ❌ Failed to create refund:', refundError);
-                  throw refundError;
-                }
-              } else {
-                // Policy exists - handle in cancelWithPolicyAction
-                console.log(`[Client Cancel] ⚠️ Cancellation policy enabled - redirecting to policy flow`);
-                return { 
-                  success: false, 
-                  error: 'Please use cancellation policy flow',
-                  message: 'This booking requires cancellation through the policy flow.'
-                };
-              }
+              // Policy exists - handle in cancelWithPolicyAction
+              console.log(`[Client Cancel] ⚠️ Cancellation policy enabled - redirecting to policy flow`);
+              return { 
+                success: false, 
+                error: 'Please use cancellation policy flow',
+                message: 'This booking requires cancellation through the policy flow.'
+              };
             }
-          } else {
+        } else {
             // Missing customer ID or professional stripe account, cancel entire payment
             console.log(`[Payment Intent] ⚠️ Missing customer ID or professional stripe account - cancelling entire payment`);
             await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
@@ -466,31 +448,81 @@ export async function cancelBookingAction(
             throw refundError;
           }
         }
-
-        // Update payment record
-        const { error: updatePaymentError } = await supabase
-          .from('booking_payments')
-          .update({
-            status: 'refunded',
-            pre_auth_scheduled_for: null,
-            capture_scheduled_for: null,
-            refunded_amount: isProfessional ? payment.amount + (payment.deposit_amount || 0) : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0),
-            refund_reason: `${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
-            refunded_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', payment.id);
-
-        if (updatePaymentError) {
-          console.error('[Payment Record] ❌ Failed to update payment status:', updatePaymentError);
-        } else {
-          console.log('[Payment Record] ✅ Payment record updated successfully');
+        } catch (stripeError) {
+          console.error('[Stripe Error] ❌ Failed to handle payment intent during cancellation:', stripeError);
         }
-      } catch (stripeError) {
-        console.error('[Stripe Error] ❌ Failed to handle payment intent during cancellation:', stripeError);
+      } else {
+        // Handle pending payment (no payment intent yet - booking made >6 days in advance)
+        console.log('[Cancellation] 📅 Handling pending payment (no payment intent yet)');
+        console.log('[Cancellation] Payment status:', payment.status);
+        console.log('[Cancellation] Pre-auth scheduled for:', payment.pre_auth_scheduled_for);
+        console.log('[Cancellation] Capture scheduled for:', payment.capture_scheduled_for);
+      }
+
+      // Update payment record for both cases (with and without payment intent)
+      console.log('[Payment Record] 🔄 Preparing to update payment record:', {
+        paymentId: payment.id,
+        currentStatus: payment.status,
+        newStatus: 'refunded',
+        isProfessional,
+        cancellationReason
+      });
+
+      const updateData = {
+        status: 'refunded' as const,
+        pre_auth_scheduled_for: null,
+        capture_scheduled_for: null,
+        refunded_amount: isProfessional ? payment.amount + (payment.deposit_amount || 0) : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0),
+        refund_reason: `${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
+        refunded_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('[Payment Record] 📝 Update data:', updateData);
+
+      console.log('[Payment Record] 🔧 Using Supabase client for update');
+      console.log('[Payment Record] 🔒 User permissions check:', {
+        userId: user.id,
+        isAuthorized: isProfessional || isClient,
+        isProfessional,
+        isClient,
+        paymentId: payment.id
+      });
+
+      // Try to verify we can read the payment first
+      const { data: existingPayment, error: readError } = await supabase
+        .from('booking_payments')
+        .select('*')
+        .eq('id', payment.id)
+        .single();
+
+      console.log('[Payment Record] 📖 Read test result:', {
+        readError,
+        canRead: !readError,
+        existingPayment: existingPayment ? { id: existingPayment.id, status: existingPayment.status } : null
+      });
+      
+      const { data: updateResult, error: updatePaymentError } = await supabase
+        .from('booking_payments')
+        .update(updateData)
+        .eq('id', payment.id)
+        .select('*');
+
+      console.log('[Payment Record] 📊 Update query result:', {
+        error: updatePaymentError,
+        updatedRows: updateResult?.length || 0,
+        updatedData: updateResult?.[0] || null
+      });
+
+      if (updatePaymentError) {
+        console.error('[Payment Record] ❌ Failed to update payment status:', updatePaymentError);
+        console.error('[Payment Record] ❌ Full error details:', JSON.stringify(updatePaymentError, null, 2));
+      } else {
+        console.log('[Payment Record] ✅ Payment record updated successfully');
+        console.log('[Payment Record] ✅ Updated record:', updateResult?.[0]);
       }
     } else {
-      console.log('[Cancellation] ℹ️ No payment record or payment intent to process');
+      console.log('[Cancellation] ℹ️ No payment record to process');
     }
 
     // Determine cancellation scenario and send appropriate emails
@@ -985,6 +1017,7 @@ export async function cancelWithPolicyAction(
         booking_services(
           id,
           price,
+          duration,
           services(name)
         ),
         booking_payments!inner(
@@ -996,6 +1029,8 @@ export async function cancelWithPolicyAction(
           status,
           stripe_payment_intent_id,
           stripe_payment_method_id,
+          pre_auth_scheduled_for,
+          capture_scheduled_for,
           payment_methods!inner(is_online)
         )
       `)

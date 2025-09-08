@@ -1288,6 +1288,16 @@ create policy "Clients can create booking payments for their bookings"
     )
   );
 
+create policy "Clients can update booking payments for cancellation"
+  on booking_payments for update
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = booking_payments.booking_id
+      and bookings.client_id = auth.uid()
+    )
+  );
+
 -- Additional policies for professionals to view client data when they have shared appointments
 create policy "Professionals can view client profiles for shared appointments"
   on client_profiles for select

@@ -262,17 +262,57 @@ export async function createBooking(
         }
       }
       
+      // Calculate payment schedule for online payments
+      let paymentRecord: any = {
+        booking_id: booking.id,
+        payment_method_id: formData.paymentMethodId,
+        amount: totalPrice,
+        tip_amount: formData.tipAmount || 0,
+        service_fee: serviceFee,
+        status: paymentStatus,
+      };
+
+      // For online payments, calculate and set payment schedule
+      if (paymentMethod?.is_online) {
+        try {
+          const { data: scheduleData, error: scheduleError } = await supabase
+            .rpc('calculate_payment_schedule', {
+              appointment_start_time: utcDate.toISOString(),
+              appointment_end_time: utcEndDate.toISOString()
+            });
+
+          if (!scheduleError && scheduleData && scheduleData.length > 0) {
+            const schedule = scheduleData[0];
+            
+            if (schedule.should_pre_auth_now) {
+              // Appointment is <6 days: Pre-auth happens immediately, no scheduling needed
+              paymentRecord.capture_scheduled_for = schedule.capture_date;
+              paymentRecord.status = 'pending'; // Will be updated to 'authorized' when payment intent is created
+              console.log('Immediate pre-auth schedule (appointment <6 days):', {
+                captureDate: schedule.capture_date,
+                immediatePreAuth: true
+              });
+            } else {
+              // Appointment is >6 days: Schedule both pre-auth and capture
+              paymentRecord.pre_auth_scheduled_for = schedule.pre_auth_date;
+              paymentRecord.capture_scheduled_for = schedule.capture_date;
+              console.log('Scheduled payment (appointment >6 days):', {
+                preAuthDate: schedule.pre_auth_date,
+                captureDate: schedule.capture_date,
+                scheduledPreAuth: true
+              });
+            }
+          }
+        } catch (scheduleError) {
+          console.error('Failed to calculate payment schedule:', scheduleError);
+          // Continue without schedule - will be handled later in the payment flow
+        }
+      }
+
       // Create payment record
       const { error: paymentError } = await supabase
         .from('booking_payments')
-        .insert({
-          booking_id: booking.id,
-          payment_method_id: formData.paymentMethodId,
-          amount: totalPrice,
-          tip_amount: formData.tipAmount || 0,
-          service_fee: serviceFee,
-          status: paymentStatus,
-        });
+        .insert(paymentRecord);
       
       if (paymentError) {
         throw new Error(`Error creating payment record: ${paymentError.message}`);
