@@ -2679,7 +2679,7 @@ create table email_templates (
   name text not null,
   description text,
   tag text not null,
-  brevo_template_id integer not null,
+  brevo_template_id integer not null default 1,
   dynamic_params jsonb default '[]'::jsonb not null,
   is_active boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

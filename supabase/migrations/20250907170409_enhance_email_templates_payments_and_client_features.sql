@@ -14,7 +14,7 @@ alter table "public"."email_templates" drop column "subject";
 
 alter table "public"."email_templates" drop column "to_field";
 
-alter table "public"."email_templates" add column "brevo_template_id" integer not null;
+alter table "public"."email_templates" add column "brevo_template_id" integer not null default 1;
 
 alter table "public"."email_templates" add column "dynamic_params" jsonb not null default '[]'::jsonb;
 
