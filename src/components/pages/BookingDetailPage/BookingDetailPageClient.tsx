@@ -257,11 +257,48 @@ export function BookingDetailPageClient({
       appointmentData.computed_status || appointmentData.status;
 
     if (isProfessional) {
-      if (computedStatus === 'upcoming') {
+      if (computedStatus === 'ongoing') {
         return [{ value: 'completed', label: 'Mark as Completed' }];
       }
     }
     return [];
+  };
+
+  // Check if there are any actions available for the current user
+  const hasAvailableActions = () => {
+    // Status update buttons
+    if (canUpdateStatus() && !isAdmin && getAvailableStatuses().length > 0) {
+      return true;
+    }
+
+    // Add additional services (professionals only, ongoing appointments)
+    if (isProfessional && appointmentData.computed_status === 'ongoing') {
+      return true;
+    }
+
+    // Cancel booking button
+    if (canCancelBooking()) {
+      return true;
+    }
+
+    // View/Create support request buttons
+    if (
+      (canViewRefund() && existingSupportRequest) ||
+      (canRequestRefund() && !existingSupportRequest)
+    ) {
+      return true;
+    }
+
+    // No show button (professionals only, completed appointments with online payments)
+    if (
+      isProfessional &&
+      appointmentData.computed_status === 'completed' &&
+      appointment.bookings.booking_payments?.payment_methods?.is_online
+    ) {
+      return true;
+    }
+
+    return false;
   };
 
   const handleCopyBookingId = async () => {
@@ -375,8 +412,8 @@ export function BookingDetailPageClient({
     // Cannot cancel if already cancelled or completed
     if (['cancelled', 'completed'].includes(computedStatus)) return false;
 
-    // Both professionals and clients can cancel upcoming appointments
-    return computedStatus === 'upcoming';
+    // Only clients can cancel upcoming appointments
+    return computedStatus === 'upcoming' && isClient;
   };
 
   // Get professional or client name for cancellation modal
@@ -1271,133 +1308,139 @@ export function BookingDetailPageClient({
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Actions Card */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl">
-                {appointmentData.computed_status === 'completed' && isClient
-                  ? 'Questions about this appointment'
-                  : 'Actions'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Status Update Buttons - Only show if user can update status and is not admin */}
-              {canUpdateStatus() && !isAdmin && (
-                <>
-                  {getAvailableStatuses().map((statusOption) => (
+          {/* Actions Card - Only show if there are available actions */}
+          {hasAvailableActions() && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-xl">
+                  {appointmentData.computed_status === 'completed' && isClient
+                    ? 'Questions about this appointment'
+                    : 'Actions'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* Status Update Buttons - Only show if user can update status and is not admin */}
+                {canUpdateStatus() && !isAdmin && (
+                  <>
+                    {getAvailableStatuses().map((statusOption) => (
+                      <Button
+                        key={statusOption.value}
+                        onClick={() => handleStatusUpdate(statusOption.value)}
+                        disabled={isUpdating}
+                        variant={
+                          statusOption.value === 'cancelled'
+                            ? 'destructiveOutline'
+                            : 'default'
+                        }
+                        className="w-full"
+                      >
+                        {isUpdating ? 'Updating...' : statusOption.label}
+                      </Button>
+                    ))}
+                  </>
+                )}
+
+                {/* Add Additional Services Button */}
+                {isProfessional &&
+                  appointmentData.computed_status === 'ongoing' && (
                     <Button
-                      key={statusOption.value}
-                      onClick={() => handleStatusUpdate(statusOption.value)}
-                      disabled={isUpdating}
-                      variant={
-                        statusOption.value === 'cancelled'
-                          ? 'destructiveOutline'
-                          : 'default'
-                      }
+                      onClick={() => setIsAddServicesModalOpen(true)}
+                      variant="outline"
                       className="w-full"
                     >
-                      {isUpdating ? 'Updating...' : statusOption.label}
+                      <Plus className="h-4 w-4" />
+                      Add Additional Services
                     </Button>
-                  ))}
-                </>
-              )}
+                  )}
 
-              {/* Add Additional Services Button */}
-              {isProfessional &&
-                appointmentData.computed_status === 'ongoing' && (
-                  <Button
-                    onClick={() => setIsAddServicesModalOpen(true)}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Additional Services
-                  </Button>
-                )}
-
-              {/* Ongoing Appointment No-Show Info */}
-              {isProfessional &&
-                appointmentData.computed_status === 'ongoing' && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 cursor-help">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            <span className="font-medium">Client No-Show?</span>
+                {/* Ongoing Appointment No-Show Info */}
+                {isProfessional &&
+                  appointmentData.computed_status === 'ongoing' && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 cursor-help">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              <span className="font-medium">
+                                Client No-Show?
+                              </span>
+                            </div>
+                            <p className="text-xs mt-1 text-blue-600">
+                              Hover for more info about no-show marking
+                            </p>
                           </div>
-                          <p className="text-xs mt-1 text-blue-600">
-                            Hover for more info about no-show marking
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            If your client hasn't shown up for this appointment,
+                            you'll be able to mark it as a no-show after the
+                            appointment time ends. You'll have 24 hours to take
+                            this action and charge up to 100% of the service
+                            amount.
                           </p>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p>
-                          If your client hasn't shown up for this appointment,
-                          you'll be able to mark it as a no-show after the
-                          appointment time ends. You'll have 24 hours to take
-                          this action and charge up to 100% of the service
-                          amount.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
 
-              {/* Cancel Booking Button */}
-              {canCancelBooking() && (
-                <Button
-                  onClick={() => setIsCancellationModalOpen(true)}
-                  variant="destructiveOutline"
-                  className="w-full"
-                >
-                  Cancel Booking
-                </Button>
-              )}
-
-              {/* View Support Request Button - For professionals and admins */}
-              {canViewRefund() && existingSupportRequest && (
-                <Button asChild variant="outline" className="w-full relative">
-                  <Link href={`/support-request/${existingSupportRequest.id}`}>
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center">
-                        <FileTextIcon className="h-4 w-4 mr-2" />
-                        {existingSupportRequest.category === 'refund_request'
-                          ? 'View Refund Request'
-                          : 'View Support Request'}
-                      </div>
-                    </div>
-                  </Link>
-                </Button>
-              )}
-
-              {/* Support Request Button - For clients */}
-              {canRequestRefund() && !existingSupportRequest && (
-                <Button
-                  onClick={() => setIsRefundModalOpen(true)}
-                  variant="destructiveOutline"
-                  className="w-full"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Support Request
-                </Button>
-              )}
-
-              {/* No Show Button - Professional only, for completed appointments */}
-              {isProfessional &&
-                appointmentData.computed_status === 'completed' &&
-                appointment.bookings.booking_payments?.payment_methods
-                  ?.is_online && (
+                {/* Cancel Booking Button */}
+                {canCancelBooking() && (
                   <Button
-                    onClick={() => setIsNoShowModalOpen(true)}
+                    onClick={() => setIsCancellationModalOpen(true)}
                     variant="destructiveOutline"
                     className="w-full"
                   >
-                    Mark as No Show
+                    Cancel Booking
                   </Button>
                 )}
-            </CardContent>
-          </Card>
+
+                {/* View Support Request Button - For professionals and admins */}
+                {canViewRefund() && existingSupportRequest && (
+                  <Button asChild variant="outline" className="w-full relative">
+                    <Link
+                      href={`/support-request/${existingSupportRequest.id}`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                          <FileTextIcon className="h-4 w-4 mr-2" />
+                          {existingSupportRequest.category === 'refund_request'
+                            ? 'View Refund Request'
+                            : 'View Support Request'}
+                        </div>
+                      </div>
+                    </Link>
+                  </Button>
+                )}
+
+                {/* Support Request Button - For clients */}
+                {canRequestRefund() && !existingSupportRequest && (
+                  <Button
+                    onClick={() => setIsRefundModalOpen(true)}
+                    variant="destructiveOutline"
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Support Request
+                  </Button>
+                )}
+
+                {/* No Show Button - Professional only, for completed appointments */}
+                {isProfessional &&
+                  appointmentData.computed_status === 'completed' &&
+                  appointment.bookings.booking_payments?.payment_methods
+                    ?.is_online && (
+                    <Button
+                      onClick={() => setIsNoShowModalOpen(true)}
+                      variant="destructiveOutline"
+                      className="w-full"
+                    >
+                      Mark as No Show
+                    </Button>
+                  )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Payment Information */}
           {appointment.bookings.booking_payments && (
@@ -1411,29 +1454,16 @@ export function BookingDetailPageClient({
               <CardContent className="space-y-4">
                 {/* Payment Amount and Status */}
                 <div className="space-y-2">
-                  {/* Show total amount for professionals */}
-                  {isProfessional ? (
-                    <div className="flex justify-between items-center">
-                      <Typography className="font-bold text-primary text-lg">
-                        {formatCurrency(servicesTotal)}
-                      </Typography>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <Typography className="font-semibold">
-                          Total:
-                        </Typography>
-                        <Typography className="font-bold text-primary text-lg">
-                          {isProfessional
-                            ? formatCurrency(servicesTotal + totalTips)
-                            : formatCurrency(
-                                servicesTotal + serviceFee + totalTips,
-                              )}
-                        </Typography>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex justify-between items-center">
+                    <Typography className="font-semibold">Total:</Typography>
+                    <Typography className="font-bold text-primary text-lg">
+                      {isProfessional
+                        ? formatCurrency(servicesTotal + totalTips)
+                        : formatCurrency(
+                            servicesTotal + serviceFee + totalTips,
+                          )}
+                    </Typography>
+                  </div>
                 </div>
 
                 <Separator />
