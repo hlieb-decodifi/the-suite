@@ -1024,7 +1024,7 @@ $$ language plpgsql;
 * Note: Uses SECURITY INVOKER to respect RLS policies of the underlying table
 */
 create or replace view appointments_with_status 
-with (security_invoker = true) as
+with (security_invoker = on) as
 select 
   a.id,
   a.booking_id,
