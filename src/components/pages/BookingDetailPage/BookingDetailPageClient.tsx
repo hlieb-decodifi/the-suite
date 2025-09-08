@@ -628,7 +628,7 @@ export function BookingDetailPageClient({
                         <Typography className="font-medium text-red-700 mb-2">
                           Refund Processed
                         </Typography>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 gap-2">
                           <div className="flex justify-between">
                             <Typography
                               variant="small"
@@ -641,11 +641,117 @@ export function BookingDetailPageClient({
                               className="font-medium text-green-600"
                             >
                               {formatCurrency(
-                                appointment.bookings.booking_payments
-                                  .refunded_amount,
+                                (() => {
+                                  const payment =
+                                    appointment.bookings.booking_payments;
+                                  const isOnlinePayment =
+                                    payment.payment_methods?.is_online;
+
+                                  if (isProfessional) {
+                                    // Professionals always get the recorded refunded amount
+                                    return payment.refunded_amount;
+                                  } else {
+                                    // For clients, the display depends on payment method
+                                    if (isOnlinePayment) {
+                                      // Online payment: client paid full amount (including any deposit), show refunded_amount + service_fee
+                                      return (
+                                        payment.refunded_amount +
+                                        payment.service_fee
+                                      );
+                                    } else {
+                                      // Cash payment: client only paid service fee + deposit (if any) via card
+                                      return (
+                                        payment.service_fee +
+                                        (payment.deposit_amount || 0)
+                                      );
+                                    }
+                                  }
+                                })(),
                               )}
                             </Typography>
                           </div>
+
+                          {/* Show breakdown for clients only */}
+                          {isClient &&
+                            appointment.bookings.booking_payments.service_fee >
+                              0 &&
+                            (() => {
+                              const payment =
+                                appointment.bookings.booking_payments;
+                              const isOnlinePayment =
+                                payment.payment_methods?.is_online;
+                              const hasDeposit = payment.deposit_amount > 0;
+
+                              if (isOnlinePayment) {
+                                // Online payment: show breakdown of service amount + suite fee + deposit (if any)
+                                return (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <Typography
+                                        variant="small"
+                                        className="text-muted-foreground pl-4"
+                                      >
+                                        • Service Amount:{' '}
+                                        {formatCurrency(
+                                          payment.refunded_amount -
+                                            (payment.deposit_amount || 0),
+                                        )}
+                                      </Typography>
+                                    </div>
+                                    {hasDeposit && (
+                                      <div className="flex justify-between">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground pl-4"
+                                        >
+                                          • Deposit:{' '}
+                                          {formatCurrency(
+                                            payment.deposit_amount,
+                                          )}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                    <div className="flex justify-between">
+                                      <Typography
+                                        variant="small"
+                                        className="text-muted-foreground pl-4"
+                                      >
+                                        • Suite Fee:{' '}
+                                        {formatCurrency(payment.service_fee)}
+                                      </Typography>
+                                    </div>
+                                  </>
+                                );
+                              } else {
+                                // Cash payment: show suite fee + deposit (if any) refunded via card
+                                return (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <Typography
+                                        variant="small"
+                                        className="text-muted-foreground pl-4"
+                                      >
+                                        • Suite Fee refunded to card:{' '}
+                                        {formatCurrency(payment.service_fee)}
+                                      </Typography>
+                                    </div>
+                                    {hasDeposit && (
+                                      <div className="flex justify-between">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground pl-4"
+                                        >
+                                          • Deposit refunded to card:{' '}
+                                          {formatCurrency(
+                                            payment.deposit_amount,
+                                          )}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              }
+                            })()}
                           {appointment.bookings.booking_payments
                             .refunded_at && (
                             <div className="flex justify-between">

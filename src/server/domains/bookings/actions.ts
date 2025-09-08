@@ -117,6 +117,7 @@ type BookingPayment = {
   status: 'incomplete' | 'pending' | 'completed' | 'failed' | 'refunded' | 'partially_refunded' | 'deposit_paid' | 'awaiting_balance' | 'authorized' | 'pre_auth_scheduled';
   stripe_payment_intent_id?: string;
   stripe_payment_method_id?: string;
+  deposit_payment_intent_id?: string;
   pre_auth_scheduled_for?: string;
   capture_scheduled_for?: string;
   payment_methods?: {
@@ -243,6 +244,7 @@ export async function cancelBookingAction(
           status,
           stripe_payment_intent_id,
           stripe_payment_method_id,
+          deposit_payment_intent_id,
           pre_auth_scheduled_for,
           capture_scheduled_for,
           payment_methods!inner(is_online)
@@ -324,37 +326,6 @@ export async function cancelBookingAction(
       return { success: false, error: 'Booking already cancelled' };
     }
 
-    // Update booking status
-    const { error: updateBookingError } = await supabase
-      .from('bookings')
-      .update({ 
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', bookingId);
-
-    if (updateBookingError) {
-      console.log('[Cancellation] ❌ Failed to update booking status:', updateBookingError);
-      return { success: false, error: 'Failed to update booking status' };
-    }
-
-    console.log('[Cancellation] ✅ Updated booking status to cancelled');
-
-    const { error: updateAppointmentError } = await supabase
-      .from('appointments')
-      .update({ 
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      })
-      .eq('booking_id', bookingId);
-
-    if (updateAppointmentError) {
-      console.log('[Cancellation] ❌ Failed to update appointment status:', updateAppointmentError);
-      return { success: false, error: 'Failed to update appointment status' };
-    }
-
-    console.log('[Cancellation] ✅ Updated appointment status to cancelled');
-
     // Debug payment record information
     console.log('[Cancellation] 🔍 Payment record debug info:', {
       hasPayment: !!payment,
@@ -399,13 +370,32 @@ export async function cancelBookingAction(
               await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
               console.log(`[Client Cancel] ✅ Uncaptured payment cancelled successfully`);
             } else {
-              // Policy exists - handle in cancelWithPolicyAction
-              console.log(`[Client Cancel] ⚠️ Cancellation policy enabled - redirecting to policy flow`);
-              return { 
-                success: false, 
-                error: 'Please use cancellation policy flow',
-                message: 'This booking requires cancellation through the policy flow.'
-              };
+              // Policy exists - check if it actually applies based on timing
+              const appointmentEnd = new Date(appointment.start_time);
+              const now = new Date();
+              const hoursUntilAppointment = (appointmentEnd.getTime() - now.getTime()) / (1000 * 60 * 60);
+              
+              // Only redirect to policy flow if cancellation actually incurs charges
+              let shouldChargeClient = false;
+              if (hoursUntilAppointment < 24 && professionalProfile.cancellation_24h_charge_percentage > 0) {
+                shouldChargeClient = true;
+              } else if (hoursUntilAppointment < 48 && professionalProfile.cancellation_48h_charge_percentage > 0) {
+                shouldChargeClient = true;
+              }
+              
+              if (shouldChargeClient) {
+                console.log(`[Client Cancel] ⚠️ Cancellation policy will charge client - redirecting to policy flow`);
+                console.log(`[Client Cancel] Hours until appointment: ${hoursUntilAppointment}`);
+                return { 
+                  success: false, 
+                  error: 'Please use cancellation policy flow',
+                  message: 'This booking requires cancellation through the policy flow.'
+                };
+              } else {
+                console.log(`[Client Cancel] 🔄 Cancellation policy exists but no charges apply (>48h) - cancelling uncaptured payment`);
+                await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+                console.log(`[Client Cancel] ✅ Uncaptured payment cancelled successfully - no charges`);
+              }
             }
         } else {
             // Missing customer ID or professional stripe account, cancel entire payment
@@ -457,6 +447,40 @@ export async function cancelBookingAction(
         console.log('[Cancellation] Payment status:', payment.status);
         console.log('[Cancellation] Pre-auth scheduled for:', payment.pre_auth_scheduled_for);
         console.log('[Cancellation] Capture scheduled for:', payment.capture_scheduled_for);
+      }
+
+      // Handle deposit refund if exists and separate from main payment
+      if (payment.deposit_payment_intent_id && (payment.deposit_amount || 0) > 0) {
+        console.log(`[Deposit Refund] Processing deposit refund: ${payment.deposit_payment_intent_id}`);
+        try {
+          const depositPaymentIntent = await stripe.paymentIntents.retrieve(payment.deposit_payment_intent_id);
+          console.log(`[Deposit Refund] Deposit status: ${depositPaymentIntent.status}`);
+          console.log(`[Deposit Refund] Deposit amount: $${depositPaymentIntent.amount / 100}`);
+
+          if (depositPaymentIntent.status === 'succeeded') {
+            // Refund the deposit
+            const depositRefund = await stripe.refunds.create({
+              payment_intent: payment.deposit_payment_intent_id,
+              metadata: {
+                booking_id: bookingId,
+                reason: `Deposit refund - ${isProfessional ? 'Professional' : 'Client'} cancelled booking`
+              }
+            });
+            
+            console.log(`[Deposit Refund] ✅ Deposit refund created: ${depositRefund.id} - Status: ${depositRefund.status} - Amount: $${depositRefund.amount / 100}`);
+            
+            if (depositRefund.status === 'failed') {
+              console.error(`[Deposit Refund] ❌ Deposit refund failed:`, depositRefund);
+              throw new Error(`Deposit refund failed: ${depositRefund.failure_reason || 'Unknown reason'}`);
+            }
+          } else if (depositPaymentIntent.status === 'requires_capture') {
+            // Cancel uncaptured deposit
+            await stripe.paymentIntents.cancel(payment.deposit_payment_intent_id);
+            console.log(`[Deposit Refund] ✅ Uncaptured deposit cancelled`);
+          }
+        } catch (depositError) {
+          console.error('[Deposit Refund] ❌ Failed to handle deposit during cancellation:', depositError);
+        }
       }
 
       // Update payment record for both cases (with and without payment intent)
@@ -547,6 +571,41 @@ export async function cancelBookingAction(
         chargeAmount = (totalServiceAmount * chargePercentage) / 100;
       }
     }
+
+    // All payment processing completed successfully - now update booking/appointment status
+    console.log('[Cancellation] 💾 Updating booking and appointment status to cancelled');
+    
+    // Update booking status
+    const { error: updateBookingError } = await supabase
+      .from('bookings')
+      .update({ 
+        status: 'cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', bookingId);
+
+    if (updateBookingError) {
+      console.log('[Cancellation] ❌ Failed to update booking status:', updateBookingError);
+      throw new Error('Failed to update booking status after payment processing');
+    }
+
+    console.log('[Cancellation] ✅ Updated booking status to cancelled');
+
+    // Update appointment status
+    const { error: updateAppointmentError } = await supabase
+      .from('appointments')
+      .update({ 
+        status: 'cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (updateAppointmentError) {
+      console.log('[Cancellation] ❌ Failed to update appointment status:', updateAppointmentError);
+      throw new Error('Failed to update appointment status after payment processing');
+    }
+
+    console.log('[Cancellation] ✅ Updated appointment status to cancelled');
 
     if (scenario === 'standard' || chargePercentage === 0) {
       // Send standard cancellation emails
@@ -1029,6 +1088,7 @@ export async function cancelWithPolicyAction(
           status,
           stripe_payment_intent_id,
           stripe_payment_method_id,
+          deposit_payment_intent_id,
           pre_auth_scheduled_for,
           capture_scheduled_for,
           payment_methods!inner(is_online)
@@ -1184,16 +1244,26 @@ export async function cancelWithPolicyAction(
                     // Step 2: Create separate charge for cancellation fee
                     console.log(`[Split Payment Cancellation] Creating separate charge for cancellation fee: $${cancellationFeeAmount/100}`);
                     
+                    // Calculate transfer amount (subtract Stripe fees ~3%)
+                    const stripeFeeEstimate = Math.round(cancellationFeeAmount * 0.029 + 30); // 2.9% + $0.30
+                    const transferAmount = Math.max(0, cancellationFeeAmount - stripeFeeEstimate);
+                    
+                    console.log(`[Split Payment Cancellation] Fee calculation:`, {
+                      cancellationFeeAmount: cancellationFeeAmount / 100,
+                      stripeFeeEstimate: stripeFeeEstimate / 100,
+                      transferAmount: transferAmount / 100
+                    });
+
                     const cancellationCharge = await stripe.paymentIntents.create({
                       amount: cancellationFeeAmount,
                       currency: 'usd',
                       payment_method: payment.stripe_payment_method_id,
                       customer: customerId,
                       confirm: true,
-                      payment_method_types: ['card'], // Specify payment method types instead of disabling automatic
+                      payment_method_types: ['card'],
                       transfer_data: {
                         destination: professionalProfile.stripe_account_id,
-                        amount: cancellationFeeAmount // Transfer full cancellation fee to professional
+                        amount: transferAmount // Transfer amount after Stripe fees
                       },
                       metadata: {
                         payment_type: 'cancellation_fee',
@@ -1235,6 +1305,40 @@ export async function cancelWithPolicyAction(
           }
         } catch (stripeError) {
           console.error('Failed to handle payment intent during cancellation:', stripeError);
+        }
+      }
+
+      // Handle deposit refund if exists and separate from main payment
+      if (payment.deposit_payment_intent_id && (payment.deposit_amount || 0) > 0) {
+        console.log(`[Policy Deposit Refund] Processing deposit refund: ${payment.deposit_payment_intent_id}`);
+        try {
+          const depositPaymentIntent = await stripe.paymentIntents.retrieve(payment.deposit_payment_intent_id);
+          console.log(`[Policy Deposit Refund] Deposit status: ${depositPaymentIntent.status}`);
+          console.log(`[Policy Deposit Refund] Deposit amount: $${depositPaymentIntent.amount / 100}`);
+
+          if (depositPaymentIntent.status === 'succeeded') {
+            // Refund the deposit (deposits are always fully refunded even with cancellation policy)
+            const depositRefund = await stripe.refunds.create({
+              payment_intent: payment.deposit_payment_intent_id,
+              metadata: {
+                booking_id: bookingId,
+                reason: `Deposit refund - Client cancelled booking with policy`
+              }
+            });
+            
+            console.log(`[Policy Deposit Refund] ✅ Deposit refund created: ${depositRefund.id} - Status: ${depositRefund.status} - Amount: $${depositRefund.amount / 100}`);
+            
+            if (depositRefund.status === 'failed') {
+              console.error(`[Policy Deposit Refund] ❌ Deposit refund failed:`, depositRefund);
+              throw new Error(`Deposit refund failed: ${depositRefund.failure_reason || 'Unknown reason'}`);
+            }
+          } else if (depositPaymentIntent.status === 'requires_capture') {
+            // Cancel uncaptured deposit
+            await stripe.paymentIntents.cancel(payment.deposit_payment_intent_id);
+            console.log(`[Policy Deposit Refund] ✅ Uncaptured deposit cancelled`);
+          }
+        } catch (depositError) {
+          console.error('[Policy Deposit Refund] ❌ Failed to handle deposit during cancellation:', depositError);
         }
       }
 

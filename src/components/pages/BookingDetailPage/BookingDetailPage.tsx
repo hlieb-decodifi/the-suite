@@ -44,6 +44,7 @@ export type DetailedAppointmentType = {
       stripe_payment_intent_id?: string | null;
       stripe_payment_method_id?: string | null;
       stripe_checkout_session_id?: string | null;
+      deposit_payment_intent_id?: string | null;
       deposit_amount: number;
       balance_amount: number;
       payment_type: 'full' | 'deposit' | 'balance';
@@ -236,6 +237,7 @@ export async function getAppointmentById(
             stripe_payment_intent_id,
             stripe_payment_method_id,
             stripe_checkout_session_id,
+            deposit_payment_intent_id,
             payment_methods(
               id,
               name,
@@ -332,6 +334,9 @@ export async function getAppointmentById(
                 data.bookings.booking_payments.stripe_payment_method_id ?? null,
               stripe_checkout_session_id:
                 data.bookings.booking_payments.stripe_checkout_session_id ??
+                null,
+              deposit_payment_intent_id:
+                data.bookings.booking_payments.deposit_payment_intent_id ??
                 null,
               authorization_expires_at:
                 data.bookings.booking_payments.authorization_expires_at ?? null,
