@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAppointmentsNeedingBalanceNotification, markBalanceNotificationSent } from '@/server/domains/stripe-payments/db';
 import { sendAppointmentCompletion2hafterClient, sendAppointmentCompletion2hafterProfessional} from '@/providers/brevo/templates';
 import { EmailRecipient } from '@/providers/brevo/types';
@@ -34,7 +34,16 @@ function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string
  * Cron job to send balance notifications to clients
  * Runs every 2 hours to check for completed appointments needing balance notifications
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Authenticate request - only allow execution from Vercel cron
+  const authHeader = request.headers.get('authorization');
+  console.log('🔐 Auth header present:', !!authHeader);
+  
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    console.log('❌ Unauthorized request - invalid auth header');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  console.log('✅ Authentication successful');
   const startTime = Date.now();
   let processedCount = 0;
   let errorCount = 0;

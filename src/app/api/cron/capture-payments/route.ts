@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { 
   getPaymentsPendingCapture, 
   markPaymentCaptured 
@@ -13,7 +13,16 @@ export const runtime = 'nodejs';
  * Cron job to capture authorized payments
  * Runs every 4 hours to check for payments that need to be captured
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Authenticate request - only allow execution from Vercel cron
+  const authHeader = request.headers.get('authorization');
+  console.log('🔐 Auth header present:', !!authHeader);
+  
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    console.log('❌ Unauthorized request - invalid auth header');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  console.log('✅ Authentication successful');
   const startTime = Date.now();
   let processedCount = 0;
   let errorCount = 0;
