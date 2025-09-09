@@ -1,8 +1,4 @@
 -- supabase/seed.sql
-DELETE FROM public.roles;
-
-insert into roles (name) values ('client'), ('professional'), ('admin');
-
 
 -- Clear existing data from payment_methods to avoid duplicates if script is run multiple times
 -- Be cautious with DELETE in production environments!
@@ -366,7 +362,6 @@ create policy "Allow users to view message attachments in bucket"
 DO $$
 DECLARE
     dummy_user_id uuid := gen_random_uuid();
-    professional_role_id uuid;
     monthly_plan_id uuid;
     dummy_address_id uuid;
     dummy_profile_id uuid;
@@ -431,8 +426,7 @@ BEGIN
         current_timestamp
     );
     
-    -- Get the professional role ID
-    SELECT id INTO professional_role_id FROM roles WHERE name = 'professional';
+    -- Note: Professional role will be set via user_roles table after user creation
     
     -- Get the monthly subscription plan ID
     SELECT id INTO monthly_plan_id FROM subscription_plans WHERE name = 'Monthly' AND interval = 'month';
@@ -620,7 +614,6 @@ END $$;
 DO $$
 DECLARE
     client_user_id uuid := gen_random_uuid();
-    client_role_id uuid;
     client_address_id uuid;
     client_profile_id uuid;
     professional_user_id uuid;
@@ -701,8 +694,7 @@ BEGIN
         current_timestamp
     );
     
-    -- Get the client role ID
-    SELECT id INTO client_role_id FROM roles WHERE name = 'client';
+    -- Note: Client role will be set via user_roles table after user creation
     
     -- Create address for the client
     INSERT INTO addresses (
@@ -1254,7 +1246,6 @@ END $$;
 DO $$
 DECLARE
     admin_user_id uuid := gen_random_uuid();
-    admin_role_id uuid;
 BEGIN
     -- Create the auth user for admin
     INSERT INTO auth.users (
@@ -1316,13 +1307,7 @@ BEGIN
         current_timestamp
     );
     
-    -- Get the admin role ID
-    SELECT id INTO admin_role_id FROM roles WHERE name = 'admin';
-    
-    -- Update the user record created by the trigger to have admin role
-    UPDATE users 
-    SET role_id = admin_role_id 
-    WHERE id = admin_user_id;
+    -- Note: Admin role will be set via user_roles table after user creation
     
     RAISE NOTICE 'Admin user created successfully!';
     RAISE NOTICE 'Admin User ID: %', admin_user_id;

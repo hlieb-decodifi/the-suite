@@ -1069,27 +1069,6 @@ export type Database = {
           },
         ]
       }
-      roles: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       service_limits: {
         Row: {
           created_at: string
@@ -1358,6 +1337,30 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           cookie_consent: boolean
@@ -1365,7 +1368,6 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
-          role_id: string
           updated_at: string
         }
         Insert: {
@@ -1374,7 +1376,6 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
-          role_id: string
           updated_at?: string
         }
         Update: {
@@ -1383,18 +1384,9 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
-          role_id?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "users_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {

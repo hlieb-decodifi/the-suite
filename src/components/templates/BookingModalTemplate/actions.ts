@@ -262,8 +262,9 @@ export async function createBooking(
         }
       }
       
-      // Calculate payment schedule for online payments
-      const paymentRecord = {
+      // Calculate payment schedule for online payments  
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const paymentRecord: any = {
         booking_id: booking.id,
         payment_method_id: formData.paymentMethodId,
         amount: totalPrice,
@@ -286,21 +287,21 @@ export async function createBooking(
           if (!scheduleError && scheduleData && scheduleData.length > 0) {
             const schedule = scheduleData[0];
             
-            if (schedule && schedule.should_pre_auth_now) {
+            if (schedule?.should_pre_auth_now) {
               // Appointment is <6 days: Pre-auth happens immediately, no scheduling needed
-              paymentRecord.capture_scheduled_for = schedule.capture_date;
+              paymentRecord.capture_scheduled_for = schedule?.capture_date;
               paymentRecord.status = 'pending'; // Will be updated to 'authorized' when payment intent is created
               console.log('Immediate pre-auth schedule (appointment <6 days):', {
-                captureDate: schedule.capture_date,
+                captureDate: schedule?.capture_date,
                 immediatePreAuth: true
               });
             } else if (schedule) {
               // Appointment is >6 days: Schedule both pre-auth and capture
-              paymentRecord.pre_auth_scheduled_for = schedule.pre_auth_date;
-              paymentRecord.capture_scheduled_for = schedule.capture_date;
+              paymentRecord.pre_auth_scheduled_for = schedule?.pre_auth_date;
+              paymentRecord.capture_scheduled_for = schedule?.capture_date;
               console.log('Scheduled payment (appointment >6 days):', {
-                preAuthDate: schedule.pre_auth_date,
-                captureDate: schedule.capture_date,
+                preAuthDate: schedule?.pre_auth_date,
+                captureDate: schedule?.capture_date,
                 scheduledPreAuth: true
               });
             }

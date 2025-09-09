@@ -5,7 +5,10 @@ import { Header, type UserInfo } from '@/components/common/Header';
 import { Footer } from '@/components/common/Footer';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthSyncWrapper } from './components/AuthSyncWrapper';
-import { getUnreadMessagesCount, getUnreadSupportMessagesCount } from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
+import {
+  getUnreadMessagesCount,
+  getUnreadSupportMessagesCount,
+} from '@/components/layouts/DashboardPageLayout/DashboardPageLayout';
 import { CookieConsent } from '@/components/common/CookieConsent';
 
 export type RootLayoutTemplateProps = {
@@ -53,14 +56,24 @@ export async function RootLayoutTemplate({
     try {
       const { data: userData } = await supabase
         .from('users')
-        .select('first_name, last_name, roles:role_id (name)')
+        .select('first_name, last_name')
         .eq('id', user.id)
         .single();
 
       if (userData) {
         firstName = userData.first_name || '';
         lastName = userData.last_name || '';
-        isAdmin = userData.roles?.name === 'admin';
+      }
+
+      // Fetch user role separately
+      const { data: userRoleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      if (userRoleData) {
+        isAdmin = userRoleData.role === 'admin';
       }
     } catch (error) {
       console.error('Error fetching user name/role from database:', error);

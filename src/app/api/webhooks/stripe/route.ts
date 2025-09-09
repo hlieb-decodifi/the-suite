@@ -424,19 +424,14 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
       console.log('Professional profile not found, creating one...');
       
       // First, ensure the user has the professional role
-      const { data: roleData } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', 'professional')
-        .single();
-        
-      if (roleData) {
-        // Update user role to professional if not already
-        await supabase
-          .from('users')
-          .update({ role_id: roleData.id })
-          .eq('id', userId);
-      }
+      await supabase
+        .from('user_roles')
+        .upsert({
+          user_id: userId,
+          role: 'professional'
+        }, {
+          onConflict: 'user_id'
+        });
       
       // Create professional profile
       const { data: newProfileData, error: createProfileError } = await supabase

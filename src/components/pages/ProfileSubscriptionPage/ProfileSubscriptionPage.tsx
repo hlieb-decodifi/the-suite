@@ -271,9 +271,7 @@ async function getUserData(userId: string): Promise<UserData> {
         `
         id,
         first_name,
-        last_name,
-        role_id,
-        roles(name)
+        last_name
       `,
       )
       .eq('id', userId)
@@ -296,15 +294,31 @@ async function getUserData(userId: string): Promise<UserData> {
       email = authUser.email;
     }
 
-    // Check if user is a professional
-    const { data: isProfessional, error: roleError } = await supabase.rpc(
-      'is_professional',
+    // Check user roles using RPC functions (these bypass RLS as they are security definer)
+    const { data: isProfessional, error: professionalError } =
+      await supabase.rpc('is_professional', { user_uuid: userId });
+
+    const { data: isClient, error: clientError } = await supabase.rpc(
+      'is_client',
       { user_uuid: userId },
     );
 
-    if (roleError) {
-      console.error('Error checking professional status:', roleError);
+    const { data: isAdmin, error: adminError } = await supabase.rpc(
+      'is_admin',
+      { user_uuid: userId },
+    );
+
+    if (professionalError) {
+      console.error('Error checking professional status:', professionalError);
     }
+    if (clientError) {
+      console.error('Error checking client status:', clientError);
+    }
+    if (adminError) {
+      console.error('Error checking admin status:', adminError);
+    }
+
+    console.log('Role checks:', { isProfessional, isClient, isAdmin });
 
     // If professional, fetch subscription status and publish status
     let subscriptionStatus = null;
@@ -362,11 +376,21 @@ async function getUserData(userId: string): Promise<UserData> {
       }
     }
 
+    // Determine role name based on RPC function results
+    let roleName = 'User'; // default fallback
+    if (isAdmin) {
+      roleName = 'admin';
+    } else if (isProfessional) {
+      roleName = 'professional';
+    } else if (isClient) {
+      roleName = 'client';
+    }
+
     return {
       id: userData.id,
       firstName: userData.first_name,
       lastName: userData.last_name,
-      roleName: userData.roles?.name || 'User',
+      roleName,
       isProfessional: !!isProfessional,
       subscriptionStatus,
       isPublished,

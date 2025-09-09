@@ -52,6 +52,7 @@ export async function ProfilePage({
     if (!currentUser) {
       redirect('/');
     }
+    console.log('currentUser', currentUser);
 
     // Check user role from database instead of metadata
     const { data: isProfessional } = await supabase.rpc('is_professional', {

@@ -5,24 +5,32 @@ create extension if not exists "uuid-ossp";
 create extension if not exists moddatetime schema extensions;
 
 /**
-* ROLES
-* Defines user roles in the system (client, professional, admin)
+* USER_ROLES
+* Maps users to their roles (replaces the old roles table approach)
 */
-create table roles (
+create table user_roles (
   id uuid primary key default uuid_generate_v4(),
-  name text not null unique,
+  user_id uuid references auth.users not null unique,
+  role text not null default 'client',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-alter table roles enable row level security;
+alter table user_roles enable row level security;
 
--- Insert default roles
-insert into roles (name) values ('client'), ('professional'), ('admin');
+-- RLS policies for user_roles table
+-- Users can view their own role
+create policy "Users can view their own role" on user_roles for select 
+  using (auth.uid() = user_id);
 
--- RLS policies for roles table
--- Anyone can view roles (needed for signup)
-create policy "Anyone can view roles" on roles for select 
-  using (true);
+-- Only admins can manage user roles
+create policy "Admins can manage user roles" on user_roles for all 
+  using (
+    exists (
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
+    )
+  );
 
 /**
 * USERS
@@ -33,7 +41,6 @@ create table users (
   id uuid references auth.users not null primary key,
   first_name text not null,
   last_name text not null,
-  role_id uuid references roles not null,
   cookie_consent boolean not null default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -47,10 +54,9 @@ declare
   is_professional boolean;
 begin
   select exists(
-    select 1 from users
-    join roles on users.role_id = roles.id
-    where users.id = user_uuid
-    and roles.name = 'professional'
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'professional'
   ) into is_professional;
   
   return is_professional;
@@ -63,10 +69,9 @@ declare
   is_client boolean;
 begin
   select exists(
-    select 1 from users
-    join roles on users.role_id = roles.id
-    where users.id = user_uuid
-    and roles.name = 'client'
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'client'
   ) into is_client;
   
   return is_client;
@@ -463,16 +468,12 @@ create policy "Clients can create their own profile"
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
 returns trigger as $$
-declare
-  professional_role_id uuid;
 begin
   -- Only proceed if the role was changed to professional
-  select id into professional_role_id from roles where name = 'professional';
-  
-  if new.role_id = professional_role_id then
+  if new.role = 'professional' then
     -- Create professional profile if it doesn't exist
-  insert into professional_profiles (user_id)
-  values (new.id)
+    insert into professional_profiles (user_id)
+    values (new.user_id)
     on conflict (user_id) do nothing;
   end if;
   
@@ -481,23 +482,19 @@ end;
 $$ language plpgsql security definer;
 
 create trigger on_user_role_change
-  after update of role_id on users
+  after update of role on user_roles
   for each row
   execute procedure handle_new_professional();
 
 -- This trigger creates a client profile when a user's role is changed to client
 create function handle_new_client()
 returns trigger as $$
-declare
-  client_role_id uuid;
 begin
   -- Only proceed if the role was changed to client
-  select id into client_role_id from roles where name = 'client';
-  
-  if new.role_id = client_role_id then
+  if new.role = 'client' then
     -- Create client profile if it doesn't exist
     insert into client_profiles (user_id)
-    values (new.id)
+    values (new.user_id)
     on conflict (user_id) do nothing;
   end if;
   
@@ -506,7 +503,7 @@ end;
 $$ language plpgsql security definer;
 
 create trigger on_user_role_change_to_client
-  after update of role_id on users
+  after update of role on user_roles
   for each row
   execute procedure handle_new_client();
 
@@ -517,8 +514,8 @@ create trigger on_user_role_change_to_client
 create function public.handle_new_user() 
 returns trigger as $$
 declare
-  user_role_id uuid;
   role_name text;
+  user_role_value text;
   first_name_val text;
   last_name_val text;
 begin
@@ -559,29 +556,37 @@ begin
       role_name := 'client'; -- Default to client if not specified properly
     end if;
     
-    -- Get the corresponding role ID with fully qualified schema
-    select id into user_role_id from public.roles where name = role_name;
+    -- Cast role name to enum
+    user_role_value := role_name;
     
-    if user_role_id is null then
-      RAISE EXCEPTION 'Could not find role_id for role: %', role_name;
-    end if;
-    
-    -- Insert the user with the specified role
+    -- Insert the user record (without role)
     begin
     insert into public.users (
       id, 
       first_name, 
-      last_name, 
-      role_id
+      last_name
     )
     values (
       new.id, 
       first_name_val,
-      last_name_val,
-      user_role_id
+      last_name_val
     );
     exception when others then
       RAISE EXCEPTION 'Error creating user record: %', SQLERRM;
+    end;
+    
+    -- Insert the user role
+    begin
+    insert into public.user_roles (
+      user_id,
+      role
+    )
+    values (
+      new.id,
+      user_role_value
+    );
+    exception when others then
+      RAISE EXCEPTION 'Error creating user role record: %', SQLERRM;
     end;
     
     -- Create the appropriate profile based on role
@@ -600,23 +605,35 @@ begin
   else
     -- OAuth user without role metadata - create basic user record without role
     -- Role will be assigned later in the callback
-    RAISE NOTICE 'OAuth user detected, creating basic user record without role';
+    RAISE NOTICE 'OAuth user detected, creating basic user record with default client role';
     
     begin
     insert into public.users (
       id, 
       first_name, 
-      last_name, 
-      role_id
+      last_name
     )
     values (
       new.id, 
       first_name_val,
-      last_name_val,
-      (select id from public.roles where name = 'client' limit 1) -- Temporary default role
+      last_name_val
     );
     exception when others then
       RAISE EXCEPTION 'Error creating OAuth user record: %', SQLERRM;
+    end;
+    
+    -- Create default client role
+    begin
+    insert into public.user_roles (
+      user_id,
+      role
+    )
+    values (
+      new.id,
+      'client'
+    );
+    exception when others then
+      RAISE EXCEPTION 'Error creating OAuth user role record: %', SQLERRM;
     end;
     
     -- Create default client profile (will be updated in callback if needed)
@@ -1465,11 +1482,7 @@ drop policy if exists "Users can update their own basic data" on users;
 create policy "Users can update their own basic data"
   on users for update
   using (auth.uid() = id)
-  with check (
-    -- Can't change their own role - using a parameter instead of a subquery
-    auth.uid() = id AND
-    role_id IS NOT NULL
-  );
+  with check (auth.uid() = id);
 
 
 
@@ -1959,16 +1972,16 @@ begin
     -- Find first admin user to handle support requests
     select u.id into default_professional_id
     from users u
-    join roles r on u.role_id = r.id
-    where r.name = 'admin'
+    join user_roles ur on u.id = ur.user_id
+    where ur.role = 'admin'
     limit 1;
     
     -- If no admin found, find any professional
     if default_professional_id is null then
       select u.id into default_professional_id
       from users u
-      join roles r on u.role_id = r.id
-      where r.name = 'professional'
+      join user_roles ur on u.id = ur.user_id
+      where ur.role = 'professional'
       limit 1;
     end if;
     
@@ -2282,10 +2295,9 @@ create policy "Anyone can create inquiries" on contact_inquiries
 create policy "Admins can view all inquiries" on contact_inquiries
   for select using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2293,10 +2305,9 @@ create policy "Admins can view all inquiries" on contact_inquiries
 create policy "Admins can update inquiries" on contact_inquiries
   for update using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2388,10 +2399,9 @@ create policy "Admins can manage configurations"
   on admin_configs for all
   using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2715,10 +2725,9 @@ create policy "Admins can manage email templates"
   on email_templates for all
   using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2776,10 +2785,9 @@ create policy "Admins can view all activity logs"
   on activity_log for select
   using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2916,10 +2924,9 @@ declare
   is_admin boolean;
 begin
   select exists(
-    select 1 from users
-    join roles on users.role_id = roles.id
-    where users.id = user_uuid
-    and roles.name = 'admin'
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'admin'
   ) into is_admin;
   
   return is_admin;

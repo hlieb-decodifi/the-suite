@@ -36,26 +36,20 @@ export default async function BookingPage({
     redirect('/');
   }
 
-  // Fetch user data to check role
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select(
-      `
-      id,
-      role_id,
-      roles(name)
-    `,
-    )
-    .eq('id', user.id)
+  // Fetch user role to check access
+  const { data: userRoleData, error: userRoleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
     .single();
 
-  if (userError || !userData) {
-    console.error('Error fetching user data:', userError);
+  if (userRoleError || !userRoleData) {
+    console.error('Error fetching user role:', userRoleError);
     redirect('/');
   }
 
   // Check if user has "client" role
-  const userRole = userData.roles?.name;
+  const userRole = userRoleData.role;
   if (userRole !== 'client') {
     // Redirect based on role
     if (userRole === 'professional') {

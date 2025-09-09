@@ -71,9 +71,7 @@ export async function getUserDashboardData(
         `
         id,
         first_name,
-        last_name,
-        role_id,
-        roles(name)
+        last_name
       `,
       )
       .eq('id', userId)
@@ -84,6 +82,13 @@ export async function getUserDashboardData(
         `Error fetching user data: ${userError?.message || 'User not found'}`,
       );
     }
+
+    // Fetch user role separately
+    const { data: userRoleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
 
     // Get user's email from the current authenticated user
     let email: string | undefined;
@@ -111,15 +116,16 @@ export async function getUserDashboardData(
 
     // Get unread messages count for general conversations
     const unreadMessagesCount = await getUnreadMessagesCount(userId);
-    
+
     // Get unread messages count for support requests
-    const unreadSupportMessagesCount = await getUnreadSupportMessagesCount(userId);
+    const unreadSupportMessagesCount =
+      await getUnreadSupportMessagesCount(userId);
 
     return {
       id: userData.id,
       firstName: userData.first_name,
       lastName: userData.last_name,
-      roleName: userData.roles?.name || 'User',
+      roleName: userRoleData?.role || 'User',
       isProfessional: !!isProfessional,
       email,
       appointmentCounts,
@@ -386,7 +392,9 @@ export async function getDashboardAppointments(
 
 // Get unread messages count
 // Get unread support request messages count
-export async function getUnreadSupportMessagesCount(userId: string): Promise<number> {
+export async function getUnreadSupportMessagesCount(
+  userId: string,
+): Promise<number> {
   try {
     const supabase = await createClient();
 

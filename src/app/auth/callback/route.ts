@@ -35,16 +35,16 @@ export async function GET(request: Request) {
           console.log('[AUTH_CALLBACK] Email verification successful. User authenticated.');
           
           // Check user role to determine correct redirect destination
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('role_id, roles(name)')
-            .eq('id', sessionData.user.id)
+          const { data: userRoleData, error: userRoleError } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', sessionData.user.id)
             .single();
             
           let finalRedirectTo = redirectTo;
           
-          if (!userError && userData?.roles) {
-            const roleName = (userData.roles as { name: string }).name;
+          if (!userRoleError && userRoleData?.role) {
+            const roleName = userRoleData.role;
             console.log('[AUTH_CALLBACK] User role:', roleName);
             
             // Override redirect destination based on role
@@ -136,16 +136,16 @@ export async function GET(request: Request) {
             console.log('[AUTH_CALLBACK] User existed before signin, checking role for redirect');
             
             // Check user role to determine correct redirect destination
-            const { data: userData, error: userError } = await supabase
-              .from('users')
-              .select('role_id, roles(name)')
-              .eq('id', sessionData.user.id)
+            const { data: userRoleData, error: userRoleError } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', sessionData.user.id)
               .single();
               
             let finalRedirectTo = redirectTo;
             
-            if (!userError && userData?.roles) {
-              const roleName = (userData.roles as { name: string }).name;
+            if (!userRoleError && userRoleData?.role) {
+              const roleName = userRoleData.role;
               console.log('[AUTH_CALLBACK] User role:', roleName);
               
               // Override redirect destination based on role
@@ -187,42 +187,35 @@ export async function GET(request: Request) {
               try {
                 const admin = createAdminClient();
                 
-                // Get the role ID
-                const { data: roleData, error: roleError } = await admin
-                  .from('roles')
-                  .select('id')
-                  .eq('name', role)
-                  .single();
+                // Update user role using new role system
+                console.log(`[AUTH_CALLBACK] Updating user role to: ${role}`);
+                const { error: updateError } = await admin
+                  .from('user_roles')
+                  .upsert({
+                    user_id: sessionData.user.id,
+                    role: role as 'professional' | 'client'
+                  }, {
+                    onConflict: 'user_id'
+                  });
                 
-                if (roleError || !roleData?.id) {
-                  console.error('[AUTH_CALLBACK] Error getting role ID:', roleError);
+                if (updateError) {
+                  console.error('[AUTH_CALLBACK] Error updating user role:', updateError);
                 } else {
-                  // Update user role
-                  console.log(`[AUTH_CALLBACK] Updating user role to: ${role}`);
-                  const { error: updateError } = await admin
-                    .from('users')
-                    .update({ role_id: roleData.id })
-                    .eq('id', sessionData.user.id);
+                  console.log('[AUTH_CALLBACK] Successfully updated user role');
                   
-                  if (updateError) {
-                    console.error('[AUTH_CALLBACK] Error updating user role:', updateError);
-                  } else {
-                    console.log('[AUTH_CALLBACK] Successfully updated user role');
+                  // If changing to professional, ensure professional profile exists
+                  if (role === 'professional') {
+                    const { error: profProfileError } = await admin
+                      .from('professional_profiles')
+                      .upsert({ user_id: sessionData.user.id }, { 
+                        onConflict: 'user_id',
+                        ignoreDuplicates: true 
+                      });
                     
-                    // If changing to professional, ensure professional profile exists
-                    if (role === 'professional') {
-                      const { error: profProfileError } = await admin
-                        .from('professional_profiles')
-                        .upsert({ user_id: sessionData.user.id }, { 
-                          onConflict: 'user_id',
-                          ignoreDuplicates: true 
-                        });
-                      
-                      if (profProfileError) {
-                        console.error('[AUTH_CALLBACK] Error creating professional profile:', profProfileError);
-                      } else {
-                        console.log('[AUTH_CALLBACK] Professional profile ensured');
-                      }
+                    if (profProfileError) {
+                      console.error('[AUTH_CALLBACK] Error creating professional profile:', profProfileError);
+                    } else {
+                      console.log('[AUTH_CALLBACK] Professional profile ensured');
                     }
                   }
                 }
@@ -249,16 +242,16 @@ export async function GET(request: Request) {
             await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Check user role to determine correct redirect destination for new OAuth signup
-            const { data: userData, error: userError } = await supabase
-              .from('users')
-              .select('role_id, roles(name)')
-              .eq('id', sessionData.user.id)
+            const { data: userRoleData, error: userRoleError } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', sessionData.user.id)
               .single();
               
             let finalRedirectTo = redirectTo;
             
-            if (!userError && userData?.roles) {
-              const roleName = (userData.roles as { name: string }).name;
+            if (!userRoleError && userRoleData?.role) {
+              const roleName = userRoleData.role;
               console.log('[AUTH_CALLBACK] New OAuth user role:', roleName);
               
               // Override redirect destination based on role
