@@ -5,6 +5,7 @@ import { getStripeConnectStatus as domainGetStripeConnectStatus } from '@/server
 import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
 import { getProfessionalPaymentMethodsAction } from '@/server/domains/payment_methods/actions';
 import { redirect } from 'next/navigation';
+import { getProfessionalSubscriptionDetails } from '@/utils/subscriptionUtils';
 import { revalidatePath } from 'next/cache';
 import { ProfilePageLayoutClient } from './ProfilePageLayoutClient';
 import type { WorkingHoursEntry } from '@/types/working_hours';
@@ -178,51 +179,19 @@ export async function getUserData(userId: string): Promise<UserData> {
     if (isProfessional) {
       const { data: profileData, error: profileError } = await supabase
         .from('professional_profiles')
-        .select('is_subscribed, is_published')
+        .select('id, is_published')
         .eq('user_id', userId)
         .single();
 
       if (!profileError && profileData) {
-        subscriptionStatus = profileData.is_subscribed;
         isPublished = profileData.is_published;
 
-        // If subscribed, check if we have professional_subscriptions record
-        if (subscriptionStatus) {
-          // Get professional profile ID
-          const { data: profileIdData } = await supabase
-            .from('professional_profiles')
-            .select('id')
-            .eq('user_id', userId)
-            .single();
-
-          if (profileIdData) {
-            // Look for active subscription in our database
-            const { data: subData } = await supabase
-              .from('professional_subscriptions')
-              .select(
-                `
-                status,
-                end_date,
-                stripe_subscription_id,
-                cancel_at_period_end,
-                subscription_plans(name)
-              `,
-              )
-              .eq('professional_profile_id', profileIdData.id)
-              .eq('status', 'active')
-              .single();
-
-            if (subData && subData.stripe_subscription_id) {
-              subscriptionDetails = {
-                planName:
-                  subData.subscription_plans?.name || 'Professional Plan',
-                nextBillingDate: subData.end_date || new Date().toISOString(),
-                status: subData.status,
-                cancelAtPeriodEnd: subData.cancel_at_period_end || false,
-              };
-            }
-          }
-        }
+        // Check subscription status using the new utility function
+        const subscriptionResult = await getProfessionalSubscriptionDetails(
+          profileData.id,
+        );
+        subscriptionStatus = subscriptionResult.isSubscribed;
+        subscriptionDetails = subscriptionResult.subscriptionDetails;
       }
     }
 

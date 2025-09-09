@@ -827,7 +827,6 @@ export type Database = {
           id: string
           instagram_url: string | null
           is_published: boolean | null
-          is_subscribed: boolean | null
           location: string | null
           phone_number: string | null
           profession: string | null
@@ -857,7 +856,6 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
-          is_subscribed?: boolean | null
           location?: string | null
           phone_number?: string | null
           profession?: string | null
@@ -887,7 +885,6 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
-          is_subscribed?: boolean | null
           location?: string | null
           phone_number?: string | null
           profession?: string | null
@@ -1553,6 +1550,14 @@ export type Database = {
       }
       is_professional: {
         Args: { user_uuid: string }
+        Returns: boolean
+      }
+      is_professional_subscribed: {
+        Args: { prof_profile_id: string }
+        Returns: boolean
+      }
+      is_professional_user_subscribed: {
+        Args: { prof_user_id: string }
         Returns: boolean
       }
       set_admin_config: {

@@ -14,7 +14,6 @@ export type SubscriptionPlan = {
 export type ProfessionalProfile = {
   id: string;
   user_id: string;
-  is_subscribed: boolean;
   // Simplified Stripe Connect fields
   stripe_account_id?: string;
   stripe_connect_status: 'not_connected' | 'pending' | 'complete';

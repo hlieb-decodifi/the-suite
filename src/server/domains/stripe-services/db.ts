@@ -37,7 +37,6 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
         id,
         user_id,
         is_published,
-        is_subscribed,
         stripe_account_id,
         stripe_connect_status
       `)
@@ -54,7 +53,6 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
       id: data.id,
       user_id: data.user_id,
       is_published: data.is_published ?? false,
-      is_subscribed: data.is_subscribed ?? false,
       stripe_account_id: data.stripe_account_id,
       stripe_connect_status: data.stripe_connect_status as 'not_connected' | 'pending' | 'complete'
     };

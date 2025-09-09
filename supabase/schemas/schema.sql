@@ -22,15 +22,7 @@ alter table user_roles enable row level security;
 create policy "Users can view their own role" on user_roles for select 
   using (auth.uid() = user_id);
 
--- Only admins can manage user roles
-create policy "Admins can manage user roles" on user_roles for all 
-  using (
-    exists (
-      select 1 from user_roles ur
-      where ur.user_id = auth.uid() 
-      and ur.role = 'admin'
-    )
-  );
+-- Admin policy will be defined later after all functions are created
 
 /**
 * USERS
@@ -75,6 +67,21 @@ begin
   ) into is_client;
   
   return is_client;
+end;
+$$ language plpgsql security definer;
+
+create or replace function is_admin(user_uuid uuid)
+returns boolean as $$
+declare
+  is_admin boolean;
+begin
+  select exists(
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'admin'
+  ) into is_admin;
+  
+  return is_admin;
 end;
 $$ language plpgsql security definer;
 
@@ -127,7 +134,6 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
-  is_subscribed boolean default false,
   -- Stripe Connect fields
   stripe_account_id text,
   stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
@@ -889,58 +895,54 @@ create table professional_subscriptions (
 );
 alter table professional_subscriptions enable row level security;
 
-/**
-* Create a function to update is_subscribed flag on professional_profiles
-* whenever a subscription is created, updated, or deleted
-*/
-create or replace function update_professional_subscription_status()
-returns trigger as $$
+-- Function to check if a professional has an active subscription
+create or replace function is_professional_subscribed(prof_profile_id uuid)
+returns boolean as $$
+declare
+  has_active_subscription boolean;
 begin
-  -- If the subscription is being created or updated
-  if (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') then
-    -- Set is_subscribed to true if the professional has an active subscription
-    update professional_profiles
-    set is_subscribed = true, updated_at = now()
-    where id = new.professional_profile_id
-    and exists (
-      select 1 from professional_subscriptions
-      where professional_profile_id = new.professional_profile_id
-      and status = 'active'
-    );
-  end if;
+  select exists(
+    select 1 from professional_subscriptions
+    where professional_profile_id = prof_profile_id
+    and status = 'active'
+    and (end_date is null or end_date > now())
+  ) into has_active_subscription;
   
-  -- If the subscription is being deleted or updated (to non-active)
-  if (TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND new.status != 'active')) then
-    -- Set is_subscribed to false if the professional has no active subscriptions
-    update professional_profiles
-    set is_subscribed = false, updated_at = now()
-    where id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
-    and not exists (
-      select 1 from professional_subscriptions
-      where professional_profile_id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
-      and status = 'active'
-    );
-  end if;
-  
-  return CASE WHEN TG_OP = 'DELETE' THEN old ELSE new END;
+  return has_active_subscription;
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
--- Create triggers for the update_professional_subscription_status function
-create trigger after_professional_subscription_insert
-  after insert on professional_subscriptions
-  for each row
-  execute function update_professional_subscription_status();
+-- Function to check if a professional (by user_id) has an active subscription
+-- This allows public access for clients to check subscription status for booking
+create or replace function is_professional_user_subscribed(prof_user_id uuid)
+returns boolean as $$
+declare
+  has_active_subscription boolean;
+  prof_profile_id uuid;
+begin
+  -- Get the professional profile ID for this user
+  select pp.id into prof_profile_id
+  from professional_profiles pp
+  where pp.user_id = prof_user_id;
   
-create trigger after_professional_subscription_update
-  after update on professional_subscriptions
-  for each row
-  execute function update_professional_subscription_status();
+  if prof_profile_id is null then
+    return false;
+  end if;
   
-create trigger after_professional_subscription_delete
-  after delete on professional_subscriptions
-  for each row
-  execute function update_professional_subscription_status();
+  -- Check for active subscription
+  select exists(
+    select 1 from professional_subscriptions
+    where professional_profile_id = prof_profile_id
+    and status = 'active'
+    and (end_date is null or end_date > now())
+  ) into has_active_subscription;
+  
+  return has_active_subscription;
+end;
+$$ language plpgsql security definer;
+
+-- Note: Subscription status is now determined dynamically by checking professional_subscriptions table
+-- This is more secure than storing a mutable flag in professional_profiles
 
 /**
 * RLS policies for subscription tables
@@ -1484,6 +1486,11 @@ create policy "Users can update their own basic data"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
+-- Add the admin policy for user_roles table (defined here after all functions are created)
+drop policy if exists "Admins can manage user roles" on user_roles;
+create policy "Admins can manage user roles" on user_roles for all 
+  using (is_admin(auth.uid()));
+
 
 
 -- RLS policies for profile photos
@@ -1527,7 +1534,6 @@ returns trigger as $$
 begin
   -- Mark all services for re-sync when key fields change that affect Stripe status
   if (old.is_published is distinct from new.is_published or 
-      old.is_subscribed is distinct from new.is_subscribed or 
       old.stripe_connect_status is distinct from new.stripe_connect_status) then
     
     update services 
@@ -2641,6 +2647,8 @@ $$;
 
 -- Grant execute permission to authenticated users
 grant execute on function insert_address_and_return_id to authenticated;
+grant execute on function is_professional_subscribed to authenticated;
+grant execute on function is_professional_user_subscribed to authenticated;
 
 /**
 * Function to determine if an appointment is upcoming or completed based on its date and time
@@ -2918,20 +2926,6 @@ begin
 end;
 $$ language plpgsql security definer;
 
-create or replace function is_admin(user_uuid uuid)
-returns boolean as $$
-declare
-  is_admin boolean;
-begin
-  select exists(
-    select 1 from user_roles
-    where user_id = user_uuid
-    and role = 'admin'
-  ) into is_admin;
-  
-  return is_admin;
-end;
-$$ language plpgsql security definer;
 -- ... existing code ...
 
 -- RPC: get_admin_dashboard_data

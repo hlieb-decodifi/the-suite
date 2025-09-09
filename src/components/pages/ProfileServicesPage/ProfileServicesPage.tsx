@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { checkProfessionalSubscriptionByUserId } from '@/utils/subscriptionUtils';
 import { ProfileServicesPageClient } from './ProfileServicesPageClient';
 import {
   getServices,
@@ -76,15 +77,7 @@ export async function ProfileServicesPage({
   }
 
   // Fetch isBookable (professional is subscribed)
-  let isBookable = false;
-  const { data: profileData } = await supabase
-    .from('professional_profiles')
-    .select('is_subscribed')
-    .eq('user_id', targetUserId)
-    .single();
-  if (profileData && profileData.is_subscribed === true) {
-    isBookable = true;
-  }
+  const isBookable = await checkProfessionalSubscriptionByUserId(targetUserId);
 
   // Extract search parameters
   const resolvedSearchParams = searchParams ? await searchParams : {};

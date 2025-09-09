@@ -313,6 +313,20 @@ async function createSubscriptionRecord(
   
   console.log('Subscription dates:', { startDate, endDate });
   
+  // Validate that the planId exists in our database
+  const { data: planData, error: planError } = await supabase
+    .from('subscription_plans')
+    .select('id, name')
+    .eq('id', planId)
+    .single();
+    
+  if (planError || !planData) {
+    console.error('Invalid plan ID:', planId, 'Error:', planError);
+    throw new Error(`Invalid subscription plan ID: ${planId}`);
+  }
+  
+  console.log('Valid subscription plan found:', planData);
+  
   // Check if subscription record already exists
   console.log('Checking for existing subscription record...');
   const { data: existingSub } = await supabase
@@ -352,6 +366,10 @@ async function createSubscriptionRecord(
       });
       
     console.log('Subscription insert result:', { subInsertError });
+    if (subInsertError) {
+      console.error('Failed to create subscription record:', subInsertError.message, subInsertError.details);
+      throw new Error(`Subscription creation failed: ${subInsertError.message}`);
+    }
   }
 }
 
@@ -399,7 +417,8 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
     
     console.log('Subscription ID:', subscriptionId);
     console.log('Customer ID:', customerId);
-    console.log('Plan ID:', planId);
+    console.log('Plan ID from metadata:', planId);
+    console.log('All session metadata:', session.metadata);
     
     if (!subscriptionId || !customerId || !planId) {
       console.error('Missing required data in checkout session:', {
@@ -437,8 +456,7 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
       const { data: newProfileData, error: createProfileError } = await supabase
         .from('professional_profiles')
         .insert({
-          user_id: userId,
-          is_subscribed: false
+          user_id: userId
         })
         .select('id')
         .single();
@@ -453,43 +471,15 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
       // Use the newly created profile
       const profileId = newProfileData.id;
       
-      // Update professional profile subscription status
-      console.log('Updating professional profile subscription status...');
-      const { error: updateError } = await supabase
-        .from('professional_profiles')
-        .update({
-          is_subscribed: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profileId);
-      
-      console.log('Profile update result:', { updateError });
-      
-      if (updateError) {
-        console.error(`Error updating professional profile: ${updateError.message}`);
-        return;
-      }
+      // Subscription status now tracked dynamically via professional_subscriptions table
+      console.log('Subscription status now tracked dynamically via professional_subscriptions table');
       
       // Continue with subscription creation using the new profile ID
       await createSubscriptionRecord(supabase, profileId, planId, subscriptionId);
     } else {
       // Existing logic for when profile exists
-      // Update professional profile subscription status
-      console.log('Updating professional profile subscription status...');
-      const { error: updateError } = await supabase
-        .from('professional_profiles')
-        .update({
-          is_subscribed: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profileData.id);
-      
-      console.log('Profile update result:', { updateError });
-      
-      if (updateError) {
-        console.error(`Error updating professional profile: ${updateError.message}`);
-        return;
-      }
+      // Subscription status now tracked dynamically via professional_subscriptions table
+      console.log('Subscription status now tracked dynamically via professional_subscriptions table');
       
       // Continue with subscription creation using the existing profile ID
       await createSubscriptionRecord(supabase, profileData.id, planId, subscriptionId);
@@ -718,18 +708,8 @@ async function updateUserSubscription(
   try {
     const supabase = createAdminClient();
     
-    // Update professional profile subscription status
-    const { error: profileError } = await supabase
-      .from('professional_profiles')
-      .update({
-        is_subscribed: isActive,
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId);
-    
-    if (profileError) {
-      console.error(`Error updating profile for user ${userId}: ${profileError.message}`);
-    }
+    // Subscription status now tracked dynamically via professional_subscriptions table
+    console.log(`Subscription status for user ${userId} now tracked dynamically via professional_subscriptions table`);
     
     // Get professional profile ID
     const { data: profileData } = await supabase

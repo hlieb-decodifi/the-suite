@@ -46,7 +46,6 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
         professional_profile:professional_profile_id(
           id,
           location,
-          is_subscribed,
           is_published,
           working_hours,
           timezone,
@@ -91,8 +90,18 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
       return null;
     }
 
-    // Check if professional profile is subscribed
-    if (!professionalProfile?.is_subscribed) {
+    // Check if professional profile is subscribed using the new RPC function
+    const { data: isSubscribed, error: subscriptionError } = await supabase.rpc(
+      'is_professional_user_subscribed',
+      { prof_user_id: service.professional_profile?.user?.id }
+    );
+    
+    if (subscriptionError) {
+      console.error('Error checking subscription status:', subscriptionError);
+      return null;
+    }
+    
+    if (!isSubscribed) {
       return null;
     }
 

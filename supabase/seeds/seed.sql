@@ -520,7 +520,6 @@ BEGIN
         instagram_url = 'https://instagram.com/johndoe',
         tiktok_url = 'https://tiktok.com/@johndoe',
         is_published = true,
-        is_subscribed = true,
         stripe_account_id = 'acct_1S2DSiLv1JUObFBA',
         stripe_connect_status = 'complete',
         stripe_connect_updated_at = NOW(),

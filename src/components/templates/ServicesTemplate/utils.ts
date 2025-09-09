@@ -83,12 +83,17 @@ export function sortServices(
       break;
   }
 
-  // Final sort: subscribed professionals first, then those with addresses
+  // Final sort: subscribed professionals first (isBookable = true), then non-subscribed
   return result.sort((a, b) => {
-    const aSubscribed = !!a.professional.is_subscribed;
-    const bSubscribed = !!b.professional.is_subscribed;
-    if (aSubscribed !== bSubscribed) return aSubscribed ? -1 : 1;
+    const aSubscribed = a.isBookable || false;
+    const bSubscribed = b.isBookable || false;
+    
+    // If subscription status differs, prioritize subscribed professionals
+    if (aSubscribed !== bSubscribed) {
+      return aSubscribed ? -1 : 1;
+    }
 
+    // If both have same subscription status, prefer those with addresses
     const aHasAddress = !!a.professional.address_data;
     const bHasAddress = !!b.professional.address_data;
     if (aHasAddress === bHasAddress) return 0;
@@ -152,9 +157,7 @@ export function calculatePagination(
 
 /**
  * Gets services for display based on filtering state
- * If no filters applied, uses server-side paginated data
- * If only search term applied, uses client-side filtering
- * If location filtering applied, uses server results directly (since server filtering is more comprehensive)
+ * Always applies sorting to ensure subscribed professionals appear first
  */
 export function getServicesForDisplay(
   initialServices: ServiceListItem[],
@@ -164,20 +167,9 @@ export function getServicesForDisplay(
   pageSize: number,
   userLocation?: { latitude: number; longitude: number } | null
 ): ServiceListItem[] {
-  // If location filter is applied, use server results directly
-  // Server-side location filtering is more comprehensive and handles complex address matching
-  if (filters.location !== '') {
-    return initialServices;
-  }
-
-  // If no filters are applied, use the services as is (already paginated from server)
-  if (filters.searchTerm === '') {
-    // Always apply the selected sort to the initial results
-    return sortServices(initialServices, filters.sortBy, userLocation);
-  }
-
-  // If search term is present, use backend paginated results directly
-  return initialServices;
+  // Always apply sorting to ensure subscribed professionals appear first
+  // This handles all cases: no filters, search terms, and location filters
+  return sortServices(initialServices, filters.sortBy, userLocation);
 }
 
 /**

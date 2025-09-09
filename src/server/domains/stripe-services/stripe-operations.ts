@@ -1,4 +1,5 @@
 import { stripe } from '@/lib/stripe/server';
+import { checkProfessionalSubscription } from '@/utils/subscriptionUtils';
 import type {
   ServiceWithStripe,
   ProfessionalStripeStatus,
@@ -31,7 +32,7 @@ export async function evaluateProfessionalStripeStatus(userId: string): Promise<
       };
     }
 
-    const hasSubscription = profile.is_subscribed;
+    const hasSubscription = await checkProfessionalSubscription(profile.id);
     const isPublished = profile.is_published;
     const isStripeConnected = profile.stripe_connect_status === 'complete' && !!profile.stripe_account_id;
     const hasCreditCardPayment = await professionalHasCreditCardPayment(profile.id);

@@ -75,7 +75,6 @@ export type ProfessionalProfileForStripe = {
   id: string;
   user_id: string;
   is_published: boolean;
-  is_subscribed: boolean;
   stripe_account_id: string | null;
   stripe_connect_status: 'not_connected' | 'pending' | 'complete';
 };

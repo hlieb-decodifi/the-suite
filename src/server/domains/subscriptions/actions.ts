@@ -1,6 +1,7 @@
 'use server';
 
 import Stripe from 'stripe';
+import { checkProfessionalSubscription } from '@/utils/subscriptionUtils';
 import { 
   updatePlanPriceInDb, 
   getActivePlansFromDb, 
@@ -323,7 +324,7 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
     // Get the professional profile
     const { data: profileData, error: profileError } = await supabase
       .from('professional_profiles')
-      .select('id, is_subscribed')
+      .select('id')
       .eq('user_id', userId)
       .single();
       
@@ -332,7 +333,8 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
     }
     
     // Check if the user has an active subscription
-    if (!profileData.is_subscribed) {
+    const isSubscribed = await checkProfessionalSubscription(profileData.id);
+    if (!isSubscribed) {
       throw new Error('Active subscription required to connect with Stripe');
     }
     

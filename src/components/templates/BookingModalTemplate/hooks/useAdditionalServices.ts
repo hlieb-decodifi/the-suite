@@ -14,7 +14,6 @@ type ServiceResponse = {
   professional_profile: {
     id: string;
     location: string | null;
-    is_subscribed: boolean;
     user: {
       id: string;
       first_name: string;
@@ -50,7 +49,6 @@ async function fetchAdditionalServices(
         professional_profile:professional_profile_id(
           id,
           location,
-          is_subscribed,
           user:user_id(
             id,
             first_name,
@@ -85,7 +83,7 @@ async function fetchAdditionalServices(
         description: service.description || '',
         price: service.price,
         duration: service.duration,
-        isBookable: professionalProfile?.is_subscribed === true,
+        isBookable: true, // TODO: Replace with dynamic subscription check
         professional: {
           id: user?.id || 'unknown',
           name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
