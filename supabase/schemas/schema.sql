@@ -1303,25 +1303,10 @@ create policy "Users can view booking payments for their bookings"
     )
   );
 
-create policy "Clients can create booking payments for their bookings"
-  on booking_payments for insert
-  with check (
-    exists (
-      select 1 from bookings
-      where bookings.id = booking_payments.booking_id
-      and bookings.client_id = auth.uid()
-    )
-  );
-
-create policy "Clients can update booking payments for cancellation"
-  on booking_payments for update
-  using (
-    exists (
-      select 1 from bookings
-      where bookings.id = booking_payments.booking_id
-      and bookings.client_id = auth.uid()
-    )
-  );
+-- Removed: "Clients can create booking payments for their bookings" policy
+-- Removed: "Clients can update booking payments for cancellation" policy
+-- Booking payment operations are now handled exclusively by server actions with admin client
+-- See migration: remove_dangerous_booking_payments_rls_policies.sql
 
 -- Additional policies for professionals to view client data when they have shared appointments
 create policy "Professionals can view client profiles for shared appointments"
@@ -1346,31 +1331,9 @@ create policy "Professionals can view user data for clients with shared appointm
     )
   );
 
--- Add policy for professionals to update booking payments during ongoing appointments
-create policy "Professionals can update payment amounts for ongoing appointments"
-  on booking_payments for update
-  using (
-    exists (
-      select 1 
-      from bookings b
-      join appointments a on a.booking_id = b.id
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = booking_payments.booking_id
-      and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
-    )
-  )
-  with check (
-    exists (
-      select 1 
-      from bookings b
-      join appointments a on a.booking_id = b.id
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = booking_payments.booking_id
-      and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
-    )
-  );
+-- Removed: "Professionals can update payment amounts for ongoing appointments" policy
+-- Booking payment operations are now handled exclusively by server actions with admin client
+-- See migration: remove_dangerous_booking_payments_rls_policies.sql
 
 /**
 * Update realtime subscriptions to include booking tables

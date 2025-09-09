@@ -24,7 +24,8 @@ export async function processStripeRefund(
   
   try {
     const supabase = await createClient();
-    console.log(`[REFUND] Supabase client created`);
+    const adminSupabase = createAdminClient();
+    console.log(`[REFUND] Supabase clients created`);
     
     // Get the support request with payment details
     const { data: supportRequest, error: supportRequestError } = await supabase
@@ -308,7 +309,7 @@ export async function processStripeRefund(
       
       const refundAmountDollars = refund.amount ? refund.amount / 100 : refundAmount;
       
-      const { error: paymentUpdateError } = await supabase
+      const { error: paymentUpdateError } = await adminSupabase
         .from('booking_payments')
         .update({
           status: 'refunded', // Set status to 'refunded'
@@ -393,6 +394,7 @@ export async function handleStripeRefundWebhook(refund: Stripe.Refund): Promise<
   
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
     
     // Get the support request ID from the refund metadata
     const supportRequestId = refund.metadata?.support_request_id;
@@ -410,7 +412,7 @@ export async function handleStripeRefundWebhook(refund: Stripe.Refund): Promise<
         .single();
         
       if (!supportRequestError && supportRequest) {
-        return await updateSupportRequestWithRefund(supabase as SupabaseClient<Database>, supportRequest, refund);
+        return await updateSupportRequestWithRefund(adminSupabase as SupabaseClient<Database>, supportRequest, refund);
       } else {
         console.log('[WEBHOOK] Support request not found by ID, trying to find by payment intent');
       }
@@ -450,16 +452,16 @@ export async function handleStripeRefundWebhook(refund: Stripe.Refund): Promise<
             console.log(`[WEBHOOK] Found support request by booking ID: ${supportRequest.id}`);
             
             // Update the booking payment with refund data
-            await updateBookingPaymentWithRefund(supabase as SupabaseClient<Database>, bookingPayment.id, refund);
+            await updateBookingPaymentWithRefund(adminSupabase as SupabaseClient<Database>, bookingPayment.id, refund);
             
-            return await updateSupportRequestWithRefund(supabase as SupabaseClient<Database>, supportRequest, refund);
+            return await updateSupportRequestWithRefund(adminSupabase as SupabaseClient<Database>, supportRequest, refund);
           } else {
             console.log(`[WEBHOOK] Support request array exists but first element is undefined`);
           }
         }
         
         // Even if we don't find a support request, update the booking payment
-        await updateBookingPaymentWithRefund(supabase as SupabaseClient<Database>, bookingPayment.id, refund);
+        await updateBookingPaymentWithRefund(adminSupabase as SupabaseClient<Database>, bookingPayment.id, refund);
       }
     }
     
@@ -503,11 +505,11 @@ async function updateSupportRequestWithRefund(
     // Add a success message to the conversation
     if (supportRequest.conversation_id && supportRequest.professional_id) {
       const refundAmountDollars = (refund.amount || 0) / 100;
+      // Use admin client since this is a system message on behalf of the professional
       const { error: messageError } = await supabase.from('messages').insert({
         conversation_id: supportRequest.conversation_id,
         sender_id: supportRequest.professional_id,
         content: `Refund of $${refundAmountDollars.toFixed(2)} has been successfully processed.`,
-        is_read: false,
       });
       
       if (messageError) {
@@ -541,11 +543,11 @@ async function updateSupportRequestWithRefund(
   if (refund.status === 'failed' && supportRequest.conversation_id && supportRequest.professional_id) {
     console.log('[WEBHOOK] Refund failed, adding message to conversation');
     
+    // Use admin client since this is a system message on behalf of the professional
     const { error: messageError } = await supabase.from('messages').insert({
       conversation_id: supportRequest.conversation_id,
       sender_id: supportRequest.professional_id,
       content: `Refund failed: ${refund.failure_reason || 'Unknown reason'}. Please try again or contact support.`,
-      is_read: false,
     });
     
     if (messageError) {

@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export type AddServicesResult = {
@@ -377,7 +377,9 @@ export async function addServicesToAppointment(
 
     if (booking.booking_payments) {
       const payment = booking.booking_payments;
-      const { error: updatePaymentError } = await supabase
+      // Use admin client for secure payment data handling
+      const adminSupabase = createAdminClient();
+      const { error: updatePaymentError } = await adminSupabase
         .from('booking_payments')
         .update({
           amount: newTotal + (payment.service_fee || 0),

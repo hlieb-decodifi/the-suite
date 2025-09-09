@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 // Type for appointment permission check through bookings
 type AppointmentWithBooking = {
@@ -341,8 +341,9 @@ export async function addAdditionalServices({
 
     console.log('[addAdditionalServices] Successfully inserted booking services:', bookingServicesData);
 
-    // Update the booking payment amount
-    const { error: updatePaymentError } = await supabase
+    // Update the booking payment amount using admin client (secure payment data handling)
+    const adminSupabase = createAdminClient();
+    const { error: updatePaymentError } = await adminSupabase
       .from('booking_payments')
       .update({
         amount: newTotalDollars,

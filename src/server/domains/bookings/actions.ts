@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
 import { format, toZonedTime } from 'date-fns-tz';
@@ -15,8 +15,6 @@ import {
   sendAppointmentCompletion2hafterClient,
   sendAppointmentCompletion2hafterProfessional
 } from '@/providers/brevo/templates';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@supabase/types';
 import {
   AppointmentCompletion2hafterClientParams,
   AppointmentCompletion2hafterProfessionalParams
@@ -24,20 +22,7 @@ import {
 import { formatDuration } from '@/utils/formatDuration';
 
 
-function createSupabaseAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
-}
+// Using createAdminClient from @/lib/supabase/server
 
 /**
  * Format a UTC date/time for a specific timezone
@@ -187,7 +172,7 @@ export async function cancelBookingAction(
   cancellationReason: string
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number; message?: string }> {
   // Use admin client only for booking data fetch
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
   const supabase = await createClient();
 
   console.log('[Cancellation] Starting cancellation process for booking:', bookingId);
@@ -534,7 +519,7 @@ export async function cancelBookingAction(
         existingPayment: existingPayment ? { id: existingPayment.id, status: existingPayment.status } : null
       });
       
-      const { data: updateResult, error: updatePaymentError } = await supabase
+      const { data: updateResult, error: updatePaymentError } = await adminSupabase
         .from('booking_payments')
         .update(updateData)
         .eq('id', payment.id)
@@ -730,7 +715,7 @@ export async function canCancelBookingAction(
  * Send cancellation email notifications
  */
 async function sendCancellationEmails(booking: BookingQueryResult, cancellationReason: string): Promise<void> {
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
 
   const { data: clientAuth } = await adminSupabase.auth.admin.getUserById(booking.clients.id);
   const { data: professionalAuth } = await adminSupabase.auth.admin.getUserById(booking.professional_profiles.users.id);
@@ -821,7 +806,7 @@ export async function markNoShowAction(
   chargePercentage: number // 0-100
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number; message?: string }> {
   // Use admin client for appointment data fetch
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
   const supabase = await createClient();
 
   try {
@@ -1045,7 +1030,7 @@ export async function cancelWithPolicyAction(
   cancellationReason: string
 ): Promise<{ success: boolean; error?: string; chargeAmount?: number }> {
   // Use admin client for booking data fetch
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
   const supabase = await createClient();
 
   try {
@@ -1359,7 +1344,7 @@ export async function cancelWithPolicyAction(
       const serviceFee = payment.service_fee || 1.00; // Default to $1 if not set
       const refundAmount = originalAmount - chargeAmount - serviceFee;
       
-      const { error: updatePaymentError } = await supabase
+      const { error: updatePaymentError } = await adminSupabase
         .from('booking_payments')
         .update({
           status: newPaymentStatus,
@@ -1652,7 +1637,7 @@ async function sendCancellationPolicyEmails(
   professionalProfile?: ProfessionalProfile
 ): Promise<void> {
   // Use Supabase admin client for reliable user data
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
   const appointment = booking.appointments[0];
   if (!appointment) throw new Error('Appointment not found');
 

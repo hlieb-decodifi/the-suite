@@ -1,7 +1,7 @@
 'use server';
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { format } from 'date-fns';
@@ -312,8 +312,9 @@ export async function createBooking(
         }
       }
 
-      // Create payment record
-      const { error: paymentError } = await supabase
+      // Create payment record using admin client (secure payment data handling)
+      const adminSupabase = createAdminClient();
+      const { error: paymentError } = await adminSupabase
         .from('booking_payments')
         .insert(paymentRecord);
       
