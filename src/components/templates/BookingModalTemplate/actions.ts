@@ -263,13 +263,15 @@ export async function createBooking(
       }
       
       // Calculate payment schedule for online payments
-      let paymentRecord: any = {
+      const paymentRecord = {
         booking_id: booking.id,
         payment_method_id: formData.paymentMethodId,
         amount: totalPrice,
         tip_amount: formData.tipAmount || 0,
         service_fee: serviceFee,
         status: paymentStatus,
+        capture_scheduled_for: null as string | null,
+        pre_auth_scheduled_for: null as string | null,
       };
 
       // For online payments, calculate and set payment schedule
@@ -284,7 +286,7 @@ export async function createBooking(
           if (!scheduleError && scheduleData && scheduleData.length > 0) {
             const schedule = scheduleData[0];
             
-            if (schedule.should_pre_auth_now) {
+            if (schedule && schedule.should_pre_auth_now) {
               // Appointment is <6 days: Pre-auth happens immediately, no scheduling needed
               paymentRecord.capture_scheduled_for = schedule.capture_date;
               paymentRecord.status = 'pending'; // Will be updated to 'authorized' when payment intent is created
@@ -292,7 +294,7 @@ export async function createBooking(
                 captureDate: schedule.capture_date,
                 immediatePreAuth: true
               });
-            } else {
+            } else if (schedule) {
               // Appointment is >6 days: Schedule both pre-auth and capture
               paymentRecord.pre_auth_scheduled_for = schedule.pre_auth_date;
               paymentRecord.capture_scheduled_for = schedule.capture_date;
