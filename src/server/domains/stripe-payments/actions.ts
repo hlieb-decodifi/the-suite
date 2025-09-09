@@ -759,17 +759,6 @@ export async function verifyBookingPayment(
       }
     }
 
-    // Update booking status to confirmed if payment was successful (but not for setup intents - webhook handles that)
-    if (paymentStatus === 'completed' && !isSetupIntent) {
-      await supabase
-        .from('bookings')
-        .update({ status: 'confirmed' })
-        .eq('id', bookingId);
-
-      // Note: Booking confirmation emails are sent via webhook handler for reliability
-      // This prevents duplicate emails and ensures emails are sent even if user doesn't visit success page
-    }
-
     return {
       success: true,
       paymentStatus,

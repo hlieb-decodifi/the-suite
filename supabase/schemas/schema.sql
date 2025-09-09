@@ -2348,9 +2348,9 @@ create policy "Clients can create their own bookings"
   on bookings for insert
   with check (auth.uid() = client_id);
 
-create policy "Clients can update their own bookings"
-  on bookings for update
-  using (auth.uid() = client_id);
+-- Removed: "Clients can update their own bookings" policy
+-- Booking updates are now handled exclusively by server actions with explicit authorization
+-- See migration: 20250909182027_remove_redundant_booking_update_policy.sql
 
 -- Add missing appointment creation policy
 create policy "Clients can create appointments for their bookings"
