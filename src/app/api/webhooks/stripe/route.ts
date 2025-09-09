@@ -1304,7 +1304,6 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
               conversation_id: supportRequest.conversation_id,
               sender_id: supportRequest.professional_id,
               content: `Refund of $${refundAmountDollars.toFixed(2)} has been successfully processed via Stripe dashboard.`,
-              is_read: false,
             });
 
             if (messageError) {

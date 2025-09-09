@@ -176,7 +176,6 @@ export async function createSupportRequestAction({
       conversation_id: conversation.id,
       sender_id: clientId,
       content: `Support request opened: ${reason}`,
-      is_read: false,
     });
 
     if (messageError) {
@@ -320,7 +319,6 @@ export async function initiateRefundServerAction(formData: FormData) {
         content: `Refund of $${refund_amount.toFixed(2)} has been initiated. ${
           professional_notes ? `Note: ${professional_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
@@ -418,7 +416,6 @@ export async function resolveSupportRequestAction({
         content: `Support request has been resolved. ${
           resolution_notes ? `Resolution notes: ${resolution_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
