@@ -164,7 +164,9 @@ export async function addAdditionalServices({
           professionals:professional_profile_id(
             id,
             user_id,
-            stripe_account_id
+            professional_stripe_connect(
+              stripe_account_id
+            )
           )
         )
       `)

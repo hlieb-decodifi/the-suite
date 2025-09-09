@@ -134,10 +134,6 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
-  -- Stripe Connect fields
-  stripe_account_id text,
-  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
-  stripe_connect_updated_at timestamp with time zone,
   -- Payment settings
   requires_deposit boolean default false not null,
   deposit_type text default 'percentage' check (deposit_type in ('percentage', 'fixed')),
@@ -161,14 +157,6 @@ create table professional_profiles (
 );
 alter table professional_profiles enable row level security;
 
--- Create indexes for Stripe Connect fields
-create index if not exists idx_professional_profiles_stripe_account_id 
-on professional_profiles(stripe_account_id) 
-where stripe_account_id is not null;
-
-create index if not exists idx_professional_profiles_stripe_connect_status 
-on professional_profiles(stripe_connect_status);
-
 -- Add constraints for cancellation policy fields
 alter table professional_profiles add constraint chk_cancellation_24h_percentage 
   check (cancellation_24h_charge_percentage >= 0 and cancellation_24h_charge_percentage <= 100);
@@ -179,6 +167,48 @@ alter table professional_profiles add constraint chk_cancellation_48h_percentage
 -- Ensure 24h charge is >= 48h charge (stricter policy for less notice)
 alter table professional_profiles add constraint chk_cancellation_policy_logic 
   check (cancellation_24h_charge_percentage >= cancellation_48h_charge_percentage);
+
+/**
+* PROFESSIONAL_STRIPE_CONNECT
+* Secure storage for professional Stripe Connect account details
+* Only admins can create/update these records, professionals can view their own
+*/
+create table professional_stripe_connect (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null unique,
+  stripe_account_id text,
+  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
+  stripe_connect_updated_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table professional_stripe_connect enable row level security;
+
+-- Create indexes for Stripe Connect fields
+create index if not exists idx_professional_stripe_connect_profile_id 
+on professional_stripe_connect(professional_profile_id);
+
+create index if not exists idx_professional_stripe_connect_account_id 
+on professional_stripe_connect(stripe_account_id) 
+where stripe_account_id is not null;
+
+create index if not exists idx_professional_stripe_connect_status 
+on professional_stripe_connect(stripe_connect_status);
+
+-- RLS policies for professional_stripe_connect
+-- Professionals can view their own Stripe Connect data
+create policy "Professionals can view their own Stripe Connect data"
+  on professional_stripe_connect for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = professional_stripe_connect.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Only admins can create/update Stripe Connect records (via admin functions)
+-- No insert/update policies for regular users - all operations done via admin client
 
 /**
 * CLIENT_PROFILES
@@ -1527,8 +1557,7 @@ create or replace function handle_professional_profile_stripe_changes()
 returns trigger as $$
 begin
   -- Mark all services for re-sync when key fields change that affect Stripe status
-  if (old.is_published is distinct from new.is_published or 
-      old.stripe_connect_status is distinct from new.stripe_connect_status) then
+  if (old.is_published is distinct from new.is_published) then
     
     update services 
     set stripe_sync_status = 'pending', 
@@ -1545,6 +1574,29 @@ create trigger professional_profile_stripe_sync_trigger
   after update on professional_profiles
   for each row
   execute function handle_professional_profile_stripe_changes();
+
+-- Function to handle Stripe Connect status changes that affect service sync
+create or replace function handle_stripe_connect_status_changes()
+returns trigger as $$
+begin
+  -- Mark all services for re-sync when Stripe Connect status changes
+  if (old.stripe_connect_status is distinct from new.stripe_connect_status) then
+    
+    update services 
+    set stripe_sync_status = 'pending', 
+        updated_at = timezone('utc'::text, now())
+    where professional_profile_id = new.professional_profile_id;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger for Stripe Connect status changes
+create trigger stripe_connect_status_sync_trigger
+  after update on professional_stripe_connect
+  for each row
+  execute function handle_stripe_connect_status_changes();
 
 -- Function to handle payment method changes that affect Stripe sync
 create or replace function handle_payment_method_stripe_changes()

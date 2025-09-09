@@ -460,7 +460,7 @@ BEGIN
     FROM professional_profiles 
     WHERE user_id = dummy_user_id;
     
-    -- Update the professional profile with additional details and Stripe Connect info
+    -- Update the professional profile with additional details (without Stripe Connect info)
     UPDATE professional_profiles SET
         description = 'Experienced professional with over 10 years in the industry. Specializing in high-quality services and exceptional customer satisfaction.',
         profession = 'Professional Services',
@@ -520,9 +520,6 @@ BEGIN
         instagram_url = 'https://instagram.com/johndoe',
         tiktok_url = 'https://tiktok.com/@johndoe',
         is_published = true,
-        stripe_account_id = 'acct_1S2DSiLv1JUObFBA',
-        stripe_connect_status = 'complete',
-        stripe_connect_updated_at = NOW(),
         requires_deposit = true,
         deposit_type = 'percentage',
         deposit_value = 25.00,
@@ -532,6 +529,19 @@ BEGIN
         cancellation_24h_charge_percentage = 50.00,
         cancellation_48h_charge_percentage = 25.00
     WHERE user_id = dummy_user_id;
+    
+    -- Create Stripe Connect record in the secure table
+    INSERT INTO professional_stripe_connect (
+        professional_profile_id,
+        stripe_account_id,
+        stripe_connect_status,
+        stripe_connect_updated_at
+    ) VALUES (
+        dummy_profile_id,
+        'acct_1S2DSiLv1JUObFBA',
+        'complete',
+        NOW()
+    );
     
     -- Create active subscription
     INSERT INTO professional_subscriptions (

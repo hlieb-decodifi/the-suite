@@ -867,9 +867,6 @@ export type Database = {
           phone_number: string | null
           profession: string | null
           requires_deposit: boolean
-          stripe_account_id: string | null
-          stripe_connect_status: string
-          stripe_connect_updated_at: string | null
           tiktok_url: string | null
           timezone: string | null
           updated_at: string
@@ -896,9 +893,6 @@ export type Database = {
           phone_number?: string | null
           profession?: string | null
           requires_deposit?: boolean
-          stripe_account_id?: string | null
-          stripe_connect_status?: string
-          stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
           timezone?: string | null
           updated_at?: string
@@ -925,9 +919,6 @@ export type Database = {
           phone_number?: string | null
           profession?: string | null
           requires_deposit?: boolean
-          stripe_account_id?: string | null
-          stripe_connect_status?: string
-          stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
           timezone?: string | null
           updated_at?: string
@@ -947,6 +938,44 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      professional_stripe_connect: {
+        Row: {
+          created_at: string
+          id: string
+          professional_profile_id: string
+          stripe_account_id: string | null
+          stripe_connect_status: string
+          stripe_connect_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          professional_profile_id: string
+          stripe_account_id?: string | null
+          stripe_connect_status?: string
+          stripe_connect_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          professional_profile_id?: string
+          stripe_account_id?: string | null
+          stripe_connect_status?: string
+          stripe_connect_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_stripe_connect_professional_profile_id_fkey"
+            columns: ["professional_profile_id"]
+            isOneToOne: true
+            referencedRelation: "professional_profiles"
             referencedColumns: ["id"]
           },
         ]

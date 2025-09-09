@@ -39,8 +39,10 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
         requires_deposit,
         deposit_type,
         deposit_value,
-        stripe_account_id,
-        stripe_connect_status
+        professional_stripe_connect(
+          stripe_account_id,
+          stripe_connect_status
+        )
       `)
       .eq('id', professionalProfileId)
       .single();
@@ -56,8 +58,8 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
       requires_deposit: data.requires_deposit ?? false,
       deposit_type: (data.deposit_type as 'percentage' | 'fixed') ?? 'percentage',
       deposit_value: data.deposit_value,
-      stripe_account_id: data.stripe_account_id,
-      stripe_connect_status: data.stripe_connect_status as 'not_connected' | 'pending' | 'complete'
+      stripe_account_id: data.professional_stripe_connect?.stripe_account_id || null,
+      stripe_connect_status: (data.professional_stripe_connect?.stripe_connect_status || 'not_connected') as 'not_connected' | 'pending' | 'complete'
     };
   } catch (error) {
     console.error('Error in getProfessionalProfileForPayment:', error);

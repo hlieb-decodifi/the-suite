@@ -14,7 +14,13 @@ export type SubscriptionPlan = {
 export type ProfessionalProfile = {
   id: string;
   user_id: string;
-  // Simplified Stripe Connect fields
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProfessionalStripeConnect = {
+  id: string;
+  professional_profile_id: string;
   stripe_account_id?: string;
   stripe_connect_status: 'not_connected' | 'pending' | 'complete';
   stripe_connect_updated_at?: string;
@@ -142,15 +148,30 @@ export async function updateStripeConnectStatus(
 ): Promise<{ success: boolean; error?: string }> {
   const supabaseAdmin = createAdminClient();
   try {
-    const { error } = await supabaseAdmin
+    // First get the professional profile ID
+    const { data: profileData, error: profileError } = await supabaseAdmin
       .from('professional_profiles')
-      .update({
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError || !profileData) {
+      console.error('Professional profile not found for user:', userId);
+      return { success: false, error: 'Professional profile not found' };
+    }
+
+    // Update or create Stripe Connect record in the secure table
+    const { error } = await supabaseAdmin
+      .from('professional_stripe_connect')
+      .upsert({
+        professional_profile_id: profileData.id,
         stripe_account_id: status.accountId || null,
         stripe_connect_status: status.connectStatus,
         stripe_connect_updated_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId);
+      }, {
+        onConflict: 'professional_profile_id'
+      });
 
     if (error) {
       console.error('Error updating Stripe Connect status:', error);
@@ -173,16 +194,21 @@ export async function getStripeConnectStatusFromDb(userId: string): Promise<{
   const supabaseAdmin = createAdminClient();
   try {
     const { data, error } = await supabaseAdmin
-      .from('professional_profiles')
+      .from('professional_stripe_connect')
       .select(`
         stripe_account_id,
-        stripe_connect_status
+        stripe_connect_status,
+        professional_profiles!inner(user_id)
       `)
-      .eq('user_id', userId)
+      .eq('professional_profiles.user_id', userId)
       .single();
 
     if (error || !data) {
-      return null;
+      // If no record exists, return default values
+      return {
+        isConnected: false,
+        connectStatus: 'not_connected'
+      };
     }
 
     const result: {

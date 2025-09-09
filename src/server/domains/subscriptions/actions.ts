@@ -341,16 +341,20 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
     // Check if we have a stored Stripe account ID in our database first
     const { data: existingConnectData } = await supabase
       .from('professional_profiles')
-      .select('stripe_account_id')
+      .select(`
+        professional_stripe_connect(
+          stripe_account_id
+        )
+      `)
       .eq('user_id', userId)
       .single();
     
     let account;
     
     // If we have a stored account ID, try to retrieve it directly
-    if (existingConnectData?.stripe_account_id) {
+    if (existingConnectData?.professional_stripe_connect?.stripe_account_id) {
       try {
-        account = await stripe.accounts.retrieve(existingConnectData.stripe_account_id);
+        account = await stripe.accounts.retrieve(existingConnectData.professional_stripe_connect.stripe_account_id);
         console.log('Retrieved existing Stripe account from DB:', account.id);
       } catch (error) {
         console.log('Stored account ID invalid, will create new account:', error);
@@ -372,10 +376,10 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
       if (existingAccount) {
         account = existingAccount;
         // Store the account ID in our database for future use
-        await supabase
-          .from('professional_profiles')
-          .update({ stripe_account_id: account.id })
-          .eq('user_id', userId);
+        await updateStripeConnectStatus(userId, {
+          accountId: account.id,
+          connectStatus: 'pending'
+        });
         console.log('Found and stored existing Stripe account:', account.id);
       }
     }
@@ -401,10 +405,10 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
       });
       
       // Store the new account ID in our database
-      await supabase
-        .from('professional_profiles')
-        .update({ stripe_account_id: account.id })
-        .eq('user_id', userId);
+      await updateStripeConnectStatus(userId, {
+        accountId: account.id,
+        connectStatus: 'pending'
+      });
       
       console.log('Created and stored new Stripe account:', account.id);
     }
@@ -447,12 +451,16 @@ export async function getStripeConnectStatus(userId: string): Promise<{
       const supabase = await createClient();
       const { data: profileData } = await supabase
         .from('professional_profiles')
-        .select('stripe_connect_updated_at')
+        .select(`
+          professional_stripe_connect(
+            stripe_connect_updated_at
+          )
+        `)
         .eq('user_id', userId)
         .single();
         
-      if (profileData?.stripe_connect_updated_at) {
-        const lastUpdate = new Date(profileData.stripe_connect_updated_at);
+      if (profileData?.professional_stripe_connect?.stripe_connect_updated_at) {
+        const lastUpdate = new Date(profileData.professional_stripe_connect.stripe_connect_updated_at);
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
         
         if (lastUpdate > oneHourAgo) {

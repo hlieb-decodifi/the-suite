@@ -216,7 +216,6 @@ export async function cancelBookingAction(
           cancellation_policy_enabled,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
-          stripe_account_id,
           address_id,
           address:address_id(
             street_address,
@@ -226,7 +225,10 @@ export async function cancelBookingAction(
             country
           ),
           timezone,
-          users!inner(id, first_name, last_name)
+          users!inner(id, first_name, last_name),
+          professional_stripe_connect(
+            stripe_account_id
+          )
         ),
         clients:users!client_id(id, first_name, last_name, client_profiles(*)),
         booking_services(
@@ -838,7 +840,6 @@ export async function markNoShowAction(
           *,
           professional_profiles!inner(
             user_id,
-            stripe_account_id,
             address_id,
             address:address_id(
               street_address,
@@ -848,7 +849,10 @@ export async function markNoShowAction(
               country
             ),
             timezone,
-            users!inner(id, first_name, last_name)
+            users!inner(id, first_name, last_name),
+            professional_stripe_connect(
+              stripe_account_id
+            )
           ),
           clients:users!client_id(id, first_name, last_name, client_profiles(*)),
           booking_services(
@@ -933,14 +937,14 @@ export async function markNoShowAction(
             payment.stripe_payment_intent_id
           );
 
-          if (originalPaymentIntent.customer && originalPaymentIntent.payment_method && professionalProfile.stripe_account_id) {
+          if (originalPaymentIntent.customer && originalPaymentIntent.payment_method && professionalProfile.professional_stripe_connect?.stripe_account_id) {
             console.log(`Processing no-show charge: $${chargeAmount.toFixed(2)} (${chargePercentage}% of $${totalServiceAmount.toFixed(2)})`);
             
             const chargeResult = await createNoShowCharge(
               chargeAmountCents,
               originalPaymentIntent.customer as string,
               originalPaymentIntent.payment_method as string,
-              professionalProfile.stripe_account_id,
+              professionalProfile.professional_stripe_connect?.stripe_account_id!,
               {
                 booking_id: booking.id,
                 appointment_id: appointmentId,
@@ -968,7 +972,7 @@ export async function markNoShowAction(
               // Continue with status update even if charge fails
             }
           } else {
-            if (!professionalProfile.stripe_account_id) {
+            if (!professionalProfile.professional_stripe_connect?.stripe_account_id) {
               console.error('Professional has not connected their Stripe account for no-show charge');
             } else {
               console.error('Missing customer or payment method information for no-show charge');
