@@ -407,8 +407,8 @@ export async function cancelBookingAction(
           console.log(`[Payment Intent] Payment already succeeded - processing refund`);
           // Handle refund for already succeeded payment
           const refundAmount = isProfessional 
-            ? payment.amount + (payment.deposit_amount || 0)  // Professional pays fees
-            : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0); // Client pays service fee
+            ? payment.amount + payment.tip_amount  // Professional gets everything back
+            : payment.amount + payment.tip_amount - (payment.service_fee || 0); // Client pays service fee
           
           console.log(`[Payment Intent] 💰 Refund calculation for succeeded payment:`, {
             paymentAmount: payment.amount,
@@ -492,11 +492,17 @@ export async function cancelBookingAction(
         cancellationReason
       });
 
+      // Calculate correct refund amount - for simple cancellations within accepted time
+      // Client gets full refund except service fee, Professional gets full refund
+      const refundAmount = isProfessional 
+        ? payment.amount + payment.tip_amount  // Professional gets everything back
+        : payment.amount + payment.tip_amount - (payment.service_fee || 0); // Client pays service fee
+      
       const updateData = {
         status: 'refunded' as const,
         pre_auth_scheduled_for: null,
         capture_scheduled_for: null,
-        refunded_amount: isProfessional ? payment.amount + (payment.deposit_amount || 0) : payment.amount + (payment.deposit_amount || 0) - (payment.service_fee || 0),
+        refunded_amount: refundAmount,
         refund_reason: `${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
         refunded_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
