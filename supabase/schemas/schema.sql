@@ -842,16 +842,10 @@ create table customers (
 alter table customers enable row level security;
 
 -- RLS policy for customers table
+-- Users can only view their customer data, not create or modify it
+-- All customer record creation/updates are handled by admin functions via Stripe webhooks
 create policy "Users can view their own customer data"
   on customers for select
-  using (auth.uid() = user_id);
-
-create policy "Users can create their own customer record"
-  on customers for insert
-  with check (auth.uid() = user_id);
-
-create policy "Users can update their own customer record"
-  on customers for update
   using (auth.uid() = user_id);
 
 /**
