@@ -25,6 +25,8 @@ export async function updateAppointmentStatus(
 ) {
   try {
     const supabase = await createClient();
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const adminSupabase = createAdminClient();
 
     // First verify that the user has permission to update this appointment
     const { data, error: fetchError } = await supabase
@@ -74,8 +76,8 @@ export async function updateAppointmentStatus(
       throw new Error('You do not have permission to update this appointment');
     }
 
-    // Update the appointment status
-    const { error: updateError } = await supabase
+    // Update the appointment status using admin client since RLS policy was removed
+    const { error: updateError } = await adminSupabase
       .from('appointments')
       .update({
         status,

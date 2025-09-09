@@ -599,8 +599,8 @@ export async function cancelBookingAction(
 
     console.log('[Cancellation] ✅ Updated booking status to cancelled');
 
-    // Update appointment status
-    const { error: updateAppointmentError } = await supabase
+    // Update appointment status using admin client since RLS policy was removed
+    const { error: updateAppointmentError } = await adminSupabase
       .from('appointments')
       .update({ 
         status: 'cancelled',
@@ -989,8 +989,8 @@ export async function markNoShowAction(
       }
     }
 
-    // Update appointment and booking status
-    const { error: updateAppointmentError } = await supabase
+    // Update appointment and booking status using admin client since RLS policy was removed
+    const { error: updateAppointmentError } = await adminSupabase
       .from('appointments')
       .update({ 
         status: 'cancelled',
@@ -1182,7 +1182,7 @@ export async function cancelWithPolicyAction(
       return { success: false, error: 'Failed to update booking status' };
     }
 
-    const { error: updateAppointmentError } = await supabase
+    const { error: updateAppointmentError } = await adminSupabase
       .from('appointments')
       .update({ 
         status: 'cancelled',

@@ -437,74 +437,10 @@ export async function getAppointmentById(
 }
 
 // Check if user has permission to view this appointment
-function checkAppointmentPermission(
-  appointment: DetailedAppointmentType,
-  userId: string,
-  isProfessional: boolean,
-): boolean {
-  if (isProfessional) {
-    // Professional can only view their own appointments
-    return (
-      appointment.bookings.professionals?.user_id === userId ||
-      appointment.bookings.professionals?.users.id === userId
-    );
-  } else {
-    // Client can only view their own appointments
-    return (
-      appointment.bookings.client_id === userId ||
-      appointment.bookings.clients?.id === userId
-    );
-  }
-}
+// Note: checkAppointmentPermission function removed - was only used by removed updateAppointmentStatus function
 
-// Update appointment status
-export async function updateAppointmentStatus(
-  appointmentId: string,
-  status: string,
-  userId: string,
-  isProfessional: boolean,
-) {
-  try {
-    const supabase = await createClient();
-
-    // First verify that the user has permission to update this appointment
-    const appointment = await getAppointmentById(appointmentId);
-
-    const hasPermission = checkAppointmentPermission(
-      appointment,
-      userId,
-      isProfessional,
-    );
-
-    if (!hasPermission) {
-      throw new Error('You do not have permission to update this appointment');
-    }
-
-    // Update the appointment status
-    const { error: updateError } = await supabase
-      .from('appointments')
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', appointmentId);
-
-    if (updateError) {
-      throw new Error(`Failed to update appointment: ${updateError.message}`);
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating appointment status:', error);
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Failed to update appointment status',
-    };
-  }
-}
+// Note: updateAppointmentStatus function removed - was unused
+// All appointment status updates now handled by server actions or BookingDetailPage/actions.ts
 
 // Get existing support request for an appointment
 async function getExistingSupportRequest(

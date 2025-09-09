@@ -1241,28 +1241,10 @@ create policy "Professionals can view appointments for their profile"
     )
   );
 
--- Add missing policy to allow professionals to update appointment status
-create policy "Professionals can update appointments for their profile"
-  on appointments for update
-  using (
-    exists (
-      select 1 from bookings b
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = appointments.booking_id
-      and pp.user_id = auth.uid()
-    )
-  );
-
--- Add missing policy to allow clients to update their appointments (for cancellation)
-create policy "Clients can update their appointments"
-  on appointments for update
-  using (
-    exists (
-      select 1 from bookings
-      where bookings.id = appointments.booking_id
-      and bookings.client_id = auth.uid()
-    )
-  );
+-- Removed: "Professionals can update appointments for their profile" policy
+-- Removed: "Clients can update their appointments" policy  
+-- Appointment updates are now handled exclusively by server actions with explicit authorization
+-- See migration: 20250909185108_remove_redundant_appointment_update_policies.sql
 
 -- Booking services policies
 create policy "Users can view booking services for their bookings"
