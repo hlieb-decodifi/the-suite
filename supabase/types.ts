@@ -667,13 +667,51 @@ export type Database = {
           },
         ]
       }
+      message_read_status: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_read_status_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_read_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
           conversation_id: string
           created_at: string
           id: string
-          is_read: boolean
           sender_id: string
           updated_at: string
         }
@@ -682,7 +720,6 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
-          is_read?: boolean
           sender_id: string
           updated_at?: string
         }
@@ -691,7 +728,6 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
-          is_read?: boolean
           sender_id?: string
           updated_at?: string
         }
@@ -1527,6 +1563,10 @@ export type Database = {
         Args: { prof_profile_id: string }
         Returns: number
       }
+      get_unread_message_count: {
+        Args: { p_conversation_id: string; p_user_id: string }
+        Returns: number
+      }
       insert_address_and_return_id: {
         Args: {
           p_country?: string
@@ -1548,6 +1588,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      is_message_read: {
+        Args: { p_message_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_professional: {
         Args: { user_uuid: string }
         Returns: boolean
@@ -1558,6 +1602,10 @@ export type Database = {
       }
       is_professional_user_subscribed: {
         Args: { prof_user_id: string }
+        Returns: boolean
+      }
+      mark_message_read: {
+        Args: { p_message_id: string; p_user_id: string }
         Returns: boolean
       }
       set_admin_config: {

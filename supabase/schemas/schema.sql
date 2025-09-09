@@ -1624,11 +1624,25 @@ create table messages (
   conversation_id uuid references conversations not null,
   sender_id uuid references users not null,
   content text not null,
-  is_read boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table messages enable row level security;
+
+/**
+* MESSAGE_READ_STATUS
+* Tracks which messages have been read by which users
+*/
+create table message_read_status (
+  id uuid primary key default uuid_generate_v4(),
+  message_id uuid references messages not null,
+  user_id uuid references users not null,
+  read_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure unique read status per message per user
+  constraint unique_message_user_read unique (message_id, user_id)
+);
+alter table message_read_status enable row level security;
 
 -- Create indexes for better performance
 create index if not exists idx_conversations_client_id on conversations(client_id);
@@ -1636,6 +1650,9 @@ create index if not exists idx_conversations_professional_id on conversations(pr
 create index if not exists idx_messages_conversation_id on messages(conversation_id);
 create index if not exists idx_messages_created_at on messages(created_at);
 create index if not exists idx_messages_sender_id on messages(sender_id);
+create index if not exists idx_message_read_status_message_id on message_read_status(message_id);
+create index if not exists idx_message_read_status_user_id on message_read_status(user_id);
+create index if not exists idx_message_read_status_read_at on message_read_status(read_at);
 
 -- Function to update conversation updated_at when a new message is added
 create or replace function update_conversation_timestamp()
@@ -1724,16 +1741,87 @@ create policy "Users can send messages in their conversations"
     )
   );
 
-create policy "Users can update their own messages"
-  on messages for update
+-- Removed insecure message update policy - message content should be immutable
+-- Read status is now tracked via message_read_status table
+
+/**
+* RLS policies for message_read_status table
+*/
+
+-- Users can view read status for messages in their conversations
+create policy "Users can view read status in their conversations"
+  on message_read_status for select
   using (
-    auth.uid() = sender_id
-    or exists (
-      select 1 from conversations
-      where conversations.id = messages.conversation_id
-      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    exists (
+      select 1 from messages m
+      join conversations c on c.id = m.conversation_id
+      where m.id = message_read_status.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
     )
   );
+
+-- Users can mark messages as read in their conversations
+create policy "Users can mark messages as read in their conversations"
+  on message_read_status for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from messages m
+      join conversations c on c.id = m.conversation_id
+      where m.id = message_read_status.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
+    )
+  );
+
+-- Users can update their own read timestamps (e.g., for re-reading)
+create policy "Users can update their own read status"
+  on message_read_status for update
+  using (auth.uid() = user_id);
+
+/**
+* Helper functions for message read status
+*/
+
+-- Function to check if a message has been read by a specific user
+create or replace function is_message_read(p_message_id uuid, p_user_id uuid)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from message_read_status
+    where message_id = p_message_id and user_id = p_user_id
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Function to mark a message as read (upsert)
+create or replace function mark_message_read(p_message_id uuid, p_user_id uuid)
+returns boolean as $$
+begin
+  insert into message_read_status (message_id, user_id)
+  values (p_message_id, p_user_id)
+  on conflict (message_id, user_id)
+  do update set read_at = timezone('utc'::text, now());
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Function to get unread message count for a user in a conversation
+create or replace function get_unread_message_count(p_conversation_id uuid, p_user_id uuid)
+returns integer as $$
+begin
+  return (
+    select count(*)::integer
+    from messages m
+    where m.conversation_id = p_conversation_id
+    and m.sender_id != p_user_id  -- Don't count own messages
+    and not exists (
+      select 1 from message_read_status mrs
+      where mrs.message_id = m.id and mrs.user_id = p_user_id
+    )
+  );
+end;
+$$ language plpgsql security definer;
 
 -- Additional policies for cross-user visibility in messaging contexts
 -- Allow users to view basic data of other users they have conversations with
@@ -2600,6 +2688,7 @@ create publication supabase_realtime for table
   professional_subscriptions,
   conversations,
   messages,
+  message_read_status,
   reviews,
   support_requests;
 
@@ -2649,6 +2738,9 @@ $$;
 grant execute on function insert_address_and_return_id to authenticated;
 grant execute on function is_professional_subscribed to authenticated;
 grant execute on function is_professional_user_subscribed to authenticated;
+grant execute on function is_message_read to authenticated;
+grant execute on function mark_message_read to authenticated;
+grant execute on function get_unread_message_count to authenticated;
 
 /**
 * Function to determine if an appointment is upcoming or completed based on its date and time

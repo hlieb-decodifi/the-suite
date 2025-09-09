@@ -248,12 +248,26 @@ export async function getProfileData(
     if (isEditable) {
       try {
         const supabase = await createClient();
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('recipient_id', userId)
-          .eq('is_read', false);
-        unreadMessagesCount = count || 0;
+
+        // Get all conversations for this user
+        const { data: conversations } = await supabase
+          .from('conversations')
+          .select('id')
+          .or(`client_id.eq.${userId},professional_id.eq.${userId}`);
+
+        if (conversations && conversations.length > 0) {
+          // Count unread messages for each conversation using the new RPC function
+          for (const conversation of conversations) {
+            const { data: unreadCount } = await supabase.rpc(
+              'get_unread_message_count',
+              {
+                p_conversation_id: conversation.id,
+                p_user_id: userId,
+              },
+            );
+            unreadMessagesCount += unreadCount || 0;
+          }
+        }
       } catch (messageError) {
         // Silently handle message count errors
         console.error('Error fetching unread messages count:', messageError);

@@ -28,7 +28,6 @@ export async function getMessagesForAdmin(conversationId: string): Promise<{ suc
       conversation_id: msg.conversation_id,
       sender_id: msg.sender_id,
       content: msg.content,
-      is_read: msg.is_read,
       created_at: msg.created_at,
       updated_at: msg.updated_at,
       attachments: msg.attachments?.map(att => ({

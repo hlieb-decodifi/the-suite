@@ -417,22 +417,30 @@ export async function getUnreadSupportMessagesCount(
       return 0;
     }
 
-    const conversationIds = conversations.map((conv) => conv.id);
+    // Count unread support messages for each conversation using the new RPC function
+    let totalUnreadCount = 0;
 
-    // Count unread messages where sender is not the current user
-    const { count, error: messagesError } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .in('conversation_id', conversationIds)
-      .eq('is_read', false)
-      .neq('sender_id', userId);
+    for (const conversation of conversations) {
+      const { data: unreadCount, error: countError } = await supabase.rpc(
+        'get_unread_message_count',
+        {
+          p_conversation_id: conversation.id,
+          p_user_id: userId,
+        },
+      );
 
-    if (messagesError) {
-      console.error('Error counting unread support messages:', messagesError);
-      return 0;
+      if (countError) {
+        console.error(
+          'Error counting unread support messages for conversation:',
+          countError,
+        );
+        continue; // Skip this conversation but continue counting others
+      }
+
+      totalUnreadCount += unreadCount || 0;
     }
 
-    return count || 0;
+    return totalUnreadCount;
   } catch (error) {
     console.error('Error in getUnreadSupportMessagesCount:', error);
     return 0;
@@ -463,22 +471,30 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
       return 0;
     }
 
-    const conversationIds = conversations.map((conv) => conv.id);
+    // Count unread messages for each conversation using the new RPC function
+    let totalUnreadCount = 0;
 
-    // Count unread messages where sender is not the current user
-    const { count, error: messagesError } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .in('conversation_id', conversationIds)
-      .eq('is_read', false)
-      .neq('sender_id', userId);
+    for (const conversation of conversations) {
+      const { data: unreadCount, error: countError } = await supabase.rpc(
+        'get_unread_message_count',
+        {
+          p_conversation_id: conversation.id,
+          p_user_id: userId,
+        },
+      );
 
-    if (messagesError) {
-      console.error('Error counting unread messages:', messagesError);
-      return 0;
+      if (countError) {
+        console.error(
+          'Error counting unread messages for conversation:',
+          countError,
+        );
+        continue; // Skip this conversation but continue counting others
+      }
+
+      totalUnreadCount += unreadCount || 0;
     }
 
-    return count || 0;
+    return totalUnreadCount;
   } catch (error) {
     console.error('Error in getUnreadMessagesCount:', error);
     return 0;

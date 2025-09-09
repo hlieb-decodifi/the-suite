@@ -491,16 +491,17 @@ export async function getSupportRequests(): Promise<{
     const supportRequestsWithUnreadCount = await Promise.all(
       supportRequests.map(async (request) => {
         if (request.conversation_id) {
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', request.conversations?.id)
-            .eq('is_read', false)
-            .neq('sender_id', user.id);
+          const { data: unreadCount } = await supabase.rpc(
+            'get_unread_message_count',
+            {
+              p_conversation_id: request.conversations?.id,
+              p_user_id: user.id,
+            }
+          );
 
           return {
             ...request,
-            unreadCount: count || 0,
+            unreadCount: unreadCount || 0,
             conversationId: request.conversations?.id,
           };
         }
