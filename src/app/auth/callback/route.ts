@@ -267,15 +267,12 @@ export async function GET(request: Request) {
             console.log('[AUTH_CALLBACK] Redirecting new OAuth user to:', finalRedirectTo);
             // Create response and set session cookie explicitly
             const response = NextResponse.redirect(new URL(finalRedirectTo, baseUrl));
-            // Ensure session is properly set in cookies
-            console.log('[AUTH_CALLBACK] Refreshing session cookie...');
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-              // Refresh the session to ensure it's properly established
-              await supabase.auth.setSession({
-                access_token: session.access_token,
-                refresh_token: session.refresh_token,
-              });
+            // Verify user is properly authenticated before redirect
+            console.log('[AUTH_CALLBACK] Verifying user authentication...');
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (!user || userError) {
+              console.error('[AUTH_CALLBACK] User verification failed:', userError);
+              return NextResponse.redirect(new URL('/auth/confirmed?verified=false', baseUrl));
             }
             return response;
           } else {

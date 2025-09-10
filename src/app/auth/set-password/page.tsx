@@ -49,17 +49,21 @@ export default function SetPasswordPage() {
             refresh_token,
           });
         }
+        // Verify user is authenticated after token exchange
         const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        if (sessionError || !session) {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
           setError('Invalid or expired invitation link');
           return;
         }
-        setUserEmail(session.user.email || null);
-        setAccessToken(session.access_token || null);
-        setRefreshToken(session.refresh_token || null);
+        
+        // Get session for authenticated user
+        const { data: { session } } = await supabase.auth.getSession();
+        setUserEmail(user.email || null);
+        setAccessToken(session?.access_token || null);
+        setRefreshToken(session?.refresh_token || null);
       } catch (err) {
         console.error('Error verifying invitation token:', err);
         setError('Failed to verify invitation link');
@@ -69,7 +73,7 @@ export default function SetPasswordPage() {
     };
     verifyInviteToken();
     // Only run on mount and when searchParams changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [searchParams]);
 
   const handleSubmit = async (

@@ -220,12 +220,14 @@ export async function signInAction(data: SignInFormValues) {
  */
 export async function requireAuth(redirectTo = '/') {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user }, error } = await supabase.auth.getUser();
   
-  if (!session) {
+  if (!user || error) {
     redirect(redirectTo);
   }
   
+  // Get session for the authenticated user
+  const { data: { session } } = await supabase.auth.getSession();
   return session;
 }
 
