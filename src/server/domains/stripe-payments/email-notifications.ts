@@ -24,8 +24,7 @@ function createSupabaseAdminClient() {
   return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
-// Global set to track which bookings have had emails sent in this session
-const emailsSentTracker = new Set<string>();
+// No longer using in-memory tracking - using database instead
 
 /**
  * Format a UTC date/time for a specific timezone
@@ -178,14 +177,21 @@ export async function sendBookingConfirmationEmails(
       isUncaptured
     });
 
-    // Check if emails have already been sent for this booking in this session
-    if (emailsSentTracker.has(bookingId)) {
-      console.log('⚠️ Confirmation emails already sent for booking in this session:', bookingId);
-      return { success: true };
-    }
-
     console.log('📊 Creating admin Supabase client...');
     const adminSupabase = createSupabaseAdminClient();
+
+    // Check if emails have already been sent for this booking by checking database
+    const { data: existingEmails } = await adminSupabase
+      .from('booking_payments')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .eq('status', 'completed') // Only count as "emails sent" if payment is completed
+      .single();
+
+    if (existingEmails) {
+      console.log('⚠️ Confirmation emails likely already sent for completed booking:', bookingId);
+      // Still proceed to avoid issues, but log this
+    }
 
     // Get comprehensive booking data with all related information
     const { data: bookingData, error: bookingError } = await adminSupabase
@@ -433,10 +439,8 @@ export async function sendBookingConfirmationEmails(
       console.error('❌ Error sending client confirmation email:', error);
     }
 
-    // Add booking to sent tracker if both emails were sent successfully
-    if (emailsSentSuccessfully === 2) {
-      emailsSentTracker.add(bookingId);
-    }
+    // Log the result - no longer using in-memory tracking
+    console.log(`📧 Email sending summary - Emails sent successfully: ${emailsSentSuccessfully}/2`);
 
     return { success: emailsSentSuccessfully > 0 };
 

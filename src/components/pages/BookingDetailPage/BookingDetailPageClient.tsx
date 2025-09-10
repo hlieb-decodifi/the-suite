@@ -636,39 +636,6 @@ export function BookingDetailPageClient({
                             >
                               Refunded Amount:
                             </Typography>
-                            <Typography
-                              variant="small"
-                              className="font-medium text-green-600"
-                            >
-                              {formatCurrency(
-                                (() => {
-                                  const payment =
-                                    appointment.bookings.booking_payments;
-                                  const isOnlinePayment =
-                                    payment.payment_methods?.is_online;
-
-                                  if (isProfessional) {
-                                    // Professionals always get the recorded refunded amount
-                                    return payment.refunded_amount;
-                                  } else {
-                                    // For clients, the display depends on payment method
-                                    if (isOnlinePayment) {
-                                      // Online payment: client paid full amount (including any deposit), show refunded_amount + service_fee
-                                      return (
-                                        payment.refunded_amount +
-                                        payment.service_fee
-                                      );
-                                    } else {
-                                      // Cash payment: client only paid service fee + deposit (if any) via card
-                                      return (
-                                        payment.service_fee +
-                                        (payment.deposit_amount || 0)
-                                      );
-                                    }
-                                  }
-                                })(),
-                              )}
-                            </Typography>
                           </div>
 
                           {/* Show breakdown for clients only */}
