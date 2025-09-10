@@ -5,7 +5,22 @@ import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Clock, Pencil, Trash2, Copy, Calendar } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Plus,
+  Clock,
+  Pencil,
+  Trash2,
+  Copy,
+  Calendar,
+  Archive,
+  ArchiveRestore,
+} from 'lucide-react';
 import { ServiceUI, ServiceLimitInfo } from '@/types/services';
 import { cn } from '@/utils/cn';
 import { ExpandableText } from '@/components/common/ExpandableText/ExpandableText';
@@ -21,6 +36,8 @@ import { useRouter } from 'next/navigation';
 import {
   upsertServiceAction,
   deleteServiceAction,
+  archiveServiceAction,
+  unarchiveServiceAction,
 } from './ProfileServicesPage';
 
 export type ProfileServicesPageClientProps = {
@@ -43,6 +60,8 @@ function ServiceCard({
   service,
   onEdit,
   onDelete,
+  onArchive,
+  onUnarchive,
   onDuplicate,
   isUpdating = false,
   isBeingEdited = false,
@@ -56,6 +75,8 @@ function ServiceCard({
   service: ServiceUI;
   onEdit: (service: ServiceUI) => void;
   onDelete: () => void;
+  onArchive?: () => void;
+  onUnarchive?: () => void;
   onDuplicate?: (service: ServiceUI) => void;
   isUpdating?: boolean;
   isBeingEdited?: boolean;
@@ -91,6 +112,7 @@ function ServiceCard({
         isBeingEdited
           ? 'border-primary ring-1 ring-primary/20 shadow-sm'
           : 'border-border',
+        service.is_archived && 'bg-muted/30 border-muted-foreground/30',
       )}
     >
       {isUpdating && (
@@ -101,12 +123,32 @@ function ServiceCard({
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="space-y-1 flex-1">
-            <Typography
-              variant="large"
-              className="font-semibold text-foreground"
-            >
-              {service.name}
-            </Typography>
+            <div className="flex items-center gap-2">
+              <Typography
+                variant="large"
+                className="font-semibold text-foreground"
+              >
+                {service.name}
+              </Typography>
+              {service.is_archived && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400 cursor-help">
+                        <Archive className="h-3 w-3" />
+                        Archived
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        This service is archived and hidden from client
+                        bookings. Unarchive to make it available again.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <Typography variant="p" className="leading-tight font-medium">
                 ${service.price.toFixed(2)}
@@ -171,6 +213,32 @@ function ServiceCard({
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
+                {/* Archive/Unarchive button */}
+                {service.is_archived
+                  ? onUnarchive && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-green-600"
+                        onClick={onUnarchive}
+                        disabled={isUpdating}
+                        title="Unarchive service"
+                      >
+                        <ArchiveRestore className="h-4 w-4" />
+                      </Button>
+                    )
+                  : onArchive && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-orange-600"
+                        onClick={onArchive}
+                        disabled={isUpdating}
+                        title="Archive service"
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                    )}
                 {isDeletable && (
                   <Button
                     variant="ghost"
@@ -455,6 +523,82 @@ export function ProfileServicesPageClient({
     setIsServiceModalOpen(false);
   };
 
+  const handleArchiveService = async (service: ServiceUI) => {
+    try {
+      const result = await archiveServiceAction({
+        userId: user.id,
+        serviceId: service.id,
+      });
+
+      if (result.success) {
+        setServices((prev) =>
+          prev.map((s) =>
+            s.id === service.id
+              ? {
+                  ...s,
+                  is_archived: true,
+                  archived_at: new Date().toISOString(),
+                }
+              : s,
+          ),
+        );
+        toast({
+          title: 'Service archived',
+          description: `"${service.name}" has been archived successfully.`,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to archive service',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error archiving service:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to archive service. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUnarchiveService = async (service: ServiceUI) => {
+    try {
+      const result = await unarchiveServiceAction({
+        userId: user.id,
+        serviceId: service.id,
+      });
+
+      if (result.success) {
+        setServices((prev) =>
+          prev.map((s) =>
+            s.id === service.id
+              ? { ...s, is_archived: false, archived_at: null }
+              : s,
+          ),
+        );
+        toast({
+          title: 'Service unarchived',
+          description: `"${service.name}" has been unarchived successfully.`,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to unarchive service',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error unarchiving service:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to unarchive service. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleDeleteServiceClick = (service: ServiceUI) => {
     if (!isEditable) return;
     setServiceToDelete(service);
@@ -704,6 +848,8 @@ export function ProfileServicesPageClient({
                     service={service}
                     onEdit={handleEditService}
                     onDelete={() => handleDeleteServiceClick(service)}
+                    onArchive={() => handleArchiveService(service)}
+                    onUnarchive={() => handleUnarchiveService(service)}
                     onDuplicate={handleDuplicateService}
                     isUpdating={
                       isSubmittingService && editingService?.id === service.id

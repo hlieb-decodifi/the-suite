@@ -15,6 +15,8 @@ export type ServiceUI = {
   price: number;
   duration: string; // formatted as "2h 30m"
   description: string;
+  is_archived: boolean;
+  archived_at: string | null;
 };
 
 /**

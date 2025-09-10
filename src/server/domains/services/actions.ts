@@ -2,7 +2,7 @@
 
 import { ServiceFormValues } from '@/components/forms/ServiceForm';
 import { revalidatePath } from 'next/cache';
-import { getServicesForUser, upsertService as dbUpsertService, deleteService as dbDeleteService } from './db';
+import { getServicesForUser, upsertService as dbUpsertService, deleteService as dbDeleteService, archiveService as dbArchiveService, unarchiveService as dbUnarchiveService } from './db';
 import type { Service } from './db';
 import type { ServiceUI } from '@/types/services';
 import { formatDuration } from '@/utils/formatDuration';
@@ -27,6 +27,8 @@ function serviceToUI(service: Service): ServiceUI {
     price: service.price,
     duration: formatDuration(service.duration),
     description: service.description || '', // Ensure description is always string
+    is_archived: service.is_archived ?? false,
+    archived_at: service.archived_at ?? null,
   };
 }
 
@@ -116,7 +118,7 @@ export async function upsertService({
 }
 
 /**
- * Server Action: Delete a service
+ * Server Action: Delete a service (only if no bookings exist)
  */
 export async function deleteService({
   userId,
@@ -142,6 +144,58 @@ export async function deleteService({
 }
 
 /**
+ * Server Action: Archive a service (soft delete)
+ */
+export async function archiveService({
+  userId,
+  serviceId,
+}: {
+  userId: string;
+  serviceId: string;
+}) {
+  try {
+    await dbArchiveService({ userId, serviceId });
+    
+    // Revalidate the path to show updated data
+    revalidatePath('/profile');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error in archiveService action:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to archive service',
+    };
+  }
+}
+
+/**
+ * Server Action: Unarchive a service
+ */
+export async function unarchiveService({
+  userId,
+  serviceId,
+}: {
+  userId: string;
+  serviceId: string;
+}) {
+  try {
+    await dbUnarchiveService({ userId, serviceId });
+    
+    // Revalidate the path to show updated data
+    revalidatePath('/profile');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error in unarchiveService action:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to unarchive service',
+    };
+  }
+}
+
+/**
  * Get service limit information for a professional
  */
 export async function getServiceLimitInfo({ userId }: { userId: string }) {
@@ -162,11 +216,12 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
       };
     }
 
-    // Get current service count
+    // Get current service count (excluding archived services)
     const { count: currentCount, error: countError } = await supabase
       .from('services')
       .select('*', { count: 'exact', head: true })
-      .eq('professional_profile_id', professionalProfile.id);
+      .eq('professional_profile_id', professionalProfile.id)
+      .eq('is_archived', false);
 
     if (countError) {
       return {

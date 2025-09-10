@@ -244,6 +244,9 @@ create table services (
   stripe_sync_status text default 'pending' not null check (stripe_sync_status in ('pending', 'synced', 'error')),
   stripe_sync_error text,
   stripe_synced_at timestamp with time zone,
+  -- Soft delete/archive fields
+  is_archived boolean default false not null,
+  archived_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -259,6 +262,10 @@ on services(stripe_status);
 
 create index if not exists idx_services_stripe_sync_status 
 on services(stripe_sync_status);
+
+-- Create index for archived services for better performance
+create index if not exists idx_services_is_archived 
+on services(is_archived);
 
 /**
 * SERVICE_LIMITS
@@ -311,10 +318,11 @@ declare
   current_count integer;
   max_allowed integer;
 begin
-  -- Get current service count
+  -- Get current service count (excluding archived services)
   select count(*) into current_count
   from services
-  where professional_profile_id = new.professional_profile_id;
+  where professional_profile_id = new.professional_profile_id
+  and is_archived = false;
   
   -- Get the limit for this professional
   max_allowed := get_service_limit(new.professional_profile_id);
@@ -370,6 +378,7 @@ drop policy if exists "Anyone can view services from published professionals" on
 drop policy if exists "Professionals can view their own unpublished services" on services;
 
 -- New policies for services
+-- Professionals can manage all their services (including archived ones)
 create policy "Professionals can manage their own services"
   on services for all
   using (
@@ -380,25 +389,97 @@ create policy "Professionals can manage their own services"
     )
   );
 
+-- Public can only view non-archived services from published professionals
 create policy "Anyone can view services from published professionals"
   on services for select
   using (
-    exists (
+    is_archived = false
+    and exists (
       select 1 from professional_profiles
       where professional_profiles.id = services.professional_profile_id
       and professional_profiles.is_published = true
     )
   );
 
-create policy "Professionals can view their own services"
+-- Allow clients to view archived services they have bookings for (for history/reference)
+create policy "Clients can view archived services they have bookings for"
   on services for select
   using (
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.id = services.professional_profile_id
-      and professional_profiles.user_id = auth.uid()
+    is_archived = true
+    and exists (
+      select 1 from booking_services bs
+      join bookings b on bs.booking_id = b.id
+      where bs.service_id = services.id
+      and b.client_id = auth.uid()
     )
   );
+
+-- Helper functions for service archiving
+-- Function to archive a service (soft delete)
+create or replace function archive_service(service_id uuid)
+returns boolean as $$
+begin
+  update services
+  set 
+    is_archived = true,
+    archived_at = timezone('utc'::text, now()),
+    updated_at = timezone('utc'::text, now())
+  where id = service_id
+  and is_archived = false; -- Only archive non-archived services
+  
+  return found;
+end;
+$$ language plpgsql security definer;
+
+-- Function to unarchive a service
+create or replace function unarchive_service(service_id uuid)
+returns boolean as $$
+declare
+  professional_profile_id_val uuid;
+  current_count integer;
+  max_allowed integer;
+begin
+  -- Get the professional profile ID for this service
+  select professional_profile_id into professional_profile_id_val
+  from services
+  where id = service_id
+  and is_archived = true;
+  
+  -- If service doesn't exist or is not archived, return false
+  if professional_profile_id_val is null then
+    return false;
+  end if;
+  
+  -- Get current non-archived service count for this professional
+  select count(*) into current_count
+  from services
+  where professional_profile_id = professional_profile_id_val
+  and is_archived = false;
+  
+  -- Get the limit for this professional
+  max_allowed := get_service_limit(professional_profile_id_val);
+  
+  -- Check if unarchiving would exceed the limit
+  if current_count >= max_allowed then
+    raise exception 'Cannot unarchive service: would exceed maximum of % services allowed for this professional. Archive or delete other services first, or contact support to increase your limit.', max_allowed;
+  end if;
+  
+  -- Unarchive the service
+  update services
+  set 
+    is_archived = false,
+    archived_at = null,
+    updated_at = timezone('utc'::text, now())
+  where id = service_id
+  and is_archived = true;
+  
+  return found;
+end;
+$$ language plpgsql security definer;
+
+-- Grant execute permissions to authenticated users
+grant execute on function archive_service to authenticated;
+grant execute on function unarchive_service to authenticated;
 
 -- RLS policies for addresses
 create policy "Users can create addresses"
@@ -1272,6 +1353,11 @@ create policy "Clients can create booking services for their bookings"
       where bookings.id = booking_services.booking_id
       and bookings.client_id = auth.uid()
     )
+    and exists (
+      select 1 from services
+      where services.id = booking_services.service_id
+      and services.is_archived = false
+    )
   );
 
 create policy "Professionals can create booking services for their bookings"
@@ -1282,6 +1368,11 @@ create policy "Professionals can create booking services for their bookings"
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.id = booking_services.booking_id
       and pp.user_id = auth.uid()
+    )
+    and exists (
+      select 1 from services
+      where services.id = booking_services.service_id
+      and services.is_archived = false
     )
   );
 

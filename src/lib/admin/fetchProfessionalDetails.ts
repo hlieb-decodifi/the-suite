@@ -66,6 +66,8 @@ export async function fetchProfessionalDetails(userId: string): Promise<Professi
 				price: s.price,
 				duration: typeof s.duration === 'number' ? `${s.duration} min` : String(s.duration),
 				description: s.description ?? '',
+				is_archived: false, // Default to not archived for admin view
+				archived_at: null,
 			}));
 		}
 

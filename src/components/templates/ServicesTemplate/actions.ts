@@ -236,6 +236,7 @@ export async function getServices(
         )
       `)
       .in('professional_profile_id', publishedProfileIds)
+      .eq('is_archived', false)
       .order('id', { ascending: true })
       .or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
 
@@ -300,13 +301,15 @@ export async function getServices(
       )
     `)
     .in('professional_profile_id', publishedProfileIds)
+    .eq('is_archived', false)
     .order('id', { ascending: true });
 
   // Get total count for pagination
   const countQuery = supabase
     .from('services')
     .select('*', { count: 'exact', head: true })
-    .in('professional_profile_id', publishedProfileIds);
+    .in('professional_profile_id', publishedProfileIds)
+    .eq('is_archived', false);
 
   const { count, error: countError } = await countQuery;
 
@@ -411,6 +414,7 @@ export async function getFilteredServices(
         )
       `)
       .in('professional_profile_id', publishedProfileIds)
+      .eq('is_archived', false)
       .order('id', { ascending: true });
     
     // Add service name filter if provided
