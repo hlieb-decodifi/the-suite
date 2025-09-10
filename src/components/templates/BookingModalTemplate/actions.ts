@@ -72,6 +72,7 @@ export async function createBooking(
   clientTimezone: string = 'UTC'
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
   
   try {
     // Get the current user
@@ -223,8 +224,8 @@ export async function createBooking(
         throw new Error(`Error creating appointment: ${appointmentError?.message}`);
       }
       
-      // Insert main service into booking_services
-      const { error: mainServiceInsertError } = await supabase
+      // Insert main service into booking_services using admin client
+      const { error: mainServiceInsertError } = await adminSupabase
         .from('booking_services')
         .insert({
           booking_id: booking.id,
@@ -252,7 +253,7 @@ export async function createBooking(
             duration: service.duration,
           }));
           
-          const { error: extraServicesError } = await supabase
+          const { error: extraServicesError } = await adminSupabase
             .from('booking_services')
             .insert(extraServicesData);
           
@@ -313,7 +314,6 @@ export async function createBooking(
       }
 
       // Create payment record using admin client (secure payment data handling)
-      const adminSupabase = createAdminClient();
       const { error: paymentError } = await adminSupabase
         .from('booking_payments')
         .insert(paymentRecord);
