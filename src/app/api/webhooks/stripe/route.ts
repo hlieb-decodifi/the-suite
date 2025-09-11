@@ -629,8 +629,31 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         paymentType
       });
 
-      // Note: Confirmation emails are sent via payment_intent.amount_capturable_updated webhook
-      // to avoid duplicates and ensure proper timing regardless of webhook order
+      // Send confirmation emails for immediate full payments (non-uncaptured)
+      // Uncaptured payments will send emails via payment_intent.amount_capturable_updated webhook
+      if (paymentType === 'full' && updateData.status === 'completed' && session.metadata?.use_uncaptured !== 'true') {
+        try {
+          console.log('📧 Immediate full payment completed - sending confirmation emails');
+          const { data: appointment } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('booking_id', bookingId)
+            .single();
+
+          if (appointment) {
+            const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+            await sendBookingConfirmationEmails(bookingId, appointment.id, false);
+            console.log(`✅ Booking confirmation emails sent for immediate full payment booking ${bookingId}`);
+          } else {
+            console.log(`❌ No appointment found for booking ${bookingId}`);
+          }
+        } catch (emailError) {
+          console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
+          // Don't fail the webhook for email errors
+        }
+      } else if (session.metadata?.use_uncaptured === 'true') {
+        console.log(`⏭️ Skipping emails for uncaptured payment booking ${bookingId} - will be sent by amount_capturable_updated webhook`);
+      }
     } catch (error) {
       console.error('❌ Error processing regular payment checkout:', error);
     }
