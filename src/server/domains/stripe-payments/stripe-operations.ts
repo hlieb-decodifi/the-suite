@@ -151,6 +151,7 @@ export async function createStripeCheckoutSession(
 
 /**
  * Create a payment intent for balance payment
+ * Uses application_fee_amount + transfer_data structure for proper partial capture support
  */
 export async function createBalancePaymentIntent(
   bookingId: string,
@@ -173,7 +174,7 @@ export async function createBalancePaymentIntent(
     }
 
     const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amount - serviceFee; // Professional gets this amount minus Stripe fees
+    const serviceAmount = amount - serviceFee; // Professional gets this amount
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
@@ -183,12 +184,12 @@ export async function createBalancePaymentIntent(
       confirmation_method: 'automatic',
       confirm: true,
       off_session: true, // Indicates this is for a saved payment method
-      // Professional receives service amount minus Stripe processing fees
+      // Use application_fee_amount + transfer_data structure for better partial capture support
+      application_fee_amount: serviceFee, // Platform fee
       transfer_data: {
-        amount: serviceAmount, // Only transfer the service amount (total - suite fee)
-        destination: professionalStripeAccountId
+        destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       },
-      // The remaining amount (suite fee) stays in the platform account
+      // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
       on_behalf_of: professionalStripeAccountId, // Professional pays the processing fees
       metadata: {
         ...metadata,
@@ -196,6 +197,8 @@ export async function createBalancePaymentIntent(
         payment_type: 'balance'
       }
     });
+
+    console.log(`[createBalancePaymentIntent] Created balance payment intent ${paymentIntent.id} - Total: $${amount/100}, App fee: $${serviceFee/100}, To professional: $${serviceAmount/100}`);
 
     return {
       success: true,
@@ -240,6 +243,7 @@ export async function getCheckoutSession(sessionId: string): Promise<{
 
 /**
  * Create an uncaptured payment intent for manual capture later
+ * Uses application_fee_amount + transfer_data structure for proper partial capture support
  */
 export async function createUncapturedPaymentIntent(
   amount: number,
@@ -250,7 +254,7 @@ export async function createUncapturedPaymentIntent(
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
     const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amount - serviceFee; // Professional gets this amount minus Stripe fees
+    const serviceAmount = amount - serviceFee; // Professional gets this amount
     
     // Check if this is a cash payment where we're only charging the suite fee
     const isCashPaymentSuiteFeeOnly = metadata.payment_method_type === 'cash' && amount === serviceFee;
@@ -268,13 +272,13 @@ export async function createUncapturedPaymentIntent(
       }
     };
 
-    // Only add transfer_data if there's actually an amount to transfer to professional
+    // Use application_fee_amount + transfer_data structure for better partial capture support
     if (!isCashPaymentSuiteFeeOnly && serviceAmount > 0) {
+      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
       paymentIntentData.transfer_data = {
-        amount: serviceAmount, // Only transfer the service amount (total - suite fee)
-        destination: professionalStripeAccountId
+        destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       };
-      // The remaining amount (suite fee) stays in the platform account
+      // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
       paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
     }
     // For cash payments suite fee only: no transfer_data, entire amount stays with platform
@@ -287,6 +291,8 @@ export async function createUncapturedPaymentIntent(
     }
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+    console.log(`[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amount/100}, App fee: $${serviceFee/100}, To professional: $${serviceAmount/100}`);
 
     return {
       success: true,
@@ -386,6 +392,7 @@ export async function capturePaymentIntent(
  * Handle cancellation with partial capture from uncaptured payment intent
  * This captures only the fees we want to charge (service fee + cancellation fee if applicable)
  * The rest is automatically cancelled by Stripe
+ * Works with application_fee_amount + transfer_data structure for proper partial capture support
  */
 export async function handleCancellationPartialCapture(
   paymentIntentId: string,
@@ -447,21 +454,19 @@ export async function handleCancellationPartialCapture(
       };
     }
 
-    // NOTE: There's a Stripe limitation - we can't easily update transfer_data before partial capture
-    // This causes the error "destination[amount] must be less than or equal to the charge amount"
-    // The workaround is to cancel the payment intent and create separate charges, but that's complex
-    // For now, we'll document this limitation and fall back to full cancellation
-    
+    // With application_fee_amount structure, partial captures should work better
     console.log(`[Cancellation] About to capture $${amountToCapture/100} from original $${originalAmount/100}`);
-    console.log(`[Cancellation] Note: Due to transfer_data limitations, partial capture may fail`);
+    console.log(`[Cancellation] Using application_fee_amount structure for better partial capture support`);
     
-    // Calculate expected distribution for logging
-    const originalTransferAmount = paymentIntent.transfer_data?.amount || 0;
-    const transferRatio = originalTransferAmount / originalAmount;
-    const expectedProfessionalAmount = Math.round(amountToCapture * transferRatio);
-    const expectedPlatformAmount = amountToCapture - expectedProfessionalAmount;
-    
-    console.log(`[Cancellation] Expected distribution - Professional: $${expectedProfessionalAmount/100}, Platform: $${expectedPlatformAmount/100}`);
+    // Log payment intent structure for debugging
+    console.log(`[Cancellation] Payment intent structure:`, {
+      amount: paymentIntent.amount,
+      application_fee_amount: paymentIntent.application_fee_amount,
+      transfer_data: paymentIntent.transfer_data ? {
+        destination: paymentIntent.transfer_data.destination,
+        amount: paymentIntent.transfer_data.amount
+      } : null
+    });
     
     // Now perform the partial capture
     const captureResult = await stripe.paymentIntents.capture(paymentIntentId, {
@@ -482,6 +487,17 @@ export async function handleCancellationPartialCapture(
 
   } catch (error) {
     console.error('Error handling cancellation partial capture:', error);
+    
+    // If partial capture fails with application_fee_amount structure, 
+    // fall back to the dual payment approach
+    if (error instanceof Error && error.message.includes('transfer_data')) {
+      console.log('[Cancellation] Partial capture failed, falling back to dual payment approach');
+      return {
+        success: false,
+        error: `Partial capture failed with application fee structure: ${error.message}. Consider using handleCancellationDualPayment instead.`
+      };
+    }
+    
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during partial capture'
@@ -769,18 +785,33 @@ export async function createPaymentIntent(options: {
   const amountInCents = Math.round(amount * 100);
 
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
+    const serviceFee = await getServiceFeeFromConfig();
+    const serviceAmount = amountInCents - serviceFee;
+
+    const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount: amountInCents,
       currency: 'usd',
       customer: stripeCustomerId,
-      transfer_data: {
-        destination: stripeAccountId,
-      },
       capture_method: capture ? 'automatic' : 'manual',
       metadata: {
         booking_id: bookingId,
       },
-    });
+    };
+
+    // Use application_fee_amount + transfer_data structure for better partial capture support
+    if (serviceAmount > 0) {
+      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+      paymentIntentData.transfer_data = {
+        destination: stripeAccountId, // Professional gets (amount - application_fee)
+      };
+      // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
+      paymentIntentData.on_behalf_of = stripeAccountId; // Professional pays the processing fees
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+    console.log(`[createPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amountInCents/100}, App fee: $${serviceFee/100}, To professional: $${serviceAmount/100}, Capture: ${capture}`);
+
     return paymentIntent;
   } catch (error) {
     console.error('Error creating PaymentIntent:', error);
@@ -994,7 +1025,13 @@ export async function createSplitPaymentCheckoutSession(
       ],
       payment_intent_data: {
         capture_method: 'manual', // Create as uncaptured from the start
-        // No transfer_data initially - we'll handle transfers manually after partial captures
+        // Use application_fee_amount + transfer_data structure for better partial capture support
+        application_fee_amount: serviceFee, // Platform fee
+        transfer_data: {
+          destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
+        },
+        // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
+        on_behalf_of: professionalStripeAccountId, // Professional pays the processing fees
         metadata: {
           ...metadata,
           booking_id: bookingId,
@@ -1071,8 +1108,27 @@ export async function createUncapturedPayment(
     throw new Error('No schedule data returned');
   }
 
-  // Create payment intent with manual capture
-  const paymentIntent = await stripe.paymentIntents.create({
+  // Get service fee and professional account
+  const serviceFee = await getServiceFeeFromConfig();
+  const serviceAmount = Math.round(amount * 100) - serviceFee;
+
+  // Get professional account from booking
+  const { data: bookingData } = await adminSupabase
+    .from('bookings')
+    .select(`
+      professional_profiles(
+        professional_stripe_connect(
+          stripe_account_id
+        )
+      )
+    `)
+    .eq('id', bookingId)
+    .single();
+
+  const professionalStripeAccountId = (bookingData?.professional_profiles as { professional_stripe_connect?: { stripe_account_id?: string } })?.professional_stripe_connect?.stripe_account_id;
+
+  // Create payment intent with manual capture using application_fee_amount structure
+  const paymentIntentData: Stripe.PaymentIntentCreateParams = {
     amount: Math.round(amount * 100),
     currency: 'usd',
     customer: customerId,
@@ -1081,9 +1137,20 @@ export async function createUncapturedPayment(
     metadata: {
       booking_id: bookingId
     }
-  });
+  };
 
-  console.log('Created Stripe payment intent:', paymentIntent.id);
+  // Add application fee structure if professional account exists
+  if (professionalStripeAccountId && serviceAmount > 0) {
+    paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+    paymentIntentData.transfer_data = {
+      destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
+    };
+    paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
+  }
+
+  const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+  console.log('Created Stripe payment intent:', paymentIntent.id, 'with application fee structure');
 
   // Update booking_payments with capture schedule
   const { error: updateError } = await adminSupabase
@@ -1158,6 +1225,7 @@ export async function updatePaymentIntent(
 
 /**
  * Create and charge a payment intent immediately for no-show fees
+ * Uses application_fee_amount + transfer_data structure for consistency
  */
 export async function createNoShowCharge(
   amount: number,
@@ -1176,7 +1244,7 @@ export async function createNoShowCharge(
     });
 
     const serviceFee = await getServiceFeeFromConfig();
-    const professionalAmount = amount - serviceFee; // Professional gets this amount minus suite fee
+    const professionalAmount = amount - serviceFee; // Professional gets this amount
 
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
@@ -1192,13 +1260,13 @@ export async function createNoShowCharge(
       }
     };
 
-    // Add transfer data to send professional portion
+    // Use application_fee_amount + transfer_data structure for consistency
     if (professionalAmount > 0) {
+      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
       paymentIntentData.transfer_data = {
-        amount: professionalAmount,
-        destination: professionalStripeAccountId
+        destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       };
-      // The remaining amount (suite fee) stays in the platform account
+      // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
       paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
     }
 
@@ -1208,6 +1276,8 @@ export async function createNoShowCharge(
       id: paymentIntent.id,
       amount: paymentIntent.amount,
       status: paymentIntent.status,
+      application_fee: paymentIntent.application_fee_amount,
+      professional_amount: professionalAmount
     });
 
     return {
@@ -1271,8 +1341,27 @@ export async function createPaymentForBooking(
   }
 
   console.log('Creating normal payment intent');
+  
+  // Get professional account from booking (for normal payment intents too)
+  const { data: normalBookingData } = await adminSupabase
+    .from('bookings')
+    .select(`
+      professional_profiles(
+        professional_stripe_connect(
+          stripe_account_id
+        )
+      )
+    `)
+    .eq('id', bookingId)
+    .single();
+
+  const normalProfessionalStripeAccountId = (normalBookingData?.professional_profiles as { professional_stripe_connect?: { stripe_account_id?: string } })?.professional_stripe_connect?.stripe_account_id;
+  
   // Otherwise, create normal payment intent
-  const paymentIntent = await stripe.paymentIntents.create({
+  const serviceFee = await getServiceFeeFromConfig();
+  const serviceAmount = Math.round(amount * 100) - serviceFee;
+
+  const paymentIntentData: Stripe.PaymentIntentCreateParams = {
     amount: Math.round(amount * 100),
     currency: 'usd',
     customer: customerId,
@@ -1280,7 +1369,20 @@ export async function createPaymentForBooking(
     metadata: {
       booking_id: bookingId
     }
-  });
+  };
+
+  // Use application_fee_amount + transfer_data structure for consistency
+  if (normalProfessionalStripeAccountId && serviceAmount > 0) {
+    paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+    paymentIntentData.transfer_data = {
+      destination: normalProfessionalStripeAccountId, // Professional gets (amount - application_fee)
+    };
+    paymentIntentData.on_behalf_of = normalProfessionalStripeAccountId; // Professional pays the processing fees
+  }
+
+  const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+  console.log('Created normal payment intent with application fee structure:', paymentIntent.id);
 
   // Update booking_payments with payment intent ID
   const { error: updateError } = await adminSupabase

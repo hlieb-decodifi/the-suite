@@ -1496,11 +1496,12 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
             confirmation_method: 'automatic',
             confirm: true,
             off_session: true,
-            // Get service fee and calculate transfer amount for deposit
+            // Use application_fee_amount structure for better partial capture support
+            application_fee_amount: 100, // $1 service fee
             transfer_data: {
-              amount: parseInt(depositAmount) - 100, // Deposit minus service fee goes to professional
-              destination: professionalStripeAccountId
+              destination: professionalStripeAccountId // Professional gets (deposit - service fee)
             },
+            // Note: transfer_data.amount is automatically calculated as (deposit_amount - application_fee_amount)
             on_behalf_of: professionalStripeAccountId,
             metadata: {
               booking_id: bookingId,
@@ -1876,12 +1877,23 @@ async function handleSplitPaymentPartialCapture(session: Stripe.Checkout.Session
       return;
     }
     
-    // Partially capture only the service fee (platform keeps this)
+    // With application_fee_amount structure, partial capture should work better
+    // Capture only the service fee (platform keeps this)
     const captureResult = await stripe.paymentIntents.capture(paymentIntentId, {
       amount_to_capture: serviceFee // Only capture service fee for platform
     });
     
-    console.log(`✅ Partially captured service fee: $${captureResult.amount_received/100} for platform, Service amount: $${serviceAmount/100} remains uncaptured for professional`);
+    console.log(`✅ Partially captured service fee using application_fee_amount structure: $${captureResult.amount_received/100} for platform, Service amount: $${serviceAmount/100} remains uncaptured for professional`);
+    
+    // Log the payment intent structure for debugging
+    const updatedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    console.log(`[Split Payment] Payment intent after partial capture:`, {
+      amount: updatedPaymentIntent.amount,
+      amount_received: updatedPaymentIntent.amount_received,
+      amount_capturable: updatedPaymentIntent.amount_capturable,
+      application_fee_amount: updatedPaymentIntent.application_fee_amount,
+      status: updatedPaymentIntent.status
+    });
     
     // The remaining $serviceAmount is still uncaptured and can be:
     // 1. Fully captured later (professional gets full service amount)

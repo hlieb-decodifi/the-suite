@@ -4,6 +4,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
+import { handleDualPaymentCancellation } from './cancellation-helpers';
 import { format, toZonedTime } from 'date-fns-tz';
 import {
   sendBookingCancellationNoShowClient,
@@ -178,6 +179,24 @@ export async function cancelBookingAction(
   console.log('[Cancellation] Starting cancellation process for booking:', bookingId);
 
   try {
+    // First, let's try a simple query to see if the booking exists at all
+    console.log('[Cancellation] 🔍 Step 1: Check if booking exists');
+    const { data: simpleBooking, error: simpleError } = await adminSupabase
+      .from('bookings')
+      .select('id, status')
+      .eq('id', bookingId)
+      .single();
+    
+    console.log('[Cancellation] Simple booking check:', { 
+      exists: !!simpleBooking, 
+      error: simpleError,
+      booking: simpleBooking 
+    });
+
+    if (simpleError || !simpleBooking) {
+      console.log('[Cancellation] ❌ Booking does not exist in database');
+      return { success: false, error: 'Booking not found in database' };
+    }
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -186,6 +205,37 @@ export async function cancelBookingAction(
     }
 
     console.log('[Cancellation] 👤 User authenticated:', user.id);
+
+    // Step 2: Check appointments
+    console.log('[Cancellation] 🔍 Step 2: Check appointments');
+    const { data: appointments, error: appointmentError } = await adminSupabase
+      .from('appointments')
+      .select('id, status, start_time, booking_id')
+      .eq('booking_id', bookingId);
+    
+    console.log('[Cancellation] Appointments check:', { 
+      appointmentExists: !!appointments && appointments.length > 0, 
+      error: appointmentError,
+      appointments 
+    });
+
+    // Step 3: Check booking_payments (using admin client to bypass RLS)
+    console.log('[Cancellation] 🔍 Step 3: Check booking_payments');
+    const { data: payments, error: paymentError } = await adminSupabase
+      .from('booking_payments')
+      .select(`
+        *,
+        payment_methods(is_online)
+      `)
+      .eq('booking_id', bookingId);
+    
+    console.log('[Cancellation] Payment check:', { 
+      paymentExists: !!payments && payments.length > 0, 
+      error: paymentError,
+      errorMessage: paymentError?.message,
+      errorCode: paymentError?.code,
+      payments 
+    });
 
   // Get booking with all related data using admin client
   const { data: booking, error } = await adminSupabase
@@ -197,7 +247,7 @@ export async function cancelBookingAction(
           status,
           start_time
         ),
-        professional_profiles!inner(
+        professional_profiles(
           cancellation_policy_enabled,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
@@ -210,7 +260,7 @@ export async function cancelBookingAction(
             country
           ),
           timezone,
-          users!inner(id, first_name, last_name),
+          users(id, first_name, last_name),
           professional_stripe_connect(
             stripe_account_id
           )
@@ -221,27 +271,21 @@ export async function cancelBookingAction(
           price,
           duration,
           services(name)
-        ),
-        booking_payments!inner(
-          id,
-          amount,
-          tip_amount,
-          service_fee,
-          deposit_amount,
-          status,
-          stripe_payment_intent_id,
-          stripe_payment_method_id,
-          deposit_payment_intent_id,
-          pre_auth_scheduled_for,
-          capture_scheduled_for,
-          payment_methods!inner(is_online)
         )
       `)
       .eq('id', bookingId)
       .single();
 
     if (error || !booking) {
-      console.log('[Cancellation] ❌ Booking not found:', { error });
+      console.log('[Cancellation] ❌ Booking not found:', { 
+        error, 
+        errorMessage: error?.message,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
+        errorCode: error?.code,
+        bookingExists: !!booking,
+        bookingId 
+      });
       return { success: false, error: 'Booking not found' };
     }
 
@@ -249,8 +293,8 @@ export async function cancelBookingAction(
       bookingId: booking.id,
       status: booking.status,
       appointmentCount: booking.appointments.length,
-      hasPayment: !!booking.booking_payments,
-      paymentData: booking.booking_payments,
+      hasPayment: !!payments && payments.length > 0,
+      paymentData: payments,
       rawBookingData: booking
     });
 
@@ -265,17 +309,22 @@ export async function cancelBookingAction(
     const professionalUser = professionalProfile.users;
     const clientUser = booking.clients;
     
-    // Handle payment - booking_payments is an array, get the first one
+    // Payment data is fetched separately to bypass RLS issues
     console.log('[Cancellation] 🔍 Raw payment data:', {
-      paymentsType: typeof booking.booking_payments,
-      paymentsIsArray: Array.isArray(booking.booking_payments),
-      paymentsLength: Array.isArray(booking.booking_payments) ? booking.booking_payments.length : 'not-array',
-      paymentsData: booking.booking_payments
+      paymentsType: typeof payments,
+      paymentsIsArray: Array.isArray(payments),
+      paymentsLength: Array.isArray(payments) ? payments.length : 'not-array',
+      paymentsData: payments
     });
 
-    const payment = Array.isArray(booking.booking_payments) 
-      ? booking.booking_payments[0] 
-      : booking.booking_payments;
+    // Use the payment data we fetched separately (to bypass RLS issues)
+    const payment = payments && payments.length > 0 ? payments[0] : null;
+
+    // Check if payment record exists
+    if (!payment) {
+      console.log('[Cancellation] ❌ No payment record found for booking');
+      return { success: false, error: 'Payment record not found' };
+    }
 
     console.log('[Cancellation] 💳 Payment details:', {
       hasPayment: !!payment,
@@ -283,8 +332,10 @@ export async function cancelBookingAction(
       paymentStatus: payment?.status,
       paymentAmount: payment?.amount,
       depositAmount: payment?.deposit_amount,
+      balanceAmount: payment?.balance_amount,
       serviceFee: payment?.service_fee,
       paymentIntentId: payment?.stripe_payment_intent_id,
+      depositPaymentIntentId: payment?.deposit_payment_intent_id,
       isOnlinePayment: payment?.payment_methods?.is_online,
       preAuthScheduled: payment?.pre_auth_scheduled_for,
       captureScheduled: payment?.capture_scheduled_for
@@ -1051,9 +1102,8 @@ export async function cancelWithPolicyAction(
           start_time,
           end_time
         ),
-        professional_profiles!inner(
+        professional_profiles(
           cancellation_policy_enabled,
-          stripe_account_id,
           cancellation_24h_charge_percentage,
           cancellation_48h_charge_percentage,
           address_id,
@@ -1065,7 +1115,10 @@ export async function cancelWithPolicyAction(
             country
           ),
           timezone,
-          users!inner(id, first_name, last_name)
+          users(id, first_name, last_name),
+          professional_stripe_connect(
+            stripe_account_id
+          )
         ),
         clients:users!client_id(id, first_name, last_name, client_profiles(*)),
         booking_services(
@@ -1073,26 +1126,21 @@ export async function cancelWithPolicyAction(
           price,
           duration,
           services(name)
-        ),
-        booking_payments!inner(
-          id,
-          amount,
-          tip_amount,
-          service_fee,
-          deposit_amount,
-          status,
-          stripe_payment_intent_id,
-          stripe_payment_method_id,
-          deposit_payment_intent_id,
-          pre_auth_scheduled_for,
-          capture_scheduled_for,
-          payment_methods!inner(is_online)
         )
       `)
       .eq('id', bookingId)
       .single() as { data: BookingQueryResult | null; error: any };
 
     if (error || !booking) {
+      console.log('[CancelWithPolicy] ❌ Booking not found:', { 
+        error, 
+        errorMessage: error?.message,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
+        errorCode: error?.code,
+        bookingExists: !!booking,
+        bookingId 
+      });
       return { success: false, error: 'Booking not found' };
     }
 
@@ -1102,9 +1150,29 @@ export async function cancelWithPolicyAction(
       return { success: false, error: 'Appointment not found' };
     }
 
+    // Fetch payment record separately to bypass RLS issues
+    const { data: policyPayments, error: policyPaymentError } = await adminSupabase
+      .from('booking_payments')
+      .select(`
+        *,
+        payment_methods(is_online)
+      `)
+      .eq('booking_id', bookingId);
+
+    console.log('[CancelWithPolicy] Payment fetch:', { 
+      paymentExists: !!policyPayments && policyPayments.length > 0, 
+      error: policyPaymentError,
+      payments: policyPayments 
+    });
+
     const professionalProfile = booking.professional_profiles;
     const clientUser = booking.clients;
-    const payment = booking.booking_payments?.[0];
+    const payment = policyPayments && policyPayments.length > 0 ? policyPayments[0] : null;
+
+    // Check if payment record exists
+    if (!payment) {
+      return { success: false, error: 'Payment record not found' };
+    }
 
     // Only clients can use cancellation policy
     if (user.id !== clientUser.id) {
@@ -1181,6 +1249,51 @@ export async function cancelWithPolicyAction(
 
     // Handle payment status
     if (payment) {
+      // Check if this is a dual payment structure (has both deposit and balance)
+      const isDualPayment = !!(payment.deposit_payment_intent_id && payment.stripe_payment_intent_id);
+      
+      console.log(`[CancelWithPolicy] Payment structure detected:`, {
+        isDualPayment,
+        hasDeposit: !!payment.deposit_payment_intent_id,
+        hasBalance: !!payment.stripe_payment_intent_id,
+        depositAmount: payment.deposit_amount,
+        balanceAmount: payment.balance_amount
+      });
+      
+      if (isDualPayment) {
+        console.log('[CancelWithPolicy] ✅ DUAL PAYMENT DETECTED - Using comprehensive dual payment cancellation helper!');
+        
+        try {
+          const cancellationResult = await handleDualPaymentCancellation(
+            payment,
+            { start_time: appointment.start_time },
+            { id: booking.id },
+            professionalProfile,
+            false, // isProfessional = false (this is client-initiated with policy)
+            user.id,
+            cancellationReason,
+            true // forcePolicy = true (this is the policy cancellation action)
+          );
+          
+          console.log('[CancelWithPolicy] Dual payment cancellation result:', cancellationResult);
+          
+          if (cancellationResult.error) {
+            throw new Error(cancellationResult.error);
+          }
+          
+          chargedSuccessfully = cancellationResult.chargeAmount > 0;
+          
+          // Skip the old single payment logic since we handled it with the dual payment helper
+          console.log('[CancelWithPolicy] ✅ Dual payment cancellation completed successfully');
+          
+        } catch (dualPaymentError) {
+          console.error('[CancelWithPolicy] ❌ Dual payment cancellation failed:', dualPaymentError);
+          chargedSuccessfully = false;
+        }
+        
+        // Skip the rest of the payment processing since dual payment helper handled everything
+      } else {
+      
       // Handle uncaptured payment intent for cancellations with policy
       if (payment.stripe_payment_intent_id) {
         try {
@@ -1191,9 +1304,9 @@ export async function cancelWithPolicyAction(
             const customerId = paymentIntent.customer as string;
             const paymentMethodId = payment.stripe_payment_method_id;
             
-            console.log(`[Debug] Customer ID: ${customerId}, Payment Method ID: ${paymentMethodId}, Professional Stripe Account: ${professionalProfile.stripe_account_id}`);
+            console.log(`[Debug] Customer ID: ${customerId}, Payment Method ID: ${paymentMethodId}`);
             
-            if (customerId && professionalProfile.stripe_account_id) {
+            if (customerId) {
               // For split payment architecture: service fee already captured by platform
               // Now we need to capture cancellation fee and transfer it to professional
               const totalServiceAmount = booking.booking_services.reduce((sum, bs) => sum + bs.price, 0);
@@ -1256,9 +1369,9 @@ export async function cancelWithPolicyAction(
                       customer: customerId,
                       confirm: true,
                       payment_method_types: ['card'],
+                      application_fee_amount: 100, // $1 platform fee
                       transfer_data: {
-                        destination: professionalProfile.stripe_account_id,
-                        amount: transferAmount // Transfer amount after Stripe fees
+                        destination: (professionalProfile as any)?.professional_stripe_connect?.[0]?.stripe_account_id || null
                       },
                       metadata: {
                         payment_type: 'cancellation_fee',
@@ -1290,7 +1403,7 @@ export async function cancelWithPolicyAction(
               }
             } else {
               // Missing required data, cannot do partial capture
-              console.error(`Missing required data for split payment cancellation - Customer: ${customerId}, Professional Account: ${professionalProfile.stripe_account_id}`);
+              console.error(`Missing required data for split payment cancellation - Customer: ${customerId}`);
               await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
               console.log(`Fallback: Cancelled entire payment intent due to missing data: ${payment.stripe_payment_intent_id}`);
             }
@@ -1302,47 +1415,12 @@ export async function cancelWithPolicyAction(
           console.error('Failed to handle payment intent during cancellation:', stripeError);
         }
       }
+      } // End of else block for single payment processing
+    }
 
-      // Handle deposit refund if exists and separate from main payment
-      if (payment.deposit_payment_intent_id && (payment.deposit_amount || 0) > 0) {
-        console.log(`[Policy Deposit Refund] Processing deposit refund: ${payment.deposit_payment_intent_id}`);
-        try {
-          const depositPaymentIntent = await stripe.paymentIntents.retrieve(payment.deposit_payment_intent_id);
-          console.log(`[Policy Deposit Refund] Deposit status: ${depositPaymentIntent.status}`);
-          console.log(`[Policy Deposit Refund] Deposit amount: $${depositPaymentIntent.amount / 100}`);
-
-          if (depositPaymentIntent.status === 'succeeded') {
-            // Refund the deposit (deposits are always fully refunded even with cancellation policy)
-            const depositRefund = await stripe.refunds.create({
-              payment_intent: payment.deposit_payment_intent_id,
-              metadata: {
-                booking_id: bookingId,
-                reason: `Deposit refund - Client cancelled booking with policy`
-              }
-            });
-            
-            console.log(`[Policy Deposit Refund] ✅ Deposit refund created: ${depositRefund.id} - Status: ${depositRefund.status} - Amount: $${depositRefund.amount / 100}`);
-            
-            if (depositRefund.status === 'failed') {
-              console.error(`[Policy Deposit Refund] ❌ Deposit refund failed:`, depositRefund);
-              throw new Error(`Deposit refund failed: ${depositRefund.failure_reason || 'Unknown reason'}`);
-            }
-          } else if (depositPaymentIntent.status === 'requires_capture') {
-            // Cancel uncaptured deposit
-            await stripe.paymentIntents.cancel(payment.deposit_payment_intent_id);
-            console.log(`[Policy Deposit Refund] ✅ Uncaptured deposit cancelled`);
-          }
-        } catch (depositError) {
-          console.error('[Policy Deposit Refund] ❌ Failed to handle deposit during cancellation:', depositError);
-        }
-      }
-
-      const newPaymentStatus = chargeAmount > 0 ? 'partially_refunded' : 'refunded';
-      
-      // Calculate refund amount (original amount minus cancellation fee and service fee)
-      const originalAmount = payment.amount + payment.tip_amount; // Total originally charged to customer
-      const serviceFee = payment.service_fee || 1.00; // Default to $1 if not set
-      const refundAmount = originalAmount - chargeAmount - serviceFee;
+    // Update payment record status after cancellation processing
+    if (payment) {
+      const newPaymentStatus = chargedSuccessfully ? 'partially_refunded' : 'refunded';
       
       const { error: updatePaymentError } = await adminSupabase
         .from('booking_payments')
@@ -1350,7 +1428,6 @@ export async function cancelWithPolicyAction(
           status: newPaymentStatus,
           pre_auth_scheduled_for: null,
           capture_scheduled_for: null,
-          refunded_amount: refundAmount,
           refund_reason: `Cancellation: ${cancellationReason}`,
           refunded_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

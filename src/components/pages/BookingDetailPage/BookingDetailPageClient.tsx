@@ -628,7 +628,7 @@ export function BookingDetailPageClient({
                         <Typography className="font-medium text-red-700 mb-2">
                           Refund Processed
                         </Typography>
-                        <div className="grid grid-cols-1 gap-2">
+                        {/* <div className="grid grid-cols-1 gap-2">
                           <div className="flex justify-between">
                             <Typography
                               variant="small"
@@ -638,7 +638,6 @@ export function BookingDetailPageClient({
                             </Typography>
                           </div>
 
-                          {/* Show breakdown for clients only */}
                           {isClient &&
                             appointment.bookings.booking_payments.service_fee >
                               0 &&
@@ -741,7 +740,7 @@ export function BookingDetailPageClient({
                               </Typography>
                             </div>
                           )}
-                        </div>
+                        </div> */}
                         {appointment.bookings.booking_payments
                           .refund_reason && (
                           <div className="mt-2">
