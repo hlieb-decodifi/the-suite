@@ -1936,18 +1936,8 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
 
     const supabase = createAdminClient();
 
-    // Check if this is a deposit flow by looking for a deposit payment intent ID
-    const { data: paymentData } = await supabase
-      .from('booking_payments')
-      .select('deposit_payment_intent_id')
-      .eq('booking_id', bookingId)
-      .single();
-
-    // If this booking has a deposit payment intent, emails were already sent in handleSetupIntentSucceeded
-    if (paymentData?.deposit_payment_intent_id) {
-      console.log(`📧 Skipping confirmation emails for booking ${bookingId} - already sent for deposit flow`);
-      return;
-    }
+    // For dual payment flows (deposit + balance), emails should be sent when balance is authorized
+    // The logic below will determine if this is the correct payment intent to trigger emails
 
     // Get appointment details
     const { data: appointmentData, error: appointmentError } = await supabase
@@ -1961,23 +1951,31 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
       return;
     }
 
-    // Send booking confirmation emails for dual payment flows (deposit + balance)
+    // Send booking confirmation emails
     try {
-      // Only send emails if this is the balance payment being authorized
-      // Check if this payment intent is the balance payment (not deposit)
-      const { data: paymentData } = await supabase
+      // Get payment data to determine if this is a dual payment scenario
+      const { data: fullPaymentData } = await supabase
         .from('booking_payments')
         .select('stripe_payment_intent_id, deposit_payment_intent_id, id')
         .eq('booking_id', bookingId)
         .single();
 
-      if (paymentData && paymentData.stripe_payment_intent_id === paymentIntent.id) {
-        // This is the balance payment intent - send emails now
+      if (fullPaymentData?.deposit_payment_intent_id && fullPaymentData?.stripe_payment_intent_id) {
+        // Dual payment scenario - only send emails when the balance payment is authorized
+        if (fullPaymentData.stripe_payment_intent_id === paymentIntent.id) {
+          console.log(`📧 Dual payment detected - balance payment authorized, sending confirmation emails for booking ${bookingId}`);
+          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+          await sendBookingConfirmationEmails(bookingId, appointmentData.id, true);
+          console.log(`✅ Booking confirmation emails sent for dual payment booking ${bookingId}`);
+        } else {
+          console.log(`⏭️ Skipping emails - payment intent ${paymentIntent.id} is the deposit payment, waiting for balance payment authorization`);
+        }
+      } else {
+        // Single payment scenario - send emails for any payment authorization
+        console.log(`📧 Single payment detected - sending confirmation emails for booking ${bookingId}`);
         const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
         await sendBookingConfirmationEmails(bookingId, appointmentData.id, true);
-        console.log(`✅ Booking confirmation emails sent for dual payment booking ${bookingId}`);
-      } else {
-        console.log(`⏭️ Skipping emails - payment intent ${paymentIntent.id} is not the balance payment for booking ${bookingId}`);
+        console.log(`✅ Booking confirmation emails sent for single payment booking ${bookingId}`);
       }
     } catch (emailError) {
       console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
