@@ -629,9 +629,9 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         paymentType
       });
 
-      // Send confirmation emails for immediate full payments (non-uncaptured)
-      // Uncaptured payments will send emails via payment_intent.amount_capturable_updated webhook
-      if (paymentType === 'full' && updateData.status === 'completed' && session.metadata?.use_uncaptured !== 'true') {
+      // Send confirmation emails for immediate full payments (including immediate uncaptured)
+      // Only skip emails for scheduled/deposit flows
+      if (paymentType === 'full' && updateData.status === 'completed' && session.metadata?.payment_flow === 'immediate_full_payment') {
         try {
           console.log('📧 Immediate full payment completed - sending confirmation emails');
           const { data: appointment } = await supabase
@@ -642,8 +642,10 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
 
           if (appointment) {
             const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-            await sendBookingConfirmationEmails(bookingId, appointment.id, false);
-            console.log(`✅ Booking confirmation emails sent for immediate full payment booking ${bookingId}`);
+            // For uncaptured payments, pass true to indicate uncaptured flow
+            const isUncaptured = session.metadata?.use_uncaptured === 'true';
+            await sendBookingConfirmationEmails(bookingId, appointment.id, isUncaptured);
+            console.log(`✅ Booking confirmation emails sent for immediate full payment booking ${bookingId} (uncaptured: ${isUncaptured})`);
           } else {
             console.log(`❌ No appointment found for booking ${bookingId}`);
           }
@@ -651,8 +653,8 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
           console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
           // Don't fail the webhook for email errors
         }
-      } else if (session.metadata?.use_uncaptured === 'true') {
-        console.log(`⏭️ Skipping emails for uncaptured payment booking ${bookingId} - will be sent by amount_capturable_updated webhook`);
+      } else {
+        console.log(`⏭️ Skipping emails for booking ${bookingId} - payment_type: ${paymentType}, status: ${updateData.status}, flow: ${session.metadata?.payment_flow}`);
       }
     } catch (error) {
       console.error('❌ Error processing regular payment checkout:', error);
