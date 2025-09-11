@@ -628,6 +628,9 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         paymentIntentId,
         paymentType
       });
+
+      // Note: Confirmation emails are sent via payment_intent.amount_capturable_updated webhook
+      // to avoid duplicates and ensure proper timing regardless of webhook order
     } catch (error) {
       console.error('❌ Error processing regular payment checkout:', error);
     }

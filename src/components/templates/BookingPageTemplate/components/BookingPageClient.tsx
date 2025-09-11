@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
-import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LeafletMap } from '@/components/common/LeafletMap';
@@ -31,7 +31,6 @@ export function BookingPageClient({
   preselectedDate?: string;
 }) {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<{
     timeSlot?: string;
     totalPrice: number;
@@ -67,6 +66,7 @@ export function BookingPageClient({
     isLoadingPaymentMethods,
     isLoadingTimeSlots,
     isLoadingCalendar,
+    isSubmitting,
     handleSuccess,
     selectedDate,
     handleDateSelect,
@@ -111,10 +111,6 @@ export function BookingPageClient({
     router.back();
   };
 
-  // Handle submission state changes
-  const handleSubmitStateChange = (submitting: boolean) => {
-    setIsSubmitting(submitting);
-  };
 
   // Ensure we always have an array of payment methods
   const availablePaymentMethods = Array.isArray(paymentMethods)
@@ -259,7 +255,6 @@ export function BookingPageClient({
             onSubmitSuccess={handleSuccess}
             selectedDate={selectedDate}
             onSelectDate={handleDateSelect}
-            onSubmitStateChange={handleSubmitStateChange}
             onFormDataChange={setFormData}
             isCalendarLoading={isLoadingCalendar}
             professionalTimezone={professionalTimezone}
@@ -407,7 +402,14 @@ export function BookingPageClient({
                     size="lg"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? 'Processing...' : 'Book Now'}
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Book Now'
+                    )}
                   </Button>
                 </div>
               </CardContent>
