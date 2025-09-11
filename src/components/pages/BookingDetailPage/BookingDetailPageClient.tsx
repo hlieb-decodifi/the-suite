@@ -301,9 +301,9 @@ export function BookingDetailPageClient({
     return false;
   };
 
-  const handleCopyBookingId = async () => {
+  const handleCopyBookingId = async (id: string) => {
     try {
-      await navigator.clipboard.writeText(appointment.id);
+      await navigator.clipboard.writeText(id);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
@@ -1637,7 +1637,7 @@ export function BookingDetailPageClient({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handleCopyBookingId}
+                    onClick={() => handleCopyBookingId(appointment.booking_id)}
                     className="h-6 w-6 p-0"
                   >
                     <CopyIcon className="h-3 w-3" />

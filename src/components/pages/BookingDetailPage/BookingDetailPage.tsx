@@ -137,6 +137,11 @@ export async function BookingDetailPage({
 
   const appointment = await getAppointmentById(id, isAdmin);
 
+  // If appointment not found, redirect to not found page
+  if (!appointment) {
+    notFound();
+  }
+
   const isProfessional =
     appointment.bookings.professionals?.user_id === user.id;
   const isClient = appointment.bookings.client_id === user.id;
@@ -172,7 +177,7 @@ export async function BookingDetailPage({
 export async function getAppointmentById(
   appointmentId: string,
   isAdmin: boolean = false,
-): Promise<DetailedAppointmentType> {
+): Promise<DetailedAppointmentType | null> {
   try {
     // Use admin client for admin users, else regular client
     const supabase = isAdmin
@@ -293,11 +298,11 @@ export async function getAppointmentById(
 
     if (error) {
       console.error('Error fetching appointment:', error);
-      notFound();
+      return null;
     }
 
     if (!data) {
-      notFound();
+      return null;
     }
 
     // Transform the data to match the expected format
@@ -432,7 +437,8 @@ export async function getAppointmentById(
     return transformedData;
   } catch (error) {
     console.error('Error in getAppointmentById:', error);
-    throw new Error('Failed to get appointment details');
+    // Return null instead of throwing, let the calling component handle the error
+    return null;
   }
 }
 
