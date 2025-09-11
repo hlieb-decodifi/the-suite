@@ -323,15 +323,17 @@ export async function createBooking(
       }
       
       // For cash payments, send confirmation emails immediately
-      // if (!paymentMethod?.is_online) {
-      //   try {
-      //     const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-      //     await sendBookingConfirmationEmails(booking.id, appointment.id, false);
-      //   } catch (emailError) {
-      //     console.error('Failed to send booking confirmation emails:', emailError);
-      //     // Don't fail the booking creation if email sending fails
-      //   }
-      // }
+      if (!paymentMethod?.is_online) {
+        try {
+          console.log('💰 Cash payment detected - sending confirmation emails immediately');
+          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+          await sendBookingConfirmationEmails(booking.id, appointment.id, false);
+          console.log('✅ Cash payment confirmation emails sent successfully');
+        } catch (emailError) {
+          console.error('❌ Failed to send booking confirmation emails:', emailError);
+          // Don't fail the booking creation if email sending fails
+        }
+      }
       
       // Return the booking details
       return { bookingId: booking.id, totalPrice };
