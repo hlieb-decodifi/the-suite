@@ -87,7 +87,7 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
       role: 'admin',
       role_id: ADMIN_ROLE_ID,
     },
-    redirectTo: `${getURL()}auth/set-password`,
+    redirectTo: `${getURL()}auth/set-password?type=admin_invite`,
   });
 
   if (inviteError) {
@@ -127,6 +127,12 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
       data.userType = 'client';
     }
     
+    // Determine the correct redirect destination based on user type
+    let finalRedirectTo = redirectTo;
+    if (!finalRedirectTo) {
+      finalRedirectTo = data.userType === 'client' ? '/client-profile' : '/profile';
+    }
+    
     // Create user with authentication
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -137,7 +143,7 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
           last_name: data.lastName,
           role: data.userType,
         },
-        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(redirectTo || '/profile')}`,
+        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(finalRedirectTo)}&type=email_verification`,
       },
     });
 
@@ -214,12 +220,14 @@ export async function signInAction(data: SignInFormValues) {
  */
 export async function requireAuth(redirectTo = '/') {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user }, error } = await supabase.auth.getUser();
   
-  if (!session) {
+  if (!user || error) {
     redirect(redirectTo);
   }
   
+  // Get session for the authenticated user
+  const { data: { session } } = await supabase.auth.getSession();
   return session;
 }
 
@@ -241,7 +249,7 @@ export async function resetPasswordAction(email: string) {
   
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getURL()}/auth/reset-password`,
+      redirectTo: `${getURL()}/auth/reset-password?type=password_reset`,
     });
 
     if (error) {
@@ -405,7 +413,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
     const { error } = await supabase.auth.updateUser({
       email: newEmail,
     }, {
-      emailRedirectTo: `${getURL()}auth/email-confirmed`,
+      emailRedirectTo: `${getURL()}auth/email-confirmed?type=email_change`,
     });
 
     if (error) {

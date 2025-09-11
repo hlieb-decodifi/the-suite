@@ -33,10 +33,11 @@ export type ChatMessage = {
   conversation_id: string;
   sender_id: string;
   content: string;
-  is_read: boolean;
   created_at: string;
   updated_at: string;
   attachments?: MessageAttachment[];
+  // Read status is now tracked separately via message_read_status table
+  read_by_current_user?: boolean;
 }
 
 export type Conversation = {

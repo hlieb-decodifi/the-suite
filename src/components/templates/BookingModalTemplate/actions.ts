@@ -1,7 +1,7 @@
 'use server';
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { format } from 'date-fns';
@@ -72,6 +72,7 @@ export async function createBooking(
   clientTimezone: string = 'UTC'
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
   
   try {
     // Get the current user
@@ -82,6 +83,24 @@ export async function createBooking(
     
     if (authError || !user) {
       throw new Error('Not authenticated');
+    }
+
+    // Update client timezone in their profile if provided
+    if (clientTimezone && clientTimezone !== 'UTC') {
+      try {
+        const { error: timezoneUpdateError } = await supabase
+          .from('client_profiles')
+          .update({ timezone: clientTimezone })
+          .eq('user_id', user.id);
+
+        if (timezoneUpdateError) {
+          console.error('Failed to update client timezone:', timezoneUpdateError);
+          // Don't fail the booking if timezone update fails
+        }
+      } catch (error) {
+        console.error('Error updating client timezone:', error);
+        // Don't fail the booking if timezone update fails
+      }
     }
     
     // Get the main service details
@@ -205,8 +224,8 @@ export async function createBooking(
         throw new Error(`Error creating appointment: ${appointmentError?.message}`);
       }
       
-      // Insert main service into booking_services
-      const { error: mainServiceInsertError } = await supabase
+      // Insert main service into booking_services using admin client
+      const { error: mainServiceInsertError } = await adminSupabase
         .from('booking_services')
         .insert({
           booking_id: booking.id,
@@ -234,7 +253,7 @@ export async function createBooking(
             duration: service.duration,
           }));
           
-          const { error: extraServicesError } = await supabase
+          const { error: extraServicesError } = await adminSupabase
             .from('booking_services')
             .insert(extraServicesData);
           
@@ -244,17 +263,60 @@ export async function createBooking(
         }
       }
       
-      // Create payment record
-      const { error: paymentError } = await supabase
+      // Calculate payment schedule for online payments  
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const paymentRecord: any = {
+        booking_id: booking.id,
+        payment_method_id: formData.paymentMethodId,
+        amount: totalPrice,
+        tip_amount: formData.tipAmount || 0,
+        service_fee: serviceFee,
+        status: paymentStatus,
+        capture_scheduled_for: null as string | null,
+        pre_auth_scheduled_for: null as string | null,
+      };
+
+      // For online payments, calculate and set payment schedule
+      if (paymentMethod?.is_online) {
+        try {
+          const { data: scheduleData, error: scheduleError } = await supabase
+            .rpc('calculate_payment_schedule', {
+              appointment_start_time: utcDate.toISOString(),
+              appointment_end_time: utcEndDate.toISOString()
+            });
+
+          if (!scheduleError && scheduleData && scheduleData.length > 0) {
+            const schedule = scheduleData[0];
+            
+            if (schedule?.should_pre_auth_now) {
+              // Appointment is <6 days: Pre-auth happens immediately, no scheduling needed
+              paymentRecord.capture_scheduled_for = schedule?.capture_date;
+              paymentRecord.status = 'pending'; // Will be updated to 'authorized' when payment intent is created
+              console.log('Immediate pre-auth schedule (appointment <6 days):', {
+                captureDate: schedule?.capture_date,
+                immediatePreAuth: true
+              });
+            } else if (schedule) {
+              // Appointment is >6 days: Schedule both pre-auth and capture
+              paymentRecord.pre_auth_scheduled_for = schedule?.pre_auth_date;
+              paymentRecord.capture_scheduled_for = schedule?.capture_date;
+              console.log('Scheduled payment (appointment >6 days):', {
+                preAuthDate: schedule?.pre_auth_date,
+                captureDate: schedule?.capture_date,
+                scheduledPreAuth: true
+              });
+            }
+          }
+        } catch (scheduleError) {
+          console.error('Failed to calculate payment schedule:', scheduleError);
+          // Continue without schedule - will be handled later in the payment flow
+        }
+      }
+
+      // Create payment record using admin client (secure payment data handling)
+      const { error: paymentError } = await adminSupabase
         .from('booking_payments')
-        .insert({
-          booking_id: booking.id,
-          payment_method_id: formData.paymentMethodId,
-          amount: totalPrice,
-          tip_amount: formData.tipAmount || 0,
-          service_fee: serviceFee,
-          status: paymentStatus,
-        });
+        .insert(paymentRecord);
       
       if (paymentError) {
         throw new Error(`Error creating payment record: ${paymentError.message}`);

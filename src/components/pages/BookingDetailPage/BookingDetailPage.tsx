@@ -44,6 +44,7 @@ export type DetailedAppointmentType = {
       stripe_payment_intent_id?: string | null;
       stripe_payment_method_id?: string | null;
       stripe_checkout_session_id?: string | null;
+      deposit_payment_intent_id?: string | null;
       deposit_amount: number;
       balance_amount: number;
       payment_type: 'full' | 'deposit' | 'balance';
@@ -107,7 +108,13 @@ export type DetailedAppointmentType = {
   };
 };
 
-export async function BookingDetailPage({ id }: { id: string }) {
+export async function BookingDetailPage({
+  id,
+  showReviewPrompt = false,
+}: {
+  id: string;
+  showReviewPrompt?: boolean;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -130,7 +137,13 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
   const appointment = await getAppointmentById(id, isAdmin);
 
-  const isProfessional = appointment.bookings.professionals?.user_id === user.id;
+  // If appointment not found, redirect to not found page
+  if (!appointment) {
+    notFound();
+  }
+
+  const isProfessional =
+    appointment.bookings.professionals?.user_id === user.id;
   const isClient = appointment.bookings.client_id === user.id;
 
   if (!isProfessional && !isClient && !isAdmin) {
@@ -139,9 +152,12 @@ export async function BookingDetailPage({ id }: { id: string }) {
 
   // Fetch existing support request for this appointment
   const existingSupportRequest = await getExistingSupportRequest(id, isAdmin);
-  
+
   // Fetch review status for this appointment
-  const reviewStatus = await getReviewStatusForAppointment(appointment.booking_id, isAdmin);
+  const reviewStatus = await getReviewStatusForAppointment(
+    appointment.booking_id,
+    isAdmin,
+  );
 
   return (
     <BookingDetailPageClient
@@ -152,6 +168,7 @@ export async function BookingDetailPage({ id }: { id: string }) {
       isAdmin={isAdmin}
       existingSupportRequest={existingSupportRequest}
       reviewStatus={reviewStatus}
+      showReviewPrompt={showReviewPrompt}
     />
   );
 }
@@ -160,7 +177,7 @@ export async function BookingDetailPage({ id }: { id: string }) {
 export async function getAppointmentById(
   appointmentId: string,
   isAdmin: boolean = false,
-): Promise<DetailedAppointmentType> {
+): Promise<DetailedAppointmentType | null> {
   try {
     // Use admin client for admin users, else regular client
     const supabase = isAdmin
@@ -225,6 +242,7 @@ export async function getAppointmentById(
             stripe_payment_intent_id,
             stripe_payment_method_id,
             stripe_checkout_session_id,
+            deposit_payment_intent_id,
             payment_methods(
               id,
               name,
@@ -280,11 +298,11 @@ export async function getAppointmentById(
 
     if (error) {
       console.error('Error fetching appointment:', error);
-      notFound();
+      return null;
     }
 
     if (!data) {
-      notFound();
+      return null;
     }
 
     // Transform the data to match the expected format
@@ -321,6 +339,9 @@ export async function getAppointmentById(
                 data.bookings.booking_payments.stripe_payment_method_id ?? null,
               stripe_checkout_session_id:
                 data.bookings.booking_payments.stripe_checkout_session_id ??
+                null,
+              deposit_payment_intent_id:
+                data.bookings.booking_payments.deposit_payment_intent_id ??
                 null,
               authorization_expires_at:
                 data.bookings.booking_payments.authorization_expires_at ?? null,
@@ -366,9 +387,13 @@ export async function getAppointmentById(
                 first_name:
                   data.bookings.professionals.users.first_name ?? null,
                 last_name: data.bookings.professionals.users.last_name ?? null,
-                avatar_url: Array.isArray(data.bookings.professionals.users.profile_photos)
-                  ? (data.bookings.professionals.users.profile_photos[0]?.url ?? null)
-                  : (data.bookings.professionals.users.profile_photos?.url ?? null),
+                avatar_url: Array.isArray(
+                  data.bookings.professionals.users.profile_photos,
+                )
+                  ? (data.bookings.professionals.users.profile_photos[0]?.url ??
+                    null)
+                  : (data.bookings.professionals.users.profile_photos?.url ??
+                    null),
               },
             }
           : null,
@@ -412,84 +437,21 @@ export async function getAppointmentById(
     return transformedData;
   } catch (error) {
     console.error('Error in getAppointmentById:', error);
-    throw new Error('Failed to get appointment details');
+    // Return null instead of throwing, let the calling component handle the error
+    return null;
   }
 }
 
 // Check if user has permission to view this appointment
-function checkAppointmentPermission(
-  appointment: DetailedAppointmentType,
-  userId: string,
-  isProfessional: boolean,
-): boolean {
-  if (isProfessional) {
-    // Professional can only view their own appointments
-    return (
-      appointment.bookings.professionals?.user_id === userId ||
-      appointment.bookings.professionals?.users.id === userId
-    );
-  } else {
-    // Client can only view their own appointments
-    return (
-      appointment.bookings.client_id === userId ||
-      appointment.bookings.clients?.id === userId
-    );
-  }
-}
+// Note: checkAppointmentPermission function removed - was only used by removed updateAppointmentStatus function
 
-// Update appointment status
-export async function updateAppointmentStatus(
-  appointmentId: string,
-  status: string,
-  userId: string,
-  isProfessional: boolean,
-) {
-  try {
-    const supabase = await createClient();
-
-    // First verify that the user has permission to update this appointment
-    const appointment = await getAppointmentById(appointmentId);
-
-    const hasPermission = checkAppointmentPermission(
-      appointment,
-      userId,
-      isProfessional,
-    );
-
-    if (!hasPermission) {
-      throw new Error('You do not have permission to update this appointment');
-    }
-
-    // Update the appointment status
-    const { error: updateError } = await supabase
-      .from('appointments')
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', appointmentId);
-
-    if (updateError) {
-      throw new Error(`Failed to update appointment: ${updateError.message}`);
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating appointment status:', error);
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Failed to update appointment status',
-    };
-  }
-}
+// Note: updateAppointmentStatus function removed - was unused
+// All appointment status updates now handled by server actions or BookingDetailPage/actions.ts
 
 // Get existing support request for an appointment
 async function getExistingSupportRequest(
   appointmentId: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
 ): Promise<{
   id: string;
   status: string;
@@ -527,7 +489,7 @@ async function getExistingSupportRequest(
 // Get review status for a booking
 async function getReviewStatusForAppointment(
   bookingId: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
 ): Promise<{
   canReview: boolean;
   hasReview: boolean;
@@ -539,16 +501,21 @@ async function getReviewStatusForAppointment(
   } | null;
 } | null> {
   try {
-    const { getReviewStatus } = await import('@/server/domains/reviews/actions');
+    const { getReviewStatus } = await import(
+      '@/server/domains/reviews/actions'
+    );
     const result = await getReviewStatus(bookingId, isAdmin);
-    
+
     console.log('Review status result:', { bookingId, isAdmin, result });
-    
+
     if (result.success && result.reviewStatus) {
       return result.reviewStatus;
     }
-    
-    console.log('Review status returned null:', result.error || 'No review status data');
+
+    console.log(
+      'Review status returned null:',
+      result.error || 'No review status data',
+    );
     return null;
   } catch (error) {
     console.error('Error fetching review status:', error);

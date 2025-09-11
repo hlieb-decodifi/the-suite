@@ -1,7 +1,7 @@
 import { BookingFormValues } from '@/components/forms/BookingForm';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { useToast } from '@/components/ui/use-toast';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BookingDetailsState,
   createBookingDetails,
@@ -124,8 +124,7 @@ export function useBookingState(props: BookingModalProps) {
   const { 
     data: availableTimeSlots = [], 
     isLoading: isLoadingTimeSlots,
-    refetch: refetchTimeSlots,
-    error: timeSlotsError
+    refetch: refetchTimeSlots
   } = useAvailableTimeSlots(
     professionalProfileId,
     formattedDate,
@@ -135,30 +134,7 @@ export function useBookingState(props: BookingModalProps) {
     isOpen && Boolean(selectedDate) && !isLoadingTimezone
   );
 
-  // Log time slots data and errors
-  useEffect(() => {
-    // console.log('Time slots query state:', {
-    //   professionalProfileId,
-    //   formattedDate,
-    //   professionalTimezone,
-    //   clientTimezone,
-    //   isEnabled: isOpen && Boolean(selectedDate) && !isLoadingTimezone,
-    //   availableTimeSlots,
-    //   isLoadingTimeSlots,
-    //   error: timeSlotsError
-    // });
-  }, [
-    professionalProfileId,
-    formattedDate,
-    professionalTimezone,
-    clientTimezone,
-    isOpen,
-    selectedDate,
-    isLoadingTimezone,
-    availableTimeSlots,
-    isLoadingTimeSlots,
-    timeSlotsError
-  ]);
+  // Removed unnecessary useEffect that was causing re-render loops
 
   // Use React Query to fetch payment methods
   const { 

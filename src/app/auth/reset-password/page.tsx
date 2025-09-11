@@ -34,22 +34,22 @@ export default function ResetPasswordPage() {
       try {
         const supabase = createClient();
 
-        // Get the session to check if user is authenticated via password reset
+        // Verify user is authenticated after password reset token exchange
         const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-        if (sessionError || !session) {
+        if (userError || !user) {
           setError('Invalid or expired password reset link');
           return;
         }
 
-        // Get user email
-        setUserEmail(session.user.email || null);
-        // Get access and refresh tokens
-        setAccessToken(session.access_token || null);
-        setRefreshToken(session.refresh_token || null);
+        // Get session for authenticated user
+        const { data: { session } } = await supabase.auth.getSession();
+        setUserEmail(user.email || null);
+        setAccessToken(session?.access_token || null);
+        setRefreshToken(session?.refresh_token || null);
       } catch (err) {
         console.error('Error verifying password reset token:', err);
         setError('Failed to verify password reset link');
@@ -84,8 +84,8 @@ export default function ResetPasswordPage() {
         // Check if user is admin and redirect accordingly
         try {
           const supabase = createClient();
-          const { data: { session } } = await supabase.auth.getSession();
-          const userId = session?.user?.id;
+          const { data: { user } } = await supabase.auth.getUser();
+          const userId = user?.id;
           let isAdmin = false;
           if (userId) {
             const { data: adminResult } = await supabase.rpc('is_admin', { user_uuid: userId });

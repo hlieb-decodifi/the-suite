@@ -164,7 +164,6 @@ export async function createSupportRequest({
       conversation_id: conversation.id,
       sender_id: clientId,
       content: `Support request opened: ${reason}`,
-      is_read: false,
     });
 
     if (messageError) {
@@ -262,7 +261,6 @@ export async function initiateRefund({
         content: `Refund of $${refund_amount.toFixed(2)} has been initiated. ${
           professional_notes ? `Note: ${professional_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
@@ -359,7 +357,6 @@ export async function resolveSupportRequest({
         content: `Support request has been resolved. ${
           resolution_notes ? `Resolution notes: ${resolution_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
@@ -468,17 +465,18 @@ export async function getSupportRequests(): Promise<{
     const supportRequestsWithUnreadCount = await Promise.all(
       supportRequests.map(async (request) => {
         if (request.conversation_id) {
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', request.conversations?.id)
-            .eq('is_read', false)
-            .neq('sender_id', user.id);
+          const { data: unreadCount } = await supabase.rpc(
+            'get_unread_message_count',
+            {
+              p_conversation_id: request.conversation_id,
+              p_user_id: user.id,
+            }
+          );
 
           return {
             ...request,
-            unreadCount: count || 0,
-            conversationId: request.conversations?.id,
+            unreadCount: unreadCount || 0,
+            conversationId: request.conversation_id,
           };
         }
         return { ...request, unreadCount: 0 };

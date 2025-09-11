@@ -1,8 +1,4 @@
 -- supabase/seed.sql
-DELETE FROM public.roles;
-
-insert into roles (name) values ('client'), ('professional'), ('admin');
-
 
 -- Clear existing data from payment_methods to avoid duplicates if script is run multiple times
 -- Be cautious with DELETE in production environments!
@@ -21,8 +17,8 @@ DELETE FROM public.subscription_plans;
 
 -- Insert subscription plans with Stripe price IDs
 INSERT INTO public.subscription_plans (name, description, price, interval, stripe_price_id, is_active) VALUES
-('Monthly', 'Standard monthly subscription', 19.99, 'month', 'price_1RRXNtLMOPuguC73GyfxSC26', true),
-('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year', 'price_1RRXNzLMOPuguC73xExJDINf', true);
+('Monthly', 'Standard monthly subscription', 7.99, 'month', 'price_1S50bHLMOPuguC73nAT6QPxH', true),
+('Yearly', 'Standard yearly subscription', 75.00, 'year', 'price_1S50atLMOPuguC73Ujmb976p', true);
 
 
 /**
@@ -44,251 +40,161 @@ insert into admin_configs (key, value, description, data_type) values
 -- Clear existing data from email_templates
 DELETE FROM public.email_templates;
 
--- Insert email templates
+-- Insert email templates with simplified structure
 INSERT INTO public.email_templates (
   name,
   description,
   tag,
-  sender_name,
-  sender_email,
-  reply_to,
-  subject,
-  html_content,
-  to_field,
+  brevo_template_id,
+  dynamic_params,
   is_active
 ) VALUES
--- Booking Cancellation - Professional
+-- Booking related templates
 (
-  'Booking Cancellation - Professional Notification',
-  'Email sent to professionals when a booking is cancelled',
-  'BookingCancellationProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Booking Cancelled - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking Cancellation</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Booking Cancellation Notification</h1><p>Dear {{ params.professional_name }},</p><p>The appointment with {{ params.client_name }} has been cancelled.</p><h2>CANCELLED APPOINTMENT DETAILS</h2><p>Client: {{ params.client_name }}{% if params.client_phone %}<br>Client Phone: {{ params.client_phone }}{% endif %}<br>Date: {{ params.date }}<br>Time: {{ params.time }}<br>Booking ID: {{ params.booking_id }}</p>{% if params.payment %}<p>Payment Method: {{ params.payment.method.name }}</p>{% endif %}{% if params.services %}<h3>SERVICES:</h3><p>{% for service in params.services %}{{ service.name }} - ${{ service.price }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}{% if params.cancellation_reason %}<h3>CANCELLATION REASON:</h3><p>"{{ params.cancellation_reason }}"</p>{% endif %}{% if params.payment and params.payment.method.is_online and params.refund_info %}<h3>REFUND INFORMATION</h3><p>Original Amount: ${{ params.refund_info.original_amount }}{% if params.refund_info.refund_amount %}<br>Refund Amount: ${{ params.refund_info.refund_amount }}{% endif %}<br>Refund Status: {{ params.refund_info.status }}</p>{% endif %}<p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><p>This time slot is now available for new bookings. If you have any questions about this cancellation, please feel free to contact our support team.</p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Booking Cancellation -  Within Accepted Time Period - Professional',
+  'Email sent to professionals when a booking is cancelled with accepted time period',
+  'BookingCancellationWithinAcceptedTimePeriodProfessional',
+  32,
+  '[]'::jsonb,
   true
 ),
--- Booking Cancellation - Client
 (
-  'Booking Cancellation - Client Notification',
-  'Email sent to clients when a booking is cancelled',
-  'BookingCancellationClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Booking Cancellation Confirmation - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking Cancellation Confirmation</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Booking Cancellation Confirmation</h1><p>Dear {{ params.client_name }},</p><p>Your appointment with {{ params.professional_name }} has been cancelled.</p><h2>CANCELLED APPOINTMENT DETAILS</h2><p>Professional: {{ params.professional_name }}<br>Date: {{ params.date }}<br>Time: {{ params.time }}<br>Booking ID: {{ params.booking_id }}</p>{% if params.payment %}<p>Payment Method: {{ params.payment.method.name }}</p>{% endif %}{% if params.services %}<h3>SERVICES:</h3><p>{% for service in params.services %}{{ service.name }} - ${{ service.price }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}{% if params.payment and params.payment.method.is_online and params.refund_info %}<h3>REFUND INFORMATION</h3><p>Original Amount: ${{ params.refund_info.original_amount }}{% if params.refund_info.refund_amount %}<br>Refund Amount: ${{ params.refund_info.refund_amount }}{% endif %}<br>Refund Status: {{ params.refund_info.status }}<br><small>Please note that refunds may take 5-10 business days to appear in your account.</small></p>{% endif %}<p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><p>If you have any questions about this cancellation or would like to book another appointment, please don''t hesitate to contact us.</p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Booking Cancellation -  Within Accepted Time Period - Client',
+  'Email sent to clients when a booking is cancelled with accepted time period',
+  'BookingCancellationWithinAcceptedTimePeriodClient',
+  31,
+  '[]'::jsonb,
   true
 ),
--- Booking Confirmation - Client
 (
-  'Booking Confirmation - Client',
+  'Booking Confirmation Email - Client',
   'Email sent to clients when a booking is confirmed',
   'BookingConfirmationClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Booking Confirmation - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking Confirmation</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Booking Confirmation</h1><p>Dear {{ params.client_name }},</p><p>Your appointment with {{ params.professional_name }} has been confirmed.</p><h2>APPOINTMENT DETAILS</h2><p>Date: {{ params.date }}<br>Time: {{ params.time }}<br>Booking ID: {{ params.booking_id }}</p>{% if params.services %}<h3>SERVICES:</h3><p>{% for service in params.services %}{{ service.name }} - ${{ service.price }}<br>{% endfor %}</p>{% endif %}<h3>PAYMENT DETAILS</h3><p>Subtotal: ${{ params.subtotal }}<br>Service Fee: ${{ params.service_fee }} (paid by card)<br>{% if params.tip_amount %}Tip: ${{ params.tip_amount }}<br>{% endif %}Total: ${{ params.total }}</p><p>Payment Method: {{ params.payment_method }}</p>{% if params.deposit_amount > 0 %}<p>Deposit Amount: ${{ params.deposit_amount }} (paid by card)</p>{% endif %}{% if params.balance_due > 0 %}<div style="background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px;"><strong>IMPORTANT: Cash Payment Required</strong><br>Amount to pay in cash at the appointment: ${{ params.balance_due }}<br>Please bring exact change.</div>{% endif %}<p>If you need to cancel or reschedule your appointment, please do so at least 48 hours in advance to avoid any cancellation fees.</p><p>Best regards,<br>The Suite Team</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  25,
+  '[]'::jsonb,
   true
 ),
--- Booking Confirmation - Professional
 (
-  'Booking Confirmation - Professional',
+  'Booking Confirmation Email - Professional',
   'Email sent to professionals when a new booking is made',
   'BookingConfirmationProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'New Booking - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>New Booking</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>New Booking Notification</h1><p>Dear {{ params.professional_name }},</p><p>You have a new booking from {{ params.client_name }}.</p><h2>APPOINTMENT DETAILS</h2><p>Client: {{ params.client_name }}{% if params.client_phone %}<br>Client Phone: {{ params.client_phone }}{% endif %}<br>Date: {{ params.date }}<br>Time: {{ params.time }}<br>Booking ID: {{ params.booking_id }}</p>{% if params.services %}<h3>SERVICES:</h3><p>{% for service in params.services %}{{ service.name }} - ${{ service.price }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}<h3>PAYMENT SUMMARY</h3><p>Subtotal: ${{ params.subtotal }}{% if params.tip_amount %}<br>Tip: ${{ params.tip_amount }}{% endif %}<br>Professional Total: ${{ params.professional_total }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  26,
+  '[]'::jsonb,
   true
 ),
--- Payment Confirmation - Client
 (
-  'Payment Confirmation - Client',
-  'Email sent to clients when a payment is processed',
-  'PaymentConfirmationClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Payment Confirmation - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Confirmation</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Payment Confirmation</h1><p>Dear {{ params.client_name }},</p><p>Your payment to {{ params.professional_name }} has been processed successfully.</p><h2>PAYMENT DETAILS</h2><p>Payment Method: {{ params.payment_method }}<br>Booking ID: {{ params.booking_id }}</p>{% if params.services %}<h3>SERVICES:</h3><p>{% for service in params.services %}{{ service.name }} - ${{ service.price }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}<h3>PAYMENT SUMMARY</h3><p>Subtotal: ${{ params.subtotal }}{% if params.tip_amount %}<br>Tip: ${{ params.tip_amount }}{% endif %}<br>Total: ${{ params.total }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Appointment Completion - 2h after - Client',
+  'Email sent to clients 2 hours after their appointment is completed',
+  'AppointmentCompletion2hafterClient',
+  35,
+  '[]'::jsonb,
   true
 ),
--- Payment Confirmation - Professional
 (
-  'Payment Confirmation - Professional',
-  'Email sent to professionals when a payment is received',
-  'PaymentConfirmationProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Payment Received - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Received</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Payment Received</h1><p>Dear {{ params.professional_name }},</p><p>A payment has been received from {{ params.client_name }}.</p><h2>PAYMENT DETAILS</h2><p>Payment Method: {{ params.payment_method }}<br>Booking ID: {{ params.booking_id }}</p>{% if params.services %}<h3>SERVICES:</h3><p>{% for service in params.services %}{{ service.name }} - ${{ service.price }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}<h3>PAYMENT SUMMARY</h3><p>Subtotal: ${{ params.subtotal }}{% if params.tip_amount %}<br>Tip: ${{ params.tip_amount }}{% endif %}<br>Professional Total: ${{ params.professional_total }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Appointment Completion -  2h after - Professional',
+  'Email sent to professionals 2 hours after their appointment is completed',
+  'AppointmentCompletion2hafterProfessional',
+  36,
+  '[]'::jsonb,
   true
 ),
--- Balance Notification
+
+
+-- Policy related templates
 (
-  'Balance Payment Notification',
-  'Email sent to remind about outstanding balance payment',
-  'BalanceNotification',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Balance Payment Due - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Balance Payment Due</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Balance Payment Due</h1><p>Dear {{ params.professional_name }},</p><p>This is a reminder about the outstanding balance payment for your upcoming appointment.</p><h2>PAYMENT DETAILS</h2><p>Total Amount: ${{ params.total_amount }}{% if params.deposit_paid %}<br>Deposit Paid: ${{ params.deposit_paid }}{% endif %}<br>Balance Amount: ${{ params.balance_amount }}{% if params.current_tip %}<br>Current Tip: ${{ params.current_tip }}{% endif %}<br>Total Due: ${{ params.total_due }}</p><p><a href="{{ params.balance_payment_url }}">PAY BALANCE NOW</a></p><p><a href="{{ params.appointment_details_url }}">VIEW APPOINTMENT DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Booking Cancellation - Less than 24h /48h - Client',
+  'Email sent to clients when cancellation fee is charged',
+  'BookingCancellationLessthan24h48hclient',
+  27,
+  '[]'::jsonb,
   true
 ),
--- Refund Request - Professional
 (
-  'Refund Request - Professional',
-  'Email sent to professionals when a refund is requested',
-  'RefundRequestProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Refund Request - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Refund Request</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Refund Request</h1><p>Dear {{ params.professional_name }},</p><p>{{ params.client_name }} has requested a refund for {{ params.service_name }}.</p><h2>REFUND DETAILS</h2><p>Original Amount: ${{ params.original_amount }}<br>Reason: "{{ params.reason }}"</p><p><a href="{{ params.review_url }}">REVIEW REFUND REQUEST</a></p><p><a href="{{ params.appointment_details_url }}">VIEW APPOINTMENT DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Booking Cancellation - Less than 24h /48h - Professional',
+  'Email sent to professionals when cancellation fee is applied',
+  'BookingCancellationLessthan24h48hprofessional',
+  30,
+  '[]'::jsonb,
   true
 ),
--- Refund Completion - Client
+
+-- Incident related templates
 (
-  'Refund Completion - Client',
-  'Email sent to clients when a refund is processed',
-  'RefundCompletionClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Refund Processed - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Refund Processed</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Refund Processed</h1><p>Dear {{ params.client_name }},</p><p>Your refund request has been approved and processed.</p><h2>REFUND DETAILS</h2><p>Professional: {{ params.professional_name }}<br>Original Amount: ${{ params.original_amount }}<br>Refund Amount: ${{ params.refund_amount }}{% if params.reason %}<br>Reason: "{{ params.reason }}"{% endif %}</p><p>Please note that refunds may take 5-10 business days to appear in your account.</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Booking Cancellation - No Show - Client',
+  'Email sent to clients when marked as no-show',
+  'BookingCancellationNoShowClient',
+  33,
+  '[]'::jsonb,
   true
 ),
--- Refund Completion - Professional
 (
-  'Refund Completion - Professional',
-  'Email sent to professionals when a refund is processed',
-  'RefundCompletionProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Refund Processed - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Refund Processed</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Refund Processed</h1><p>Dear {{ params.professional_name }},</p><p>The refund for {{ params.client_name }} has been processed.</p><h2>REFUND DETAILS</h2><p>Original Amount: ${{ params.original_amount }}<br>Refund Amount: ${{ params.refund_amount }}<br>Platform Fee: ${{ params.platform_fee }}<br>Net Refund: ${{ params.net_refund }}{% if params.reason %}<br>Reason: "{{ params.reason }}"{% endif %}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Booking Cancellation - No Show - Professional',
+  'Email sent to professionals when client is marked as no-show',
+  'BookingCancellationNoShowProfessional',
+  34,
+  '[]'::jsonb,
   true
 ),
--- Refund Decline - Client
-(
-  'Refund Decline - Client',
-  'Email sent to clients when a refund is declined',
-  'RefundDeclineClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Refund Request Declined - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Refund Request Declined</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Refund Request Declined</h1><p>Dear {{ params.client_name }},</p><p>Your refund request has been reviewed and declined by {{ params.professional_name }}.</p><h2>REQUEST DETAILS</h2><p>Original Amount: ${{ params.original_amount }}<br>Decline Reason: "{{ params.decline_reason }}"</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
-  true
-),
--- Review & Tip Notification
-(
-  'Review & Tip Notification',
-  'Email sent to request review and optional tip',
-  'ReviewTipNotification',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Share Your Experience - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Share Your Experience</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Share Your Experience</h1><p>Dear {{ params.client_name }},</p><p>Thank you for booking with {{ params.professional_name }}. We hope you had a great experience!</p><h2>BOOKING DETAILS</h2><p>Date: {{ params.date }}<br>Time: {{ params.time }}<br>Payment Method: {{ params.payment_method }}</p><h3>PAYMENT SUMMARY</h3><p>Service Amount: ${{ params.service_amount }}<br>Service Fee: ${{ params.service_fee }}<br>Total Amount: ${{ params.total_amount }}</p><p><a href="{{ params.review_url }}">LEAVE A REVIEW & TIP</a></p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
-  true
-),
--- Contact Inquiry - Admin
+
+
+-- Contact related templates
 (
   'Contact Inquiry - Admin Notification',
   'Email sent to admin when contact form is submitted',
   'ContactInquiryAdmin',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'New Contact Inquiry - {{ params.subject }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>New Contact Inquiry</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>New Contact Inquiry</h1><h2>INQUIRY DETAILS</h2><p>Name: {{ params.name }}<br>Email: {{ params.email }}{% if params.phone %}<br>Phone: {{ params.phone }}{% endif %}<br>Subject: {{ params.subject }}<br>Submitted: {{ params.submitted_at }}<br>Inquiry ID: {{ params.inquiry_id }}<br>Urgency: <span style="color: {{ params.urgency_color }}">{{ params.urgency }}</span></p><h3>MESSAGE</h3><p>"{{ params.message }}"</p><p><a href="{{ params.dashboard_url }}">VIEW IN DASHBOARD</a></p><hr><p>This email was sent by The Suite</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  40,
+  '[]'::jsonb,
   true
 ),
--- Contact Inquiry - Confirmation
 (
   'Contact Inquiry - Confirmation',
   'Email sent to confirm contact form submission',
   'ContactInquiryConfirmation',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Contact Form Received - {{ params.subject }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contact Form Received</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Contact Form Received</h1><p>Dear {{ params.name }},</p><p>Thank you for contacting us. We have received your inquiry and will respond as soon as possible.</p><h2>YOUR MESSAGE</h2><p>Subject: {{ params.subject }}<br>Message: "{{ params.message }}"<br>Inquiry ID: {{ params.inquiry_id }}</p><p>Please keep your inquiry ID for future reference.</p><hr><p>This email was sent by The Suite</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  39,
+  '[]'::jsonb,
   true
 ),
--- Cancellation Policy Charge - Client
+
+
+-- Support Request related templates
 (
-  'Cancellation Policy Charge - Client',
-  'Email sent to clients when cancellation fee is charged',
-  'CancellationPolicyChargeClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Cancellation Fee Charged - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cancellation Fee Charged</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Cancellation Fee Charged</h1><p>Dear {{ params.client_name }},</p><p>A cancellation fee has been charged for your cancelled appointment with {{ params.professional_name }}.</p><h2>CHARGE DETAILS</h2><p>Charge Amount: ${{ params.policy_info.charge_amount }} ({{ params.policy_info.charge_percentage }}% of ${{ params.policy_info.service_amount }})<br>Reason: {{ params.policy_info.time_description }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Support Request - Creation',
+  'Email sent to professional when support request is created',
+  'SupportRequestCreation',
+  41,
+  '[]'::jsonb,
   true
 ),
--- Cancellation Policy Charge - Professional
 (
-  'Cancellation Policy Charge - Professional',
-  'Email sent to professionals when cancellation fee is applied',
-  'CancellationPolicyChargeProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Cancellation Fee Applied - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cancellation Fee Applied</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Cancellation Fee Applied</h1><p>Dear {{ params.professional_name }},</p><p>A cancellation fee has been applied for {{ params.client_name }}''s cancelled appointment.</p><h2>CHARGE DETAILS</h2><p>Charge Amount: ${{ params.policy_info.charge_amount }} ({{ params.policy_info.charge_percentage }}% of ${{ params.policy_info.service_amount }})<br>Reason: {{ params.policy_info.time_description }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Support Request - Refunded - Client',
+  'Email sent to client when support request results in refund',
+  'SupportRequestRefundedClient',
+  42,
+  '[]'::jsonb,
   true
 ),
--- No Show Notification - Client
 (
-  'No Show Notification - Client',
-  'Email sent to clients when marked as no-show',
-  'NoShowNotificationClient',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'No Show Fee Charged - {{ params.professional_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>No Show Fee Charged</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>No Show Fee Charged</h1><p>Dear {{ params.client_name }},</p><p>You have been marked as a no-show for your appointment with {{ params.professional_name }}.</p><h2>CHARGE DETAILS</h2><p>No Show Fee: ${{ params.no_show_fee }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Support Request - Refunded - Professional',
+  'Email sent to professional when support request results in refund',
+  'SupportRequestRefundedProfessional',
+  43,
+  '[]'::jsonb,
   true
 ),
--- No Show Notification - Professional
 (
-  'No Show Notification - Professional',
-  'Email sent to professionals when client is marked as no-show',
-  'NoShowNotificationProfessional',
-  'The Suite Team',
-  'og.jessica@thesuiteservice.com',
-  'og.jessica@thesuiteservice.com',
-  'Client No Show - {{ params.client_name }}',
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Client No Show</title></head><body><div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h1>Client No Show</h1><p>Dear {{ params.professional_name }},</p><p>{{ params.client_name }} has been marked as a no-show for their appointment.</p><h2>CHARGE DETAILS</h2><p>No Show Fee: ${{ params.no_show_fee }}</p><p><a href="{{ params.appointment_details_url }}">VIEW BOOKING DETAILS</a></p><hr><p>This email was sent by The Suite<br>{{ params.website_url }}</p><p>Need assistance? Contact us at {{ params.support_email }}</p></div></body></html>',
-  '{{ contact.EMAIL }}',
+  'Support Request - Resolved - Client',
+  'Email sent to client when support request is resolved without refund',
+  'SupportRequestResolvedClient',
+  44,
+  '[]'::jsonb,
+  true
+),
+(
+  'Support Request - Resolved - Professional',
+  'Email sent to professional when support request is resolved without refund',
+  'SupportRequestResolvedProfessional',
+  45,
+  '[]'::jsonb,
   true
 );
 
@@ -456,7 +362,6 @@ create policy "Allow users to view message attachments in bucket"
 DO $$
 DECLARE
     dummy_user_id uuid := gen_random_uuid();
-    professional_role_id uuid;
     monthly_plan_id uuid;
     dummy_address_id uuid;
     dummy_profile_id uuid;
@@ -521,8 +426,7 @@ BEGIN
         current_timestamp
     );
     
-    -- Get the professional role ID
-    SELECT id INTO professional_role_id FROM roles WHERE name = 'professional';
+    -- Note: Professional role will be set via user_roles table after user creation
     
     -- Get the monthly subscription plan ID
     SELECT id INTO monthly_plan_id FROM subscription_plans WHERE name = 'Monthly' AND interval = 'month';
@@ -556,24 +460,66 @@ BEGIN
     FROM professional_profiles 
     WHERE user_id = dummy_user_id;
     
-    -- Update the professional profile with additional details and Stripe Connect info
+    -- Update the professional profile with additional details (without Stripe Connect info)
     UPDATE professional_profiles SET
         description = 'Experienced professional with over 10 years in the industry. Specializing in high-quality services and exceptional customer satisfaction.',
         profession = 'Professional Services',
         appointment_requirements = 'Please arrive 10 minutes early for your appointment. Bring any necessary documentation.',
         phone_number = '+1-555-0123',
-        working_hours = '{"monday": {"start": "09:00", "end": "17:00"}, "tuesday": {"start": "09:00", "end": "17:00"}, "wednesday": {"start": "09:00", "end": "17:00"}, "thursday": {"start": "09:00", "end": "17:00"}, "friday": {"start": "09:00", "end": "17:00"}, "saturday": {"start": "10:00", "end": "15:00"}, "sunday": {"start": "10:00", "end": "15:00"}}'::jsonb,
-        timezone = 'America/Los_Angeles',
+        working_hours = '{
+  "hours": [
+    {
+      "day": "Monday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Tuesday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Wednesday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Thursday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Friday",
+      "enabled": true,
+      "endTime": "18:00",
+      "startTime": "07:00"
+    },
+    {
+      "day": "Saturday",
+      "enabled": true,
+      "endTime": "18:00",
+      "startTime": "07:30"
+    },
+    {
+      "day": "Sunday",
+      "enabled": true,
+      "endTime": "17:00",
+      "startTime": "08:30"
+    }
+  ],
+  "timezone": "Europe/Warsaw"
+}'::jsonb,
+        timezone = 'Europe/Warsaw',
         location = 'San Francisco, CA',
         address_id = dummy_address_id,
         facebook_url = 'https://facebook.com/johndoe',
         instagram_url = 'https://instagram.com/johndoe',
         tiktok_url = 'https://tiktok.com/@johndoe',
         is_published = true,
-        is_subscribed = true,
-        stripe_account_id = 'acct_1Rps2uPtT7haMfhy',
-        stripe_connect_status = 'complete',
-        stripe_connect_updated_at = NOW(),
         requires_deposit = true,
         deposit_type = 'percentage',
         deposit_value = 25.00,
@@ -583,6 +529,19 @@ BEGIN
         cancellation_24h_charge_percentage = 50.00,
         cancellation_48h_charge_percentage = 25.00
     WHERE user_id = dummy_user_id;
+    
+    -- Create Stripe Connect record in the secure table
+    INSERT INTO professional_stripe_connect (
+        professional_profile_id,
+        stripe_account_id,
+        stripe_connect_status,
+        stripe_connect_updated_at
+    ) VALUES (
+        dummy_profile_id,
+        'acct_1S2DSiLv1JUObFBA',
+        'complete',
+        NOW()
+    );
     
     -- Create active subscription
     INSERT INTO professional_subscriptions (
@@ -656,7 +615,7 @@ BEGIN
     RAISE NOTICE 'Profile ID: %', dummy_profile_id;
     RAISE NOTICE 'Email: professional@mail.com';
     RAISE NOTICE 'Password: secret';
-    RAISE NOTICE 'Stripe Account: acct_1Rps2uPtT7haMfhy';
+    RAISE NOTICE 'Stripe Account: acct_1S2DSiLv1JUObFBA';
     
 END $$;
 
@@ -664,7 +623,6 @@ END $$;
 DO $$
 DECLARE
     client_user_id uuid := gen_random_uuid();
-    client_role_id uuid;
     client_address_id uuid;
     client_profile_id uuid;
     professional_user_id uuid;
@@ -745,8 +703,7 @@ BEGIN
         current_timestamp
     );
     
-    -- Get the client role ID
-    SELECT id INTO client_role_id FROM roles WHERE name = 'client';
+    -- Note: Client role will be set via user_roles table after user creation
     
     -- Create address for the client
     INSERT INTO addresses (
@@ -1169,14 +1126,128 @@ BEGIN
         NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes' + INTERVAL '12 hours'
     );
     
+    -- 7. Past completed appointment without review (for testing post-appointment flow)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'completed',
+        'Completed appointment without review - for testing post-appointment flow'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() - INTERVAL '3 days' + INTERVAL '14 hours',  -- 2 PM, 3 days ago
+        NOW() - INTERVAL '3 days' + INTERVAL '15 hours',  -- 3 PM, 3 days ago
+        'completed'
+    ) RETURNING id INTO appointment_id;
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        standard_service_id,
+        150.00,
+        60
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        150.00,
+        0.00,  -- No tip yet - can be added post-appointment
+        1.00,
+        'completed',
+        'pi_completed_no_review_' || extract(epoch from now())::text
+    );
+    
+    -- NOTE: Intentionally NOT creating a review for this appointment
+    
+    -- 8. Currently ongoing appointment (for testing Add Additional Services)
+    INSERT INTO bookings (
+        client_id,
+        professional_profile_id,
+        status,
+        notes
+    ) VALUES (
+        client_user_id,
+        prof_profile_id,
+        'confirmed',
+        'Currently ongoing appointment - started 30 minutes ago'
+    ) RETURNING id INTO booking_id;
+    
+    INSERT INTO appointments (
+        booking_id,
+        start_time,
+        end_time,
+        status
+    ) VALUES (
+        booking_id,
+        NOW() - INTERVAL '30 minutes',  -- Started 30 minutes ago
+        NOW() + INTERVAL '30 minutes',  -- Ends in 30 minutes
+        'ongoing'
+    ) RETURNING id INTO appointment_id;
+    
+    INSERT INTO booking_services (
+        booking_id,
+        service_id,
+        price,
+        duration
+    ) VALUES (
+        booking_id,
+        standard_service_id,
+        150.00,
+        60
+    );
+    
+    INSERT INTO booking_payments (
+        booking_id,
+        payment_method_id,
+        amount,
+        tip_amount,
+        service_fee,
+        status,
+        stripe_payment_intent_id
+    ) VALUES (
+        booking_id,
+        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+        150.00,
+        0.00,
+        1.00,
+        'completed',
+        'pi_ongoing_' || extract(epoch from now())::text
+    );
+    
     RAISE NOTICE 'All appointments created successfully!';
-    RAISE NOTICE 'Created 6 different appointment scenarios:';
+    RAISE NOTICE 'Created 8 different appointment scenarios:';
     RAISE NOTICE '1. Past completed appointment with review';
     RAISE NOTICE '2. Past cancelled appointment with cancellation fee';
     RAISE NOTICE '3. Upcoming confirmed appointment with deposit';
     RAISE NOTICE '4. Future appointment pending payment';
     RAISE NOTICE '5. Past no-show appointment';
     RAISE NOTICE '6. Future appointment with pre-auth scheduled';
+    RAISE NOTICE '7. Past completed appointment without review (for post-appointment flow testing)';
+    RAISE NOTICE '8. Currently ongoing appointment (for testing Add Additional Services)';
     
 END $$;
 
@@ -1184,7 +1255,6 @@ END $$;
 DO $$
 DECLARE
     admin_user_id uuid := gen_random_uuid();
-    admin_role_id uuid;
 BEGIN
     -- Create the auth user for admin
     INSERT INTO auth.users (
@@ -1246,13 +1316,7 @@ BEGIN
         current_timestamp
     );
     
-    -- Get the admin role ID
-    SELECT id INTO admin_role_id FROM roles WHERE name = 'admin';
-    
-    -- Update the user record created by the trigger to have admin role
-    UPDATE users 
-    SET role_id = admin_role_id 
-    WHERE id = admin_user_id;
+    -- Note: Admin role will be set via user_roles table after user creation
     
     RAISE NOTICE 'Admin user created successfully!';
     RAISE NOTICE 'Admin User ID: %', admin_user_id;

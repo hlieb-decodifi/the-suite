@@ -5,7 +5,7 @@ import { ProfileData, HeaderFormValues } from '@/types/profiles';
 export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   const supabase = await createClient();
   
-  // Fetch user, role, and profile info (including both client and professional profiles)
+  // Fetch user and profile info (including both client and professional profiles)
   const { data, error } = await supabase
     .from('users')
     .select(`
@@ -13,8 +13,6 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
       first_name,
       last_name,
       cookie_consent,
-      role_id,
-      roles:role_id (name),
       professional_profiles (
         description,
         profession,
@@ -35,8 +33,15 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   if (error) throw new Error(`Database error: ${error.message}`);
   if (!data) throw new Error('Profile not found');
 
+  // Fetch user role separately
+  const { data: userRoleData } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .single();
+
   // Determine if user is professional or client based on role
-  const userRole = data.roles?.name;
+  const userRole = userRoleData?.role;
   const isProfessional = userRole === 'professional';
   
   // Get phone number from appropriate profile type

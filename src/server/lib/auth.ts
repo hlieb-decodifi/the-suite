@@ -10,25 +10,13 @@ export async function requireAdminUser() {
   if (sessionError || !sessionUser) {
     return { success: false, error: 'Not authenticated' };
   }
-  // Get user role
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select('role_id')
-    .eq('id', sessionUser.id)
+  // Check if user has admin role
+  const { data: userRoleData, error: userRoleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', sessionUser.id)
     .single();
-  if (userError || !userData) {
-    return { success: false, error: 'User not found' };
-  }
-  // Get admin role id
-  const { data: adminRole, error: adminRoleError } = await supabase
-    .from('roles')
-    .select('id')
-    .eq('name', 'admin')
-    .single();
-  if (adminRoleError || !adminRole) {
-    return { success: false, error: 'Admin role not found' };
-  }
-  if (userData.role_id !== adminRole.id) {
+  if (userRoleError || !userRoleData || userRoleData.role !== 'admin') {
     return { success: false, error: 'Permission denied: admin only' };
   }
   return { success: true, user: sessionUser };

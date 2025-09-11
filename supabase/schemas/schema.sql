@@ -5,24 +5,24 @@ create extension if not exists "uuid-ossp";
 create extension if not exists moddatetime schema extensions;
 
 /**
-* ROLES
-* Defines user roles in the system (client, professional, admin)
+* USER_ROLES
+* Maps users to their roles (replaces the old roles table approach)
 */
-create table roles (
+create table user_roles (
   id uuid primary key default uuid_generate_v4(),
-  name text not null unique,
+  user_id uuid references auth.users not null unique,
+  role text not null default 'client',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-alter table roles enable row level security;
+alter table user_roles enable row level security;
 
--- Insert default roles
-insert into roles (name) values ('client'), ('professional'), ('admin');
+-- RLS policies for user_roles table
+-- Users can view their own role
+create policy "Users can view their own role" on user_roles for select 
+  using (auth.uid() = user_id);
 
--- RLS policies for roles table
--- Anyone can view roles (needed for signup)
-create policy "Anyone can view roles" on roles for select 
-  using (true);
+-- Admin policy will be defined later after all functions are created
 
 /**
 * USERS
@@ -33,7 +33,6 @@ create table users (
   id uuid references auth.users not null primary key,
   first_name text not null,
   last_name text not null,
-  role_id uuid references roles not null,
   cookie_consent boolean not null default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -47,10 +46,9 @@ declare
   is_professional boolean;
 begin
   select exists(
-    select 1 from users
-    join roles on users.role_id = roles.id
-    where users.id = user_uuid
-    and roles.name = 'professional'
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'professional'
   ) into is_professional;
   
   return is_professional;
@@ -63,13 +61,27 @@ declare
   is_client boolean;
 begin
   select exists(
-    select 1 from users
-    join roles on users.role_id = roles.id
-    where users.id = user_uuid
-    and roles.name = 'client'
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'client'
   ) into is_client;
   
   return is_client;
+end;
+$$ language plpgsql security definer;
+
+create or replace function is_admin(user_uuid uuid)
+returns boolean as $$
+declare
+  is_admin boolean;
+begin
+  select exists(
+    select 1 from user_roles
+    where user_id = user_uuid
+    and role = 'admin'
+  ) into is_admin;
+  
+  return is_admin;
 end;
 $$ language plpgsql security definer;
 
@@ -122,11 +134,6 @@ create table professional_profiles (
   instagram_url text,
   tiktok_url text,
   is_published boolean default false,
-  is_subscribed boolean default false,
-  -- Stripe Connect fields
-  stripe_account_id text,
-  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
-  stripe_connect_updated_at timestamp with time zone,
   -- Payment settings
   requires_deposit boolean default false not null,
   deposit_type text default 'percentage' check (deposit_type in ('percentage', 'fixed')),
@@ -150,14 +157,6 @@ create table professional_profiles (
 );
 alter table professional_profiles enable row level security;
 
--- Create indexes for Stripe Connect fields
-create index if not exists idx_professional_profiles_stripe_account_id 
-on professional_profiles(stripe_account_id) 
-where stripe_account_id is not null;
-
-create index if not exists idx_professional_profiles_stripe_connect_status 
-on professional_profiles(stripe_connect_status);
-
 -- Add constraints for cancellation policy fields
 alter table professional_profiles add constraint chk_cancellation_24h_percentage 
   check (cancellation_24h_charge_percentage >= 0 and cancellation_24h_charge_percentage <= 100);
@@ -170,6 +169,48 @@ alter table professional_profiles add constraint chk_cancellation_policy_logic
   check (cancellation_24h_charge_percentage >= cancellation_48h_charge_percentage);
 
 /**
+* PROFESSIONAL_STRIPE_CONNECT
+* Secure storage for professional Stripe Connect account details
+* Only admins can create/update these records, professionals can view their own
+*/
+create table professional_stripe_connect (
+  id uuid primary key default uuid_generate_v4(),
+  professional_profile_id uuid references professional_profiles not null unique,
+  stripe_account_id text,
+  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
+  stripe_connect_updated_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table professional_stripe_connect enable row level security;
+
+-- Create indexes for Stripe Connect fields
+create index if not exists idx_professional_stripe_connect_profile_id 
+on professional_stripe_connect(professional_profile_id);
+
+create index if not exists idx_professional_stripe_connect_account_id 
+on professional_stripe_connect(stripe_account_id) 
+where stripe_account_id is not null;
+
+create index if not exists idx_professional_stripe_connect_status 
+on professional_stripe_connect(stripe_connect_status);
+
+-- RLS policies for professional_stripe_connect
+-- Professionals can view their own Stripe Connect data
+create policy "Professionals can view their own Stripe Connect data"
+  on professional_stripe_connect for select
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = professional_stripe_connect.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Only admins can create/update Stripe Connect records (via admin functions)
+-- No insert/update policies for regular users - all operations done via admin client
+
+/**
 * CLIENT_PROFILES
 * Extended profile information for clients
 */
@@ -179,6 +220,7 @@ create table client_profiles (
   phone_number text,
   location text,
   address_id uuid references addresses,
+  timezone text default 'UTC', -- Client's timezone for appointment scheduling
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -202,6 +244,9 @@ create table services (
   stripe_sync_status text default 'pending' not null check (stripe_sync_status in ('pending', 'synced', 'error')),
   stripe_sync_error text,
   stripe_synced_at timestamp with time zone,
+  -- Soft delete/archive fields
+  is_archived boolean default false not null,
+  archived_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -217,6 +262,10 @@ on services(stripe_status);
 
 create index if not exists idx_services_stripe_sync_status 
 on services(stripe_sync_status);
+
+-- Create index for archived services for better performance
+create index if not exists idx_services_is_archived 
+on services(is_archived);
 
 /**
 * SERVICE_LIMITS
@@ -269,10 +318,11 @@ declare
   current_count integer;
   max_allowed integer;
 begin
-  -- Get current service count
+  -- Get current service count (excluding archived services)
   select count(*) into current_count
   from services
-  where professional_profile_id = new.professional_profile_id;
+  where professional_profile_id = new.professional_profile_id
+  and is_archived = false;
   
   -- Get the limit for this professional
   max_allowed := get_service_limit(new.professional_profile_id);
@@ -328,6 +378,7 @@ drop policy if exists "Anyone can view services from published professionals" on
 drop policy if exists "Professionals can view their own unpublished services" on services;
 
 -- New policies for services
+-- Professionals can manage all their services (including archived ones)
 create policy "Professionals can manage their own services"
   on services for all
   using (
@@ -338,25 +389,97 @@ create policy "Professionals can manage their own services"
     )
   );
 
+-- Public can only view non-archived services from published professionals
 create policy "Anyone can view services from published professionals"
   on services for select
   using (
-    exists (
+    is_archived = false
+    and exists (
       select 1 from professional_profiles
       where professional_profiles.id = services.professional_profile_id
       and professional_profiles.is_published = true
     )
   );
 
-create policy "Professionals can view their own services"
+-- Allow clients to view archived services they have bookings for (for history/reference)
+create policy "Clients can view archived services they have bookings for"
   on services for select
   using (
-    exists (
-      select 1 from professional_profiles
-      where professional_profiles.id = services.professional_profile_id
-      and professional_profiles.user_id = auth.uid()
+    is_archived = true
+    and exists (
+      select 1 from booking_services bs
+      join bookings b on bs.booking_id = b.id
+      where bs.service_id = services.id
+      and b.client_id = auth.uid()
     )
   );
+
+-- Helper functions for service archiving
+-- Function to archive a service (soft delete)
+create or replace function archive_service(service_id uuid)
+returns boolean as $$
+begin
+  update services
+  set 
+    is_archived = true,
+    archived_at = timezone('utc'::text, now()),
+    updated_at = timezone('utc'::text, now())
+  where id = service_id
+  and is_archived = false; -- Only archive non-archived services
+  
+  return found;
+end;
+$$ language plpgsql security definer;
+
+-- Function to unarchive a service
+create or replace function unarchive_service(service_id uuid)
+returns boolean as $$
+declare
+  professional_profile_id_val uuid;
+  current_count integer;
+  max_allowed integer;
+begin
+  -- Get the professional profile ID for this service
+  select professional_profile_id into professional_profile_id_val
+  from services
+  where id = service_id
+  and is_archived = true;
+  
+  -- If service doesn't exist or is not archived, return false
+  if professional_profile_id_val is null then
+    return false;
+  end if;
+  
+  -- Get current non-archived service count for this professional
+  select count(*) into current_count
+  from services
+  where professional_profile_id = professional_profile_id_val
+  and is_archived = false;
+  
+  -- Get the limit for this professional
+  max_allowed := get_service_limit(professional_profile_id_val);
+  
+  -- Check if unarchiving would exceed the limit
+  if current_count >= max_allowed then
+    raise exception 'Cannot unarchive service: would exceed maximum of % services allowed for this professional. Archive or delete other services first, or contact support to increase your limit.', max_allowed;
+  end if;
+  
+  -- Unarchive the service
+  update services
+  set 
+    is_archived = false,
+    archived_at = null,
+    updated_at = timezone('utc'::text, now())
+  where id = service_id
+  and is_archived = true;
+  
+  return found;
+end;
+$$ language plpgsql security definer;
+
+-- Grant execute permissions to authenticated users
+grant execute on function archive_service to authenticated;
+grant execute on function unarchive_service to authenticated;
 
 -- RLS policies for addresses
 create policy "Users can create addresses"
@@ -462,16 +585,12 @@ create policy "Clients can create their own profile"
 -- This trigger creates a professional profile when a user's role is changed to professional
 create function handle_new_professional()
 returns trigger as $$
-declare
-  professional_role_id uuid;
 begin
   -- Only proceed if the role was changed to professional
-  select id into professional_role_id from roles where name = 'professional';
-  
-  if new.role_id = professional_role_id then
+  if new.role = 'professional' then
     -- Create professional profile if it doesn't exist
-  insert into professional_profiles (user_id)
-  values (new.id)
+    insert into professional_profiles (user_id)
+    values (new.user_id)
     on conflict (user_id) do nothing;
   end if;
   
@@ -480,23 +599,19 @@ end;
 $$ language plpgsql security definer;
 
 create trigger on_user_role_change
-  after update of role_id on users
+  after update of role on user_roles
   for each row
   execute procedure handle_new_professional();
 
 -- This trigger creates a client profile when a user's role is changed to client
 create function handle_new_client()
 returns trigger as $$
-declare
-  client_role_id uuid;
 begin
   -- Only proceed if the role was changed to client
-  select id into client_role_id from roles where name = 'client';
-  
-  if new.role_id = client_role_id then
+  if new.role = 'client' then
     -- Create client profile if it doesn't exist
     insert into client_profiles (user_id)
-    values (new.id)
+    values (new.user_id)
     on conflict (user_id) do nothing;
   end if;
   
@@ -505,7 +620,7 @@ end;
 $$ language plpgsql security definer;
 
 create trigger on_user_role_change_to_client
-  after update of role_id on users
+  after update of role on user_roles
   for each row
   execute procedure handle_new_client();
 
@@ -516,8 +631,8 @@ create trigger on_user_role_change_to_client
 create function public.handle_new_user() 
 returns trigger as $$
 declare
-  user_role_id uuid;
   role_name text;
+  user_role_value text;
   first_name_val text;
   last_name_val text;
 begin
@@ -558,29 +673,37 @@ begin
       role_name := 'client'; -- Default to client if not specified properly
     end if;
     
-    -- Get the corresponding role ID with fully qualified schema
-    select id into user_role_id from public.roles where name = role_name;
+    -- Cast role name to enum
+    user_role_value := role_name;
     
-    if user_role_id is null then
-      RAISE EXCEPTION 'Could not find role_id for role: %', role_name;
-    end if;
-    
-    -- Insert the user with the specified role
+    -- Insert the user record (without role)
     begin
     insert into public.users (
       id, 
       first_name, 
-      last_name, 
-      role_id
+      last_name
     )
     values (
       new.id, 
       first_name_val,
-      last_name_val,
-      user_role_id
+      last_name_val
     );
     exception when others then
       RAISE EXCEPTION 'Error creating user record: %', SQLERRM;
+    end;
+    
+    -- Insert the user role
+    begin
+    insert into public.user_roles (
+      user_id,
+      role
+    )
+    values (
+      new.id,
+      user_role_value
+    );
+    exception when others then
+      RAISE EXCEPTION 'Error creating user role record: %', SQLERRM;
     end;
     
     -- Create the appropriate profile based on role
@@ -599,23 +722,35 @@ begin
   else
     -- OAuth user without role metadata - create basic user record without role
     -- Role will be assigned later in the callback
-    RAISE NOTICE 'OAuth user detected, creating basic user record without role';
+    RAISE NOTICE 'OAuth user detected, creating basic user record with default client role';
     
     begin
     insert into public.users (
       id, 
       first_name, 
-      last_name, 
-      role_id
+      last_name
     )
     values (
       new.id, 
       first_name_val,
-      last_name_val,
-      (select id from public.roles where name = 'client' limit 1) -- Temporary default role
+      last_name_val
     );
     exception when others then
       RAISE EXCEPTION 'Error creating OAuth user record: %', SQLERRM;
+    end;
+    
+    -- Create default client role
+    begin
+    insert into public.user_roles (
+      user_id,
+      role
+    )
+    values (
+      new.id,
+      'client'
+    );
+    exception when others then
+      RAISE EXCEPTION 'Error creating OAuth user role record: %', SQLERRM;
     end;
     
     -- Create default client profile (will be updated in callback if needed)
@@ -818,16 +953,10 @@ create table customers (
 alter table customers enable row level security;
 
 -- RLS policy for customers table
+-- Users can only view their customer data, not create or modify it
+-- All customer record creation/updates are handled by admin functions via Stripe webhooks
 create policy "Users can view their own customer data"
   on customers for select
-  using (auth.uid() = user_id);
-
-create policy "Users can create their own customer record"
-  on customers for insert
-  with check (auth.uid() = user_id);
-
-create policy "Users can update their own customer record"
-  on customers for update
   using (auth.uid() = user_id);
 
 /**
@@ -852,11 +981,6 @@ create table subscription_plans (
 );
 alter table subscription_plans enable row level security;
 
--- Insert default subscription plans
-insert into subscription_plans (name, description, price, interval) 
-values 
-  ('Monthly', 'Standard monthly subscription', 19.99, 'month'),
-  ('Yearly', 'Standard yearly subscription (save 15%)', 199.99, 'year');
 
 /**
 * PROFESSIONAL_SUBSCRIPTIONS
@@ -876,58 +1000,54 @@ create table professional_subscriptions (
 );
 alter table professional_subscriptions enable row level security;
 
-/**
-* Create a function to update is_subscribed flag on professional_profiles
-* whenever a subscription is created, updated, or deleted
-*/
-create or replace function update_professional_subscription_status()
-returns trigger as $$
+-- Function to check if a professional has an active subscription
+create or replace function is_professional_subscribed(prof_profile_id uuid)
+returns boolean as $$
+declare
+  has_active_subscription boolean;
 begin
-  -- If the subscription is being created or updated
-  if (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') then
-    -- Set is_subscribed to true if the professional has an active subscription
-    update professional_profiles
-    set is_subscribed = true, updated_at = now()
-    where id = new.professional_profile_id
-    and exists (
-      select 1 from professional_subscriptions
-      where professional_profile_id = new.professional_profile_id
-      and status = 'active'
-    );
-  end if;
+  select exists(
+    select 1 from professional_subscriptions
+    where professional_profile_id = prof_profile_id
+    and status = 'active'
+    and (end_date is null or end_date > now())
+  ) into has_active_subscription;
   
-  -- If the subscription is being deleted or updated (to non-active)
-  if (TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND new.status != 'active')) then
-    -- Set is_subscribed to false if the professional has no active subscriptions
-    update professional_profiles
-    set is_subscribed = false, updated_at = now()
-    where id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
-    and not exists (
-      select 1 from professional_subscriptions
-      where professional_profile_id = CASE WHEN TG_OP = 'DELETE' THEN old.professional_profile_id ELSE new.professional_profile_id END
-      and status = 'active'
-    );
-  end if;
-  
-  return CASE WHEN TG_OP = 'DELETE' THEN old ELSE new END;
+  return has_active_subscription;
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
--- Create triggers for the update_professional_subscription_status function
-create trigger after_professional_subscription_insert
-  after insert on professional_subscriptions
-  for each row
-  execute function update_professional_subscription_status();
+-- Function to check if a professional (by user_id) has an active subscription
+-- This allows public access for clients to check subscription status for booking
+create or replace function is_professional_user_subscribed(prof_user_id uuid)
+returns boolean as $$
+declare
+  has_active_subscription boolean;
+  prof_profile_id uuid;
+begin
+  -- Get the professional profile ID for this user
+  select pp.id into prof_profile_id
+  from professional_profiles pp
+  where pp.user_id = prof_user_id;
   
-create trigger after_professional_subscription_update
-  after update on professional_subscriptions
-  for each row
-  execute function update_professional_subscription_status();
+  if prof_profile_id is null then
+    return false;
+  end if;
   
-create trigger after_professional_subscription_delete
-  after delete on professional_subscriptions
-  for each row
-  execute function update_professional_subscription_status();
+  -- Check for active subscription
+  select exists(
+    select 1 from professional_subscriptions
+    where professional_profile_id = prof_profile_id
+    and status = 'active'
+    and (end_date is null or end_date > now())
+  ) into has_active_subscription;
+  
+  return has_active_subscription;
+end;
+$$ language plpgsql security definer;
+
+-- Note: Subscription status is now determined dynamically by checking professional_subscriptions table
+-- This is more secure than storing a mutable flag in professional_profiles
 
 /**
 * RLS policies for subscription tables
@@ -1018,16 +1138,17 @@ begin
     return 'completed';
   end if;
 
-  -- If we're between start and end time, it's still considered upcoming
-  return 'upcoming';
+  -- If we're between start and end time, it's ongoing
+  return 'ongoing';
 end;
 $$ language plpgsql;
 
 /**
 * View that combines appointments with their computed status
-* Note: Views in Postgres inherit the relationships of their base tables
+* Note: Uses SECURITY INVOKER to respect RLS policies of the underlying table
 */
-create or replace view appointments_with_status as
+create or replace view appointments_with_status 
+with (security_invoker = on) as
 select 
   a.id,
   a.booking_id,
@@ -1068,8 +1189,9 @@ create table booking_payments (
   tip_amount decimal(10, 2) default 0 not null,
   service_fee decimal(10, 2) not null,
   status text not null check (status in ('incomplete', 'pending', 'completed', 'failed', 'refunded', 'partially_refunded', 'deposit_paid', 'awaiting_balance', 'authorized', 'pre_auth_scheduled')),
-  stripe_payment_intent_id text, -- For Stripe integration
+  stripe_payment_intent_id text, -- For Stripe integration (balance payment)
   stripe_payment_method_id text, -- For stored payment methods from setup intents
+  deposit_payment_intent_id text, -- For tracking deposit payment intent separately
   -- Stripe checkout session fields
   stripe_checkout_session_id text,
   deposit_amount decimal(10, 2) default 0 not null,
@@ -1200,28 +1322,10 @@ create policy "Professionals can view appointments for their profile"
     )
   );
 
--- Add missing policy to allow professionals to update appointment status
-create policy "Professionals can update appointments for their profile"
-  on appointments for update
-  using (
-    exists (
-      select 1 from bookings b
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = appointments.booking_id
-      and pp.user_id = auth.uid()
-    )
-  );
-
--- Add missing policy to allow clients to update their appointments (for cancellation)
-create policy "Clients can update their appointments"
-  on appointments for update
-  using (
-    exists (
-      select 1 from bookings
-      where bookings.id = appointments.booking_id
-      and bookings.client_id = auth.uid()
-    )
-  );
+-- Removed: "Professionals can update appointments for their profile" policy
+-- Removed: "Clients can update their appointments" policy  
+-- Appointment updates are now handled exclusively by server actions with explicit authorization
+-- See migration: 20250909185108_remove_redundant_appointment_update_policies.sql
 
 -- Booking services policies
 create policy "Users can view booking services for their bookings"
@@ -1249,6 +1353,12 @@ create policy "Clients can create booking services for their bookings"
       where bookings.id = booking_services.booking_id
       and bookings.client_id = auth.uid()
     )
+    and not exists (
+      -- Check if service is archived using direct table access
+      select 1 from public.services s
+      where s.id = booking_services.service_id
+      and s.is_archived = true
+    )
   );
 
 create policy "Professionals can create booking services for their bookings"
@@ -1259,6 +1369,12 @@ create policy "Professionals can create booking services for their bookings"
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.id = booking_services.booking_id
       and pp.user_id = auth.uid()
+    )
+    and not exists (
+      -- Check if service is archived using direct table access
+      select 1 from public.services s
+      where s.id = booking_services.service_id
+      and s.is_archived = true
     )
   );
 
@@ -1280,15 +1396,10 @@ create policy "Users can view booking payments for their bookings"
     )
   );
 
-create policy "Clients can create booking payments for their bookings"
-  on booking_payments for insert
-  with check (
-    exists (
-      select 1 from bookings
-      where bookings.id = booking_payments.booking_id
-      and bookings.client_id = auth.uid()
-    )
-  );
+-- Removed: "Clients can create booking payments for their bookings" policy
+-- Removed: "Clients can update booking payments for cancellation" policy
+-- Booking payment operations are now handled exclusively by server actions with admin client
+-- See migration: remove_dangerous_booking_payments_rls_policies.sql
 
 -- Additional policies for professionals to view client data when they have shared appointments
 create policy "Professionals can view client profiles for shared appointments"
@@ -1313,31 +1424,9 @@ create policy "Professionals can view user data for clients with shared appointm
     )
   );
 
--- Add policy for professionals to update booking payments during ongoing appointments
-create policy "Professionals can update payment amounts for ongoing appointments"
-  on booking_payments for update
-  using (
-    exists (
-      select 1 
-      from bookings b
-      join appointments a on a.booking_id = b.id
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = booking_payments.booking_id
-      and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
-    )
-  )
-  with check (
-    exists (
-      select 1 
-      from bookings b
-      join appointments a on a.booking_id = b.id
-      join professional_profiles pp on b.professional_profile_id = pp.id
-      where b.id = booking_payments.booking_id
-      and pp.user_id = auth.uid()
-      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'ongoing'
-    )
-  );
+-- Removed: "Professionals can update payment amounts for ongoing appointments" policy
+-- Booking payment operations are now handled exclusively by server actions with admin client
+-- See migration: remove_dangerous_booking_payments_rls_policies.sql
 
 /**
 * Update realtime subscriptions to include booking tables
@@ -1457,11 +1546,12 @@ drop policy if exists "Users can update their own basic data" on users;
 create policy "Users can update their own basic data"
   on users for update
   using (auth.uid() = id)
-  with check (
-    -- Can't change their own role - using a parameter instead of a subquery
-    auth.uid() = id AND
-    role_id IS NOT NULL
-  );
+  with check (auth.uid() = id);
+
+-- Add the admin policy for user_roles table (defined here after all functions are created)
+drop policy if exists "Admins can manage user roles" on user_roles;
+create policy "Admins can manage user roles" on user_roles for all 
+  using (is_admin(auth.uid()));
 
 
 
@@ -1505,9 +1595,7 @@ create or replace function handle_professional_profile_stripe_changes()
 returns trigger as $$
 begin
   -- Mark all services for re-sync when key fields change that affect Stripe status
-  if (old.is_published is distinct from new.is_published or 
-      old.is_subscribed is distinct from new.is_subscribed or 
-      old.stripe_connect_status is distinct from new.stripe_connect_status) then
+  if (old.is_published is distinct from new.is_published) then
     
     update services 
     set stripe_sync_status = 'pending', 
@@ -1524,6 +1612,29 @@ create trigger professional_profile_stripe_sync_trigger
   after update on professional_profiles
   for each row
   execute function handle_professional_profile_stripe_changes();
+
+-- Function to handle Stripe Connect status changes that affect service sync
+create or replace function handle_stripe_connect_status_changes()
+returns trigger as $$
+begin
+  -- Mark all services for re-sync when Stripe Connect status changes
+  if (old.stripe_connect_status is distinct from new.stripe_connect_status) then
+    
+    update services 
+    set stripe_sync_status = 'pending', 
+        updated_at = timezone('utc'::text, now())
+    where professional_profile_id = new.professional_profile_id;
+  end if;
+  
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger for Stripe Connect status changes
+create trigger stripe_connect_status_sync_trigger
+  after update on professional_stripe_connect
+  for each row
+  execute function handle_stripe_connect_status_changes();
 
 -- Function to handle payment method changes that affect Stripe sync
 create or replace function handle_payment_method_stripe_changes()
@@ -1597,11 +1708,25 @@ create table messages (
   conversation_id uuid references conversations not null,
   sender_id uuid references users not null,
   content text not null,
-  is_read boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 alter table messages enable row level security;
+
+/**
+* MESSAGE_READ_STATUS
+* Tracks which messages have been read by which users
+*/
+create table message_read_status (
+  id uuid primary key default uuid_generate_v4(),
+  message_id uuid references messages not null,
+  user_id uuid references users not null,
+  read_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Ensure unique read status per message per user
+  constraint unique_message_user_read unique (message_id, user_id)
+);
+alter table message_read_status enable row level security;
 
 -- Create indexes for better performance
 create index if not exists idx_conversations_client_id on conversations(client_id);
@@ -1609,6 +1734,9 @@ create index if not exists idx_conversations_professional_id on conversations(pr
 create index if not exists idx_messages_conversation_id on messages(conversation_id);
 create index if not exists idx_messages_created_at on messages(created_at);
 create index if not exists idx_messages_sender_id on messages(sender_id);
+create index if not exists idx_message_read_status_message_id on message_read_status(message_id);
+create index if not exists idx_message_read_status_user_id on message_read_status(user_id);
+create index if not exists idx_message_read_status_read_at on message_read_status(read_at);
 
 -- Function to update conversation updated_at when a new message is added
 create or replace function update_conversation_timestamp()
@@ -1697,16 +1825,87 @@ create policy "Users can send messages in their conversations"
     )
   );
 
-create policy "Users can update their own messages"
-  on messages for update
+-- Removed insecure message update policy - message content should be immutable
+-- Read status is now tracked via message_read_status table
+
+/**
+* RLS policies for message_read_status table
+*/
+
+-- Users can view read status for messages in their conversations
+create policy "Users can view read status in their conversations"
+  on message_read_status for select
   using (
-    auth.uid() = sender_id
-    or exists (
-      select 1 from conversations
-      where conversations.id = messages.conversation_id
-      and (conversations.client_id = auth.uid() or conversations.professional_id = auth.uid())
+    exists (
+      select 1 from messages m
+      join conversations c on c.id = m.conversation_id
+      where m.id = message_read_status.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
     )
   );
+
+-- Users can mark messages as read in their conversations
+create policy "Users can mark messages as read in their conversations"
+  on message_read_status for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from messages m
+      join conversations c on c.id = m.conversation_id
+      where m.id = message_read_status.message_id
+      and (c.client_id = auth.uid() or c.professional_id = auth.uid())
+    )
+  );
+
+-- Users can update their own read timestamps (e.g., for re-reading)
+create policy "Users can update their own read status"
+  on message_read_status for update
+  using (auth.uid() = user_id);
+
+/**
+* Helper functions for message read status
+*/
+
+-- Function to check if a message has been read by a specific user
+create or replace function is_message_read(p_message_id uuid, p_user_id uuid)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from message_read_status
+    where message_id = p_message_id and user_id = p_user_id
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Function to mark a message as read (upsert)
+create or replace function mark_message_read(p_message_id uuid, p_user_id uuid)
+returns boolean as $$
+begin
+  insert into message_read_status (message_id, user_id)
+  values (p_message_id, p_user_id)
+  on conflict (message_id, user_id)
+  do update set read_at = timezone('utc'::text, now());
+  
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- Function to get unread message count for a user in a conversation
+create or replace function get_unread_message_count(p_conversation_id uuid, p_user_id uuid)
+returns integer as $$
+begin
+  return (
+    select count(*)::integer
+    from messages m
+    where m.conversation_id = p_conversation_id
+    and m.sender_id != p_user_id  -- Don't count own messages
+    and not exists (
+      select 1 from message_read_status mrs
+      where mrs.message_id = m.id and mrs.user_id = p_user_id
+    )
+  );
+end;
+$$ language plpgsql security definer;
 
 -- Additional policies for cross-user visibility in messaging contexts
 -- Allow users to view basic data of other users they have conversations with
@@ -1951,16 +2150,16 @@ begin
     -- Find first admin user to handle support requests
     select u.id into default_professional_id
     from users u
-    join roles r on u.role_id = r.id
-    where r.name = 'admin'
+    join user_roles ur on u.id = ur.user_id
+    where ur.role = 'admin'
     limit 1;
     
     -- If no admin found, find any professional
     if default_professional_id is null then
       select u.id into default_professional_id
       from users u
-      join roles r on u.role_id = r.id
-      where r.name = 'professional'
+      join user_roles ur on u.id = ur.user_id
+      where ur.role = 'professional'
       limit 1;
     end if;
     
@@ -2187,9 +2386,9 @@ create policy "Clients can create their own bookings"
   on bookings for insert
   with check (auth.uid() = client_id);
 
-create policy "Clients can update their own bookings"
-  on bookings for update
-  using (auth.uid() = client_id);
+-- Removed: "Clients can update their own bookings" policy
+-- Booking updates are now handled exclusively by server actions with explicit authorization
+-- See migration: 20250909182027_remove_redundant_booking_update_policy.sql
 
 -- Add missing appointment creation policy
 create policy "Clients can create appointments for their bookings"
@@ -2274,10 +2473,9 @@ create policy "Anyone can create inquiries" on contact_inquiries
 create policy "Admins can view all inquiries" on contact_inquiries
   for select using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2285,10 +2483,9 @@ create policy "Admins can view all inquiries" on contact_inquiries
 create policy "Admins can update inquiries" on contact_inquiries
   for update using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2380,10 +2577,9 @@ create policy "Admins can manage configurations"
   on admin_configs for all
   using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2576,6 +2772,7 @@ create publication supabase_realtime for table
   professional_subscriptions,
   conversations,
   messages,
+  message_read_status,
   reviews,
   support_requests;
 
@@ -2623,6 +2820,11 @@ $$;
 
 -- Grant execute permission to authenticated users
 grant execute on function insert_address_and_return_id to authenticated;
+grant execute on function is_professional_subscribed to authenticated;
+grant execute on function is_professional_user_subscribed to authenticated;
+grant execute on function is_message_read to authenticated;
+grant execute on function mark_message_read to authenticated;
+grant execute on function get_unread_message_count to authenticated;
 
 /**
 * Function to determine if an appointment is upcoming or completed based on its date and time
@@ -2674,19 +2876,15 @@ create trigger handle_updated_at before update on appointments
 
 /**
 * EMAIL TEMPLATES
-* Stores email template configurations for various system notifications
+* Stores email template configurations with references to Brevo templates
 */
 create table email_templates (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   description text,
   tag text not null,
-  sender_name text not null,
-  sender_email text not null,
-  reply_to text,
-  subject text not null,
-  html_content text not null,
-  to_field text not null,
+  brevo_template_id integer not null default 1,
+  dynamic_params jsonb default '[]'::jsonb not null,
   is_active boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -2698,6 +2896,7 @@ alter table email_templates enable row level security;
 
 -- Create indexes for better performance
 create index if not exists idx_email_templates_tag on email_templates(tag);
+create index if not exists idx_email_templates_brevo_template_id on email_templates(brevo_template_id);
 create index if not exists idx_email_templates_is_active on email_templates(is_active);
 
 -- RLS policies for email templates
@@ -2710,10 +2909,9 @@ create policy "Admins can manage email templates"
   on email_templates for all
   using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2771,10 +2969,9 @@ create policy "Admins can view all activity logs"
   on activity_log for select
   using (
     exists (
-      select 1 from users u
-      join roles r on u.role_id = r.id
-      where u.id = auth.uid() 
-      and r.name = 'admin'
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
     )
   );
 
@@ -2905,21 +3102,6 @@ begin
 end;
 $$ language plpgsql security definer;
 
-create or replace function is_admin(user_uuid uuid)
-returns boolean as $$
-declare
-  is_admin boolean;
-begin
-  select exists(
-    select 1 from users
-    join roles on users.role_id = roles.id
-    where users.id = user_uuid
-    and roles.name = 'admin'
-  ) into is_admin;
-  
-  return is_admin;
-end;
-$$ language plpgsql security definer;
 -- ... existing code ...
 
 -- RPC: get_admin_dashboard_data

@@ -152,11 +152,7 @@ export function NoShowModal({
           <Button variant="outline" onClick={onClose} disabled={isProcessing}>
             Cancel
           </Button>
-          <Button
-            onClick={handleMarkNoShow}
-            disabled={isProcessing}
-            className="bg-amber-600 hover:bg-amber-700"
-          >
+          <Button onClick={handleMarkNoShow} disabled={isProcessing}>
             {isProcessing ? 'Processing...' : 'Mark as No-Show'}
           </Button>
         </DialogFooter>

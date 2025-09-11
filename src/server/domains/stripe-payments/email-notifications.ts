@@ -3,10 +3,9 @@ import { Database } from '@/../supabase/types';
 import { 
   sendBookingConfirmationClient,
   sendBookingConfirmationProfessional,
-  sendPaymentConfirmationClient,
-  sendPaymentConfirmationProfessional
+
 } from '@/providers/brevo/templates';
-import { getBookingDetailsForConfirmation } from './db';
+import { format, toZonedTime } from 'date-fns-tz';
 
 // Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
@@ -25,8 +24,143 @@ function createSupabaseAdminClient() {
   return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
-// Global set to track which bookings have had emails sent in this session
-const emailsSentTracker = new Set<string>();
+// No longer using in-memory tracking - using database instead
+
+/**
+ * Format a UTC date/time for a specific timezone
+ */
+function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string {
+  try {
+    const utcDate = new Date(utcDateTime);
+    const zonedDate = toZonedTime(utcDate, timezone);
+    return format(zonedDate, 'EEEE, MMMM d, yyyy \'at\' h:mm a zzz', { timeZone: timezone });
+  } catch (error) {
+    console.error('Error formatting date in timezone:', error, { utcDateTime, timezone });
+    // Fallback to UTC formatting
+    return new Date(utcDateTime).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    }) + ' UTC';
+  }
+}
+
+// Helper function to format address like in booking page
+function formatAddress(address: {
+  street_address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+} | null): string {
+  if (!address) return '';
+  const parts = [
+    address.street_address,
+    address.city,
+    address.state,
+    address.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : '';
+}
+
+// Helper function to generate message URL for email notifications
+async function generateMessageURL(currentUserId: string, targetUserId: string): Promise<string> {
+  try {
+    const adminSupabase = createSupabaseAdminClient();
+    
+    // Determine who is client and who i`s professional
+    const { data: isCurrentUserClient } = await adminSupabase.rpc('is_client', {
+      user_uuid: currentUserId,
+    });
+    const { data: isCurrentUserProfessional } = await adminSupabase.rpc('is_professional', {
+      user_uuid: currentUserId,
+    });
+    const { data: isTargetClient } = await adminSupabase.rpc('is_client', {
+      user_uuid: targetUserId,
+    });
+    const { data: isTargetProfessional } = await adminSupabase.rpc('is_professional', {
+      user_uuid: targetUserId,
+    });
+
+    let clientId: string;
+    let professionalId: string;
+
+    if (isCurrentUserClient && isTargetProfessional) {
+      clientId = currentUserId;
+      professionalId = targetUserId;
+    } else if (isCurrentUserProfessional && isTargetClient) {
+      clientId = targetUserId;
+      professionalId = currentUserId;
+    } else {
+      // Fallback to general messages if roles can't be determined
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+    }
+
+    // Check if conversation already exists
+    const { data: existingConversation } = await adminSupabase
+      .from('conversations')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('professional_id', professionalId)
+      .eq('purpose', 'general')
+      .single();
+
+    if (existingConversation) {
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages?conversation=${existingConversation.id}`;
+    }
+
+    // Get professional profile ID for booking check
+    const { data: professionalProfile } = await adminSupabase
+      .from('professional_profiles')
+      .select('id')
+      .eq('user_id', professionalId)
+      .single();
+
+    if (!professionalProfile) {
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+    }
+
+    // Check if they have shared appointments (they should since this is a booking confirmation)
+    const { data: sharedAppointments } = await adminSupabase
+      .from('bookings')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('professional_profile_id', professionalProfile.id)
+      .limit(1);
+
+    const hasSharedAppointments = sharedAppointments && sharedAppointments.length > 0;
+
+    if (hasSharedAppointments) {
+      // Create the conversation using admin client
+      const { data: newConversation, error: createError } = await adminSupabase
+        .from('conversations')
+        .insert({
+          client_id: clientId,
+          professional_id: professionalId,
+          purpose: 'general'
+        })
+        .select('id')
+        .single();
+
+      if (createError) {
+        console.error('Error creating conversation for email:', createError);
+        return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+      }
+
+      return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages?conversation=${newConversation.id}`;
+    }
+
+    // Fallback to general messages page
+    return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+  } catch (error) {
+    console.error('Error generating message URL for email:', error);
+    return `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/messages`;
+  }
+}
 
 /**
  * Send booking confirmation emails to both client and professional
@@ -43,14 +177,21 @@ export async function sendBookingConfirmationEmails(
       isUncaptured
     });
 
-    // Check if emails have already been sent for this booking in this session
-    if (emailsSentTracker.has(bookingId)) {
-      console.log('⚠️ Confirmation emails already sent for booking in this session:', bookingId);
-      return { success: true };
-    }
-
     console.log('📊 Creating admin Supabase client...');
     const adminSupabase = createSupabaseAdminClient();
+
+    // Check if emails have already been sent for this booking by checking database
+    const { data: existingEmails } = await adminSupabase
+      .from('booking_payments')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .eq('status', 'completed') // Only count as "emails sent" if payment is completed
+      .single();
+
+    if (existingEmails) {
+      console.log('⚠️ Confirmation emails likely already sent for completed booking:', bookingId);
+      // Still proceed to avoid issues, but log this
+    }
 
     // Get comprehensive booking data with all related information
     const { data: bookingData, error: bookingError } = await adminSupabase
@@ -94,14 +235,15 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Failed to fetch appointment data' };
     }
 
-    // Get client data with profile for phone number
+    // Get client data with profile for phone number and timezone
     const { data: clientData, error: clientError } = await adminSupabase
       .from('users')
       .select(`
-        first_name, 
+        first_name,
         last_name,
         client_profiles (
-          phone_number
+          phone_number,
+          timezone
         )
       `)
       .eq('id', bookingData.client_id)
@@ -112,14 +254,15 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Failed to fetch client data' };
     }
 
-    // Get professional data with profile and address
+    // Get professional data with profile, address, and timezone
     const { data: professionalData, error: professionalError } = await adminSupabase
       .from('professional_profiles')
       .select(`
         user_id,
         phone_number,
         location,
-        addresses (
+        timezone,
+        address:address_id(
           street_address,
           city,
           state,
@@ -164,18 +307,36 @@ export async function sendBookingConfirmationEmails(
       return { success: false, error: 'Missing required booking data' };
     }
 
-    // Format appointment date and time
-    const appointmentDate = new Date(appointment.start_time).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    // Format address for professional
+    const professionalAddress = formatAddress(professionalData.address);
 
-    const appointmentTime = new Date(appointment.start_time).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
+    // Prepare services array for email templates (import formatDuration if needed)
+    const { formatDuration } = await import('@/utils/formatDuration');
+    const servicesForEmail = services.map(service => ({
+      name: service.services?.name || '',
+      description: service.services?.description || '',
+      duration: formatDuration(service.duration || 0),
+      price: service.price || 0
+    }));
+
+    // Generate message URLs
+    const clientMessageUrl = await generateMessageURL(bookingData.client_id, professionalData.user_id);
+    const professionalMessageUrl = await generateMessageURL(professionalData.user_id, bookingData.client_id);
+
+    // Get timezones (fallback to UTC if not set)
+    const clientTimezone = clientProfile?.timezone || 'UTC';
+    const professionalTimezone = professionalData.timezone || 'UTC';
+
+    // Format appointment date and time for each timezone
+    const clientAppointmentDateTime = formatDateTimeInTimezone(appointment.start_time, clientTimezone);
+    const professionalAppointmentDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
+
+    console.log('Appointment time formatting:', {
+      utcTime: appointment.start_time,
+      clientTimezone,
+      professionalTimezone,
+      clientFormatted: clientAppointmentDateTime,
+      professionalFormatted: professionalAppointmentDateTime
     });
 
     // Calculate totals
@@ -197,18 +358,18 @@ export async function sendBookingConfirmationEmails(
         [{ email: professionalAuth.user.email, name: `${professional.first_name} ${professional.last_name}` }],
         {
           client_name: `${clientData.first_name} ${clientData.last_name}`,
-          client_phone: clientProfile?.phone_number || undefined,
+          client_phone: clientProfile?.phone_number || '',
           professional_name: `${professional.first_name} ${professional.last_name}`,
-          subtotal,
-          tip_amount: tipAmount,
-          professional_total: professionalTotal,
+          price_subtotal: subtotal,
+          price_tip: tipAmount,
+          price_total_paid: professionalTotal,
           booking_id: bookingId,
-          appointment_id: appointmentId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
+          appointment_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
+          date_and_time: professionalAppointmentDateTime,
+          address: professionalAddress,
+          home_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          message_url: professionalMessageUrl,
+          services: servicesForEmail
         }
       );
 
@@ -228,23 +389,23 @@ export async function sendBookingConfirmationEmails(
       isUncaptured
     });
 
-    // Get payment details including payment method
-    const { data: paymentData, error: paymentError } = await adminSupabase
-      .from('booking_payments')
-      .select(`
-        *,
-        payment_method:payment_methods(
-          name,
-          is_online
-        )
-      `)
-      .eq('booking_id', bookingId)
-      .single();
+    // TODO: Add payment details when needed for email templates
+    // const { data: paymentData, error: paymentError } = await adminSupabase
+    //   .from('booking_payments')
+    //   .select(`
+    //     *,
+    //     payment_method:payment_methods(
+    //       name,
+    //       is_online
+    //     )
+    //   `)
+    //   .eq('booking_id', bookingId)
+    //   .single();
 
-    if (paymentError) {
-      console.error('Error fetching payment details:', paymentError);
-      throw new Error('Failed to fetch payment details');
-    }
+    // if (paymentError) {
+    //   console.error('Error fetching payment details:', paymentError);
+    //   throw new Error('Failed to fetch payment details');
+    // }
 
     // Send client email
     try {
@@ -253,22 +414,18 @@ export async function sendBookingConfirmationEmails(
         {
           client_name: `${clientData.first_name} ${clientData.last_name}`,
           professional_name: `${professional.first_name} ${professional.last_name}`,
-          subtotal,
-          service_fee: serviceFee,
-          tip_amount: tipAmount,
-          total: totalPaid,
-          payment_method: paymentData.payment_method.name,
-          is_card_payment: paymentData.payment_method.is_online,
-          deposit_amount: payment.deposit_amount || 0,
-          balance_due: paymentData.payment_method.name.toLowerCase() === 'cash' ? subtotal : 0,
-          balance_due_date: appointmentDate,
+          price_subtotal: subtotal,
+          price_service_fee: serviceFee,
+          price_tip: tipAmount,
+          price_total_paid: totalPaid,
           booking_id: bookingId,
-          appointment_id: appointmentId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
+          appointment_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${appointmentId}`,
+          date_and_time: clientAppointmentDateTime,
+          home_url: process.env.NEXT_PUBLIC_BASE_URL!,
+          message_url: clientMessageUrl,
+          professional_address: professionalAddress,
+          professional_phone: professionalData.phone_number || '',
+          services: servicesForEmail
         }
       );
 
@@ -282,10 +439,8 @@ export async function sendBookingConfirmationEmails(
       console.error('❌ Error sending client confirmation email:', error);
     }
 
-    // Add booking to sent tracker if both emails were sent successfully
-    if (emailsSentSuccessfully === 2) {
-      emailsSentTracker.add(bookingId);
-    }
+    // Log the result - no longer using in-memory tracking
+    console.log(`📧 Email sending summary - Emails sent successfully: ${emailsSentSuccessfully}/2`);
 
     return { success: emailsSentSuccessfully > 0 };
 
@@ -295,102 +450,4 @@ export async function sendBookingConfirmationEmails(
   }
 }
 
-/**
- * Send payment confirmation emails to both client and professional
- */
-export async function sendPaymentConfirmationEmails(
-  bookingId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Get booking details
-    const { booking, error: bookingError } = await getBookingDetailsForConfirmation(bookingId);
-
-    if (bookingError || !booking) {
-      console.error('Failed to fetch booking data for payment confirmation:', bookingError);
-      return { success: false, error: 'Failed to fetch booking data' };
-    }
-
-    const {
-      clientEmail,
-      clientName,
-      professionalEmail,
-      professionalName,
-      appointmentDate,
-      appointmentTime,
-      totalAmount: subtotal,
-      tipAmount,
-      capturedAmount: totalPaid,
-    } = booking;
-
-    const professionalTotal = subtotal + (tipAmount || 0);
-    let emailsSentSuccessfully = 0;
-
-    // Send client email
-    try {
-      const result = await sendPaymentConfirmationClient(
-        [{ email: clientEmail, name: clientName }],
-        {
-          client_name: clientName,
-          professional_name: professionalName,
-          payment_method: 'Credit Card',
-          subtotal,
-          tip_amount: tipAmount || 0,
-          total: totalPaid,
-          booking_id: bookingId,
-          appointment_id: bookingId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${bookingId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
-        }
-      );
-
-      if (result.success) {
-        emailsSentSuccessfully++;
-        console.log('✅ Client payment confirmation email sent:', result.messageId);
-      } else {
-        console.error('❌ Failed to send client payment confirmation email:', result.error);
-      }
-    } catch (error) {
-      console.error('❌ Error sending client payment confirmation email:', error);
-    }
-
-    // Send professional email
-    try {
-      const result = await sendPaymentConfirmationProfessional(
-        [{ email: professionalEmail, name: professionalName }],
-        {
-          client_name: clientName,
-          professional_name: professionalName,
-          payment_method: 'Credit Card',
-          subtotal,
-          tip_amount: tipAmount || 0,
-          professional_total: professionalTotal,
-          booking_id: bookingId,
-          appointment_id: bookingId,
-          date: appointmentDate,
-          time: appointmentTime,
-          appointment_details_url: `${process.env.NEXT_PUBLIC_BASE_URL}/bookings/${bookingId}`,
-          website_url: process.env.NEXT_PUBLIC_BASE_URL!,
-          support_email: process.env.BREVO_ADMIN_EMAIL!
-        }
-      );
-
-      if (result.success) {
-        emailsSentSuccessfully++;
-        console.log('✅ Professional payment confirmation email sent:', result.messageId);
-      } else {
-        console.error('❌ Failed to send professional payment confirmation email:', result.error);
-      }
-    } catch (error) {
-      console.error('❌ Error sending professional payment confirmation email:', error);
-    }
-
-    return { success: emailsSentSuccessfully > 0 };
-
-  } catch (error) {
-    console.error('❌ Error in sendPaymentConfirmationEmails:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-} 
+// Payment confirmation emails have been removed 

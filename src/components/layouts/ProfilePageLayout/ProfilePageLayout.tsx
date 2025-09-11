@@ -5,6 +5,7 @@ import { getStripeConnectStatus as domainGetStripeConnectStatus } from '@/server
 import { getWorkingHoursAction } from '@/server/domains/working_hours/actions';
 import { getProfessionalPaymentMethodsAction } from '@/server/domains/payment_methods/actions';
 import { redirect } from 'next/navigation';
+import { getProfessionalSubscriptionDetails } from '@/utils/subscriptionUtils';
 import { revalidatePath } from 'next/cache';
 import { ProfilePageLayoutClient } from './ProfilePageLayoutClient';
 import type { WorkingHoursEntry } from '@/types/working_hours';
@@ -54,6 +55,8 @@ export async function ProfilePageLayout({ children }: ProfilePageLayoutProps) {
   // Fetch user data first to get the role from database
   const userData = await getUserData(user.id);
   const userRole = userData.roleName;
+
+  console.log('userRole', userRole);
 
   if (userRole === 'client') {
     redirect('/client-profile');
@@ -119,9 +122,7 @@ export async function getUserData(userId: string): Promise<UserData> {
         `
         id,
         first_name,
-        last_name,
-        role_id,
-        roles(name)
+        last_name
       `,
       )
       .eq('id', userId)
@@ -144,15 +145,31 @@ export async function getUserData(userId: string): Promise<UserData> {
       email = authUser.email;
     }
 
-    // Check if user is a professional
-    const { data: isProfessional, error: roleError } = await supabase.rpc(
-      'is_professional',
+    // Check user roles using RPC functions (these bypass RLS as they are security definer)
+    const { data: isProfessional, error: professionalError } =
+      await supabase.rpc('is_professional', { user_uuid: userId });
+
+    const { data: isClient, error: clientError } = await supabase.rpc(
+      'is_client',
       { user_uuid: userId },
     );
 
-    if (roleError) {
-      console.error('Error checking professional status:', roleError);
+    const { data: isAdmin, error: adminError } = await supabase.rpc(
+      'is_admin',
+      { user_uuid: userId },
+    );
+
+    if (professionalError) {
+      console.error('Error checking professional status:', professionalError);
     }
+    if (clientError) {
+      console.error('Error checking client status:', clientError);
+    }
+    if (adminError) {
+      console.error('Error checking admin status:', adminError);
+    }
+
+    console.log('Role checks:', { isProfessional, isClient, isAdmin });
 
     // If professional, fetch subscription status and publish status
     let subscriptionStatus = null;
@@ -162,59 +179,37 @@ export async function getUserData(userId: string): Promise<UserData> {
     if (isProfessional) {
       const { data: profileData, error: profileError } = await supabase
         .from('professional_profiles')
-        .select('is_subscribed, is_published')
+        .select('id, is_published')
         .eq('user_id', userId)
         .single();
 
       if (!profileError && profileData) {
-        subscriptionStatus = profileData.is_subscribed;
         isPublished = profileData.is_published;
 
-        // If subscribed, check if we have professional_subscriptions record
-        if (subscriptionStatus) {
-          // Get professional profile ID
-          const { data: profileIdData } = await supabase
-            .from('professional_profiles')
-            .select('id')
-            .eq('user_id', userId)
-            .single();
-
-          if (profileIdData) {
-            // Look for active subscription in our database
-            const { data: subData } = await supabase
-              .from('professional_subscriptions')
-              .select(
-                `
-                status,
-                end_date,
-                stripe_subscription_id,
-                cancel_at_period_end,
-                subscription_plans(name)
-              `,
-              )
-              .eq('professional_profile_id', profileIdData.id)
-              .eq('status', 'active')
-              .single();
-
-            if (subData && subData.stripe_subscription_id) {
-              subscriptionDetails = {
-                planName:
-                  subData.subscription_plans?.name || 'Professional Plan',
-                nextBillingDate: subData.end_date || new Date().toISOString(),
-                status: subData.status,
-                cancelAtPeriodEnd: subData.cancel_at_period_end || false,
-              };
-            }
-          }
-        }
+        // Check subscription status using the new utility function
+        const subscriptionResult = await getProfessionalSubscriptionDetails(
+          profileData.id,
+        );
+        subscriptionStatus = subscriptionResult.isSubscribed;
+        subscriptionDetails = subscriptionResult.subscriptionDetails;
       }
+    }
+
+    // Determine role name based on RPC function results
+    let roleName = 'User'; // default fallback
+    if (isAdmin) {
+      roleName = 'admin';
+    } else if (isProfessional) {
+      roleName = 'professional';
+    } else if (isClient) {
+      roleName = 'client';
     }
 
     return {
       id: userData.id,
       firstName: userData.first_name,
       lastName: userData.last_name,
-      roleName: userData.roles?.name || 'User',
+      roleName,
       isProfessional: !!isProfessional,
       subscriptionStatus,
       isPublished,

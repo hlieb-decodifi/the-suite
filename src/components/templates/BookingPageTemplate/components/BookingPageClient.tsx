@@ -13,7 +13,7 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LeafletMap } from '@/components/common/LeafletMap';
 import { useActivityTracker } from '@/api/activity-log';
 
@@ -45,8 +45,17 @@ export function BookingPageClient({
   // Activity tracking
   const { trackServiceView, trackProfessionalView } = useActivityTracker();
 
+  // Memoize the booking completion handler to prevent infinite re-renders
+  const handleBookingComplete = useCallback((bookingId: string) => {
+    // Redirect to success page or show completion state
+    console.log('Booking completed:', bookingId);
+  }, []);
+
   // Use the existing booking state hook with the page context
-  const selectedExtraServiceIds = formData.extraServices?.map((s) => s.id) || [];
+  const selectedExtraServiceIds = useMemo(() => 
+    formData.extraServices?.map((s) => s.id) || [], 
+    [formData.extraServices]
+  );
   const {
     bookingCompleted,
     bookingDetails,
@@ -66,10 +75,7 @@ export function BookingPageClient({
   } = useBookingState({
     isOpen: true, // Always open for page context
     service,
-    onBookingComplete: (bookingId) => {
-      // Redirect to success page or show completion state
-      console.log('Booking completed:', bookingId);
-    },
+    onBookingComplete: handleBookingComplete,
     selectedExtraServiceIds,
   });
 

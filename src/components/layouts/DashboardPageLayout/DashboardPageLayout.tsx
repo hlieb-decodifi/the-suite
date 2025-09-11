@@ -71,9 +71,7 @@ export async function getUserDashboardData(
         `
         id,
         first_name,
-        last_name,
-        role_id,
-        roles(name)
+        last_name
       `,
       )
       .eq('id', userId)
@@ -84,6 +82,13 @@ export async function getUserDashboardData(
         `Error fetching user data: ${userError?.message || 'User not found'}`,
       );
     }
+
+    // Fetch user role separately
+    const { data: userRoleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
 
     // Get user's email from the current authenticated user
     let email: string | undefined;
@@ -111,15 +116,16 @@ export async function getUserDashboardData(
 
     // Get unread messages count for general conversations
     const unreadMessagesCount = await getUnreadMessagesCount(userId);
-    
+
     // Get unread messages count for support requests
-    const unreadSupportMessagesCount = await getUnreadSupportMessagesCount(userId);
+    const unreadSupportMessagesCount =
+      await getUnreadSupportMessagesCount(userId);
 
     return {
       id: userData.id,
       firstName: userData.first_name,
       lastName: userData.last_name,
-      roleName: userData.roles?.name || 'User',
+      roleName: userRoleData?.role || 'User',
       isProfessional: !!isProfessional,
       email,
       appointmentCounts,
@@ -386,7 +392,9 @@ export async function getDashboardAppointments(
 
 // Get unread messages count
 // Get unread support request messages count
-export async function getUnreadSupportMessagesCount(userId: string): Promise<number> {
+export async function getUnreadSupportMessagesCount(
+  userId: string,
+): Promise<number> {
   try {
     const supabase = await createClient();
 
@@ -409,22 +417,30 @@ export async function getUnreadSupportMessagesCount(userId: string): Promise<num
       return 0;
     }
 
-    const conversationIds = conversations.map((conv) => conv.id);
+    // Count unread support messages for each conversation using the new RPC function
+    let totalUnreadCount = 0;
 
-    // Count unread messages where sender is not the current user
-    const { count, error: messagesError } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .in('conversation_id', conversationIds)
-      .eq('is_read', false)
-      .neq('sender_id', userId);
+    for (const conversation of conversations) {
+      const { data: unreadCount, error: countError } = await supabase.rpc(
+        'get_unread_message_count',
+        {
+          p_conversation_id: conversation.id,
+          p_user_id: userId,
+        },
+      );
 
-    if (messagesError) {
-      console.error('Error counting unread support messages:', messagesError);
-      return 0;
+      if (countError) {
+        console.error(
+          'Error counting unread support messages for conversation:',
+          countError,
+        );
+        continue; // Skip this conversation but continue counting others
+      }
+
+      totalUnreadCount += unreadCount || 0;
     }
 
-    return count || 0;
+    return totalUnreadCount;
   } catch (error) {
     console.error('Error in getUnreadSupportMessagesCount:', error);
     return 0;
@@ -455,22 +471,30 @@ export async function getUnreadMessagesCount(userId: string): Promise<number> {
       return 0;
     }
 
-    const conversationIds = conversations.map((conv) => conv.id);
+    // Count unread messages for each conversation using the new RPC function
+    let totalUnreadCount = 0;
 
-    // Count unread messages where sender is not the current user
-    const { count, error: messagesError } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .in('conversation_id', conversationIds)
-      .eq('is_read', false)
-      .neq('sender_id', userId);
+    for (const conversation of conversations) {
+      const { data: unreadCount, error: countError } = await supabase.rpc(
+        'get_unread_message_count',
+        {
+          p_conversation_id: conversation.id,
+          p_user_id: userId,
+        },
+      );
 
-    if (messagesError) {
-      console.error('Error counting unread messages:', messagesError);
-      return 0;
+      if (countError) {
+        console.error(
+          'Error counting unread messages for conversation:',
+          countError,
+        );
+        continue; // Skip this conversation but continue counting others
+      }
+
+      totalUnreadCount += unreadCount || 0;
     }
 
-    return count || 0;
+    return totalUnreadCount;
   } catch (error) {
     console.error('Error in getUnreadMessagesCount:', error);
     return 0;

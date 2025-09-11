@@ -43,7 +43,6 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
     professional_profile: {
       id: string;
       location: string | null;
-      is_subscribed: boolean;
       hide_full_address: boolean;
       address: {
         id: string;
@@ -101,6 +100,25 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
         .trim()
     : professionalProfile?.location || 'Location not specified'; // Fallback to legacy location field
   
+  // Check subscription status for this professional
+  const supabase = await createClient();
+  let isBookable = false;
+  
+  try {
+    const { data: isSubscribed, error: subscriptionError } = await supabase.rpc(
+      'is_professional_user_subscribed',
+      { prof_user_id: user?.id }
+    );
+    
+    if (subscriptionError) {
+      console.error('Error checking subscription status for professional:', user?.id, subscriptionError);
+    } else {
+      isBookable = !!isSubscribed;
+    }
+  } catch (error) {
+    console.error('Error in subscription check:', error);
+  }
+
   // Create professional object
   const professional: Professional = {
     id: user?.id || 'unknown',
@@ -112,7 +130,6 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
     profile_id: professionalProfile?.id, // Include the professional profile ID
     hide_full_address: hideFullAddress,
     address_data: address,
-    is_subscribed: professionalProfile?.is_subscribed === true, // Add subscription status
   };
 
   return {
@@ -121,7 +138,7 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
     description: serviceData.description || '',
     price: serviceData.price,
     duration: serviceData.duration,
-    isBookable: professionalProfile?.is_subscribed === true,
+    isBookable, // Now dynamically checked based on subscription status
     professional,
   };
 }
@@ -197,7 +214,6 @@ export async function getServices(
         professional_profile:professional_profile_id(
           id,
           location,
-          is_subscribed,
           hide_full_address,
           address:address_id(
             id,
@@ -220,6 +236,7 @@ export async function getServices(
         )
       `)
       .in('professional_profile_id', publishedProfileIds)
+      .eq('is_archived', false)
       .order('id', { ascending: true })
       .or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
 
@@ -262,7 +279,6 @@ export async function getServices(
       professional_profile:professional_profile_id(
         id,
         location,
-        is_subscribed,
         hide_full_address,
         address:address_id(
           id,
@@ -285,13 +301,15 @@ export async function getServices(
       )
     `)
     .in('professional_profile_id', publishedProfileIds)
+    .eq('is_archived', false)
     .order('id', { ascending: true });
 
   // Get total count for pagination
   const countQuery = supabase
     .from('services')
     .select('*', { count: 'exact', head: true })
-    .in('professional_profile_id', publishedProfileIds);
+    .in('professional_profile_id', publishedProfileIds)
+    .eq('is_archived', false);
 
   const { count, error: countError } = await countQuery;
 
@@ -374,7 +392,6 @@ export async function getFilteredServices(
         professional_profile:professional_profile_id(
           id,
           location,
-          is_subscribed,
           hide_full_address,
           address:address_id(
             id,
@@ -397,6 +414,7 @@ export async function getFilteredServices(
         )
       `)
       .in('professional_profile_id', publishedProfileIds)
+      .eq('is_archived', false)
       .order('id', { ascending: true });
     
     // Add service name filter if provided
@@ -456,8 +474,8 @@ export async function getFilteredServices(
 
       // Prioritize subscribed professionals first, then those with non-null addresses
       filteredServices = filteredServices.sort((a, b) => {
-        const aSubscribed = !!a.professional_profile?.is_subscribed;
-        const bSubscribed = !!b.professional_profile?.is_subscribed;
+        const aSubscribed = true; // TODO: Replace with dynamic subscription check
+        const bSubscribed = true; // TODO: Replace with dynamic subscription check
         if (aSubscribed !== bSubscribed) return aSubscribed ? -1 : 1;
 
         const aHasAddress = !!a.professional_profile?.address;

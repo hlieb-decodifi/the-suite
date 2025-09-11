@@ -80,7 +80,7 @@ export async function getServicesForUser({
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     
-    // Build query
+    // Build query - include both archived and active services for professional management
     let query = supabase
       .from('services')
       .select('*', { count: 'exact' });
@@ -91,8 +91,10 @@ export async function getServicesForUser({
     }
     
     // Apply remaining filters and pagination
+    // Sort by is_archived first (active services first), then by created_at (newest first)
     const { data, error, count } = await query
       .eq('professional_profile_id', profileId)
+      .order('is_archived', { ascending: true })
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -147,11 +149,12 @@ export async function upsertService({
         throw new Error('Could not verify service limit.');
       }
       
-      // Get current service count
+      // Get current service count (excluding archived services)
       const { count, error: countError } = await supabase
         .from('services')
         .select('*', { count: 'exact', head: true })
-        .eq('professional_profile_id', profileId);
+        .eq('professional_profile_id', profileId)
+        .eq('is_archived', false);
         
       if (countError) {
         throw new Error(countError.message);
@@ -230,6 +233,21 @@ export async function deleteService({
       throw new Error('Service not found or you do not have permission to delete it');
     }
     
+    // Check if service has any bookings - if yes, suggest archiving instead
+    const { count: bookingCount, error: bookingError } = await supabase
+      .from('booking_services')
+      .select('*', { count: 'exact', head: true })
+      .eq('service_id', serviceId);
+      
+    if (bookingError) {
+      console.error('Error checking bookings:', bookingError);
+      throw new Error('Could not verify if service has bookings');
+    }
+    
+    if (bookingCount && bookingCount > 0) {
+      throw new Error('Cannot delete service with existing bookings. Use archive instead.');
+    }
+    
     const { error } = await supabase
       .from('services')
       .delete()
@@ -243,6 +261,74 @@ export async function deleteService({
     return true;
   } catch (error) {
     console.error('Error in deleteService:', error);
+    throw error;
+  }
+}
+
+export async function archiveService({
+  userId,
+  serviceId
+}: {
+  userId: string;
+  serviceId: string;
+}) {
+  const supabase = await createClient();
+  
+  try {
+    // Validate user ownership by getting profile ID (this will throw if user doesn't have a professional profile)
+    await getProfessionalProfileId(userId);
+    
+    // Use the archive_service function from the database
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await supabase.rpc('archive_service' as any, {
+      service_id: serviceId
+    });
+    
+    if (error) {
+      throw new Error(error.message);
+    }
+    
+    if (!data) {
+      throw new Error('Service not found or already archived');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in archiveService:', error);
+    throw error;
+  }
+}
+
+export async function unarchiveService({
+  userId,
+  serviceId
+}: {
+  userId: string;
+  serviceId: string;
+}) {
+  const supabase = await createClient();
+  
+  try {
+    // Validate user ownership by getting profile ID (this will throw if user doesn't have a professional profile)
+    await getProfessionalProfileId(userId);
+    
+    // Use the unarchive_service function from the database
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await supabase.rpc('unarchive_service' as any, {
+      service_id: serviceId
+    });
+    
+    if (error) {
+      throw new Error(error.message);
+    }
+    
+    if (!data) {
+      throw new Error('Service not found or already active');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in unarchiveService:', error);
     throw error;
   }
 } 

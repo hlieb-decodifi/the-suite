@@ -18,7 +18,6 @@ export type Professional = {
     latitude: number;
     longitude: number;
   } | null;
-  is_subscribed?: boolean;
 }
 export type ServiceListItem = {
   id: string;

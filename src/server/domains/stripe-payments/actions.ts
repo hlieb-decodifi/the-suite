@@ -13,6 +13,8 @@ export async function createBookingWithStripePayment(
   professionalProfileId: string,
   clientTimezone?: string
 ): Promise<PaymentProcessingResult> {
+  let bookingId: string | null = null;
+  
   try {
     const supabase = await createClient();
     
@@ -60,8 +62,11 @@ export async function createBookingWithStripePayment(
       };
     }
 
+    // Store booking ID for cleanup on error
+    bookingId = bookingResult.bookingId;
+
     // Unified payment flow for both cash and card
-    return await handleUnifiedPaymentFlow(
+    const paymentResult = await handleUnifiedPaymentFlow(
       bookingResult.bookingId,
       professionalProfileId,
       user.id,
@@ -71,14 +76,48 @@ export async function createBookingWithStripePayment(
       paymentMethod.is_online
     );
 
+    // If payment processing failed, clean up the booking
+    if (!paymentResult.success) {
+      console.log(`Payment processing failed for booking ${bookingId}, cleaning up...`);
+      await cleanupFailedBooking(bookingId);
+      bookingId = null; // Prevent cleanup in catch block
+    }
+
+    return paymentResult;
+
   } catch (error) {
     console.error('Error in createBookingWithStripePayment:', error);
+    
+    // Clean up booking if it was created but payment failed
+    if (bookingId) {
+      console.log(`Cleaning up failed booking ${bookingId} due to error...`);
+      await cleanupFailedBooking(bookingId);
+    }
+    
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to process booking',
       requiresPayment: false,
       paymentType: 'full'
     };
+  }
+}
+
+/**
+ * Clean up a failed booking and all related records
+ */
+async function cleanupFailedBooking(bookingId: string): Promise<void> {
+  try {
+    const { deleteBookingAndRelatedRecords } = await import('./db');
+    const result = await deleteBookingAndRelatedRecords(bookingId);
+    
+    if (result.success) {
+      console.log(`✅ Successfully cleaned up failed booking ${bookingId}`);
+    } else {
+      console.error(`❌ Failed to clean up booking ${bookingId}:`, result.error);
+    }
+  } catch (error) {
+    console.error(`❌ Error during booking cleanup for ${bookingId}:`, error);
   }
 }
 
@@ -134,8 +173,20 @@ async function handleUnifiedPaymentFlow(
       };
     }
 
-    // Calculate payment amounts including service fee
-    const paymentCalculation = calculatePaymentAmounts(Math.round(totalPrice * 100), professionalProfile);
+    // Calculate service amount and tip amount separately for proper deposit calculation
+    const totalAmountCents = Math.round(totalPrice * 100);
+    const tipAmountCents = Math.round((formData.tipAmount || 0) * 100);
+    const { getServiceFeeFromConfig } = await import('./stripe-operations');
+    const serviceFeeResult = await getServiceFeeFromConfig();
+    const serviceAmountCents = totalAmountCents - serviceFeeResult - tipAmountCents;
+    
+    // Calculate payment amounts with proper service/tip separation
+    const paymentCalculation = calculatePaymentAmounts(
+      totalAmountCents, 
+      professionalProfile,
+      serviceAmountCents,
+      tipAmountCents
+    );
 
     // Get appointment timing from the appointments table
     const { data: appointmentData, error: appointmentError } = await supabase
@@ -158,9 +209,8 @@ async function handleUnifiedPaymentFlow(
     const daysUntilAppointment = Math.ceil((appointmentStartTime.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     const shouldUseSetupIntent = daysUntilAppointment > 6;
 
-    // Get service fee for calculations
-    const { getServiceFeeFromConfig } = await import('./stripe-operations');
-    const serviceFee = await getServiceFeeFromConfig();
+    // Service fee already imported above
+    const serviceFee = serviceFeeResult;
 
     // Update existing booking payment record with enhanced payment data
     const paymentRecordResult = await updateBookingPaymentForStripe(
@@ -177,81 +227,75 @@ async function handleUnifiedPaymentFlow(
       };
     }
 
-    // NEW LOGIC: Handle deposits separately if there's a deposit
+    // NEW LOGIC: Handle deposits using setup intent + immediate charge + uncaptured balance
     if (paymentCalculation.requiresDeposit && paymentCalculation.depositAmount > 0) {
-      console.log(`Processing immediate deposit charge: $${paymentCalculation.depositAmount / 100}`);
+      console.log(`Processing deposit setup intent: Deposit $${paymentCalculation.depositAmount / 100}, Balance $${paymentCalculation.balanceAmount / 100}`);
       
-      // Charge deposit immediately
-      const depositResult = await createEnhancedCheckoutSession({
+      // Calculate payment schedule for balance capture
+      const scheduleResult = await schedulePaymentAuthorization(
         bookingId,
-        clientId: userId,
-        professionalStripeAccountId: professionalProfile.stripe_account_id,
-        amount: paymentCalculation.depositAmount, // Only the deposit amount
-        depositAmount: paymentCalculation.depositAmount,
-        balanceAmount: 0, // No balance in this session
-        paymentType: 'deposit',
-        requiresBalancePayment: false, // This session only handles deposit
-        metadata: {
-          booking_id: bookingId,
-          professional_profile_id: professionalProfileId,
-          payment_flow: 'immediate_deposit',
-          payment_method_type: isOnlinePayment ? 'card' : 'cash',
-          charge_type: 'deposit_only'
-        },
-        customerEmail: userEmail,
-        useUncapturedPayment: false // Capture deposit immediately
-      });
+        appointmentStartTime,
+        new Date(appointmentData.end_time)
+      );
 
-      if (!depositResult.success || !depositResult.checkoutUrl) {
+      if (!scheduleResult.success) {
         return {
           success: false,
-          error: depositResult.error || 'Failed to create deposit payment session',
+          error: scheduleResult.error || 'Failed to schedule balance payment',
           requiresPayment: false,
           paymentType: 'full'
         };
       }
 
-      // Update payment record with deposit session information
-      await updateBookingPaymentWithSession(bookingId, depositResult.sessionId!);
-
-      // Calculate remaining amount for scheduled processing (service fee + balance - deposit)
-      const remainingAmount = paymentCalculation.totalAmount - paymentCalculation.depositAmount;
+      // Update payment record with schedule
+      await updateBookingPaymentWithScheduling(
+        bookingId,
+        scheduleResult.preAuthDate!,
+        scheduleResult.captureDate!,
+        scheduleResult.shouldPreAuthNow!, // Use the actual shouldPreAuthNow from schedule calculation
+        undefined
+      );
       
-      if (remainingAmount > 0) {
-        // Schedule the remaining amount (service fee + balance) for later processing
-        if (shouldUseSetupIntent) {
-          // For >6 days: save payment method for remaining amount
-          console.log(`Scheduling remaining amount $${remainingAmount / 100} for future processing (${daysUntilAppointment} days away)`);
-          
-          const scheduleResult = await schedulePaymentAuthorization(
-            bookingId,
-            appointmentStartTime,
-            new Date(appointmentData.end_time)
-          );
+      // Create setup intent that will trigger immediate deposit charge + uncaptured balance creation
+      const setupResult = await createEnhancedCheckoutSession({
+        bookingId,
+        clientId: userId,
+        professionalStripeAccountId: professionalProfile.stripe_account_id,
+        amount: paymentCalculation.totalAmount, // Full amount for display
+        depositAmount: paymentCalculation.depositAmount,
+        balanceAmount: paymentCalculation.balanceAmount,
+        paymentType: 'setup_only', // This creates a setup intent
+        requiresBalancePayment: true,
+        metadata: {
+          booking_id: bookingId,
+          professional_profile_id: professionalProfileId,
+          payment_flow: 'setup_for_deposit_and_balance',
+          payment_method_type: isOnlinePayment ? 'card' : 'cash',
+          deposit_amount: paymentCalculation.depositAmount.toString(),
+          balance_amount: paymentCalculation.balanceAmount.toString(),
+          professional_stripe_account_id: professionalProfile.stripe_account_id,
+          capture_scheduled_for: scheduleResult.captureDate!.toISOString(),
+          appointment_timing: scheduleResult.shouldPreAuthNow ? 'immediate' : 'scheduled'
+        },
+        customerEmail: userEmail
+      });
 
-          if (scheduleResult.success) {
-            await updateBookingPaymentWithScheduling(
-              bookingId,
-              scheduleResult.preAuthDate!,
-              scheduleResult.captureDate!,
-              false,
-              undefined
-            );
-            
-            // Store the remaining amount that will be processed by cron
-            const { updateBookingPaymentAmount } = await import('./db');
-            await updateBookingPaymentAmount(bookingId, remainingAmount / 100);
-          }
-        } else {
-          // For ≤6 days: the remaining amount will be processed after appointment via cron capture
-          console.log(`Remaining amount $${remainingAmount / 100} will be processed via cron after appointment`);
-        }
+      if (!setupResult.success || !setupResult.checkoutUrl) {
+        return {
+          success: false,
+          error: setupResult.error || 'Failed to create deposit setup session',
+          requiresPayment: false,
+          paymentType: 'full'
+        };
       }
+
+      // Update payment record with setup session information
+      await updateBookingPaymentWithSession(bookingId, setupResult.sessionId!);
 
       return {
         success: true,
         bookingId,
-        checkoutUrl: depositResult.checkoutUrl,
+        checkoutUrl: setupResult.checkoutUrl,
         requiresPayment: true,
         paymentType: 'deposit'
       };
@@ -713,17 +757,6 @@ export async function verifyBookingPayment(
     if (!updateResult.success) {
       console.error('Failed to update booking payment status:', updateResult.error);
       }
-    }
-
-    // Update booking status to confirmed if payment was successful (but not for setup intents - webhook handles that)
-    if (paymentStatus === 'completed' && !isSetupIntent) {
-      await supabase
-        .from('bookings')
-        .update({ status: 'confirmed' })
-        .eq('id', bookingId);
-
-      // Note: Booking confirmation emails are sent via webhook handler for reliability
-      // This prevents duplicate emails and ensures emails are sent even if user doesn't visit success page
     }
 
     return {

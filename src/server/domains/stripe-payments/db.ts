@@ -5,6 +5,7 @@ import type {
   PaymentCalculation,
   BookingPaymentWithStripe
 } from './types';
+import { formatDuration } from '@/utils/formatDuration';
 
 // Create admin client for operations that need elevated permissions
 function createSupabaseAdminClient() {
@@ -38,8 +39,10 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
         requires_deposit,
         deposit_type,
         deposit_value,
-        stripe_account_id,
-        stripe_connect_status
+        professional_stripe_connect(
+          stripe_account_id,
+          stripe_connect_status
+        )
       `)
       .eq('id', professionalProfileId)
       .single();
@@ -55,8 +58,8 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
       requires_deposit: data.requires_deposit ?? false,
       deposit_type: (data.deposit_type as 'percentage' | 'fixed') ?? 'percentage',
       deposit_value: data.deposit_value,
-      stripe_account_id: data.stripe_account_id,
-      stripe_connect_status: data.stripe_connect_status as 'not_connected' | 'pending' | 'complete'
+      stripe_account_id: data.professional_stripe_connect?.stripe_account_id || null,
+      stripe_connect_status: (data.professional_stripe_connect?.stripe_connect_status || 'not_connected') as 'not_connected' | 'pending' | 'complete'
     };
   } catch (error) {
     console.error('Error in getProfessionalProfileForPayment:', error);
@@ -69,7 +72,9 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
  */
 export function calculatePaymentAmounts(
   totalAmount: number, // in cents
-  professionalProfile: ProfessionalProfileForPayment
+  professionalProfile: ProfessionalProfileForPayment,
+  serviceAmount?: number, // service amount only (without tips or fees) - in cents
+  tipAmount?: number // tip amount in cents
 ): PaymentCalculation {
   const {
     requires_deposit,
@@ -80,8 +85,8 @@ export function calculatePaymentAmounts(
   // Get service fee from config
   const serviceFee = 100; // $1 in cents, TODO: get from config
 
-  // Separate service amount from total
-  const serviceAmount = totalAmount - serviceFee;
+  // Calculate service amount if not provided (backward compatibility)
+  const actualServiceAmount = serviceAmount || (totalAmount - serviceFee - (tipAmount || 0));
 
   if (!requires_deposit || !deposit_value) {
     // No deposit required - full payment
@@ -98,21 +103,21 @@ export function calculatePaymentAmounts(
   let depositAmount: number;
   
   if (deposit_type === 'percentage') {
-    // Calculate deposit based on service amount only (excluding fee)
-    depositAmount = Math.round(serviceAmount * (deposit_value / 100));
+    // Calculate deposit based on service amount only (excluding tips and fees)
+    depositAmount = Math.round(actualServiceAmount * (deposit_value / 100));
     // Enforce minimum deposit of $1 (100 cents) for percentage deposits
     depositAmount = Math.max(depositAmount, 100);
   } else {
     // Fixed amount deposit - if it's bigger than service amount, cap it
     depositAmount = Math.min(
       Math.round(deposit_value * 100), // Convert to cents
-      serviceAmount // Cap at service amount
+      actualServiceAmount // Cap at service amount
     );
     // Enforce minimum deposit of $1 (100 cents) for fixed deposits
     depositAmount = Math.max(depositAmount, 100);
   }
 
-  // Service fee is always charged with the remaining balance
+  // Service fee and tips are always charged with the remaining balance
   const balanceAmount = totalAmount - depositAmount;
 
   return {
@@ -121,7 +126,7 @@ export function calculatePaymentAmounts(
     balanceAmount,
     requiresDeposit: true,
     requiresBalancePayment: balanceAmount > 0,
-    isFullPayment: depositAmount >= serviceAmount // Only compare with service amount
+    isFullPayment: depositAmount >= actualServiceAmount // Only compare with service amount
   };
 }
 
@@ -198,6 +203,83 @@ export async function updateBookingPaymentWithSession(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentWithSession:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Update booking payment with uncaptured payment intent for balance processing
+ */
+export async function updateBookingPaymentWithUncapturedIntent(
+  bookingId: string,
+  paymentIntentId: string,
+  captureDate: Date,
+  balanceAmount: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseAdminClient();
+    
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        stripe_payment_intent_id: paymentIntentId,
+        capture_method: 'manual',
+        capture_scheduled_for: captureDate.toISOString(),
+        authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        status: 'authorized',
+        balance_amount: balanceAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating booking payment with uncaptured intent:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateBookingPaymentWithUncapturedIntent:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Update booking payment with scheduled balance payment info (to be created later in webhook)
+ */
+export async function updateBookingPaymentWithScheduledBalance(
+  bookingId: string,
+  captureDate: Date,
+  balanceAmount: number,
+  status: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createSupabaseAdminClient();
+    
+    const { error } = await supabase
+      .from('booking_payments')
+      .update({
+        capture_scheduled_for: captureDate.toISOString(),
+        balance_amount: balanceAmount,
+        status: status, // 'pending_balance_payment' indicates balance payment intent needs to be created
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error updating booking payment with scheduled balance:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateBookingPaymentWithScheduledBalance:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
@@ -574,7 +656,8 @@ export async function updateBookingPaymentWithScheduling(
   
   try {
     const updateData: Record<string, string | number | null> = {
-      pre_auth_scheduled_for: preAuthDate.toISOString(),
+      // Only set pre_auth_scheduled_for if NOT doing immediate authorization
+      pre_auth_scheduled_for: shouldPreAuthNow ? null : preAuthDate.toISOString(),
       capture_scheduled_for: captureDate.toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -794,10 +877,15 @@ export async function markPaymentCaptured(
  * Get appointments needing balance notifications (includes both card and cash payments)
  */
 export async function getAppointmentsNeedingBalanceNotification(limit: number = 50): Promise<{
+  appointment_id: string;
   booking_id: string;
   client_email: string;
   client_name: string;
+  client_timezone: string;
   professional_name: string;
+  professional_email: string;
+  professional_address: string;
+  professional_timezone: string;
   start_time: string;
   total_amount: number;
   service_fee: number;
@@ -806,6 +894,11 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
   tip_amount: number;
   payment_method_name: string;
   is_cash_payment: boolean;
+  services: {
+    duration: string; // Formatted duration like "1h 30m"
+    name: string;
+    price: number;
+  }[];
 }[]> {
   const supabase = createSupabaseAdminClient();
   
@@ -818,7 +911,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     // First get completed appointments
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
-      .select('booking_id, start_time, end_time')
+      .select('id, booking_id, start_time, end_time')
       .eq('status', 'completed')
       .limit(limit);
 
@@ -892,7 +985,18 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
       .select(`
         id,
         client_id,
-        professional_profile_id
+        professional_profile_id,
+        booking_services(
+          id,
+          service_id,
+          price,
+          duration,
+          services(
+            id,
+            name,
+            description
+          )
+        )
       `)
       .in('id', finalBookingIds);
 
@@ -905,56 +1009,101 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     const clientIds = bookings.map(b => b.client_id);
     const professionalProfileIds = bookings.map(b => b.professional_profile_id);
 
-    const [clientsResult, professionalsResult] = await Promise.all([
-      supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }), // Get auth users for emails
-      supabase
-        .from('professional_profiles')
-        .select('id, user_id')
-        .in('id', professionalProfileIds)
-    ]);
-
+    // Get client auth users (for email)
+    const clientsResult = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
     const authUsers = clientsResult.data?.users || [];
-    const professionalProfiles = professionalsResult.data || [];
 
+    // Get professional profiles with address and timezone
+    const { data: professionalProfiles, error: professionalsError } = await supabase
+      .from('professional_profiles')
+      .select('id, user_id, address:address_id(street_address, apartment, city, state, country), timezone')
+      .in('id', professionalProfileIds);
+    if (professionalsError || !professionalProfiles) {
+      console.error('Error fetching professional profiles:', professionalsError);
+      return [];
+    }
+
+    // Get users table for names and timezones
     const { data: allUsers, error: usersError } = await supabase
       .from('users')
-      .select('id, first_name, last_name')
+      .select('id, first_name, last_name, client_profiles(*)')
       .in('id', [...clientIds, ...professionalProfiles.map(p => p.user_id)]);
-
     if (usersError || !allUsers) {
       console.error('Error fetching users:', usersError);
       return [];
     }
 
     // Build the final result
-    return eligiblePayments.map(payment => {
-      const appointment = eligibleAppointments.find(a => a.booking_id === payment.booking_id)!;
-      const booking = bookings.find(b => b.id === payment.booking_id)!;
-      const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
-      
-      // Find client details
-      const clientUser = allUsers.find(u => u.id === booking.client_id)!;
-      const clientAuth = authUsers.find(u => u.id === booking.client_id);
-      
-      // Find professional details
-      const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
-      const professionalUser = allUsers.find(u => u.id === professionalProfile.user_id)!;
+      // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
+      function ianaToAbbreviation(iana: string | undefined): string {
+        if (!iana) return '';
+        try {
+          const dtf = new Intl.DateTimeFormat('en-US', {
+            timeZone: iana,
+            timeZoneName: 'short'
+          });
+          const parts = dtf.formatToParts(new Date());
+          const tzPart = parts.find(p => p.type === 'timeZoneName');
+          return tzPart ? tzPart.value : iana;
+        } catch {
+          return iana;
+        }
+      }
 
-      return {
-        booking_id: payment.booking_id,
-        client_email: clientAuth?.email || '',
-        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        start_time: appointment.start_time,
-        total_amount: payment.amount,
-        service_fee: payment.service_fee,
-        deposit_amount: payment.deposit_amount,
-        balance_amount: payment.balance_amount,
-        tip_amount: payment.tip_amount || 0,
-        payment_method_name: paymentMethod.name,
-        is_cash_payment: !paymentMethod.is_online
-      };
-    });
+      return eligiblePayments.map(payment => {
+        const appointment = eligibleAppointments.find(a => a.booking_id === payment.booking_id)!;
+        const booking = bookings.find(b => b.id === payment.booking_id)!;
+        const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
+
+        // Find client details
+        const clientUser = allUsers.find(u => u.id === booking.client_id)!;
+        const clientAuth = authUsers.find(u => u.id === booking.client_id);
+        const clientTimezone = Array.isArray(clientUser.client_profiles) 
+          ? clientUser.client_profiles[0]?.timezone 
+          : clientUser.client_profiles?.timezone || 'UTC';
+
+        // Find professional details
+        const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
+        const professionalUser = allUsers.find(u => u.id === professionalProfile.user_id)!;
+        const professionalAuth = authUsers.find(u => u.id === professionalProfile.user_id);
+        const professionalAddress = professionalProfile.address
+          ? [professionalProfile.address.street_address, professionalProfile.address.apartment, professionalProfile.address.city, professionalProfile.address.state, professionalProfile.address.country].filter(Boolean).join(', ')
+          : '';
+        const professionalTimezone = professionalProfile.timezone || '';
+        const professionalTimezoneAbbr = ianaToAbbreviation(professionalTimezone);
+
+        // Format services data for email templates
+        const services = (booking.booking_services || []).map((bs: { 
+          duration: number; 
+          services?: { name?: string }; 
+          price: number; 
+        }) => ({
+          duration: formatDuration(bs.duration),
+          name: bs.services?.name || 'Unknown Service',
+          price: bs.price
+        }));
+
+        return {
+          appointment_id: appointment.id,
+          booking_id: payment.booking_id,
+          client_email: clientAuth?.email || '',
+          client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+          client_timezone: clientTimezone,
+          professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+          professional_email: professionalAuth?.email || '',
+          professional_address: professionalAddress,
+          professional_timezone: professionalTimezoneAbbr,
+          start_time: appointment.start_time,
+          total_amount: payment.amount + (payment.tip_amount || 0) + payment.service_fee,
+          service_fee: payment.service_fee,
+          deposit_amount: payment.deposit_amount,
+          balance_amount: payment.balance_amount,
+          tip_amount: payment.tip_amount || 0,
+          payment_method_name: paymentMethod.name,
+          is_cash_payment: !paymentMethod.is_online,
+          services: services
+        };
+      });
   } catch (error) {
     console.error('Error in getAppointmentsNeedingBalanceNotification:', error);
     return [];

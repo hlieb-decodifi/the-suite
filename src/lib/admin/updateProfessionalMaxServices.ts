@@ -21,16 +21,13 @@ export async function updateProfessionalMaxServices(userId: string, maxServices:
   if (userError || !userData) {
     return { success: false, error: 'User not found' };
   }
-  // Get admin role id
-  const { data: adminRole, error: adminRoleError } = await supabase
-    .from('roles')
-    .select('id')
-    .eq('name', 'admin')
+  // Check if user is admin
+  const { data: userRoleData, error: userRoleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
     .single();
-  if (adminRoleError || !adminRole) {
-    return { success: false, error: 'Admin role not found' };
-  }
-  if (userData.role_id !== adminRole.id) {
+  if (userRoleError || !userRoleData || userRoleData.role !== 'admin') {
     return { success: false, error: 'Permission denied: admin only' };
   }
 
