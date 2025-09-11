@@ -656,7 +656,8 @@ export async function updateBookingPaymentWithScheduling(
   
   try {
     const updateData: Record<string, string | number | null> = {
-      pre_auth_scheduled_for: preAuthDate.toISOString(),
+      // Only set pre_auth_scheduled_for if NOT doing immediate authorization
+      pre_auth_scheduled_for: shouldPreAuthNow ? null : preAuthDate.toISOString(),
       capture_scheduled_for: captureDate.toISOString(),
       updated_at: new Date().toISOString()
     };

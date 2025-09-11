@@ -252,7 +252,7 @@ async function handleUnifiedPaymentFlow(
         bookingId,
         scheduleResult.preAuthDate!,
         scheduleResult.captureDate!,
-        false,
+        scheduleResult.shouldPreAuthNow!, // Use the actual shouldPreAuthNow from schedule calculation
         undefined
       );
       

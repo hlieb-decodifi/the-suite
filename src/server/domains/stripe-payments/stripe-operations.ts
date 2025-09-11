@@ -1086,31 +1086,16 @@ export async function createUncapturedPayment(
 ): Promise<Stripe.PaymentIntent> {
   const adminSupabase = createSupabaseAdminClient();
 
-  console.log('Creating uncaptured payment for booking:', bookingId);
+  console.log('Creating IMMEDIATE uncaptured payment for booking:', bookingId);
   console.log('Appointment times:', { start: appointmentStartTime, end: appointmentEndTime });
-
-  // Calculate payment schedule
-  const { data: scheduleData, error: scheduleError } = await adminSupabase
-    .rpc('calculate_payment_schedule', {
-      appointment_start_time: appointmentStartTime,
-      appointment_end_time: appointmentEndTime
-    });
-
-  if (scheduleError) {
-    console.error('Error calculating payment schedule:', scheduleError);
-    throw new Error('Failed to calculate payment schedule');
-  }
-
-  console.log('Payment schedule calculated:', scheduleData);
-
-  if (!scheduleData || scheduleData.length === 0) {
-    console.error('No schedule data returned from calculate_payment_schedule');
-    throw new Error('No schedule data returned');
-  }
+  console.log('NOTE: This is for appointments <6 days - NO pre-auth scheduling, immediate authorization');
 
   // Get service fee and professional account
   const serviceFee = await getServiceFeeFromConfig();
   const serviceAmount = Math.round(amount * 100) - serviceFee;
+  
+  // For immediate uncaptured payments, capture should happen at appointment end time
+  const captureTime = new Date(appointmentEndTime);
 
   // Get professional account from booking
   const { data: bookingData } = await adminSupabase
@@ -1152,13 +1137,14 @@ export async function createUncapturedPayment(
 
   console.log('Created Stripe payment intent:', paymentIntent.id, 'with application fee structure');
 
-  // Update booking_payments with capture schedule
+  // Update booking_payments for immediate uncaptured payment (NO pre-auth scheduling)
   const { error: updateError } = await adminSupabase
     .from('booking_payments')
     .update({
       capture_method: 'manual',
-      capture_scheduled_for: scheduleData[0].capture_date,
-      pre_auth_placed_at: new Date().toISOString(),
+      capture_scheduled_for: captureTime.toISOString(), // Capture at appointment end time
+      pre_auth_scheduled_for: null, // NULL - no scheduling needed, it's immediate
+      pre_auth_placed_at: new Date().toISOString(), // Set now since auth is placed immediately
       authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
       stripe_payment_intent_id: paymentIntent.id,
       status: 'authorized'
@@ -1166,13 +1152,14 @@ export async function createUncapturedPayment(
     .eq('booking_id', bookingId);
 
   if (updateError) {
-    console.error('Error updating booking payment schedule:', updateError);
-    throw new Error('Failed to update booking payment schedule');
+    console.error('Error updating booking payment for immediate uncaptured payment:', updateError);
+    throw new Error('Failed to update booking payment for immediate uncaptured payment');
   }
 
-  console.log('Updated booking payment with schedule:', {
+  console.log('Updated booking payment for immediate uncaptured payment:', {
     bookingId,
-    captureScheduledFor: scheduleData[0].capture_date,
+    captureScheduledFor: captureTime.toISOString(),
+    preAuthScheduledFor: null, // Important: NULL for immediate payments
     paymentIntentId: paymentIntent.id
   });
 
