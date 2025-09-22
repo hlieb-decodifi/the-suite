@@ -9,8 +9,9 @@ import type { LegalDoc } from '@/types/legal_documents';
 type AdminLegalTemplateProps = {
   initialTerms: LegalDoc;
   initialPrivacy: LegalDoc;
+  initialCopyright: LegalDoc;
   updateLegalDocument: (
-    type: 'terms' | 'privacy',
+    type: 'terms' | 'privacy' | 'copyright',
     content: string,
     effectiveDate: string,
   ) => Promise<boolean>;
@@ -39,10 +40,19 @@ function formatDateForInput(dateString: string): string {
 function AdminLegalTemplate({
   initialTerms,
   initialPrivacy,
+  initialCopyright,
   updateLegalDocument,
 }: AdminLegalTemplateProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'terms' | 'privacy'>('terms');
+  const [activeTab, setActiveTab] = useState<'terms' | 'privacy' | 'copyright'>(
+    'terms',
+  );
+  console.log(
+    'activeTab',
+    initialTerms.effectiveDate,
+    initialPrivacy.effectiveDate,
+    initialCopyright.effectiveDate,
+  );
   const [content, setContent] = useState(initialTerms.content);
   const [effectiveDate, setEffectiveDate] = useState(
     formatDateForInput(initialTerms.effectiveDate),
@@ -55,12 +65,15 @@ function AdminLegalTemplate({
     if (activeTab === 'terms') {
       setContent(initialTerms.content);
       setEffectiveDate(formatDateForInput(initialTerms.effectiveDate));
-    } else {
+    } else if (activeTab === 'privacy') {
       setContent(initialPrivacy.content);
       setEffectiveDate(formatDateForInput(initialPrivacy.effectiveDate));
+    } else {
+      setContent(initialCopyright.content);
+      setEffectiveDate(formatDateForInput(initialCopyright.effectiveDate));
     }
     setError('');
-  }, [activeTab, initialTerms, initialPrivacy]);
+  }, [activeTab, initialTerms, initialPrivacy, initialCopyright]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -74,7 +87,11 @@ function AdminLegalTemplate({
       if (!isSuccess) throw new Error();
 
       const documentName =
-        activeTab === 'terms' ? 'Terms & Conditions' : 'Privacy Policy';
+        activeTab === 'terms'
+          ? 'Terms & Conditions'
+          : activeTab === 'privacy'
+            ? 'Privacy Policy'
+            : 'Copyright Policy';
       toast({
         title: 'Document Saved Successfully!',
         description: `${documentName} has been updated and published. All related pages have been refreshed.`,
@@ -102,6 +119,12 @@ function AdminLegalTemplate({
           onClick={() => setActiveTab('privacy')}
         >
           Privacy Policy
+        </button>
+        <button
+          className={`px-4 py-2 rounded ${activeTab === 'copyright' ? 'bg-primary text-white' : 'bg-muted'}`}
+          onClick={() => setActiveTab('copyright')}
+        >
+          Copyright Policy
         </button>
       </div>
       <>

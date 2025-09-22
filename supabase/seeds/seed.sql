@@ -244,6 +244,36 @@ INSERT INTO public.legal_documents (type, title, content, is_published, effectiv
 <p><em>Last updated: ' || to_char(now(), 'Month DD, YYYY') || '</em></p>',
   true,
   timezone('utc'::text, now())
+),
+(
+  'copyright_policy',
+  'Copyright Policy',
+  '<h1>Copyright Policy</h1>
+<p><strong>Last Modified:</strong> June 29, 2025</p>
+
+<h2>Reporting Claims of Copyright Infringement</h2>
+<p>We take claims of copyright seriously. We will respond to notices of alleged copyright infringement that comply with applicable law. If you believe any materials accessible on or from this site (the "Website") infringe your copyright, you may request removal of those materials (or access to them) from the Website by submitting written notification to our copyright agent designated below. In accordance with the Online Copyright Infringement Liability Limitation Act on the Digital Millennium Copyright Act (17 U.S.C. § 512) ("DMCA"), the written notice (the "DMCA Notice") must include substantially the following:</p>
+
+<ul>
+<li>Your physical or electronic signature.</li>
+<li>Identification of the copyrighted work you believe to have been infringed or, if the claim involves multiple works on the Website, a representative list of such works.</li>
+<li>Identification of the material you believe to be infringing in a sufficiently precise manner to allow us to locate that material.</li>
+<li>Adequate information by which we can contact you (including your name, postal address, telephone number, and if available, email address).</li>
+<li>A statement that you have a good faith belief that use of the copyrighted material is not authorized by the copyright owner, its agent, or the law.</li>
+<li>A statement that the information in the written notice is accurate.</li>
+<li>A statement, under penalty of perjury, that you are authorized to act on behalf of the copyright owner.</li>
+</ul>
+
+<p><strong>Our designated copyright agent to receive DMCA Notices is:</strong></p>
+<p>[INSERT FIRST AND LAST NAME OF REGISTERED AGENT]<br>
+[NAME OF AGENT''S ORGANIZATION]<br>
+[PHYSICAL MAIL ADDRESS OF AGENT]<br>
+[TELEPHONE NUMBER OF AGENT]<br>
+[EMAIL ADDRESS OF AGENT]</p>
+
+<p><em>Last updated: ' || to_char(now(), 'Month DD, YYYY') || '</em></p>',
+  true,
+  timezone('utc'::text, now())
 );
 
 
