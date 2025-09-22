@@ -41,6 +41,12 @@ export function Footer({ className }: FooterProps) {
             >
               Privacy Policy
             </Link>
+            <Link
+              href="/copyright-policy"
+              className="text-foreground hover:text-primary"
+            >
+              Copyright Policy
+            </Link>
           </div>
         </div>
       </div>

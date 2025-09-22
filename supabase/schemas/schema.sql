@@ -401,18 +401,6 @@ create policy "Anyone can view services from published professionals"
     )
   );
 
--- Allow clients to view archived services they have bookings for (for history/reference)
-create policy "Clients can view archived services they have bookings for"
-  on services for select
-  using (
-    is_archived = true
-    and exists (
-      select 1 from booking_services bs
-      join bookings b on bs.booking_id = b.id
-      where bs.service_id = services.id
-      and b.client_id = auth.uid()
-    )
-  );
 
 -- Helper functions for service archiving
 -- Function to archive a service (soft delete)
@@ -1378,6 +1366,19 @@ create policy "Professionals can create booking services for their bookings"
     )
   );
 
+-- Allow clients to view archived services they have bookings for (for history/reference)
+create policy "Clients can view archived services they have bookings for"
+  on services for select
+  using (
+    is_archived = true
+    and exists (
+      select 1 from booking_services bs
+      join bookings b on bs.booking_id = b.id
+      where bs.service_id = services.id
+      and b.client_id = auth.uid()
+    )
+  );
+
 -- Booking payments policies
 create policy "Users can view booking payments for their bookings"
   on booking_payments for select
@@ -2319,7 +2320,7 @@ create publication supabase_realtime for table
 */
 create table legal_documents (
   id uuid primary key default uuid_generate_v4(),
-  type text not null check (type in ('terms_and_conditions', 'privacy_policy')),
+  type text not null check (type in ('terms_and_conditions', 'privacy_policy', 'copyright_policy')),
   title text not null,
   content text not null,
   version integer not null default 1,
@@ -2380,6 +2381,39 @@ create trigger legal_document_versioning_trigger
 create policy "Anyone can view published legal documents"
   on legal_documents for select
   using (is_published = true);
+
+-- Admins can insert legal documents
+create policy "Admins can insert legal documents"
+  on legal_documents for insert
+  with check (
+    exists (
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
+    )
+  );
+
+-- Admins can update legal documents
+create policy "Admins can update legal documents"
+  on legal_documents for update
+  using (
+    exists (
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
+    )
+  );
+
+-- Admins can view all legal documents (including unpublished)
+create policy "Admins can view all legal documents"
+  on legal_documents for select
+  using (
+    exists (
+      select 1 from user_roles ur
+      where ur.user_id = auth.uid() 
+      and ur.role = 'admin'
+    )
+  );
 
 -- Add missing booking policies
 create policy "Clients can create their own bookings"
