@@ -218,7 +218,6 @@ export function ProfilePageHeader({
                       : 'bg-background border-gray-300 text-gray-500',
                 )}
                 onClick={handlePublishClick}
-                disabled={!canPublish && !isPublished}
               >
                 {isPublished ? 'Unpublish Profile' : 'Publish Profile'}
               </Button>
