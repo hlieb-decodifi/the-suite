@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { revalidatePath } from 'next/cache';
 
 export async function getLegalDocument(type: 'terms' | 'privacy') {
   const supabase = await createClient();
@@ -32,5 +33,13 @@ export async function updateLegalDocument(type: 'terms' | 'privacy', content: st
       title: docType === 'terms_and_conditions' ? 'Terms & Conditions' : 'Privacy Policy',
     })
     .eq('type', docType);
+
+  // Revalidate the admin legal page and any public legal pages
+  if (!error) {
+    revalidatePath('/admin/legal');
+    revalidatePath('/terms-and-conditions');
+    revalidatePath('/privacy-policy');
+  }
+
   return !error;
 }
