@@ -907,12 +907,11 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     const twoHoursAgo = new Date();
     twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
 
-    // Use a simpler approach: query each table separately and join in code
-    // First get completed appointments
+    // Use the appointments_with_status view to get computed status
     const { data: appointments, error: appointmentsError } = await supabase
-      .from('appointments')
-      .select('id, booking_id, start_time, end_time')
-      .eq('status', 'completed')
+      .from('appointments_with_status')
+      .select('id, booking_id, start_time, end_time, computed_status')
+      .eq('computed_status', 'completed')
       .limit(limit);
 
     if (appointmentsError) {
@@ -924,8 +923,9 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
       return [];
     }
 
-    // Filter appointments that are >2 hours past end time
+    // Filter appointments that are >2 hours past end time and have valid IDs and times
     const eligibleAppointments = appointments.filter(appointment => {
+      if (!appointment.end_time || !appointment.id || !appointment.start_time) return false;
       const appointmentEndTime = new Date(appointment.end_time);
       return appointmentEndTime <= twoHoursAgo;
     });
@@ -934,7 +934,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
       return [];
     }
 
-    const bookingIds = eligibleAppointments.map(a => a.booking_id);
+    const bookingIds = eligibleAppointments.map(a => a.booking_id).filter((id): id is string => id !== null);
 
     // Get booking payments with payment methods
     const { data: payments, error: paymentsError } = await supabase
@@ -1058,9 +1058,9 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         // Find client details
         const clientUser = allUsers.find(u => u.id === booking.client_id)!;
         const clientAuth = authUsers.find(u => u.id === booking.client_id);
-        const clientTimezone = Array.isArray(clientUser.client_profiles) 
+        const clientTimezone: string = (Array.isArray(clientUser.client_profiles) 
           ? clientUser.client_profiles[0]?.timezone 
-          : clientUser.client_profiles?.timezone || 'UTC';
+          : clientUser.client_profiles?.timezone) || 'UTC';
 
         // Find professional details
         const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
@@ -1084,7 +1084,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         }));
 
         return {
-          appointment_id: appointment.id,
+          appointment_id: appointment.id!,
           booking_id: payment.booking_id,
           client_email: clientAuth?.email || '',
           client_name: `${clientUser.first_name} ${clientUser.last_name}`,
@@ -1093,7 +1093,7 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
           professional_email: professionalAuth?.email || '',
           professional_address: professionalAddress,
           professional_timezone: professionalTimezoneAbbr,
-          start_time: appointment.start_time,
+          start_time: appointment.start_time!,
           total_amount: payment.amount + (payment.tip_amount || 0) + payment.service_fee,
           service_fee: payment.service_fee,
           deposit_amount: payment.deposit_amount,
