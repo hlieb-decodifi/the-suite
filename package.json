@@ -25,12 +25,16 @@
     "mailpit:start": "docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit || docker start mailpit",
     "mailpit:stop": "docker stop mailpit",
     "sync-brevo-templates": "ts-node scripts/sync-brevo-templates.ts",
+    "cron:trigger": "npx tsx scripts/trigger-cron.ts",
+    "cron:balance": "npx tsx scripts/trigger-cron.ts balance-notifications",
+    "cron:capture": "npx tsx scripts/trigger-cron.ts capture-payments",
+    "cron:preauth": "npx tsx scripts/trigger-cron.ts pre-auth-payments",
+    "cron:all": "npx tsx scripts/trigger-cron.ts all",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
-    "test:codegen": "playwright codegen",
-    "cron:balance-notifications": "curl http://localhost:3000/api/cron/balance-notifications"
+    "test:codegen": "playwright codegen"
   },
   "dependencies": {
     "@getbrevo/brevo": "^2.5.0",
