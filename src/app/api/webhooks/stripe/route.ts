@@ -48,6 +48,39 @@ function createAdminClient() {
   return createClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
+// Centralized helper function to send booking confirmation emails
+async function sendConfirmationEmailsForBooking(
+  bookingId: string, 
+  context: string = 'payment processed'
+): Promise<void> {
+  try {
+    console.log(`📧 ${context} - attempting to send confirmation emails for booking ${bookingId}`);
+    
+    const supabase = createAdminClient();
+    const { data: appointment } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .single();
+
+    if (appointment) {
+      const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
+      const result = await sendBookingConfirmationEmails(bookingId, appointment.id);
+      
+      if (result.success) {
+        console.log(`✅ Booking confirmation emails processed for booking ${bookingId} (${context})`);
+      } else {
+        console.log(`⏭️ Booking confirmation emails skipped for booking ${bookingId}: ${result.error || 'Unknown reason'}`);
+      }
+    } else {
+      console.log(`❌ No appointment found for booking ${bookingId}`);
+    }
+  } catch (emailError) {
+    console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
+    // Don't fail the webhook for email errors
+  }
+}
+
 // Webhook endpoint for Stripe events
 export async function POST(request: Request) {
   const payload = await request.text();
@@ -578,6 +611,9 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         bookingId,
         captureScheduledFor: captureDate
       });
+
+      // Send confirmation emails for cash payments
+      await sendConfirmationEmailsForBooking(bookingId, 'cash payment processed');
     } catch (error) {
       console.error('❌ Error processing immediate service fee only payment:', error);
     }
@@ -629,32 +665,17 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         paymentType
       });
 
-      // Send confirmation emails for immediate full payments (including immediate uncaptured)
-      // Only skip emails for scheduled/deposit flows
-      if (paymentType === 'full' && updateData.status === 'completed' && session.metadata?.payment_flow === 'immediate_full_payment') {
-        try {
-          console.log('📧 Immediate full payment completed - sending confirmation emails');
-          const { data: appointment } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('booking_id', bookingId)
-            .single();
-
-          if (appointment) {
-            const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-            // For uncaptured payments, pass true to indicate uncaptured flow
-            const isUncaptured = session.metadata?.use_uncaptured === 'true';
-            await sendBookingConfirmationEmails(bookingId, appointment.id, isUncaptured);
-            console.log(`✅ Booking confirmation emails sent for immediate full payment booking ${bookingId} (uncaptured: ${isUncaptured})`);
-          } else {
-            console.log(`❌ No appointment found for booking ${bookingId}`);
-          }
-        } catch (emailError) {
-          console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);
-          // Don't fail the webhook for email errors
-        }
+      // Send confirmation emails for all new bookings that have been successfully processed
+      // This ensures consistent email behavior regardless of payment method
+      const isNewBooking = session.metadata?.is_new_booking !== 'false';
+      
+      if (isNewBooking) {
+        await sendConfirmationEmailsForBooking(
+          bookingId, 
+          `${paymentType} payment processed (${session.metadata?.payment_flow || 'unknown flow'})`
+        );
       } else {
-        console.log(`⏭️ Skipping emails for booking ${bookingId} - payment_type: ${paymentType}, status: ${updateData.status}, flow: ${session.metadata?.payment_flow}`);
+        console.log(`⏭️ Skipping emails for booking ${bookingId} - not a new booking`);
       }
     } catch (error) {
       console.error('❌ Error processing regular payment checkout:', error);
@@ -1798,17 +1819,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
 
         if (!isDualPayment) {
           // This is a deposit-only or full payment scenario - send emails now
-          const { data: appointment } = await supabase
-            .from('appointments')
-            .select('id')
-            .eq('booking_id', bookingId)
-            .single();
-
-          if (appointment) {
-            const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-            await sendBookingConfirmationEmails(bookingId, appointment.id, false);
-            console.log(`✅ Booking confirmation emails sent for deposit-only booking ${bookingId}`);
-          }
+          await sendConfirmationEmailsForBooking(bookingId, 'deposit-only payment processed');
         } else {
           console.log(`⏭️ Skipping emails for dual payment booking ${bookingId} - will be sent by capturable handler`);
         }
@@ -1941,6 +1952,8 @@ async function handleSplitPaymentPartialCapture(session: Stripe.Checkout.Session
     
     console.log('✅ Updated booking payment record with split payment info');
     
+    // Send confirmation emails for split payment flow
+    await sendConfirmationEmailsForBooking(bookingId, 'split payment processed');
   } catch (error) {
     console.error('❌ Error processing split payment partial capture:', error);
   }
@@ -1991,19 +2004,13 @@ async function handlePaymentIntentCapturableUpdated(paymentIntent: Stripe.Paymen
       if (fullPaymentData?.deposit_payment_intent_id && fullPaymentData?.stripe_payment_intent_id) {
         // Dual payment scenario - only send emails when the balance payment is authorized
         if (fullPaymentData.stripe_payment_intent_id === paymentIntent.id) {
-          console.log(`📧 Dual payment detected - balance payment authorized, sending confirmation emails for booking ${bookingId}`);
-          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-          await sendBookingConfirmationEmails(bookingId, appointmentData.id, true);
-          console.log(`✅ Booking confirmation emails sent for dual payment booking ${bookingId}`);
+          await sendConfirmationEmailsForBooking(bookingId, 'dual payment - balance payment authorized');
         } else {
           console.log(`⏭️ Skipping emails - payment intent ${paymentIntent.id} is the deposit payment, waiting for balance payment authorization`);
         }
       } else {
         // Single payment scenario - send emails for any payment authorization
-        console.log(`📧 Single payment detected - sending confirmation emails for booking ${bookingId}`);
-        const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-        await sendBookingConfirmationEmails(bookingId, appointmentData.id, true);
-        console.log(`✅ Booking confirmation emails sent for single payment booking ${bookingId}`);
+        await sendConfirmationEmailsForBooking(bookingId, 'single payment authorized');
       }
     } catch (emailError) {
       console.error(`❌ Failed to send booking confirmation emails for ${bookingId}:`, emailError);

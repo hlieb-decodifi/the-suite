@@ -167,31 +167,35 @@ async function generateMessageURL(currentUserId: string, targetUserId: string): 
  */
 export async function sendBookingConfirmationEmails(
   bookingId: string,
-  appointmentId: string,
-  isUncaptured: boolean = false
+  appointmentId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log('🚀 sendBookingConfirmationEmails called with:', {
       bookingId,
-      appointmentId,
-      isUncaptured
+      appointmentId
     });
 
     console.log('📊 Creating admin Supabase client...');
     const adminSupabase = createSupabaseAdminClient();
 
-    // Check if emails have already been sent for this booking by checking database
-    const { data: existingEmails } = await adminSupabase
+    // Use atomic update to prevent race conditions - try to claim the right to send emails
+    const { data: updateResult, error: updateError } = await adminSupabase
       .from('booking_payments')
-      .select('id')
+      .update({
+        confirmation_emails_sent: true,
+        confirmation_emails_sent_at: new Date().toISOString()
+      })
       .eq('booking_id', bookingId)
-      .eq('status', 'completed') // Only count as "emails sent" if payment is completed
+      .eq('confirmation_emails_sent', false) // Only update if not already sent
+      .select('id')
       .single();
 
-    if (existingEmails) {
-      console.log('⚠️ Confirmation emails likely already sent for completed booking:', bookingId);
-      // Still proceed to avoid issues, but log this
+    if (updateError || !updateResult) {
+      console.log(`⏭️ Confirmation emails already sent for booking ${bookingId} - skipping duplicate send (atomic check)`);
+      return { success: true, error: 'Emails already sent - prevented duplicate by atomic update' };
     }
+
+    console.log(`🔒 Successfully claimed email sending rights for booking ${bookingId}`);
 
     // Get comprehensive booking data with all related information
     const { data: bookingData, error: bookingError } = await adminSupabase
@@ -383,12 +387,6 @@ export async function sendBookingConfirmationEmails(
       console.error('❌ Error sending professional confirmation email:', error);
     }
 
-    console.log('🚀 sendBookingConfirmationEmails called with:', {
-      bookingId,
-      appointmentId,
-      isUncaptured
-    });
-
     // TODO: Add payment details when needed for email templates
     // const { data: paymentData, error: paymentError } = await adminSupabase
     //   .from('booking_payments')
@@ -439,8 +437,26 @@ export async function sendBookingConfirmationEmails(
       console.error('❌ Error sending client confirmation email:', error);
     }
 
-    // Log the result - no longer using in-memory tracking
+    // Log the result - database was already updated atomically at the beginning
     console.log(`📧 Email sending summary - Emails sent successfully: ${emailsSentSuccessfully}/2`);
+
+    // If no emails were sent successfully, reset the flag to allow retry
+    if (emailsSentSuccessfully === 0) {
+      try {
+        await adminSupabase
+          .from('booking_payments')
+          .update({
+            confirmation_emails_sent: false,
+            confirmation_emails_sent_at: null
+          })
+          .eq('booking_id', bookingId);
+        console.log(`🔄 Reset email sent flag for booking ${bookingId} due to send failure`);
+      } catch (resetError) {
+        console.error(`❌ Failed to reset email sent flag for booking ${bookingId}:`, resetError);
+      }
+    } else {
+      console.log(`✅ Email tracking already updated for booking ${bookingId} (atomic operation)`);
+    }
 
     return { success: emailsSentSuccessfully > 0 };
 

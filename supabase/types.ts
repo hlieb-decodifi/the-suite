@@ -179,6 +179,8 @@ export type Database = {
           capture_method: string | null
           capture_scheduled_for: string | null
           captured_at: string | null
+          confirmation_emails_sent: boolean
+          confirmation_emails_sent_at: string | null
           created_at: string
           deposit_amount: number
           deposit_payment_intent_id: string | null
@@ -209,6 +211,8 @@ export type Database = {
           capture_method?: string | null
           capture_scheduled_for?: string | null
           captured_at?: string | null
+          confirmation_emails_sent?: boolean
+          confirmation_emails_sent_at?: string | null
           created_at?: string
           deposit_amount?: number
           deposit_payment_intent_id?: string | null
@@ -239,6 +243,8 @@ export type Database = {
           capture_method?: string | null
           capture_scheduled_for?: string | null
           captured_at?: string | null
+          confirmation_emails_sent?: boolean
+          confirmation_emails_sent_at?: string | null
           created_at?: string
           deposit_amount?: number
           deposit_payment_intent_id?: string | null

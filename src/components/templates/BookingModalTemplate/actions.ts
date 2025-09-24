@@ -322,18 +322,8 @@ export async function createBooking(
         throw new Error(`Error creating payment record: ${paymentError.message}`);
       }
       
-      // For cash payments, send confirmation emails immediately
-      if (!paymentMethod?.is_online) {
-        try {
-          console.log('💰 Cash payment detected - sending confirmation emails immediately');
-          const { sendBookingConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-          await sendBookingConfirmationEmails(booking.id, appointment.id, false);
-          console.log('✅ Cash payment confirmation emails sent successfully');
-        } catch (emailError) {
-          console.error('❌ Failed to send booking confirmation emails:', emailError);
-          // Don't fail the booking creation if email sending fails
-        }
-      }
+      // Note: Confirmation emails are sent from Stripe webhook after payment confirmation
+      // This ensures emails are only sent for successfully paid bookings
       
       // Return the booking details
       return { bookingId: booking.id, totalPrice };
