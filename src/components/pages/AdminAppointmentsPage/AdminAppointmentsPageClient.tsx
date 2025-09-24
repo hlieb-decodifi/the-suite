@@ -2,28 +2,39 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AdminAppointmentsTemplate } from '@/components/templates/AdminAppointmentsTemplate';
 // Import Appointment type directly for compatibility
 import type { Appointment } from '@/types/appointments';
 
-export function AdminAppointmentsPageClient({ appointments, clients, professionals }: {
+export function AdminAppointmentsPageClient({
+  appointments,
+  clients,
+  professionals,
+}: {
   appointments: Appointment[];
   clients: string[];
   professionals: string[];
 }) {
+  const router = useRouter();
+
   // Filter/sort state
   const [filterClient, setFilterClient] = useState('');
   const [filterProfessional, setFilterProfessional] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  const handleRefresh = () => {
+    router.refresh();
+  };
+
   // Filter and sort appointments
   const filteredAppointments = useMemo(() => {
     let filtered = appointments;
     if (filterClient) {
-      filtered = filtered.filter(a => a.client === filterClient);
+      filtered = filtered.filter((a) => a.client === filterClient);
     }
     if (filterProfessional) {
-      filtered = filtered.filter(a => a.professional === filterProfessional);
+      filtered = filtered.filter((a) => a.professional === filterProfessional);
     }
     filtered = filtered.sort((a, b) => {
       if (sortDirection === 'asc') {
@@ -46,6 +57,7 @@ export function AdminAppointmentsPageClient({ appointments, clients, professiona
       onFilterClient={setFilterClient}
       onFilterProfessional={setFilterProfessional}
       onSortDirection={setSortDirection}
+      onRefresh={handleRefresh}
     />
   );
 }
