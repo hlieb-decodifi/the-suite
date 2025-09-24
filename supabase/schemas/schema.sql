@@ -1200,7 +1200,10 @@ create table booking_payments (
   refunded_amount decimal(10, 2) default 0 not null,
   refund_reason text,
   refunded_at timestamp with time zone,
-  refund_transaction_id text
+  refund_transaction_id text,
+  -- Email tracking fields
+  confirmation_emails_sent_at timestamp with time zone,
+  confirmation_emails_sent boolean default false not null
 );
 alter table booking_payments enable row level security;
 
