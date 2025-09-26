@@ -953,6 +953,9 @@ export function BookingDetailPageClient({
                               const stripeBalance =
                                 appointment.bookings.booking_payments
                                   ?.balance_amount ?? 0;
+                              const suiteFee =
+                                appointment.bookings.booking_payments
+                                  ?.service_fee ?? 0;
 
                               if (isDeposit && isCashPayment) {
                                 // For cash payments with deposit: show both Stripe balance (suite fee) and cash balance (services + tips)
@@ -974,7 +977,7 @@ export function BookingDetailPageClient({
                                           variant="small"
                                           className="font-medium text-amber-600"
                                         >
-                                          {formatCurrency(stripeBalance)}
+                                          {formatCurrency(suiteFee)}
                                         </Typography>
                                       </div>
                                     )}
@@ -1022,7 +1025,11 @@ export function BookingDetailPageClient({
                                       variant="small"
                                       className="font-medium text-amber-600"
                                     >
-                                      {formatCurrency(stripeBalance)}
+                                      {formatCurrency(
+                                        isProfessional
+                                          ? stripeBalance - suiteFee
+                                          : stripeBalance,
+                                      )}
                                     </Typography>
                                   </div>
                                 );

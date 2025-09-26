@@ -1344,12 +1344,6 @@ create policy "Clients can create booking services for their bookings"
       where bookings.id = booking_services.booking_id
       and bookings.client_id = auth.uid()
     )
-    and not exists (
-      -- Check if service is archived using direct table access
-      select 1 from public.services s
-      where s.id = booking_services.service_id
-      and s.is_archived = true
-    )
   );
 
 create policy "Professionals can create booking services for their bookings"
@@ -1360,12 +1354,6 @@ create policy "Professionals can create booking services for their bookings"
       join professional_profiles pp on b.professional_profile_id = pp.id
       where b.id = booking_services.booking_id
       and pp.user_id = auth.uid()
-    )
-    and not exists (
-      -- Check if service is archived using direct table access
-      select 1 from public.services s
-      where s.id = booking_services.service_id
-      and s.is_archived = true
     )
   );
 
