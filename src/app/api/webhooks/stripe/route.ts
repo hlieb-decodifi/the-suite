@@ -632,10 +632,31 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
       
       console.log(`💳 Payment intent created: ${paymentIntentId}, Type: ${paymentType}`);
       
-      // Update booking payment with payment intent ID
+      // Retrieve the payment intent to get the payment method ID
+      let paymentMethodId: string | undefined;
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        if (paymentIntent.payment_method && typeof paymentIntent.payment_method === 'string') {
+          paymentMethodId = paymentIntent.payment_method;
+          console.log(`💳 Found payment method ID: ${paymentMethodId}`);
+        } else if (paymentIntent.payment_method && typeof paymentIntent.payment_method === 'object') {
+          paymentMethodId = paymentIntent.payment_method.id;
+          console.log(`💳 Found payment method ID from object: ${paymentMethodId}`);
+        }
+      } catch (piError) {
+        console.error('❌ Error retrieving payment intent for payment method:', piError);
+      }
+      
+      // Update booking payment with payment intent ID and payment method ID
       const updateData: Record<string, string> = {
         updated_at: new Date().toISOString()
       };
+      
+      // Always save the payment method ID if we have it
+      if (paymentMethodId) {
+        updateData.stripe_payment_method_id = paymentMethodId;
+        console.log(`📝 Saving payment method ID: ${paymentMethodId}`);
+      }
       
       // For deposit payments, store in deposit_payment_intent_id
       if (paymentType === 'deposit' || paymentType === 'deposit_only') {
