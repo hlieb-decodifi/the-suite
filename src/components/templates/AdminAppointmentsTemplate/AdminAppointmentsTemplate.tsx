@@ -271,7 +271,7 @@ export function AdminAppointmentsTemplate({
                         >
                           <AdminAppointmentTestActions
                             appointmentId={app.id}
-                            onUpdate={onRefresh}
+                            {...(onRefresh && { onUpdate: onRefresh })}
                           />
                         </div>
                       </td>
@@ -331,7 +331,7 @@ export function AdminAppointmentsTemplate({
                   </Typography>
                   <AdminAppointmentTestActions
                     appointmentId={app.id}
-                    onUpdate={onRefresh}
+                    {...(onRefresh && { onUpdate: onRefresh })}
                   />
                 </div>
               </div>

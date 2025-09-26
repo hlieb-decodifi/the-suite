@@ -17,8 +17,19 @@ import {
   makeAppointmentOngoingAction,
   makeAppointmentCompletedAction,
   makeAppointmentUpcomingAction,
+  makePaymentPreAuthScheduledAction,
+  makePaymentPreAuthPlacedAction,
+  makePaymentCaptureReadyAction,
 } from '@/server/domains/appointments/admin-actions';
-import { Settings, Clock, CheckCircle, Calendar } from 'lucide-react';
+import {
+  Settings,
+  Clock,
+  CheckCircle,
+  Calendar,
+  CreditCard,
+  Timer,
+  Wallet,
+} from 'lucide-react';
 
 type AdminAppointmentTestActionsProps = {
   appointmentId: string;
@@ -80,6 +91,18 @@ export function AdminAppointmentTestActions({
   const makeUpcoming = () => {
     const hours = parseInt(hoursFromNow) || 24;
     handleAction(() => makeAppointmentUpcomingAction(appointmentId, hours));
+  };
+
+  const makePreAuthScheduled = () => {
+    handleAction(() => makePaymentPreAuthScheduledAction(appointmentId));
+  };
+
+  const makePreAuthPlaced = () => {
+    handleAction(() => makePaymentPreAuthPlacedAction(appointmentId));
+  };
+
+  const makeCaptureReady = () => {
+    handleAction(() => makePaymentCaptureReadyAction(appointmentId));
   };
 
   return (
@@ -180,10 +203,65 @@ export function AdminAppointmentTestActions({
             </div>
           </div>
 
-          <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
-            <strong>Note:</strong> This will modify the appointment's start_time
-            and end_time in the database. The status is computed dynamically
-            based on these times relative to the current time.
+          <div className="border-t pt-4">
+            <div className="text-sm font-medium mb-3 text-muted-foreground">
+              Payment Testing
+            </div>
+            <div className="space-y-2">
+              <Button
+                onClick={makePreAuthScheduled}
+                disabled={isLoading}
+                className="w-full justify-start"
+                variant="outline"
+                size="sm"
+              >
+                <Timer className="mr-2 h-4 w-4" />
+                Pre-Auth Scheduled
+                <span className="ml-auto text-xs text-muted-foreground">
+                  (7 days away)
+                </span>
+              </Button>
+
+              <Button
+                onClick={makePreAuthPlaced}
+                disabled={isLoading}
+                className="w-full justify-start"
+                variant="outline"
+                size="sm"
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Pre-Auth Placed
+                <span className="ml-auto text-xs text-muted-foreground">
+                  (5 days away)
+                </span>
+              </Button>
+
+              <Button
+                onClick={makeCaptureReady}
+                disabled={isLoading}
+                className="w-full justify-start"
+                variant="outline"
+                size="sm"
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                Capture Ready
+                <span className="ml-auto text-xs text-muted-foreground">
+                  (ended 2h ago)
+                </span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg space-y-1">
+            <div>
+              <strong>Appointment Actions:</strong> Modify start_time and
+              end_time in appointments table.
+            </div>
+            <div>
+              <strong>Payment Actions:</strong> Also update
+              pre_auth_scheduled_for, capture_scheduled_for, and payment status
+              in booking_payments table.
+            </div>
           </div>
         </div>
       </DialogContent>
