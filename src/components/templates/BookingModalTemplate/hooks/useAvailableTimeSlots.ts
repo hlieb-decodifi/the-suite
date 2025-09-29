@@ -16,11 +16,12 @@ export function useAvailableTimeSlots(
   enabled = true
 ) {
   const query = useQuery({
-    queryKey: ['availableTimeSlots', professionalProfileId, date, professionalTimezone, clientTimezone],
+    queryKey: ['availableTimeSlots', professionalProfileId, date, requiredDurationMinutes, professionalTimezone, clientTimezone],
     queryFn: async () => {
       console.log('Fetching time slots with params:', {
         professionalProfileId,
         date,
+        requiredDurationMinutes,
         professionalTimezone,
         clientTimezone
       });
