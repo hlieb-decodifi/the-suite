@@ -278,7 +278,7 @@ export async function initiateRefundServerAction(formData: FormData) {
 
     console.log('[SERVER-ACTION] Processing refund through Stripe');
     // Process the refund through Stripe
-    const { success, refundId, error: refundError } = await processStripeRefund(
+    const { success, error: refundError } = await processStripeRefund(
       support_request_id,
       refund_amount
     );
@@ -291,24 +291,20 @@ export async function initiateRefundServerAction(formData: FormData) {
       };
     }
 
-    console.log('[SERVER-ACTION] Refund processed successfully, updating support request');
-    // Update the support request with refund information
-    const { error: updateError } = await supabase
-      .from('support_requests')
-      .update({
-        refund_amount: refund_amount,
-        stripe_refund_id: refundId || null,
-        professional_notes: professional_notes || null,
-        status: 'in_progress' // Set to in_progress while waiting for Stripe webhook
-      })
-      .eq('id', support_request_id);
+    console.log('[SERVER-ACTION] Refund processed successfully, adding professional notes');
+    // Only update professional notes if provided, since processStripeRefund already handled the main update
+    if (professional_notes) {
+      const { error: updateError } = await supabase
+        .from('support_requests')
+        .update({
+          professional_notes: professional_notes
+        })
+        .eq('id', support_request_id);
 
-    if (updateError) {
-      console.error('[SERVER-ACTION] Error updating support request:', updateError);
-      return {
-        success: false,
-        error: 'Failed to update support request with refund information',
-      };
+      if (updateError) {
+        console.error('[SERVER-ACTION] Error updating support request notes:', updateError);
+        // Don't fail the entire operation for notes update failure
+      }
     }
 
     // Add a message to the conversation
