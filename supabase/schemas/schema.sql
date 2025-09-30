@@ -1232,6 +1232,39 @@ add constraint booking_payments_refund_amount_check
 check (refunded_amount >= 0 and refunded_amount <= (amount + tip_amount + service_fee));
 
 /**
+* TIPS
+* Separate tips that can be added after appointment completion
+* This allows clients to tip after the original payment is already captured
+*/
+create table tips (
+  id uuid primary key default uuid_generate_v4(),
+  booking_id uuid references bookings not null,
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  amount decimal(10, 2) not null check (amount > 0),
+  stripe_payment_intent_id text,
+  status text not null default 'pending' check (status in ('pending', 'completed', 'failed', 'refunded')),
+  refunded_amount decimal(10, 2) default 0 not null,
+  refunded_at timestamp with time zone,
+  stripe_refund_id text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Constraints
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id)),
+  constraint tip_refund_amount_check check (refunded_amount >= 0 and refunded_amount <= amount)
+);
+alter table tips enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_tips_booking_id on tips(booking_id);
+create index if not exists idx_tips_client_id on tips(client_id);
+create index if not exists idx_tips_professional_id on tips(professional_id);
+create index if not exists idx_tips_stripe_payment_intent_id on tips(stripe_payment_intent_id) where stripe_payment_intent_id is not null;
+create index if not exists idx_tips_status on tips(status);
+create index if not exists idx_tips_created_at on tips(created_at);
+
+/**
 * Function to check professional availability
 * Prevents double booking
 */
@@ -1392,6 +1425,39 @@ create policy "Users can view booking payments for their bookings"
 -- Removed: "Clients can update booking payments for cancellation" policy
 -- Booking payment operations are now handled exclusively by server actions with admin client
 -- See migration: remove_dangerous_booking_payments_rls_policies.sql
+
+-- Tips policies
+create policy "Users can view tips for their bookings"
+  on tips for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = tips.booking_id
+      and (
+        bookings.client_id = auth.uid()
+        or exists (
+          select 1 from professional_profiles
+          where professional_profiles.id = bookings.professional_profile_id
+          and professional_profiles.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+create policy "Clients can create tips for their completed bookings"
+  on tips for insert
+  with check (
+    auth.uid() = client_id
+    and exists (
+      select 1 from bookings b
+      join appointments a on a.booking_id = b.id
+      where b.id = tips.booking_id
+      and b.client_id = auth.uid()
+      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'completed'
+    )
+  );
+
+-- Tip operations (updates, refunds) are handled by server actions only
 
 -- Additional policies for professionals to view client data when they have shared appointments
 create policy "Professionals can view client profiles for shared appointments"
@@ -2799,7 +2865,8 @@ create publication supabase_realtime for table
   messages,
   message_read_status,
   reviews,
-  support_requests;
+  support_requests,
+  tips;
 
 -- Add a function to safely insert address and return the ID (bypasses RLS)
 create or replace function insert_address_and_return_id(

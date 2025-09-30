@@ -529,13 +529,91 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
   }
 }
 
+// Handle tip payment checkout
+async function handleTipPaymentCheckout(session: Stripe.Checkout.Session) {
+  console.log('=== TIP PAYMENT CHECKOUT ===');
+  console.log('Session ID:', session.id);
+  console.log('Payment status:', session.payment_status);
+  console.log('Session metadata:', session.metadata);
+
+  const supabase = createAdminClient();
+  const tipId = session.metadata?.tip_id;
+  const bookingId = session.metadata?.booking_id;
+
+  if (!tipId) {
+    console.error('❌ No tip ID found in session metadata');
+    return;
+  }
+
+  try {
+    if (session.payment_status === 'paid') {
+      console.log('✅ Tip payment successful, updating tip status');
+      
+      // Update tip status to completed
+      const { error: updateError } = await supabase
+        .from('tips')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tipId);
+
+      if (updateError) {
+        console.error('❌ Error updating tip status:', updateError);
+        return;
+      }
+
+      console.log('✅ Tip payment processed successfully:', tipId);
+
+      // Optional: Log activity for analytics
+      if (bookingId) {
+        await trackActivity({
+          activityType: 'booking_completed', // Use existing enum value
+          entityType: 'booking',
+          entityId: bookingId,
+          metadata: {
+            tip_id: tipId,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            payment_type: 'tip'
+          }
+        });
+      }
+    } else {
+      console.log('❌ Tip payment not successful, status:', session.payment_status);
+      
+      // Update tip status to failed
+      const { error: updateError } = await supabase
+        .from('tips')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tipId);
+
+      if (updateError) {
+        console.error('❌ Error updating tip status to failed:', updateError);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error processing tip payment:', error);
+  }
+}
+
 // Handle booking payment checkout
 async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
   const supabase = createAdminClient();
   const bookingId = session.metadata?.booking_id;
+  const paymentType = session.metadata?.payment_type;
   
   if (!bookingId) {
     console.error('❌ No booking ID found in session metadata');
+    return;
+  }
+
+  // Handle tip payments
+  if (paymentType === 'tip') {
+    console.log('🎯 Processing tip payment checkout session');
+    await handleTipPaymentCheckout(session);
     return;
   }
 

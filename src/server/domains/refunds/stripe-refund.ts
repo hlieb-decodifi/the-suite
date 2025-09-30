@@ -123,6 +123,35 @@ export async function processStripeRefund(
       };
     }
 
+    // Get any tips for this booking that need to be included in refund calculations
+    let bookingTips: Array<{
+      id: string;
+      amount: number;
+      stripe_payment_intent_id?: string | null;
+      status: string;
+      refunded_amount: number;
+    }> = [];
+    
+    // First, get the booking_id from the booking_payment
+    const { data: booking, error: bookingError } = await adminSupabase
+      .from('booking_payments')
+      .select('booking_id')
+      .eq('id', bookingPayment.id)
+      .single();
+      
+    if (!bookingError && booking) {
+      const { data: tips, error: tipsError } = await adminSupabase
+        .from('tips')
+        .select('id, amount, stripe_payment_intent_id, status, refunded_amount')
+        .eq('booking_id', booking.booking_id)
+        .eq('status', 'completed');
+        
+      if (!tipsError && tips) {
+        bookingTips = tips;
+        console.log(`[REFUND] Found ${bookingTips.length} completed tips for booking, total: $${bookingTips.reduce((sum, tip) => sum + tip.amount, 0)}`);
+      }
+    }
+
     console.log('[REFUND] Payment details:', {
       deposit_payment_intent_id: bookingPayment.deposit_payment_intent_id,
       stripe_payment_intent_id: bookingPayment.stripe_payment_intent_id,
@@ -244,6 +273,70 @@ export async function processStripeRefund(
           success: false,
           error: 'Failed to create deposit payment refund'
         };
+      }
+    }
+
+    // STEP 3: Handle tips refund (if needed and any tips exist)
+    let remainingRefundCentsAfterMain = refundAmountCents - totalRefundedCents;
+    
+    if (remainingRefundCentsAfterMain > 0 && bookingTips.length > 0) {
+      console.log(`[REFUND] Processing tips refund for remaining amount: $${remainingRefundCentsAfterMain/100}`);
+      
+      for (const tip of bookingTips) {
+        if (remainingRefundCentsAfterMain <= 0) break;
+        
+        const tipAmountCents = Math.round(tip.amount * 100);
+        const tipRefundedAmountCents = Math.round(tip.refunded_amount * 100);
+        const tipRefundableAmountCents = tipAmountCents - tipRefundedAmountCents;
+        
+        if (tipRefundableAmountCents <= 0) {
+          console.log(`[REFUND] Tip ${tip.id} already fully refunded, skipping`);
+          continue;
+        }
+        
+        const tipRefundAmount = Math.min(remainingRefundCentsAfterMain, tipRefundableAmountCents);
+        
+        if (tip.stripe_payment_intent_id) {
+          console.log(`[REFUND] Creating tip refund for $${tipRefundAmount/100}`);
+          
+          try {
+            const tipRefund = await stripe.refunds.create({
+              payment_intent: tip.stripe_payment_intent_id,
+              amount: tipRefundAmount,
+              metadata: {
+                support_request_id: supportRequestId,
+                refund_type: 'tip',
+                tip_id: tip.id
+              }
+            });
+            
+            refundIds.push(tipRefund.id);
+            totalRefundedCents += tipRefundAmount;
+            remainingRefundCentsAfterMain -= tipRefundAmount;
+            
+            // Update tip refunded amount
+            const { error: tipUpdateError } = await adminSupabase
+              .from('tips')
+              .update({
+                refunded_amount: (tipRefundedAmountCents + tipRefundAmount) / 100,
+                refunded_at: new Date().toISOString(),
+                stripe_refund_id: tipRefund.id
+              })
+              .eq('id', tip.id);
+              
+            if (tipUpdateError) {
+              console.error('[REFUND] Error updating tip refund status:', tipUpdateError);
+            }
+            
+            console.log(`[REFUND] Tip refund created: ${tipRefund.id}, amount: $${tipRefundAmount/100}`);
+          } catch (refundError) {
+            console.error('[REFUND] Error creating tip refund:', refundError);
+            return {
+              success: false,
+              error: 'Failed to create tip refund'
+            };
+          }
+        }
       }
     }
 
@@ -471,6 +564,30 @@ async function updateSupportRequestWithRefund(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`[WEBHOOK] Updating support request ${supportRequest.id} with refund status: ${refund.status}`);
+    
+    // Check if this is a tip refund and handle separately
+    if (refund.metadata?.refund_type === 'tip' && refund.metadata?.tip_id) {
+      console.log(`[WEBHOOK] Processing tip refund for tip ID: ${refund.metadata.tip_id}`);
+      
+      // Update the tip record
+      const { error: tipUpdateError } = await supabase
+        .from('tips')
+        .update({
+          refunded_amount: refund.amount / 100,
+          refunded_at: new Date().toISOString(),
+          stripe_refund_id: refund.id,
+          status: refund.status === 'succeeded' ? 'refunded' : 'completed'
+        })
+        .eq('id', refund.metadata.tip_id);
+        
+      if (tipUpdateError) {
+        console.error('[WEBHOOK] Error updating tip refund status:', tipUpdateError);
+        return { success: false, error: tipUpdateError.message };
+      }
+      
+      console.log('[WEBHOOK] Tip refund processed successfully');
+      return { success: true };
+    }
     
     // Update the support request
     const updateData: {
