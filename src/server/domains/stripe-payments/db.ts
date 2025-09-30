@@ -715,7 +715,9 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
           client_id,
           professional_profile_id,
           professional_profiles!inner(
-            stripe_account_id
+            professional_stripe_connect!inner(
+              stripe_account_id
+            )
           ),
           users!bookings_client_id_fkey(
             customers!inner(
@@ -725,7 +727,6 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
         )
       `)
       .lte('pre_auth_scheduled_for', new Date().toISOString())
-      .eq('status', 'pending')
       .is('pre_auth_placed_at', null)
       .not('pre_auth_scheduled_for', 'is', null)
       .limit(limit);
@@ -743,8 +744,8 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
         users: { customers: { stripe_customer_id: string } } 
       }).users.customers.stripe_customer_id,
       professional_stripe_account_id: (payment.bookings as unknown as { 
-        professional_profiles: { stripe_account_id: string } 
-      }).professional_profiles.stripe_account_id,
+        professional_profiles: { professional_stripe_connect: { stripe_account_id: string } } 
+      }).professional_profiles.professional_stripe_connect.stripe_account_id,
       pre_auth_scheduled_for: payment.pre_auth_scheduled_for!,
       stripe_payment_method_id: payment.stripe_payment_method_id
     }));
@@ -824,6 +825,7 @@ export async function markPaymentPreAuthorized(
       .update({
         stripe_payment_intent_id: paymentIntentId,
         pre_auth_placed_at: new Date().toISOString(),
+        pre_auth_scheduled_for: null, // Clear the scheduled date since auth is now placed
         status: 'authorized',
         updated_at: new Date().toISOString()
       })

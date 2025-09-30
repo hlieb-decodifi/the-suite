@@ -1558,7 +1558,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
         const paymentMethodType = setupIntent.metadata?.payment_method_type;
         const isOnlinePayment = paymentMethodType === 'card';
         
-        // Step 1: Immediately charge the deposit
+        // Step 1: Immediately charge the deposit (NO application fee for deposits)
         try {
           const depositPaymentIntent = await stripe.paymentIntents.create({
             amount: parseInt(depositAmount),
@@ -1568,12 +1568,11 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
             confirmation_method: 'automatic',
             confirm: true,
             off_session: true,
-            // Use application_fee_amount structure for better partial capture support
-            application_fee_amount: 100, // $1 service fee
+            // For deposits: Transfer full amount to professional, no application fee
             transfer_data: {
-              destination: professionalStripeAccountId // Professional gets (deposit - service fee)
+              amount: parseInt(depositAmount), // Transfer full deposit amount to professional
+              destination: professionalStripeAccountId
             },
-            // Note: transfer_data.amount is automatically calculated as (deposit_amount - application_fee_amount)
             on_behalf_of: professionalStripeAccountId,
             metadata: {
               booking_id: bookingId,

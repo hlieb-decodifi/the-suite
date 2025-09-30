@@ -111,12 +111,14 @@ export async function createStripeCheckoutSession(
           }
         ],
         payment_intent_data: {
-          // Get service fee from config instead of calculating percentage
+          // For deposits: transfer full amount, for full payments: subtract service fee
           transfer_data: {
-            amount: chargeAmount - await getServiceFeeFromConfig(), // Only transfer the service amount (total - suite fee)
+            amount: paymentType === 'deposit' 
+              ? chargeAmount // Transfer full deposit amount to professional
+              : chargeAmount - await getServiceFeeFromConfig(), // For full payments, subtract service fee
             destination: professionalStripeAccountId
           },
-          // The remaining amount (suite fee) stays in the platform account
+          // For deposits: no platform fee, for full payments: platform keeps service fee
           on_behalf_of: professionalStripeAccountId, // Professional pays the processing fees
           metadata: sessionConfig.metadata || {}
         }
