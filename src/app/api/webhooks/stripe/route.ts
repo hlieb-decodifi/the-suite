@@ -1201,6 +1201,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       .update({
         status: 'completed',
         captured_at: new Date().toISOString(),
+        capture_scheduled_for: null, // Clear the scheduled capture date
         updated_at: new Date().toISOString()
       })
       .eq('booking_id', bookingId)
@@ -1285,6 +1286,7 @@ async function handlePaymentCaptureByPaymentIntentId(paymentIntentId: string) {
       .update({
         status: 'completed',
         captured_at: new Date().toISOString(),
+        capture_scheduled_for: null, // Clear the scheduled capture date
         updated_at: new Date().toISOString()
       })
       .eq('id', payment.id);

@@ -763,6 +763,8 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
   stripe_payment_intent_id: string;
   amount: number;
   tip_amount: number;
+  balance_amount: number;
+  payment_type: string;
   capture_scheduled_for: string;
 }[]> {
   const supabase = createSupabaseAdminClient();
@@ -776,12 +778,14 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
         stripe_payment_intent_id,
         amount,
         tip_amount,
+        balance_amount,
+        payment_type,
         capture_scheduled_for
       `)
       .lte('capture_scheduled_for', new Date().toISOString())
       .in('status', ['authorized', 'pre_auth_scheduled'])
       .not('stripe_payment_intent_id', 'is', null)
-      .is('captured_at', null)
+      .not('capture_scheduled_for', 'is', null)
       .limit(limit);
 
     if (error) {
@@ -795,6 +799,8 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
       stripe_payment_intent_id: payment.stripe_payment_intent_id!,
       amount: Math.round(payment.amount * 100), // Convert to cents
       tip_amount: Math.round((payment.tip_amount || 0) * 100), // Convert to cents
+      balance_amount: Math.round((payment.balance_amount || 0) * 100), // Convert to cents
+      payment_type: payment.payment_type!,
       capture_scheduled_for: payment.capture_scheduled_for!
     }));
   } catch (error) {
@@ -854,6 +860,7 @@ export async function markPaymentCaptured(
         captured_at: new Date().toISOString(),
         status: 'completed',
         amount: capturedAmount / 100, // Convert back to dollars
+        capture_scheduled_for: null, // Clear the scheduled capture date
         updated_at: new Date().toISOString()
       })
       .eq('id', paymentId);
