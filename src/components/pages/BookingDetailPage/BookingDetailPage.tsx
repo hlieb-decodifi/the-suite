@@ -63,6 +63,17 @@ export type DetailedAppointmentType = {
         is_online: boolean;
       } | null;
     } | null;
+    tips: Array<{
+      id: string;
+      amount: number;
+      status: string;
+      stripe_payment_intent_id?: string | null;
+      refunded_amount: number;
+      refunded_at: string | null;
+      stripe_refund_id?: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
     professionals: {
       id: string;
       user_id: string;
@@ -249,6 +260,17 @@ export async function getAppointmentById(
               is_online
             )
           ),
+          tips(
+            id,
+            amount,
+            status,
+            stripe_payment_intent_id,
+            refunded_amount,
+            refunded_at,
+            stripe_refund_id,
+            created_at,
+            updated_at
+          ),
           professionals:professional_profiles!inner(
             id,
             user_id,
@@ -320,6 +342,7 @@ export async function getAppointmentById(
         client_id: data.bookings.client_id,
         professional_profile_id: data.bookings.professional_profile_id,
         booking_services: data.bookings.booking_services,
+        tips: data.bookings.tips || [],
         booking_payments: data.bookings.booking_payments
           ? {
               ...data.bookings.booking_payments,

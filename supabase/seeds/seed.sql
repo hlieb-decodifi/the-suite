@@ -277,6 +277,8 @@ INSERT INTO public.legal_documents (type, title, content, is_published, effectiv
 );
 
 
+DELETE FROM storage.buckets;
+DELETE FROM storage.objects;
 
 /**
 * STORAGE BUCKETS
@@ -421,7 +423,7 @@ BEGIN
         'authenticated',
         'authenticated',
         'professional@mail.com',
-        crypt('secret', gen_salt('bf')),
+        extensions.crypt('secret', extensions.gen_salt('bf')),
         current_timestamp,
         current_timestamp,
         current_timestamp,
@@ -698,7 +700,7 @@ BEGIN
         'authenticated',
         'authenticated',
         'client@mail.com',
-        crypt('secret', gen_salt('bf')),
+        extensions.crypt('secret', extensions.gen_salt('bf')),
         current_timestamp,
         current_timestamp,
         current_timestamp,
@@ -776,508 +778,510 @@ BEGIN
     RAISE NOTICE 'Client Profile ID: %', client_profile_id;
     RAISE NOTICE 'Email: client@mail.com';
     RAISE NOTICE 'Password: secret';
+
     
-    -- Create various appointments covering different scenarios
+    -- -- Create various appointments covering different scenarios
     
-    -- 1. Past completed appointment (with payment and review)
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'completed',
-        'Great service, very professional'
-    ) RETURNING id INTO booking_id;
+    -- -- 1. Past completed appointment (with payment and review)
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'completed',
+    --     'Great service, very professional'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() - INTERVAL '7 days' + INTERVAL '10 hours',
-        NOW() - INTERVAL '7 days' + INTERVAL '11 hours',
-        'completed'
-    ) RETURNING id INTO appointment_id;
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() - INTERVAL '7 days' + INTERVAL '10 hours',
+    --     NOW() - INTERVAL '7 days' + INTERVAL '11 hours',
+    --     'completed'
+    -- ) RETURNING id INTO appointment_id;
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        standard_service_id,
-        150.00,
-        60
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     standard_service_id,
+    --     150.00,
+    --     60
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        150.00,
-        20.00,
-        1.00,
-        'completed',
-        'pi_completed_123'
-    ) RETURNING id INTO booking_payment_id;
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     150.00,
+    --     20.00,
+    --     1.00,
+    --     'completed',
+    --     'pi_completed_123'
+    -- ) RETURNING id INTO booking_payment_id;
     
-    -- Add review for completed appointment
-    INSERT INTO reviews (
-        appointment_id,
-        client_id,
-        professional_id,
-        score,
-        message
-    ) VALUES (
-        appointment_id,
-        client_user_id,
-        professional_user_id,
-        5,
-        'Excellent service! Very professional and thorough. Would definitely recommend.'
-    );
+    -- -- Add review for completed appointment
+    -- INSERT INTO reviews (
+    --     appointment_id,
+    --     client_id,
+    --     professional_id,
+    --     score,
+    --     message
+    -- ) VALUES (
+    --     appointment_id,
+    --     client_user_id,
+    --     professional_user_id,
+    --     5,
+    --     'Excellent service! Very professional and thorough. Would definitely recommend.'
+    -- );
     
-    -- 2. Past cancelled appointment (with cancellation fee)
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'cancelled',
-        'Cancelled due to emergency'
-    ) RETURNING id INTO booking_id;
+    -- -- 2. Past cancelled appointment (with cancellation fee)
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'cancelled',
+    --     'Cancelled due to emergency'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() - INTERVAL '3 days' + INTERVAL '14 hours',
-        NOW() - INTERVAL '3 days' + INTERVAL '15 hours',
-        'cancelled'
-    );
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() - INTERVAL '3 days' + INTERVAL '14 hours',
+    --     NOW() - INTERVAL '3 days' + INTERVAL '15 hours',
+    --     'cancelled'
+    -- );
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        premium_service_id,
-        250.00,
-        90
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     premium_service_id,
+    --     250.00,
+    --     90
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id,
-        refunded_amount,
-        refund_reason,
-        refunded_at
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        250.00,
-        0.00,
-        1.00,
-        'partially_refunded',
-        'pi_cancelled_456',
-        187.50,
-        'Cancellation fee applied (25% of service amount)',
-        NOW() - INTERVAL '2 days'
-    );
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id,
+    --     refunded_amount,
+    --     refund_reason,
+    --     refunded_at
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     250.00,
+    --     0.00,
+    --     1.00,
+    --     'partially_refunded',
+    --     'pi_cancelled_456',
+    --     187.50,
+    --     'Cancellation fee applied (25% of service amount)',
+    --     NOW() - INTERVAL '2 days'
+    -- );
     
-    -- 3. Upcoming confirmed appointment (with deposit paid)
-    INSERT INTO bookings (
-        id,
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        '0a399b49-4f8c-4064-8bc4-d0629e2dd694',
-        client_user_id,
-        prof_profile_id,
-        'confirmed',
-        'Looking forward to the appointment'
-    ) RETURNING id INTO booking_id;
+    -- -- 3. Upcoming confirmed appointment (with deposit paid)
+    -- INSERT INTO bookings (
+    --     id,
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     '0a399b49-4f8c-4064-8bc4-d0629e2dd694',
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'confirmed',
+    --     'Looking forward to the appointment'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() + INTERVAL '2 days' + INTERVAL '9 hours',
-        NOW() + INTERVAL '2 days' + INTERVAL '10 hours',
-        'ongoing'
-    );
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() + INTERVAL '2 days' + INTERVAL '9 hours',
+    --     NOW() + INTERVAL '2 days' + INTERVAL '10 hours',
+    --     'ongoing'
+    -- );
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        basic_service_id,
-        50.00,
-        30
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     basic_service_id,
+    --     50.00,
+    --     30
+    -- );
     
-    INSERT INTO booking_payments (
-        id,
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id,
-        stripe_checkout_session_id,
-        deposit_amount,
-        balance_amount,
-        payment_type,
-        requires_balance_payment
-    ) VALUES (
-        '73dc758a-0d9d-4001-8276-679f6ec04504',
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        51.00,
-        0.00,
-        1.00,
-        'completed',
-        'pi_3RsTfxLMOPuguC730nldFayF',
-        'cs_test_a1zaEXowPcQaX9Mru09sikilJ5eU3AdvuvPnLuFfKOA83yExY4RHTAmsI7',
-        50.00,
-        1.00,
-        'full',
-        true
-    );
+    -- INSERT INTO booking_payments (
+    --     id,
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id,
+    --     stripe_checkout_session_id,
+    --     deposit_amount,
+    --     balance_amount,
+    --     payment_type,
+    --     requires_balance_payment
+    -- ) VALUES (
+    --     '73dc758a-0d9d-4001-8276-679f6ec04504',
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     51.00,
+    --     0.00,
+    --     1.00,
+    --     'completed',
+    --     'pi_3RsTfxLMOPuguC730nldFayF',
+    --     'cs_test_a1zaEXowPcQaX9Mru09sikilJ5eU3AdvuvPnLuFfKOA83yExY4RHTAmsI7',
+    --     50.00,
+    --     1.00,
+    --     'full',
+    --     true
+    -- );
     
-    -- 4. Future appointment (pending payment)
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'pending_payment',
-        'New appointment request'
-    ) RETURNING id INTO booking_id;
+    -- -- 4. Future appointment (pending payment)
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'pending_payment',
+    --     'New appointment request'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() + INTERVAL '1 week' + INTERVAL '11 hours',
-        NOW() + INTERVAL '1 week' + INTERVAL '12 hours 30 minutes',
-        'ongoing'
-    );
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() + INTERVAL '1 week' + INTERVAL '11 hours',
+    --     NOW() + INTERVAL '1 week' + INTERVAL '12 hours 30 minutes',
+    --     'ongoing'
+    -- );
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        standard_service_id,
-        150.00,
-        60
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     standard_service_id,
+    --     150.00,
+    --     60
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_checkout_session_id
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        150.00,
-        0.00,
-        1.00,
-        'incomplete',
-        'cs_pending_101'
-    );
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_checkout_session_id
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     150.00,
+    --     0.00,
+    --     1.00,
+    --     'incomplete',
+    --     'cs_pending_101'
+    -- );
     
-    -- 5. Past no-show appointment
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'cancelled',
-        'Client no-show'
-    ) RETURNING id INTO booking_id;
+    -- -- 5. Past no-show appointment
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'cancelled',
+    --     'Client no-show'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() - INTERVAL '1 day' + INTERVAL '13 hours',
-        NOW() - INTERVAL '1 day' + INTERVAL '14 hours',
-        'cancelled'
-    );
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() - INTERVAL '1 day' + INTERVAL '13 hours',
+    --     NOW() - INTERVAL '1 day' + INTERVAL '14 hours',
+    --     'cancelled'
+    -- );
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        basic_service_id,
-        50.00,
-        30
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     basic_service_id,
+    --     50.00,
+    --     30
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id,
-        refunded_amount,
-        refund_reason,
-        refunded_at
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        50.00,
-        0.00,
-        1.00,
-        'partially_refunded',
-        'pi_noshow_202',
-        25.00,
-        'No-show fee applied (50% of service amount)',
-        NOW() - INTERVAL '12 hours'
-    );
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id,
+    --     refunded_amount,
+    --     refund_reason,
+    --     refunded_at
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     50.00,
+    --     0.00,
+    --     1.00,
+    --     'partially_refunded',
+    --     'pi_noshow_202',
+    --     25.00,
+    --     'No-show fee applied (50% of service amount)',
+    --     NOW() - INTERVAL '12 hours'
+    -- );
     
-    -- 6. Future appointment with pre-auth scheduled
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'confirmed',
-        'Pre-auth appointment'
-    ) RETURNING id INTO booking_id;
+    -- -- 6. Future appointment with pre-auth scheduled
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'confirmed',
+    --     'Pre-auth appointment'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() + INTERVAL '5 days' + INTERVAL '15 hours',
-        NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes',
-        'ongoing'
-    );
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() + INTERVAL '5 days' + INTERVAL '15 hours',
+    --     NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes',
+    --     'ongoing'
+    -- );
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        premium_service_id,
-        250.00,
-        90
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     premium_service_id,
+    --     250.00,
+    --     90
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id,
-        capture_method,
-        pre_auth_scheduled_for,
-        capture_scheduled_for
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        250.00,
-        30.00,
-        1.00,
-        'authorized',
-        'pi_preauth_303',
-        'manual',
-        NOW() + INTERVAL '1 day',
-        NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes' + INTERVAL '12 hours'
-    );
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id,
+    --     capture_method,
+    --     pre_auth_scheduled_for,
+    --     capture_scheduled_for
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     250.00,
+    --     30.00,
+    --     1.00,
+    --     'authorized',
+    --     'pi_preauth_303',
+    --     'manual',
+    --     NOW() + INTERVAL '1 day',
+    --     NOW() + INTERVAL '5 days' + INTERVAL '16 hours 30 minutes' + INTERVAL '12 hours'
+    -- );
     
-    -- 7. Past completed appointment without review (for testing post-appointment flow)
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'completed',
-        'Completed appointment without review - for testing post-appointment flow'
-    ) RETURNING id INTO booking_id;
+    -- -- 7. Past completed appointment without review (for testing post-appointment flow)
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'completed',
+    --     'Completed appointment without review - for testing post-appointment flow'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() - INTERVAL '3 days' + INTERVAL '14 hours',  -- 2 PM, 3 days ago
-        NOW() - INTERVAL '3 days' + INTERVAL '15 hours',  -- 3 PM, 3 days ago
-        'completed'
-    ) RETURNING id INTO appointment_id;
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() - INTERVAL '3 days' + INTERVAL '14 hours',  -- 2 PM, 3 days ago
+    --     NOW() - INTERVAL '3 days' + INTERVAL '15 hours',  -- 3 PM, 3 days ago
+    --     'completed'
+    -- ) RETURNING id INTO appointment_id;
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        standard_service_id,
-        150.00,
-        60
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     standard_service_id,
+    --     150.00,
+    --     60
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        150.00,
-        0.00,  -- No tip yet - can be added post-appointment
-        1.00,
-        'completed',
-        'pi_completed_no_review_' || extract(epoch from now())::text
-    );
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     150.00,
+    --     0.00,  -- No tip yet - can be added post-appointment
+    --     1.00,
+    --     'completed',
+    --     'pi_completed_no_review_' || extract(epoch from now())::text
+    -- );
     
-    -- NOTE: Intentionally NOT creating a review for this appointment
+    -- -- NOTE: Intentionally NOT creating a review for this appointment
     
-    -- 8. Currently ongoing appointment (for testing Add Additional Services)
-    INSERT INTO bookings (
-        client_id,
-        professional_profile_id,
-        status,
-        notes
-    ) VALUES (
-        client_user_id,
-        prof_profile_id,
-        'confirmed',
-        'Currently ongoing appointment - started 30 minutes ago'
-    ) RETURNING id INTO booking_id;
+    -- -- 8. Currently ongoing appointment (for testing Add Additional Services)
+    -- INSERT INTO bookings (
+    --     client_id,
+    --     professional_profile_id,
+    --     status,
+    --     notes
+    -- ) VALUES (
+    --     client_user_id,
+    --     prof_profile_id,
+    --     'confirmed',
+    --     'Currently ongoing appointment - started 30 minutes ago'
+    -- ) RETURNING id INTO booking_id;
     
-    INSERT INTO appointments (
-        booking_id,
-        start_time,
-        end_time,
-        status
-    ) VALUES (
-        booking_id,
-        NOW() - INTERVAL '30 minutes',  -- Started 30 minutes ago
-        NOW() + INTERVAL '30 minutes',  -- Ends in 30 minutes
-        'ongoing'
-    ) RETURNING id INTO appointment_id;
+    -- INSERT INTO appointments (
+    --     booking_id,
+    --     start_time,
+    --     end_time,
+    --     status
+    -- ) VALUES (
+    --     booking_id,
+    --     NOW() - INTERVAL '30 minutes',  -- Started 30 minutes ago
+    --     NOW() + INTERVAL '30 minutes',  -- Ends in 30 minutes
+    --     'ongoing'
+    -- ) RETURNING id INTO appointment_id;
     
-    INSERT INTO booking_services (
-        booking_id,
-        service_id,
-        price,
-        duration
-    ) VALUES (
-        booking_id,
-        standard_service_id,
-        150.00,
-        60
-    );
+    -- INSERT INTO booking_services (
+    --     booking_id,
+    --     service_id,
+    --     price,
+    --     duration
+    -- ) VALUES (
+    --     booking_id,
+    --     standard_service_id,
+    --     150.00,
+    --     60
+    -- );
     
-    INSERT INTO booking_payments (
-        booking_id,
-        payment_method_id,
-        amount,
-        tip_amount,
-        service_fee,
-        status,
-        stripe_payment_intent_id
-    ) VALUES (
-        booking_id,
-        (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
-        150.00,
-        0.00,
-        1.00,
-        'completed',
-        'pi_ongoing_' || extract(epoch from now())::text
-    );
+    -- INSERT INTO booking_payments (
+    --     booking_id,
+    --     payment_method_id,
+    --     amount,
+    --     tip_amount,
+    --     service_fee,
+    --     status,
+    --     stripe_payment_intent_id
+    -- ) VALUES (
+    --     booking_id,
+    --     (SELECT id FROM payment_methods WHERE name = 'Credit Card'),
+    --     150.00,
+    --     0.00,
+    --     1.00,
+    --     'completed',
+    --     'pi_ongoing_' || extract(epoch from now())::text
+    -- );
     
-    RAISE NOTICE 'All appointments created successfully!';
-    RAISE NOTICE 'Created 8 different appointment scenarios:';
-    RAISE NOTICE '1. Past completed appointment with review';
-    RAISE NOTICE '2. Past cancelled appointment with cancellation fee';
-    RAISE NOTICE '3. Upcoming confirmed appointment with deposit';
-    RAISE NOTICE '4. Future appointment pending payment';
-    RAISE NOTICE '5. Past no-show appointment';
-    RAISE NOTICE '6. Future appointment with pre-auth scheduled';
-    RAISE NOTICE '7. Past completed appointment without review (for post-appointment flow testing)';
-    RAISE NOTICE '8. Currently ongoing appointment (for testing Add Additional Services)';
+    
+    -- RAISE NOTICE 'All appointments created successfully!';
+    -- RAISE NOTICE 'Created 8 different appointment scenarios:';
+    -- RAISE NOTICE '1. Past completed appointment with review';
+    -- RAISE NOTICE '2. Past cancelled appointment with cancellation fee';
+    -- RAISE NOTICE '3. Upcoming confirmed appointment with deposit';
+    -- RAISE NOTICE '4. Future appointment pending payment';
+    -- RAISE NOTICE '5. Past no-show appointment';
+    -- RAISE NOTICE '6. Future appointment with pre-auth scheduled';
+    -- RAISE NOTICE '7. Past completed appointment without review (for post-appointment flow testing)';
+    -- RAISE NOTICE '8. Currently ongoing appointment (for testing Add Additional Services)';
     
 END $$;
 
@@ -1311,7 +1315,7 @@ BEGIN
         'authenticated',
         'authenticated',
         'admin@mail.com',
-        crypt('secret', gen_salt('bf')),
+        extensions.crypt('secret', extensions.gen_salt('bf')),
         current_timestamp,
         current_timestamp,
         current_timestamp,

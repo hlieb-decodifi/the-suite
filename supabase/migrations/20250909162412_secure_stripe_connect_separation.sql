@@ -4,7 +4,7 @@
 
 -- Step 1: Create the new secure table for Stripe Connect data
 create table if not exists professional_stripe_connect (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null unique,
   stripe_account_id text,
   stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),

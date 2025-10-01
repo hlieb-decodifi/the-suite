@@ -103,7 +103,7 @@ drop index if exists "public"."unique_conversation";
 drop table "public"."refunds";
 
 create table "public"."support_requests" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "client_id" uuid not null,
     "professional_id" uuid,
     "conversation_id" uuid not null,

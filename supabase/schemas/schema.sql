@@ -9,7 +9,7 @@ create extension if not exists moddatetime schema extensions;
 * Maps users to their roles (replaces the old roles table approach)
 */
 create table user_roles (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references auth.users not null unique,
   role text not null default 'client',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -92,7 +92,7 @@ $$ language plpgsql security definer;
 * Stores detailed address information for users
 */
 create table addresses (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   country text,
   state text,
   city text,
@@ -120,7 +120,7 @@ where google_place_id is not null;
 * Extended profile information for professionals
 */
 create table professional_profiles (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references users not null unique,
   description text,
   profession text,
@@ -174,7 +174,7 @@ alter table professional_profiles add constraint chk_cancellation_policy_logic
 * Only admins can create/update these records, professionals can view their own
 */
 create table professional_stripe_connect (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null unique,
   stripe_account_id text,
   stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
@@ -215,7 +215,7 @@ create policy "Professionals can view their own Stripe Connect data"
 * Extended profile information for clients
 */
 create table client_profiles (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references users not null unique,
   phone_number text,
   location text,
@@ -231,7 +231,7 @@ alter table client_profiles enable row level security;
 * Services that can be offered by professionals
 */
 create table services (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null,
   name text not null,
   description text,
@@ -272,7 +272,7 @@ on services(is_archived);
 * Table to store customizable service limits per professional
 */
 create table service_limits (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null unique,
   max_services integer not null default 50,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -766,7 +766,7 @@ drop type if exists photo_type;
 * One profile photo per user (both clients and professionals)
 */
 create table profile_photos (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references users not null unique, -- Unique constraint ensures only one photo per user
   url text not null,
   filename text not null,
@@ -807,7 +807,7 @@ create policy "Anyone can view profile photos of published professionals"
 * Up to 20 portfolio photos per professional
 */
 create table portfolio_photos (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references users not null,
   url text not null,
   filename text not null,
@@ -872,7 +872,7 @@ create policy "Anyone can view portfolio photos of published professionals"
 * Master list of available payment methods
 */
 create table payment_methods (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   name text not null unique,
   is_online boolean default false not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -889,7 +889,7 @@ create policy "Anyone can view available payment methods"
 * Junction table linking professionals to the payment methods they accept
 */
 create table professional_payment_methods (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null,
   payment_method_id uuid references payment_methods not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -933,7 +933,7 @@ create policy "Anyone can view payment methods of published professionals"
 * Tables for Stripe integration
 */
 create table customers (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references users not null unique,
   stripe_customer_id text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -957,7 +957,7 @@ create policy "Users can view their own customer data"
 * Available subscription plans for professionals
 */
 create table subscription_plans (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   name text not null,
   description text,
   price decimal(10, 2) not null,
@@ -975,7 +975,7 @@ alter table subscription_plans enable row level security;
 * Tracks active subscriptions for professionals
 */
 create table professional_subscriptions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null,
   subscription_plan_id uuid references subscription_plans not null,
   status text not null check (status in ('active', 'cancelled', 'expired')),
@@ -1067,7 +1067,7 @@ create policy "Professionals can view their own subscriptions"
 * Core table to track bookings
 */
 create table bookings (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   client_id uuid references users not null,
   professional_profile_id uuid references professional_profiles not null,
   status text not null,
@@ -1086,7 +1086,7 @@ alter table bookings add constraint bookings_status_check
 * Individual appointment slots for bookings
 */
 create table appointments (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   booking_id uuid references bookings not null,
   start_time timestamptz not null,
   end_time timestamptz not null,
@@ -1156,7 +1156,7 @@ grant select on appointments_with_status to authenticated;
 * To link bookings with services (allowing multiple services per booking)
 */
 create table booking_services (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   booking_id uuid references bookings not null,
   service_id uuid references services not null,
   price decimal(10, 2) not null, -- Store price at time of booking
@@ -1170,7 +1170,7 @@ alter table booking_services enable row level security;
 * To track payment details
 */
 create table booking_payments (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   booking_id uuid references bookings not null unique,
   payment_method_id uuid references payment_methods not null,
   amount decimal(10, 2) not null,
@@ -1230,6 +1230,39 @@ where refunded_at is not null;
 alter table booking_payments 
 add constraint booking_payments_refund_amount_check 
 check (refunded_amount >= 0 and refunded_amount <= (amount + tip_amount + service_fee));
+
+/**
+* TIPS
+* Separate tips that can be added after appointment completion
+* This allows clients to tip after the original payment is already captured
+*/
+create table tips (
+  id uuid primary key default extensions.uuid_generate_v4(),
+  booking_id uuid references bookings not null,
+  client_id uuid references users not null,
+  professional_id uuid references users not null,
+  amount decimal(10, 2) not null check (amount > 0),
+  stripe_payment_intent_id text,
+  status text not null default 'pending' check (status in ('pending', 'completed', 'failed', 'refunded')),
+  refunded_amount decimal(10, 2) default 0 not null,
+  refunded_at timestamp with time zone,
+  stripe_refund_id text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Constraints
+  constraint client_is_client check (is_client(client_id)),
+  constraint professional_is_professional check (is_professional(professional_id)),
+  constraint tip_refund_amount_check check (refunded_amount >= 0 and refunded_amount <= amount)
+);
+alter table tips enable row level security;
+
+-- Create indexes for better performance
+create index if not exists idx_tips_booking_id on tips(booking_id);
+create index if not exists idx_tips_client_id on tips(client_id);
+create index if not exists idx_tips_professional_id on tips(professional_id);
+create index if not exists idx_tips_stripe_payment_intent_id on tips(stripe_payment_intent_id) where stripe_payment_intent_id is not null;
+create index if not exists idx_tips_status on tips(status);
+create index if not exists idx_tips_created_at on tips(created_at);
 
 /**
 * Function to check professional availability
@@ -1392,6 +1425,39 @@ create policy "Users can view booking payments for their bookings"
 -- Removed: "Clients can update booking payments for cancellation" policy
 -- Booking payment operations are now handled exclusively by server actions with admin client
 -- See migration: remove_dangerous_booking_payments_rls_policies.sql
+
+-- Tips policies
+create policy "Users can view tips for their bookings"
+  on tips for select
+  using (
+    exists (
+      select 1 from bookings
+      where bookings.id = tips.booking_id
+      and (
+        bookings.client_id = auth.uid()
+        or exists (
+          select 1 from professional_profiles
+          where professional_profiles.id = bookings.professional_profile_id
+          and professional_profiles.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+create policy "Clients can create tips for their completed bookings"
+  on tips for insert
+  with check (
+    auth.uid() = client_id
+    and exists (
+      select 1 from bookings b
+      join appointments a on a.booking_id = b.id
+      where b.id = tips.booking_id
+      and b.client_id = auth.uid()
+      and get_appointment_computed_status(a.start_time, a.end_time, a.status) = 'completed'
+    )
+  );
+
+-- Tip operations (updates, refunds) are handled by server actions only
 
 -- Additional policies for professionals to view client data when they have shared appointments
 create policy "Professionals can view client profiles for shared appointments"
@@ -1677,7 +1743,7 @@ create trigger payment_method_stripe_sync_trigger
 * Tracks conversations between two users
 */
 create table conversations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   client_id uuid references users not null,
   professional_id uuid references users not null,
   purpose text default 'general', -- Purpose of conversation: 'general', 'support_request', etc.
@@ -1696,7 +1762,7 @@ alter table conversations enable row level security;
 * Individual messages within conversations
 */
 create table messages (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   conversation_id uuid references conversations not null,
   sender_id uuid references users not null,
   content text not null,
@@ -1710,7 +1776,7 @@ alter table messages enable row level security;
 * Tracks which messages have been read by which users
 */
 create table message_read_status (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   message_id uuid references messages not null,
   user_id uuid references users not null,
   read_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -1974,7 +2040,7 @@ create policy "Users can insert attachments in their conversations"
 
 -- Add trigger for updated_at
 create trigger handle_updated_at before update on public.message_attachments
-  for each row execute procedure moddatetime (updated_at);
+  for each row execute procedure extensions.moddatetime (updated_at);
 
 /**
 * SUPPORT REQUESTS
@@ -2001,7 +2067,7 @@ create type support_request_category as enum (
 );
 
 create table support_requests (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   -- The client who created the support request
   client_id uuid references users not null,
   -- The professional this request is about (if applicable)
@@ -2310,7 +2376,7 @@ create publication supabase_realtime for table
 * Stores legal documents with versioning support
 */
 create table legal_documents (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   type text not null check (type in ('terms_and_conditions', 'privacy_policy', 'copyright_policy')),
   title text not null,
   content text not null,
@@ -2459,7 +2525,7 @@ $$ language plpgsql;
 * Table for storing contact form submissions from clients to suite admins
 */
 create table contact_inquiries (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   name text not null,
   email text not null,
   phone text,
@@ -2538,7 +2604,7 @@ create trigger update_contact_inquiries_updated_at
 * Stores application configuration that can be managed from admin panel
 */
 create table admin_configs (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   key text not null unique,
   value text not null,
   description text not null,
@@ -2632,7 +2698,7 @@ create trigger update_admin_configs_updated_at
 * Client reviews for completed appointments
 */
 create table reviews (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   appointment_id uuid references appointments not null unique, -- One review per appointment
   client_id uuid references users not null,
   professional_id uuid references users not null,
@@ -2799,7 +2865,8 @@ create publication supabase_realtime for table
   messages,
   message_read_status,
   reviews,
-  support_requests;
+  support_requests,
+  tips;
 
 -- Add a function to safely insert address and return the ID (bypasses RLS)
 create or replace function insert_address_and_return_id(
@@ -2893,7 +2960,7 @@ $$ language plpgsql;
 
 -- Add trigger for updated_at on appointments
 create trigger handle_updated_at before update on appointments
-  for each row execute procedure moddatetime (updated_at);
+  for each row execute procedure extensions.moddatetime (updated_at);
 
 /**
 * RLS policies for appointments
@@ -2904,7 +2971,7 @@ create trigger handle_updated_at before update on appointments
 * Stores email template configurations with references to Brevo templates
 */
 create table email_templates (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   name text not null,
   description text,
   tag text not null,
@@ -2942,7 +3009,7 @@ create policy "Admins can manage email templates"
 
 -- Add trigger for updated_at
 create trigger handle_updated_at before update on email_templates
-  for each row execute procedure moddatetime (updated_at);
+  for each row execute procedure extensions.moddatetime (updated_at);
 
 -- Efficiently check if a user exists by email in auth.users
 create or replace function public.user_exists(p_email text)
@@ -2961,7 +3028,7 @@ $$;
 * Track user activities for business analytics and engagement metrics
 */
 create table activity_log (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references users,  -- null for anonymous users, references users table instead of auth.users
   session_id text,  -- for tracking anonymous sessions
   activity_type text not null check (activity_type in ('page_view', 'service_view', 'professional_view', 'booking_started', 'booking_completed', 'booking_cancelled', 'search_performed')),

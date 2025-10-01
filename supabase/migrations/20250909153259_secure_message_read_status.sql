@@ -1,7 +1,7 @@
 drop policy "Users can update their own messages" on "public"."messages";
 
 create table "public"."message_read_status" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "message_id" uuid not null,
     "user_id" uuid not null,
     "read_at" timestamp with time zone not null default timezone('utc'::text, now()),

@@ -2,8 +2,8 @@ import { AdminCronTemplate } from '@/components/templates/AdminCronTemplate/Admi
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Cron Jobs - Admin',
-  description: 'Manage and monitor cron jobs',
+  title: 'Emails - Admin',
+  description: 'Manage and monitor emails',
 };
 
 export default function AdminCronPage() {

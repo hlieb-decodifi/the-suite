@@ -1,5 +1,5 @@
 create table "public"."dummy_test_table" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text,
     "value" integer,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now())

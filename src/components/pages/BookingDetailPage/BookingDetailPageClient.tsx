@@ -352,9 +352,11 @@ export function BookingDetailPageClient({
     // Only for completed appointments
     if (computedStatus !== 'completed') return false;
 
-    // Only for card payments
+    console.log('computedStatus', computedStatus);
+
+    // Only existing payments
     const payment = appointmentData.bookings.booking_payments;
-    if (!payment || !payment.payment_methods?.is_online) return false;
+    if (!payment) return false;
 
     // Only if not already refunded
     if (payment.refunded_amount > 0 || payment.refunded_at) return false;
@@ -1583,7 +1585,7 @@ export function BookingDetailPageClient({
                   <>
                     <Separator />
                     <div>
-                      <Typography className="font-medium text-foreground mb-4">
+                      <Typography className="font-medium text-foreground mb-2">
                         Tip
                       </Typography>
                       <TipSection
@@ -1592,11 +1594,18 @@ export function BookingDetailPageClient({
                         currentTipAmount={
                           appointment.bookings.booking_payments?.tip_amount || 0
                         }
+                        postAppointmentTips={appointment.bookings.tips || []}
                         serviceAmount={appointment.bookings.booking_services.reduce(
                           (sum, service) => sum + service.price,
                           0,
                         )}
                         isClient={isClient}
+                        professionalId={
+                          appointment.bookings.professionals?.user_id ||
+                          undefined
+                        }
+                        clientId={appointment.bookings.client_id || undefined}
+                        isCompletedAppointment={true}
                       />
                     </div>
                   </>

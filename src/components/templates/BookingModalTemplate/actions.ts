@@ -512,33 +512,34 @@ export async function getAvailableTimeSlots(
     // that fall on the client's selected date (due to timezone differences)
     const allSlots: string[] = [];
     
-    // Check all enabled working days for the professional
-    for (const dayWorkingHours of workingHours.hours) {
-      if (!dayWorkingHours.enabled || !dayWorkingHours.startTime || !dayWorkingHours.endTime) {
-        continue;
-      }
+    console.log(`Finding available slots for client date ${date} (professional timezone: ${professionalTimezone}, client timezone: ${clientTimezone})`);
+    
+    // For each day offset around the client's selected date, check which professional working days
+    // might have slots that fall on this client date after timezone conversion
+    for (let dayOffset = -1; dayOffset <= 1; dayOffset++) {
+      const professionalDate = new Date(clientSelectedDateObj);
+      professionalDate.setDate(professionalDate.getDate() + dayOffset);
       
-      console.log(`Checking ${dayWorkingHours.day} working hours (${dayWorkingHours.startTime} - ${dayWorkingHours.endTime}) for client date ${date}`);
+      const professionalDayOfWeek = professionalDate.getDay();
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const professionalDayName = dayNames[professionalDayOfWeek];
       
-      // We need to check multiple professional dates around the client's selected date
-      // because timezone conversion can shift dates
-      for (let dayOffset = -1; dayOffset <= 1; dayOffset++) {
-        const professionalDate = new Date(clientSelectedDateObj);
-        professionalDate.setDate(professionalDate.getDate() + dayOffset);
-        
-        const professionalDayOfWeek = professionalDate.getDay();
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const professionalDayName = dayNames[professionalDayOfWeek];
-        
-        if (dayWorkingHours.day.toLowerCase() !== professionalDayName?.toLowerCase()) {
-          continue;
-        }
-        
-        console.log(`Generating slots for professional ${dayWorkingHours.day} (offset ${dayOffset}) that fall on client date ${date}`);
+      console.log(`Checking professional ${professionalDayName} (offset ${dayOffset}) for slots that fall on client date ${date}`);
+      
+      // Find all working day configurations that match this professional day
+      const matchingWorkingDays = workingHours.hours.filter(dayHours => 
+        dayHours.enabled && 
+        dayHours.startTime && 
+        dayHours.endTime && 
+        dayHours.day.toLowerCase() === professionalDayName?.toLowerCase()
+      );
+      
+      for (const dayWorkingHours of matchingWorkingDays) {
+        console.log(`  Processing ${dayWorkingHours.day} working hours (${dayWorkingHours.startTime} - ${dayWorkingHours.endTime})`);
         
         // Generate slots for this professional working day
         const daySlots = await generateCrossMidnightSlots(
-          { startTime: dayWorkingHours.startTime, endTime: dayWorkingHours.endTime },
+          { startTime: dayWorkingHours.startTime!, endTime: dayWorkingHours.endTime! },
           professionalTimezone,
           clientTimezone,
           date,
@@ -547,6 +548,7 @@ export async function getAvailableTimeSlots(
           dayOffset
         );
         
+        console.log(`    Found ${daySlots.length} slots from ${dayWorkingHours.day}: ${daySlots.join(', ')}`);
         allSlots.push(...daySlots);
       }
     }
