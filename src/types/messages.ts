@@ -1,3 +1,23 @@
+// For admin messages tab: matches the structure returned by getAllGeneralConversationsForAdmin
+export type AdminConversation = {
+  id: string;
+  client_id: string;
+  professional_id: string;
+  created_at: string;
+  updated_at: string;
+  purpose?: string | null;
+  last_message: ChatMessage;
+  client_user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  } | null;
+  professional_user: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  } | null;
+};
 export type MessageAttachment = {
   id: string;
   message_id: string;
@@ -13,10 +33,11 @@ export type ChatMessage = {
   conversation_id: string;
   sender_id: string;
   content: string;
-  is_read: boolean;
   created_at: string;
   updated_at: string;
   attachments?: MessageAttachment[];
+  // Read status is now tracked separately via message_read_status table
+  read_by_current_user?: boolean;
 }
 
 export type Conversation = {

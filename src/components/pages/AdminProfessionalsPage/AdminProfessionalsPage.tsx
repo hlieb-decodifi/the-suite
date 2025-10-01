@@ -1,19 +1,33 @@
 import { createAdminClient } from '@/lib/supabase/server';
 
-export async function getAdminProfessionalsData({ start, end }: { start?: string | undefined; end?: string | undefined }) {
+export async function getAdminProfessionalsData({
+  start,
+  end,
+}: {
+  start?: string | undefined;
+  end?: string | undefined;
+}) {
   const adminSupabase = await createAdminClient();
-  // Query roles table for professional role id
-  const { data: rolesData, error: rolesError } = await adminSupabase
-    .from('roles')
-    .select('id')
-    .eq('name', 'professional')
-    .single();
-  if (rolesError || !rolesData?.id) throw new Error('Could not find professional role id');
-  const PROFESSIONAL_ROLE_ID = rolesData.id;
+  // Get professional users by querying user_roles table
+  const userRolesQuery = adminSupabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('role', 'professional');
+
+  const { data: professionalUserIds, error: rolesError } = await userRolesQuery;
+  if (rolesError) throw new Error('Could not fetch professional user IDs');
+
+  const professionalIds = professionalUserIds?.map((row) => row.user_id) || [];
+  if (professionalIds.length === 0) {
+    return { professionals: [] };
+  }
+
   let query = adminSupabase
     .from('users')
-    .select('id, first_name, last_name, created_at, role_id, professional_profiles(id, is_published)')
-    .eq('role_id', PROFESSIONAL_ROLE_ID);
+    .select(
+      'id, first_name, last_name, created_at, professional_profiles(id, is_published)',
+    )
+    .in('id', professionalIds);
   if (start) query = query.gte('created_at', start);
   if (end) query = query.lte('created_at', end);
 
@@ -26,7 +40,10 @@ export async function getAdminProfessionalsData({ start, end }: { start?: string
         data.map(async (u: unknown) => {
           let email = '';
           try {
-            const { data: authUser, error: authError } = await adminSupabase.auth.admin.getUserById((u as { id: string }).id);
+            const { data: authUser, error: authError } =
+              await adminSupabase.auth.admin.getUserById(
+                (u as { id: string }).id,
+              );
             if (authError) throw authError;
             email = authUser?.user?.email || '';
           } catch {
@@ -70,7 +87,7 @@ export async function getAdminProfessionalsData({ start, end }: { start?: string
             completedAppointmentsCount,
             isPublished,
           };
-        })
+        }),
       )
     : [];
 
@@ -81,12 +98,16 @@ export type AdminProfessionalsPageProps = {
   searchParams?: Promise<Record<string, unknown>>;
 };
 
-export default async function AdminProfessionalsPage({ searchParams }: AdminProfessionalsPageProps) {
+export default async function AdminProfessionalsPage({
+  searchParams,
+}: AdminProfessionalsPageProps) {
   const params = searchParams ? await searchParams : {};
   const start = typeof params.start === 'string' ? params.start : undefined;
   const end = typeof params.end === 'string' ? params.end : undefined;
   const { professionals } = await getAdminProfessionalsData({ start, end });
   // @ts-ignore
-  const AdminProfessionalsPageClient = (await import('./AdminProfessionalsPageClient')).default;
+  const AdminProfessionalsPageClient = (
+    await import('./AdminProfessionalsPageClient')
+  ).default;
   return <AdminProfessionalsPageClient professionals={professionals} />;
 }

@@ -63,6 +63,8 @@ function getOptimisticUpdate(data: UpsertServiceParams['data'], oldServices: Ser
         description: data.description || '',
         price: data.price,
         duration: 'Saving...', // Placeholder until we get real data
+        is_archived: false,
+        archived_at: null,
       },
       ...oldServices,
     ];

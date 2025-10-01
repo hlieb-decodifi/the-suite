@@ -37,9 +37,10 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
         id,
         user_id,
         is_published,
-        is_subscribed,
-        stripe_account_id,
-        stripe_connect_status
+        professional_stripe_connect(
+          stripe_account_id,
+          stripe_connect_status
+        )
       `)
       .eq('user_id', userId)
       .single();
@@ -54,9 +55,8 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
       id: data.id,
       user_id: data.user_id,
       is_published: data.is_published ?? false,
-      is_subscribed: data.is_subscribed ?? false,
-      stripe_account_id: data.stripe_account_id,
-      stripe_connect_status: data.stripe_connect_status as 'not_connected' | 'pending' | 'complete'
+      stripe_account_id: data.professional_stripe_connect?.stripe_account_id || null,
+      stripe_connect_status: (data.professional_stripe_connect?.stripe_connect_status || 'not_connected') as 'not_connected' | 'pending' | 'complete'
     };
   } catch (error) {
     console.error('Error in getProfessionalProfileForStripe:', error);

@@ -13,6 +13,7 @@ import {
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { verifyBookingPayment } from '@/server/domains/stripe-payments/actions';
+import { useActivityTracker } from '@/api/activity-log';
 
 type PaymentStatus = 'processing' | 'success' | 'error';
 
@@ -20,6 +21,7 @@ export function BookingSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { trackBookingCompleted } = useActivityTracker();
 
   const [status, setStatus] = useState<PaymentStatus>('processing');
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export function BookingSuccessContent() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isUncaptured, setIsUncaptured] = useState(false);
   const hasShownToast = useRef(false);
+  const hasTrackedCompletion = useRef(false);
 
   useEffect(() => {
     if (!searchParams) return;
@@ -57,6 +60,18 @@ export function BookingSuccessContent() {
           setStatus('success');
           setIsUncaptured(result.isUncaptured || false);
           setAppointmentId(result.appointmentId || null);
+
+          // Track booking completion (only once)
+          if (!hasTrackedCompletion.current && bookingIdParam) {
+            hasTrackedCompletion.current = true;
+            trackBookingCompleted(bookingIdParam, {
+              payment_status: 'completed',
+              is_uncaptured: result.isUncaptured || false,
+              appointment_id: result.appointmentId,
+              source: 'success_page_verification',
+            });
+          }
+
           if (!hasShownToast.current) {
             hasShownToast.current = true;
             toast({
@@ -165,11 +180,12 @@ export function BookingSuccessContent() {
           {isUncaptured && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800 font-medium">
-                Payment Schedule
+                Payment Information
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                Your payment method is authorized. The final payment will be
-                automatically processed closer to your appointment date.
+                Your payment method has been saved and your booking is confirmed. 
+                Visit your booking details page to see complete payment information 
+                including what, when, and how payments will be processed.
               </p>
             </div>
           )}

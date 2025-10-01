@@ -28,7 +28,7 @@ port = 54322
 shadow_port = 54320
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
-major_version = 15
+major_version = 17
 
 [db.pooler]
 enabled = false
@@ -105,8 +105,9 @@ file_size_limit = "50MiB"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "env(NEXT_PUBLIC_SUPABASE_URL)"
+site_url = "env(NEXT_PUBLIC_BASE_URL)"
 additional_redirect_urls = [
+    "http://localhost:3000/**",
     "https://localhost:3000/**",
     "https://*-decodifi.vercel.app/**",
     "https://the-suite.vercel.app/**"
@@ -135,6 +136,7 @@ project_id = "oanahbzcijxmqvadqysp"
 
 [remotes.develop.auth]
 additional_redirect_urls = [
+    "http://localhost:3000/**",
     "https://localhost:3000/**",
     "https://*-decodifi.vercel.app/**",
     "https://the-suite.vercel.app/**",
@@ -191,10 +193,18 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Custom email template configuration
+[auth.email.template.confirmation]
+subject = "Welcome to The Suite!"
+content_path = "supabase/templates/confirmation.html"
+
+[auth.email.template.email_change]
+subject = "Confirm Your New Email Address for The Suite"
+content_path = "supabase/templates/email_change.html"
+
+[auth.email.template.recovery]
+subject = "Reset Your Password for The Suite"
+content_path = "supabase/templates/recovery.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

@@ -10,16 +10,18 @@ import { getAvailableTimeSlots } from '../actions';
 export function useAvailableTimeSlots(
   professionalProfileId: string,
   date: string | null,
+  requiredDurationMinutes: number = 30,
   professionalTimezone: string = 'UTC',
   clientTimezone: string = 'UTC',
   enabled = true
 ) {
   const query = useQuery({
-    queryKey: ['availableTimeSlots', professionalProfileId, date, professionalTimezone, clientTimezone],
+    queryKey: ['availableTimeSlots', professionalProfileId, date, requiredDurationMinutes, professionalTimezone, clientTimezone],
     queryFn: async () => {
       console.log('Fetching time slots with params:', {
         professionalProfileId,
         date,
+        requiredDurationMinutes,
         professionalTimezone,
         clientTimezone
       });
@@ -29,7 +31,7 @@ export function useAvailableTimeSlots(
         return [];
       }
 
-      const slots = await getAvailableTimeSlots(professionalProfileId, date, professionalTimezone, clientTimezone);
+  const slots = await getAvailableTimeSlots(professionalProfileId, date, requiredDurationMinutes, professionalTimezone, clientTimezone);
       console.log('Received time slots:', slots);
       return slots;
     },

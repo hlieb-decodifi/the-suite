@@ -81,7 +81,6 @@ export async function getConversations(conversationId?: string): Promise<{
           conversation_id: lastMessageData.conversation_id,
           sender_id: lastMessageData.sender_id,
           content: lastMessageData.content,
-          is_read: lastMessageData.is_read,
           created_at: lastMessageData.created_at,
           updated_at: lastMessageData.updated_at,
           attachments: lastMessageData.attachments?.map(att => ({
@@ -95,13 +94,11 @@ export async function getConversations(conversationId?: string): Promise<{
           })) || []
         } : undefined;
 
-        // Count unread messages for the current user
-        const { count: unreadCount } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conversation.id)
-          .neq('sender_id', user.id)
-          .eq('is_read', false);
+        // Count unread messages for the current user using the new function
+        const { data: unreadCount } = await supabase.rpc('get_unread_message_count', {
+          p_conversation_id: conversation.id,
+          p_user_id: user.id
+        });
 
         return {
           ...conversation,
@@ -181,7 +178,6 @@ export async function getMessages(conversationId: string): Promise<{
       conversation_id: msg.conversation_id,
       sender_id: msg.sender_id,
       content: msg.content,
-      is_read: msg.is_read,
       created_at: msg.created_at,
       updated_at: msg.updated_at,
       attachments: msg.attachments?.map(att => ({
@@ -297,7 +293,6 @@ export async function sendMessage(
       conversation_id: completeMessage.conversation_id,
       sender_id: completeMessage.sender_id,
       content: completeMessage.content,
-      is_read: completeMessage.is_read,
       created_at: completeMessage.created_at,
       updated_at: completeMessage.updated_at,
       attachments: completeMessage.attachments?.map(att => ({
@@ -335,17 +330,29 @@ export async function markMessagesAsRead(conversationId: string): Promise<{
       return { success: false, error: 'Not authenticated' };
     }
 
-    // Mark all messages in conversation as read (except those sent by current user)
-    const { error: updateError } = await supabase
+    // Mark all unread messages in conversation as read for current user
+    // Get all unread messages for this user in this conversation
+    const { data: unreadMessages } = await supabase
       .from('messages')
-      .update({ is_read: true })
+      .select('id')
       .eq('conversation_id', conversationId)
-      .neq('sender_id', user.id)
-      .eq('is_read', false);
-
-    if (updateError) {
-      console.error('Error marking messages as read:', updateError);
-      return { success: false, error: 'Failed to mark messages as read' };
+      .neq('sender_id', user.id);
+    
+    if (unreadMessages && unreadMessages.length > 0) {
+      // Mark each message as read using the new table
+      const readStatusInserts = unreadMessages.map(msg => ({
+        message_id: msg.id,
+        user_id: user.id
+      }));
+      
+      const { error: updateError } = await supabase
+        .from('message_read_status')
+        .upsert(readStatusInserts, { onConflict: 'message_id,user_id' });
+        
+      if (updateError) {
+        console.error('Error marking messages as read:', updateError);
+        return { success: false, error: 'Failed to mark messages as read' };
+      }
     }
 
     revalidatePath('/dashboard/messages');
@@ -657,7 +664,6 @@ export async function getRecentConversations(): Promise<{
           conversation_id: lastMessageData.conversation_id,
           sender_id: lastMessageData.sender_id,
           content: lastMessageData.content,
-          is_read: lastMessageData.is_read,
           created_at: lastMessageData.created_at,
           updated_at: lastMessageData.updated_at,
           attachments: lastMessageData.attachments?.map(att => ({
@@ -671,13 +677,11 @@ export async function getRecentConversations(): Promise<{
           })) || []
         } : undefined;
 
-        // Count unread messages for the current user
-        const { count: unreadCount } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conversation.id)
-          .neq('sender_id', user.id)
-          .eq('is_read', false);
+        // Count unread messages for the current user using the new function
+        const { data: unreadCount } = await supabase.rpc('get_unread_message_count', {
+          p_conversation_id: conversation.id,
+          p_user_id: user.id
+        });
 
         return {
           ...conversation,

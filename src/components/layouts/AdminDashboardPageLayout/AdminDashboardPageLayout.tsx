@@ -1,4 +1,3 @@
-
 'use server';
 import React from 'react';
 
@@ -23,23 +22,58 @@ export type DashboardData = {
   newProfessionals: number;
   totalChats: number;
   newChats: number;
-  totalRefunds: number;
-  newRefunds: number;
+  totalSupportRequests: number;
+  newSupportRequests: number;
 };
 
-
 // Fetch dashboard overview data (RPC)
-export async function getAdminDashboardData({ startDate, endDate }: { startDate?: string | undefined; endDate?: string | undefined }): Promise<DashboardData> {
+type DashboardDataRpc = {
+  totalBookings?: number;
+  newBookings?: number;
+  bookingsPerDay?: Record<string, number>;
+  totalClients?: number;
+  newClients?: number;
+  totalProfessionals?: number;
+  newProfessionals?: number;
+  totalChats?: number;
+  newChats?: number;
+  totalSupportRequests?: number;
+  newSupportRequests?: number;
+};
+
+export async function getAdminDashboardData({
+  startDate,
+  endDate,
+}: {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+}): Promise<DashboardData> {
   const adminSupabase = await createAdminClient();
   const params: { start_date?: string; end_date?: string } = {};
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
-  const { data, error } = await adminSupabase.rpc('get_admin_dashboard_data', params);
+  const { data, error } = await adminSupabase.rpc(
+    'get_admin_dashboard_data',
+    params,
+  );
   if (error) throw new Error(error.message);
-  if (!data) throw new Error('No dashboard data returned');
-  (data as DashboardData).totalRefunds = 0;
-  (data as DashboardData).newRefunds = 0;
-  return data as DashboardData;
+  if (!data || typeof data !== 'object')
+    throw new Error('No dashboard data returned');
+  const d: DashboardDataRpc =
+    data && !Array.isArray(data) && typeof data === 'object' ? data : {};
+  return {
+    totalBookings: d.totalBookings ?? 0,
+    newBookings: d.newBookings ?? 0,
+    bookingsPerDay: d.bookingsPerDay ?? {},
+    totalClients: d.totalClients ?? 0,
+    newClients: d.newClients ?? 0,
+    totalProfessionals: d.totalProfessionals ?? 0,
+    newProfessionals: d.newProfessionals ?? 0,
+    totalChats: d.totalChats ?? 0,
+    newChats: d.newChats ?? 0,
+    totalSupportRequests: d.totalSupportRequests ?? 0,
+    newSupportRequests: d.newSupportRequests ?? 0,
+  };
 }
 
 // Fetch appointments data (direct query)
@@ -69,12 +103,19 @@ export async function getAdminAppointmentsData({
   return data;
 }
 
-
-export async function AdminDashboardPageLayout({ children }: { children: React.ReactNode }) {
+export async function AdminDashboardPageLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect('/');
-  const { data: isAdmin } = await supabase.rpc('is_admin', { user_uuid: user.id });
+  const { data: isAdmin } = await supabase.rpc('is_admin', {
+    user_uuid: user.id,
+  });
   if (!isAdmin) redirect('/');
 
   // Get date range from headers (for initial dashboard data fetch)
@@ -92,10 +133,11 @@ export async function AdminDashboardPageLayout({ children }: { children: React.R
     if (path.includes('/admin/appointments')) return 'appointments';
     if (path.includes('/admin/clients')) return 'clients';
     if (path.includes('/admin/professionals')) return 'professionals';
-    if (path.includes('/admin/refunds')) return 'refunds';
+    if (path.includes('/admin/support-requests')) return 'support-requests';
     if (path.includes('/admin/messages')) return 'messages';
     if (path.includes('/admin/admins')) return 'admins';
     if (path.includes('/admin/legal')) return 'legal';
+    if (path.includes('/admin/analytics')) return 'analytics';
     return 'overview';
   }
   const activeTab = getActiveTabFromPath(pathname);
@@ -104,7 +146,10 @@ export async function AdminDashboardPageLayout({ children }: { children: React.R
   let dashboardData: DashboardData | undefined = undefined;
   const tabProps: {} = {};
   if (activeTab === 'overview') {
-    dashboardData = await getAdminDashboardData({ startDate: start, endDate: end });
+    dashboardData = await getAdminDashboardData({
+      startDate: start,
+      endDate: end,
+    });
   }
 
   // Pass tabProps to children if needed

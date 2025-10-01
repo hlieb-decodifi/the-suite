@@ -1,5 +1,6 @@
 'use client';
 
+import { getDisplayName } from '@/utils/getDisplayName';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { SupportRequestChatWidget } from './SupportRequestChatWidget';
+import { ChatMessage } from '@/types/messages';
 import { RefundModal } from './RefundModal';
 import { ResolutionModal } from './ResolutionModal';
 import { SupportRequestData } from '@/server/domains/support-requests/actions';
@@ -28,6 +30,17 @@ type SupportRequestDetailPageClientProps = {
   supportRequest: SupportRequestData;
   isProfessional: boolean;
   currentUserId: string;
+  isAdmin?: boolean;
+  initialMessages?: ChatMessage[];
+  usersMap?: Record<
+    string,
+    {
+      id: string;
+      first_name: string;
+      last_name: string;
+      profile_photo_url?: string;
+    }
+  >;
 };
 
 // Helper component to render the status badge
@@ -74,21 +87,33 @@ function SupportRequestStatusBadge({ status }: { status: string }) {
   }
 }
 
-export function SupportRequestDetailPageClient({
-  supportRequest,
-  isProfessional,
-  currentUserId,
-}: SupportRequestDetailPageClientProps) {
+export function SupportRequestDetailPageClient(
+  props: SupportRequestDetailPageClientProps,
+) {
+  const {
+    supportRequest,
+    isProfessional,
+    currentUserId,
+    isAdmin = false,
+    initialMessages,
+    usersMap,
+  } = props;
   const router = useRouter();
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isResolutionModalOpen, setIsResolutionModalOpen] = useState(false);
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Effect to stop polling when support request is resolved
   useEffect(() => {
-    if (isProcessingRefund && (supportRequest.status === 'resolved' || supportRequest.refund_status === 'succeeded')) {
+    if (
+      isProcessingRefund &&
+      (supportRequest.status === 'resolved' ||
+        supportRequest.refund_status === 'succeeded')
+    ) {
       console.log('Support request resolved, stopping refund polling');
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -114,18 +139,40 @@ export function SupportRequestDetailPageClient({
     };
   }, []);
 
-  // Extract data from support request
-  const clientName = supportRequest.client_user
-    ? `${supportRequest.client_user.first_name || ''} ${supportRequest.client_user.last_name || ''}`.trim()
-    : 'Client';
-
-  const professionalName = supportRequest.professional_user
-    ? `${supportRequest.professional_user.first_name || ''} ${supportRequest.professional_user.last_name || ''}`.trim()
-    : 'Professional';
+  // Use getDisplayName utility for admin user name display
+  let clientName = '';
+  let professionalName = '';
+  if (isAdmin) {
+    clientName = getDisplayName(
+      supportRequest.client_user || { id: supportRequest.client_id },
+      'Unknown Client',
+    );
+    professionalName = getDisplayName(
+      supportRequest.professional_user || {
+        id: supportRequest.professional_id,
+      },
+      'Unknown Professional',
+    );
+  } else {
+    if (supportRequest.client_user) {
+      const fn = supportRequest.client_user.first_name || '';
+      const ln = supportRequest.client_user.last_name || '';
+      clientName = `${fn} ${ln}`.trim() || 'Client';
+    } else {
+      clientName = 'Client';
+    }
+    if (supportRequest.professional_user) {
+      const fn = supportRequest.professional_user.first_name || '';
+      const ln = supportRequest.professional_user.last_name || '';
+      professionalName = `${fn} ${ln}`.trim() || 'Professional';
+    } else {
+      professionalName = 'Professional';
+    }
+  }
 
   // Directly access the appointment from the supportRequest
   const appointment = supportRequest.appointments;
-  
+
   // Directly access the booking from the appointment
   const booking = appointment?.bookings;
 
@@ -143,13 +190,13 @@ export function SupportRequestDetailPageClient({
 
   // Directly access the payment from the booking
   const payment = booking?.booking_payments;
-  
+
   // Check if payment was made by card (for refund eligibility)
   const isPaidByCard = payment?.stripe_payment_intent_id;
-  
+
   // Better service name fallback logic with direct access to service data
   let serviceName = 'General Inquiry';
-  
+
   if (services.length > 0) {
     serviceName = services.join(', ');
   } else if (supportRequest.category === 'refund_request') {
@@ -163,10 +210,10 @@ export function SupportRequestDetailPageClient({
     if (isRefund) {
       // Set processing state for refunds
       setIsProcessingRefund(true);
-      
+
       let pollCount = 0;
       const maxPolls = 20; // Poll for up to 60 seconds (20 * 3 seconds)
-      
+
       // Clear any existing intervals
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -174,15 +221,17 @@ export function SupportRequestDetailPageClient({
       if (pollingTimeoutRef.current) {
         clearTimeout(pollingTimeoutRef.current);
       }
-      
+
       // Poll by refreshing the page data every 3 seconds to check for refund completion
       pollingIntervalRef.current = setInterval(() => {
         pollCount++;
-        console.log(`Polling for refund status update... (${pollCount}/${maxPolls})`);
-        
+        console.log(
+          `Polling for refund status update... (${pollCount}/${maxPolls})`,
+        );
+
         // Refresh the page to get updated data from server
         router.refresh();
-        
+
         // Check if we've reached maximum polls
         if (pollCount >= maxPolls) {
           console.log('Maximum polling attempts reached, stopping polling');
@@ -192,11 +241,11 @@ export function SupportRequestDetailPageClient({
           }
           setIsProcessingRefund(false);
         }
-        
+
         // Note: We rely on the webhook's revalidatePath to update the data
         // The polling will stop when the component re-renders with updated status
       }, 3000);
-      
+
       // Set a backup timeout to ensure we stop polling
       pollingTimeoutRef.current = setTimeout(() => {
         console.log('Polling timeout reached, stopping polling and refreshing');
@@ -219,7 +268,7 @@ export function SupportRequestDetailPageClient({
     appointment,
     payment,
     isPaidByCard,
-  })
+  });
 
   return (
     <div className="space-y-6 w-full mx-auto relative">
@@ -230,13 +279,16 @@ export function SupportRequestDetailPageClient({
           variant="light"
         />
       )}
-      
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Link
-            href="/dashboard/support-requests"
-            // className="text-muted-foreground hover:text-foreground"
+            href={
+              isAdmin
+                ? '/admin/support-requests'
+                : '/dashboard/support-requests'
+            }
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -250,20 +302,17 @@ export function SupportRequestDetailPageClient({
             supportRequest.status !== 'closed' && (
               <div className="flex gap-3">
                 {/* Refund Button - Only show if appointment has payment made by card and not already a refund request */}
-                {appointment &&
-                  payment &&
-                  isPaidByCard &&
-                   (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsRefundModalOpen(true)}
-                      className="text-sm text-orange-600 border-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                    >
-                      <DollarSign className="h-4 w-4 mr-2" />
-                      Process Refund
-                    </Button>
-                  )}
+                {appointment && payment && isPaidByCard && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsRefundModalOpen(true)}
+                    className="text-sm text-orange-600 border-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Process Refund
+                  </Button>
+                )}
 
                 {/* Resolve Button */}
                 <Button
@@ -567,24 +616,36 @@ export function SupportRequestDetailPageClient({
                           id: supportRequest.professional_user.id,
                           first_name:
                             supportRequest.professional_user.first_name,
-                          last_name:
-                            supportRequest.professional_user.last_name,
-                          profile_photo_url: supportRequest.professional_user.profile_photos && 
-                            supportRequest.professional_user.profile_photos.length > 0 ? 
-                            supportRequest.professional_user.profile_photos[0]?.url || undefined : undefined,
+                          last_name: supportRequest.professional_user.last_name,
+                          profile_photo_url:
+                            supportRequest.professional_user.profile_photos &&
+                            supportRequest.professional_user.profile_photos
+                              .length > 0
+                              ? supportRequest.professional_user
+                                  .profile_photos[0]?.url || undefined
+                              : undefined,
                         }
                       : {
                           id: supportRequest.client_user.id,
                           first_name: supportRequest.client_user.first_name,
                           last_name: supportRequest.client_user.last_name,
-                          profile_photo_url: supportRequest.client_user.profile_photos && 
-                            supportRequest.client_user.profile_photos.length > 0 ? 
-                            supportRequest.client_user.profile_photos[0]?.url || undefined : undefined,
+                          profile_photo_url:
+                            supportRequest.client_user.profile_photos &&
+                            supportRequest.client_user.profile_photos.length > 0
+                              ? supportRequest.client_user.profile_photos[0]
+                                  ?.url || undefined
+                              : undefined,
                         }
                   }
-                  readOnly={supportRequest.status === 'resolved' || supportRequest.status === 'closed'}
+                  usersMap={usersMap}
+                  readOnly={
+                    isAdmin ||
+                    supportRequest.status === 'resolved' ||
+                    supportRequest.status === 'closed'
+                  }
                   resolvedInfo={
-                    supportRequest.status === 'resolved' || supportRequest.status === 'closed'
+                    supportRequest.status === 'resolved' ||
+                    supportRequest.status === 'closed'
                       ? {
                           status: supportRequest.status,
                           resolvedAt: supportRequest.resolved_at,
@@ -593,6 +654,7 @@ export function SupportRequestDetailPageClient({
                         }
                       : undefined
                   }
+                  initialMessages={initialMessages}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full">
@@ -616,11 +678,16 @@ export function SupportRequestDetailPageClient({
           serviceName={serviceName}
           onSuccess={() => handleModalSuccess(true)}
           paymentDetails={{
-            baseAmount: payment.amount - (payment.deposit_amount || 0) - (payment.service_fee || 0),
+            baseAmount:
+              payment.amount -
+              (payment.deposit_amount || 0) -
+              (payment.service_fee || 0),
             depositAmount: payment.deposit_amount || 0,
             tipAmount: payment.tip_amount || 0,
             serviceFee: payment.service_fee || 0,
             paymentMethod: payment.payment_methods?.name || 'Card',
+            isOnlinePayment: payment.payment_methods?.is_online ?? true,
+            balanceAmount: payment.balance_amount || 0,
           }}
         />
       )}

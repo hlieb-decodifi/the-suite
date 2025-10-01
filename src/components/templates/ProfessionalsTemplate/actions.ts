@@ -41,7 +41,6 @@ async function mapProfessionalData(professional: unknown): Promise<ProfessionalL
     profession: string | null;
     description: string | null;
     location: string | null;
-    is_subscribed: boolean;
     created_at: string;
     hide_full_address: boolean;
     address: {
@@ -101,7 +100,7 @@ async function mapProfessionalData(professional: unknown): Promise<ProfessionalL
     rating,
     reviewCount,
     serviceCount,
-    isSubscribed: professionalData.is_subscribed,
+    isSubscribed: true, // TODO: Replace with dynamic subscription check
     joinedDate: professionalData.created_at,
     hide_full_address: professionalData.hide_full_address,
     address: professionalData.address ? {
@@ -157,7 +156,6 @@ export async function getProfessionals(
           profession,
           description,
           location,
-          is_subscribed,
           created_at,
           hide_full_address,
           address:address_id(
@@ -255,7 +253,6 @@ export async function getProfessionals(
           profession,
           description,
           location,
-          is_subscribed,
           created_at,
           hide_full_address,
           address:address_id(

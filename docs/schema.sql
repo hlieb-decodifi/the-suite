@@ -151,7 +151,7 @@ create trigger on_auth_user_created
 * Note: This table contains user roles for authorization. Users can't modify this table directly.
 */
 create table roles (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default extensions.uuid_generate_v4(),
   user_id uuid references auth.users not null unique,
   role text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

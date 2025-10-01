@@ -11,10 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
-import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LeafletMap } from '@/components/common/LeafletMap';
+import { useActivityTracker } from '@/api/activity-log';
 
 export type BookingPageClientProps = {
   service: ServiceListItem;
@@ -30,7 +31,6 @@ export function BookingPageClient({
   preselectedDate?: string;
 }) {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<{
     timeSlot?: string;
     totalPrice: number;
@@ -41,7 +41,20 @@ export function BookingPageClient({
     extraServices: [],
   });
 
+  // Activity tracking
+  const { trackServiceView, trackProfessionalView } = useActivityTracker();
+
+  // Memoize the booking completion handler to prevent infinite re-renders
+  const handleBookingComplete = useCallback((bookingId: string) => {
+    // Redirect to success page or show completion state
+    console.log('Booking completed:', bookingId);
+  }, []);
+
   // Use the existing booking state hook with the page context
+  const selectedExtraServiceIds = useMemo(() => 
+    formData.extraServices?.map((s) => s.id) || [], 
+    [formData.extraServices]
+  );
   const {
     bookingCompleted,
     bookingDetails,
@@ -53,6 +66,7 @@ export function BookingPageClient({
     isLoadingPaymentMethods,
     isLoadingTimeSlots,
     isLoadingCalendar,
+    isSubmitting,
     handleSuccess,
     selectedDate,
     handleDateSelect,
@@ -61,11 +75,22 @@ export function BookingPageClient({
   } = useBookingState({
     isOpen: true, // Always open for page context
     service,
-    onBookingComplete: (bookingId) => {
-      // Redirect to success page or show completion state
-      console.log('Booking completed:', bookingId);
-    },
+    onBookingComplete: handleBookingComplete,
+    selectedExtraServiceIds,
   });
+
+  // Track service view when component loads
+  useEffect(() => {
+    trackServiceView(service.id, {
+      service_name: service.name,
+      professional_id: service.professional.id,
+      professional_name: service.professional.name,
+      price: service.price,
+      duration: service.duration,
+      source: 'booking_page',
+      ...(preselectedDate && { preselected_date: preselectedDate }),
+    });
+  }, [service, preselectedDate, trackServiceView]);
 
   // Handle preselected date from URL params
   useEffect(() => {
@@ -86,10 +111,6 @@ export function BookingPageClient({
     router.back();
   };
 
-  // Handle submission state changes
-  const handleSubmitStateChange = (submitting: boolean) => {
-    setIsSubmitting(submitting);
-  };
 
   // Ensure we always have an array of payment methods
   const availablePaymentMethods = Array.isArray(paymentMethods)
@@ -160,9 +181,15 @@ export function BookingPageClient({
         <Card className="cursor-pointer hover:bg-muted/50 transition-colors">
           <CardContent className="p-6">
             <div
-              onClick={() =>
-                router.push(`/professionals/${service.professional.id}`)
-              }
+              onClick={() => {
+                // Track professional view before navigation
+                trackProfessionalView(service.professional.id, {
+                  professional_name: service.professional.name,
+                  from_service: service.id,
+                  source: 'booking_page_professional_click',
+                });
+                router.push(`/professionals/${service.professional.id}`);
+              }}
               className="flex items-center gap-4 mb-4"
             >
               <Avatar className="h-16 w-16 border-2 border-primary/10">
@@ -228,7 +255,6 @@ export function BookingPageClient({
             onSubmitSuccess={handleSuccess}
             selectedDate={selectedDate}
             onSelectDate={handleDateSelect}
-            onSubmitStateChange={handleSubmitStateChange}
             onFormDataChange={setFormData}
             isCalendarLoading={isLoadingCalendar}
             professionalTimezone={professionalTimezone}
@@ -376,7 +402,14 @@ export function BookingPageClient({
                     size="lg"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? 'Processing...' : 'Book Now'}
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Book Now'
+                    )}
                   </Button>
                 </div>
               </CardContent>

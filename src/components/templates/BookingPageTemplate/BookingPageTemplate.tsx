@@ -17,6 +17,8 @@ export async function BookingPageTemplate({
   // Fetch service data on the server
   const service = await getServiceForBooking(serviceId);
 
+  console.log('service', service);
+
   // If service not found or not bookable, show 404
   if (!service) {
     notFound();

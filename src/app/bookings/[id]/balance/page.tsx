@@ -67,7 +67,9 @@ export default async function BalancePaymentPage({
           first_name,
           last_name
         ),
-        stripe_account_id
+        professional_stripe_connect(
+          stripe_account_id
+        )
       ),
       booking_services(
         id,

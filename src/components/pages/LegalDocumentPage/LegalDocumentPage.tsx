@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import { LegalDocumentPageClient } from './LegalDocumentPageClient';
 
 export type LegalDocumentPageProps = {
-  documentType: 'terms_and_conditions' | 'privacy_policy';
+  documentType: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy';
 };
 
 export async function LegalDocumentPage({

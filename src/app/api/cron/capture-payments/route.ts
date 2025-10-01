@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { 
   getPaymentsPendingCapture, 
   markPaymentCaptured 
@@ -13,7 +13,16 @@ export const runtime = 'nodejs';
  * Cron job to capture authorized payments
  * Runs every 4 hours to check for payments that need to be captured
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Authenticate request - only allow execution from Vercel cron
+  const authHeader = request.headers.get('authorization');
+  console.log('🔐 Auth header present:', !!authHeader);
+  
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    console.log('❌ Unauthorized request - invalid auth header');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  console.log('✅ Authentication successful');
   const startTime = Date.now();
   let processedCount = 0;
   let errorCount = 0;
@@ -42,8 +51,18 @@ export async function GET() {
       try {
         console.log(`[CRON] Capturing payment for booking: ${payment.booking_id}`);
 
-        // Calculate total amount to capture (original amount + any tips)
-        const totalCaptureAmount = payment.amount + payment.tip_amount;
+        // Calculate amount to capture based on payment type
+        let totalCaptureAmount: number;
+        
+        if (payment.payment_type === 'deposit') {
+          // For deposit payments, capture the balance amount + tip
+          totalCaptureAmount = payment.balance_amount + payment.tip_amount;
+          console.log(`[CRON] Deposit payment detected - capturing balance: $${payment.balance_amount/100} + tip: $${payment.tip_amount/100} = $${totalCaptureAmount/100}`);
+        } else {
+          // For full payments, capture the full amount + tip
+          totalCaptureAmount = payment.amount + payment.tip_amount;
+          console.log(`[CRON] Full payment detected - capturing total: $${payment.amount/100} + tip: $${payment.tip_amount/100} = $${totalCaptureAmount/100}`);
+        }
 
         // Capture the payment intent
         const result = await capturePaymentIntent(
@@ -68,20 +87,8 @@ export async function GET() {
         processedCount++;
         console.log(`[CRON] Successfully captured payment for booking: ${payment.booking_id}, Amount: $${(result.capturedAmount || totalCaptureAmount) / 100}`);
 
-        // Send payment confirmation emails
-        try {
-          const { sendPaymentConfirmationEmails } = await import('@/server/domains/stripe-payments/email-notifications');
-          const emailResult = await sendPaymentConfirmationEmails(payment.booking_id);
-          
-          if (emailResult.success) {
-            console.log(`[CRON] ✅ Payment confirmation emails sent for booking: ${payment.booking_id}`);
-          } else {
-            console.error(`[CRON] ❌ Failed to send payment confirmation emails for booking ${payment.booking_id}: ${emailResult.error}`);
-          }
-        } catch (emailError) {
-          console.error(`[CRON] 💥 Exception sending payment confirmation emails for booking ${payment.booking_id}:`, emailError);
-          // Don't fail the cron job for email errors
-        }
+        // Payment confirmation emails have been removed
+        console.log(`[CRON] ℹ️ Payment confirmation emails are no longer sent for booking: ${payment.booking_id}`);
 
       } catch (error) {
         errorCount++;

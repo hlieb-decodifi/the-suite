@@ -79,36 +79,25 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   }
   const ADMIN_ROLE_ID = rolesData.id;
 
-  // Create user with admin role, no password, email not confirmed
-  const { data: createdUser, error: userError } = await adminSupabase.auth.admin.createUser({
-    email,
-    email_confirm: false,
-    user_metadata: {
+  // Use Supabase's inviteUserByEmail to invite the admin
+  const { data: invitedUser, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+    data: {
       first_name: firstName,
       last_name: lastName,
       role: 'admin',
       role_id: ADMIN_ROLE_ID,
     },
+    redirectTo: `${getURL()}auth/set-password?type=admin_invite`,
   });
 
-  if (userError) {
-    return { success: false, error: userError.message };
+  if (inviteError) {
+    return { success: false, error: inviteError.message };
   }
 
+  // Revalidate the admin list page after successful invite
+  await revalidatePath('/admin/admins');
 
-  // Send a password-reset (magic) link to the invited user so they can set their password.
-  // Use the admin client to trigger Supabase's reset password email which contains the secure link.
-  const { error: resetError } = await adminSupabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${getURL()}auth/reset-password?invited=true`,
-  });
-
-  if (resetError) {
-    console.error('inviteAdminAction: failed to send reset/invite email', resetError);
-    // Optionally, you could remove the created user here via adminSupabase.auth.admin.deleteUser(createdUser?.id)
-    return { success: false, error: 'Failed to send invitation email.' };
-  }
-
-  return { success: true, user: createdUser };
+  return { success: true, user: invitedUser };
 }
 
 /**
@@ -138,6 +127,12 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
       data.userType = 'client';
     }
     
+    // Determine the correct redirect destination based on user type
+    let finalRedirectTo = redirectTo;
+    if (!finalRedirectTo) {
+      finalRedirectTo = data.userType === 'client' ? '/client-profile' : '/profile';
+    }
+    
     // Create user with authentication
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -148,7 +143,7 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
           last_name: data.lastName,
           role: data.userType,
         },
-        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(redirectTo || '/profile')}`,
+        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(finalRedirectTo)}&type=email_verification`,
       },
     });
 
@@ -225,12 +220,14 @@ export async function signInAction(data: SignInFormValues) {
  */
 export async function requireAuth(redirectTo = '/') {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user }, error } = await supabase.auth.getUser();
   
-  if (!session) {
+  if (!user || error) {
     redirect(redirectTo);
   }
   
+  // Get session for the authenticated user
+  const { data: { session } } = await supabase.auth.getSession();
   return session;
 }
 
@@ -252,7 +249,7 @@ export async function resetPasswordAction(email: string) {
   
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getURL()}/auth/reset-password`,
+      redirectTo: `${getURL()}/auth/reset-password?type=password_reset`,
     });
 
     if (error) {
@@ -416,7 +413,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
     const { error } = await supabase.auth.updateUser({
       email: newEmail,
     }, {
-      emailRedirectTo: `${getURL()}auth/email-confirmed`,
+      emailRedirectTo: `${getURL()}auth/email-confirmed?type=email_change`,
     });
 
     if (error) {
@@ -488,6 +485,101 @@ export async function googleOAuthFormAction(formData: FormData) {
   console.log('Redirect to:', redirectTo);
   // await signInWithGoogleAction(redirectTo);
   await signInWithGoogleAction(redirectTo);
+}
+
+/**
+ * Server action to convert OAuth user to email/password user
+ * This adds an email identity while keeping the OAuth identity
+ */
+export async function convertOAuthToEmailAction(newEmail: string, newPassword: string) {
+  const supabase = await createClient();
+  
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return {
+        success: false,
+        error: "No user found",
+      };
+    }
+
+    // Check if user is OAuth user
+    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    if (!isOAuth) {
+      return {
+        success: false,
+        error: "This feature is only available for OAuth users",
+      };
+    }
+
+    // Check if user already has email identity
+    const hasEmailIdentity = user.identities?.some(identity => identity.provider === 'email');
+    if (hasEmailIdentity) {
+      return {
+        success: false,
+        error: "User already has email authentication enabled",
+      };
+    }
+
+    // Check if the new email is already in use
+    const { exists, error: userCheckError } = await userExistsByEmail(newEmail);
+    if (userCheckError) {
+      return {
+        success: false,
+        error: 'Error checking for existing user. Please try again later.',
+      };
+    }
+    if (exists) {
+      return {
+        success: false,
+        error: 'An account with this email already exists.',
+      };
+    }
+
+    // Use admin client to update user with email and password
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return {
+        success: false,
+        error: 'Server configuration error',
+      };
+    }
+
+    const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+    // Update user with new email and password
+    const { error: updateError } = await adminSupabase.auth.admin.updateUserById(
+      user.id,
+      {
+        email: newEmail,
+        password: newPassword,
+        email_confirm: true, // Auto-confirm the email
+      }
+    );
+
+    if (updateError) {
+      console.error('Error converting OAuth user:', updateError);
+      return {
+        success: false,
+        error: updateError.message,
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Successfully added email authentication. You can now sign in with either Google or email/password.',
+    };
+  } catch (error) {
+    console.error('Error converting OAuth user:', error);
+    return {
+      success: false,
+      error: "Failed to convert account. Please try again.",
+    };
+  }
 }
 
 /**

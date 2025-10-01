@@ -9,6 +9,56 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          activity_type: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip_address: unknown | null
+          metadata: Json | null
+          referrer: string | null
+          session_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: unknown | null
+          metadata?: Json | null
+          referrer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: unknown | null
+          metadata?: Json | null
+          referrer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       addresses: {
         Row: {
           apartment: string | null
@@ -129,8 +179,11 @@ export type Database = {
           capture_method: string | null
           capture_scheduled_for: string | null
           captured_at: string | null
+          confirmation_emails_sent: boolean
+          confirmation_emails_sent_at: string | null
           created_at: string
           deposit_amount: number
+          deposit_payment_intent_id: string | null
           id: string
           payment_method_id: string
           payment_type: string
@@ -158,8 +211,11 @@ export type Database = {
           capture_method?: string | null
           capture_scheduled_for?: string | null
           captured_at?: string | null
+          confirmation_emails_sent?: boolean
+          confirmation_emails_sent_at?: string | null
           created_at?: string
           deposit_amount?: number
+          deposit_payment_intent_id?: string | null
           id?: string
           payment_method_id: string
           payment_type?: string
@@ -187,8 +243,11 @@ export type Database = {
           capture_method?: string | null
           capture_scheduled_for?: string | null
           captured_at?: string | null
+          confirmation_emails_sent?: boolean
+          confirmation_emails_sent_at?: string | null
           created_at?: string
           deposit_amount?: number
+          deposit_payment_intent_id?: string | null
           id?: string
           payment_method_id?: string
           payment_type?: string
@@ -318,6 +377,7 @@ export type Database = {
           id: string
           location: string | null
           phone_number: string | null
+          timezone: string | null
           updated_at: string
           user_id: string
         }
@@ -327,6 +387,7 @@ export type Database = {
           id?: string
           location?: string | null
           phone_number?: string | null
+          timezone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -336,6 +397,7 @@ export type Database = {
           id?: string
           location?: string | null
           phone_number?: string | null
+          timezone?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -489,48 +551,36 @@ export type Database = {
       }
       email_templates: {
         Row: {
+          brevo_template_id: number
           created_at: string
           description: string | null
-          html_content: string
+          dynamic_params: Json
           id: string
           is_active: boolean
           name: string
-          reply_to: string | null
-          sender_email: string
-          sender_name: string
-          subject: string
           tag: string
-          to_field: string
           updated_at: string
         }
         Insert: {
+          brevo_template_id?: number
           created_at?: string
           description?: string | null
-          html_content: string
+          dynamic_params?: Json
           id?: string
           is_active?: boolean
           name: string
-          reply_to?: string | null
-          sender_email: string
-          sender_name: string
-          subject: string
           tag: string
-          to_field: string
           updated_at?: string
         }
         Update: {
+          brevo_template_id?: number
           created_at?: string
           description?: string | null
-          html_content?: string
+          dynamic_params?: Json
           id?: string
           is_active?: boolean
           name?: string
-          reply_to?: string | null
-          sender_email?: string
-          sender_name?: string
-          subject?: string
           tag?: string
-          to_field?: string
           updated_at?: string
         }
         Relationships: []
@@ -623,13 +673,51 @@ export type Database = {
           },
         ]
       }
+      message_read_status: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_read_status_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_read_status_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
           conversation_id: string
           created_at: string
           id: string
-          is_read: boolean
           sender_id: string
           updated_at: string
         }
@@ -638,7 +726,6 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
-          is_read?: boolean
           sender_id: string
           updated_at?: string
         }
@@ -647,7 +734,6 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
-          is_read?: boolean
           sender_id?: string
           updated_at?: string
         }
@@ -783,14 +869,10 @@ export type Database = {
           id: string
           instagram_url: string | null
           is_published: boolean | null
-          is_subscribed: boolean | null
           location: string | null
           phone_number: string | null
           profession: string | null
           requires_deposit: boolean
-          stripe_account_id: string | null
-          stripe_connect_status: string
-          stripe_connect_updated_at: string | null
           tiktok_url: string | null
           timezone: string | null
           updated_at: string
@@ -813,14 +895,10 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
-          is_subscribed?: boolean | null
           location?: string | null
           phone_number?: string | null
           profession?: string | null
           requires_deposit?: boolean
-          stripe_account_id?: string | null
-          stripe_connect_status?: string
-          stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
           timezone?: string | null
           updated_at?: string
@@ -843,14 +921,10 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           is_published?: boolean | null
-          is_subscribed?: boolean | null
           location?: string | null
           phone_number?: string | null
           profession?: string | null
           requires_deposit?: boolean
-          stripe_account_id?: string | null
-          stripe_connect_status?: string
-          stripe_connect_updated_at?: string | null
           tiktok_url?: string | null
           timezone?: string | null
           updated_at?: string
@@ -870,6 +944,44 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      professional_stripe_connect: {
+        Row: {
+          created_at: string
+          id: string
+          professional_profile_id: string
+          stripe_account_id: string | null
+          stripe_connect_status: string
+          stripe_connect_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          professional_profile_id: string
+          stripe_account_id?: string | null
+          stripe_connect_status?: string
+          stripe_connect_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          professional_profile_id?: string
+          stripe_account_id?: string | null
+          stripe_connect_status?: string
+          stripe_connect_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_stripe_connect_professional_profile_id_fkey"
+            columns: ["professional_profile_id"]
+            isOneToOne: true
+            referencedRelation: "professional_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1025,27 +1137,6 @@ export type Database = {
           },
         ]
       }
-      roles: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       service_limits: {
         Row: {
           created_at: string
@@ -1080,10 +1171,12 @@ export type Database = {
       }
       services: {
         Row: {
+          archived_at: string | null
           created_at: string
           description: string | null
           duration: number
           id: string
+          is_archived: boolean
           name: string
           price: number
           professional_profile_id: string
@@ -1096,10 +1189,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
           duration: number
           id?: string
+          is_archived?: boolean
           name: string
           price: number
           professional_profile_id: string
@@ -1112,10 +1207,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
           duration?: number
           id?: string
+          is_archived?: boolean
           name?: string
           price?: number
           professional_profile_id?: string
@@ -1314,6 +1411,97 @@ export type Database = {
           },
         ]
       }
+      tips: {
+        Row: {
+          amount: number
+          booking_id: string
+          client_id: string
+          created_at: string
+          id: string
+          professional_id: string
+          refunded_amount: number
+          refunded_at: string | null
+          status: string
+          stripe_payment_intent_id: string | null
+          stripe_refund_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          booking_id: string
+          client_id: string
+          created_at?: string
+          id?: string
+          professional_id: string
+          refunded_amount?: number
+          refunded_at?: string | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          booking_id?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          professional_id?: string
+          refunded_amount?: number
+          refunded_at?: string | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tips_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tips_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tips_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           cookie_consent: boolean
@@ -1321,7 +1509,6 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
-          role_id: string
           updated_at: string
         }
         Insert: {
@@ -1330,7 +1517,6 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
-          role_id: string
           updated_at?: string
         }
         Update: {
@@ -1339,18 +1525,9 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
-          role_id?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "users_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -1397,6 +1574,10 @@ export type Database = {
       }
     }
     Functions: {
+      archive_service: {
+        Args: { service_id: string }
+        Returns: boolean
+      }
       calculate_payment_schedule: {
         Args: { appointment_start_time: string; appointment_end_time: string }
         Returns: {
@@ -1442,6 +1623,42 @@ export type Database = {
         }
         Returns: string
       }
+      get_engagement_analytics: {
+        Args: {
+          start_date?: string
+          end_date?: string
+          entity_filter_type?: string
+          entity_filter_id?: string
+        }
+        Returns: {
+          total_service_views: number
+          total_professional_views: number
+          total_bookings_started: number
+          total_bookings_completed: number
+          conversion_rate: number
+          engagement_rate: number
+          bounce_rate: number
+        }[]
+      }
+      get_non_converting_users: {
+        Args: {
+          start_date?: string
+          end_date?: string
+          entity_filter_type?: string
+          entity_filter_id?: string
+        }
+        Returns: {
+          user_id: string
+          session_id: string
+          user_name: string
+          service_views: number
+          professional_views: number
+          bookings_started: number
+          bookings_completed: number
+          last_activity: string
+          viewed_entities: Json
+        }[]
+      }
       get_professional_rating_stats: {
         Args: { p_professional_id: string }
         Returns: {
@@ -1456,6 +1673,10 @@ export type Database = {
       }
       get_service_limit: {
         Args: { prof_profile_id: string }
+        Returns: number
+      }
+      get_unread_message_count: {
+        Args: { p_conversation_id: string; p_user_id: string }
         Returns: number
       }
       insert_address_and_return_id: {
@@ -1479,12 +1700,32 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      is_message_read: {
+        Args: { p_message_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_professional: {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      is_professional_subscribed: {
+        Args: { prof_profile_id: string }
+        Returns: boolean
+      }
+      is_professional_user_subscribed: {
+        Args: { prof_user_id: string }
+        Returns: boolean
+      }
+      mark_message_read: {
+        Args: { p_message_id: string; p_user_id: string }
+        Returns: boolean
+      }
       set_admin_config: {
         Args: { config_key: string; config_value: string }
+        Returns: boolean
+      }
+      unarchive_service: {
+        Args: { service_id: string }
         Returns: boolean
       }
       update_service_limit: {

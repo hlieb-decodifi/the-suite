@@ -1,8 +1,13 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { processStripeRefund } from '../refunds/stripe-refund';
 import { redirect } from 'next/navigation';
+import { 
+  sendSupportRequestCreation,
+  sendSupportRequestResolvedClient,
+  sendSupportRequestResolvedProfessional
+} from '@/providers/brevo/templates';
 
 /**
  * Create a new support request - Server Action
@@ -171,13 +176,15 @@ export async function createSupportRequestAction({
       conversation_id: conversation.id,
       sender_id: clientId,
       content: `Support request opened: ${reason}`,
-      is_read: false,
     });
 
     if (messageError) {
       console.error('Error creating initial message:', messageError);
       // We don't return an error here as the support request was created successfully
     }
+
+    // Send creation email to professional
+    await sendSupportRequestCreationEmail(supportRequest.id, professionalId);
 
     return {
       success: true,
@@ -271,7 +278,7 @@ export async function initiateRefundServerAction(formData: FormData) {
 
     console.log('[SERVER-ACTION] Processing refund through Stripe');
     // Process the refund through Stripe
-    const { success, refundId, error: refundError } = await processStripeRefund(
+    const { success, error: refundError } = await processStripeRefund(
       support_request_id,
       refund_amount
     );
@@ -284,27 +291,9 @@ export async function initiateRefundServerAction(formData: FormData) {
       };
     }
 
-    console.log('[SERVER-ACTION] Refund processed successfully, updating support request');
-    // Update the support request with refund information
-    const { error: updateError } = await supabase
-      .from('support_requests')
-      .update({
-        refund_amount: refund_amount,
-        stripe_refund_id: refundId || null,
-        professional_notes: professional_notes || null,
-        status: 'in_progress' // Set to in_progress while waiting for Stripe webhook
-      })
-      .eq('id', support_request_id);
-
-    if (updateError) {
-      console.error('[SERVER-ACTION] Error updating support request:', updateError);
-      return {
-        success: false,
-        error: 'Failed to update support request with refund information',
-      };
-    }
-
-    // Add a message to the conversation
+    console.log('[SERVER-ACTION] Refund processed successfully, sending message and updating status');
+    
+    // Add a message to the conversation BEFORE resolving the support request
     if (supportRequest.conversation_id) {
       const { error: messageError } = await supabase.from('messages').insert({
         conversation_id: supportRequest.conversation_id,
@@ -312,13 +301,40 @@ export async function initiateRefundServerAction(formData: FormData) {
         content: `Refund of $${refund_amount.toFixed(2)} has been initiated. ${
           professional_notes ? `Note: ${professional_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
         console.error('[SERVER-ACTION] Error creating refund message:', messageError);
         // Don't return error as the refund was processed successfully
       }
+    }
+
+    // Now update support request status to resolved and add professional notes
+    const updateData: {
+      status: 'resolved';
+      resolved_at: string;
+      resolved_by: string;
+      resolution_notes: string;
+      professional_notes?: string;
+    } = {
+      status: 'resolved',
+      resolved_at: new Date().toISOString(),
+      resolved_by: user.id,
+      resolution_notes: 'Resolved via successful Stripe refund'
+    };
+
+    if (professional_notes) {
+      updateData.professional_notes = professional_notes;
+    }
+
+    const { error: updateError } = await supabase
+      .from('support_requests')
+      .update(updateData)
+      .eq('id', support_request_id);
+
+    if (updateError) {
+      console.error('[SERVER-ACTION] Error updating support request status:', updateError);
+      // Don't fail the entire operation for status update failure
     }
 
     console.log('[SERVER-ACTION] Refund initiation completed successfully');
@@ -410,7 +426,6 @@ export async function resolveSupportRequestAction({
         content: `Support request has been resolved. ${
           resolution_notes ? `Resolution notes: ${resolution_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
@@ -418,6 +433,9 @@ export async function resolveSupportRequestAction({
         // Don't return error as the support request was resolved successfully
       }
     }
+
+    // Send resolved emails
+    await sendSupportRequestResolvedEmails(support_request_id);
 
     return {
       success: true,
@@ -430,3 +448,139 @@ export async function resolveSupportRequestAction({
     };
   }
 }
+
+/**
+ * Send support request creation email to professional
+ */
+async function sendSupportRequestCreationEmail(supportRequestId: string, professionalUserId: string) {
+  try {
+    // Use admin client for auth operations
+    const adminSupabase = await createAdminClient();
+
+    // Get professional data using admin client
+    const { data: professionalAuth, error: professionalAuthError } = await adminSupabase.auth.admin.getUserById(professionalUserId);
+    if (professionalAuthError || !professionalAuth.user?.email) {
+      console.error('Failed to get professional email:', professionalAuthError);
+      return;
+    }
+
+    const { data: professionalUser, error: professionalUserError } = await adminSupabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', professionalUserId)
+      .single();
+
+    if (professionalUserError || !professionalUser) {
+      console.error('Failed to get professional user data:', professionalUserError);
+      return;
+    }
+
+    await sendSupportRequestCreation(
+      [{ email: professionalAuth.user.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      {
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        support_request_url: `${process.env.NEXT_PUBLIC_BASE_URL}/support-request/${supportRequestId}`
+      }
+    );
+
+    console.log('✅ Support request creation email sent to professional');
+  } catch (error) {
+    console.error('❌ Error sending support request creation email:', error);
+  }
+}
+
+/**
+ * Send support request resolved emails to both client and professional
+ */
+async function sendSupportRequestResolvedEmails(supportRequestId: string) {
+  try {
+    // Use admin client for auth operations
+    const adminSupabase = await createAdminClient();
+
+    // Get support request data with booking and user info
+    const { data: supportRequest, error: supportRequestError } = await adminSupabase
+      .from('support_requests')
+      .select(`
+        id,
+        booking_id,
+        client_id,
+        professional_id,
+        bookings (
+          id,
+          clients:users!client_id (
+            first_name,
+            last_name
+          ),
+          professional_profiles (
+            users (
+              first_name,
+              last_name
+            )
+          )
+        )
+      `)
+      .eq('id', supportRequestId)
+      .single();
+
+    if (supportRequestError || !supportRequest) {
+      console.error('Failed to get support request data:', supportRequestError);
+      return;
+    }
+
+    const booking = supportRequest.bookings;
+    if (!booking) {
+      console.error('Missing booking data');
+      return;
+    }
+
+    const client = booking.clients;
+    const professional = booking.professional_profiles?.users;
+
+    if (!client || !professional) {
+      console.error('Missing client or professional data');
+      return;
+    }
+
+    if (!supportRequest.client_id || !supportRequest.professional_id) {
+      console.error('Missing client or professional ID');
+      return;
+    }
+
+    // Get email addresses using admin client
+    const { data: clientAuth, error: clientAuthError } = await adminSupabase.auth.admin.getUserById(supportRequest.client_id);
+    const { data: professionalAuth, error: professionalAuthError } = await adminSupabase.auth.admin.getUserById(supportRequest.professional_id);
+
+    if (clientAuthError || !clientAuth.user?.email || professionalAuthError || !professionalAuth.user?.email) {
+      console.error('Failed to get email addresses');
+      return;
+    }
+
+    const clientName = `${client.first_name} ${client.last_name}`;
+    const professionalName = `${professional.first_name} ${professional.last_name}`;
+
+    // Send emails
+    await Promise.all([
+      sendSupportRequestResolvedClient(
+        [{ email: clientAuth.user.email, name: clientName }],
+        {
+          booking_id: supportRequest.booking_id || '',
+          client_name: clientName,
+          professional_name: professionalName
+        }
+      ),
+      sendSupportRequestResolvedProfessional(
+        [{ email: professionalAuth.user.email, name: professionalName }],
+        {
+          booking_id: supportRequest.booking_id || '',
+          client_name: clientName,
+          professional_name: professionalName
+        }
+      )
+    ]);
+
+    console.log('✅ Support request resolved emails sent');
+  } catch (error) {
+    console.error('❌ Error sending support request resolved emails:', error);
+  }
+}
+

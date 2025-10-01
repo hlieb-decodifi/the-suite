@@ -2,14 +2,18 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { checkProfessionalSubscriptionByUserId } from '@/utils/subscriptionUtils';
 import { ProfileServicesPageClient } from './ProfileServicesPageClient';
 import {
   getServices,
   getServiceLimitInfo,
+  deleteService,
+  archiveService,
+  unarchiveService,
 } from '@/server/domains/services/actions';
 import {
   syncServiceAction,
-  archiveServiceAction,
+  archiveServiceAction as stripeArchiveServiceAction,
 } from '@/server/domains/stripe-services';
 import type { ServiceUI, ServiceLimitInfo } from '@/types/services';
 import type { User } from '@supabase/supabase-js';
@@ -76,15 +80,7 @@ export async function ProfileServicesPage({
   }
 
   // Fetch isBookable (professional is subscribed)
-  let isBookable = false;
-  const { data: profileData } = await supabase
-    .from('professional_profiles')
-    .select('is_subscribed')
-    .eq('user_id', targetUserId)
-    .single();
-  if (profileData && profileData.is_subscribed === true) {
-    isBookable = true;
-  }
+  const isBookable = await checkProfessionalSubscriptionByUserId(targetUserId);
 
   // Extract search parameters
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -208,7 +204,7 @@ export async function deleteServiceAction({
 }) {
   // First archive the service from Stripe
   try {
-    const archiveResult = await archiveServiceAction(serviceId);
+    const archiveResult = await stripeArchiveServiceAction(serviceId);
     if (!archiveResult.success) {
       console.error(
         'Failed to archive service from Stripe:',
@@ -222,6 +218,49 @@ export async function deleteServiceAction({
   }
 
   // Then delete from our database
-  const { deleteService } = await import('@/server/domains/services/actions');
   return deleteService({ userId, serviceId });
+}
+
+export async function archiveServiceAction({
+  userId,
+  serviceId,
+}: {
+  userId: string;
+  serviceId: string;
+}) {
+  try {
+    const result = await archiveService({ userId, serviceId });
+    return result;
+  } catch (error) {
+    console.error('Error in archiveServiceAction:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to archive service. Please try again.',
+    };
+  }
+}
+
+export async function unarchiveServiceAction({
+  userId,
+  serviceId,
+}: {
+  userId: string;
+  serviceId: string;
+}) {
+  try {
+    const result = await unarchiveService({ userId, serviceId });
+    return result;
+  } catch (error) {
+    console.error('Error in unarchiveServiceAction:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to unarchive service. Please try again.',
+    };
+  }
 }

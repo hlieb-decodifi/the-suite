@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Titillium_Web, Inter } from 'next/font/google';
+import { GoogleAnalytics } from '@next/third-parties/google';
 import './globals.css';
 import { Providers } from '@/providers';
 import { Toaster } from '@/components/ui/toaster';
@@ -22,21 +23,26 @@ export const metadata: Metadata = {
   description: 'Premium services at your fingertips',
 };
 
-const RootLayout = ({ children }: { children: React.ReactNode }) => (
-  <html lang="en" suppressHydrationWarning>
-    <body
-      className={cn(
-        'min-h-screen bg-background font-sans antialiased',
-        titillium.variable,
-        inter.variable,
-      )}
-    >
-      <Providers>
-        <RootLayoutTemplate>{children}</RootLayoutTemplate>
-        <Toaster />
-      </Providers>
-    </body>
-  </html>
-);
+const RootLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={cn(
+          'min-h-screen bg-background font-sans antialiased',
+          titillium.variable,
+          inter.variable,
+        )}
+      >
+        <Providers>
+          <RootLayoutTemplate>{children}</RootLayoutTemplate>
+          <Toaster />
+        </Providers>
+        <GoogleAnalytics
+          gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || ''}
+        />
+      </body>
+    </html>
+  );
+};
 
 export default RootLayout;

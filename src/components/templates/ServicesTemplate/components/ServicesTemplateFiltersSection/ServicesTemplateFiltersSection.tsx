@@ -66,8 +66,19 @@ function useFilterState(initialFilters: ServicesFilters) {
     }
   }, [initialFilters.location]); // Only depend on location changes
 
-  const hasActiveFilters =
-    localFilters.location !== '' || localFilters.searchTerm !== '';
+  // Determine if there are active filters in local state or URL params
+  function urlHasActiveFilters(): boolean {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    const hasSearch = !!(params.get('search') && params.get('search')!.trim() !== '');
+    const hasLocation = !!(params.get('location') && params.get('location')!.trim() !== '');
+    return hasSearch || hasLocation;
+  }
+
+  const hasActiveFilters: boolean =
+    Boolean(localFilters.location && localFilters.location !== '') ||
+    Boolean(localFilters.searchTerm && localFilters.searchTerm !== '') ||
+    urlHasActiveFilters();
 
   // Handle changes and actions
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) =>

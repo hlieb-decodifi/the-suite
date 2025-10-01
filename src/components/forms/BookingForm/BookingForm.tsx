@@ -7,7 +7,8 @@ import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { Form } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Typography } from '@/components/ui/typography';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import useQueryClient from './useQueryClient';
 import {
   BookingFormDateTimePicker,
   BookingFormExtraServices,
@@ -16,6 +17,7 @@ import {
 } from './components';
 import { BookingFormValues } from './schema';
 import { useBookingForm } from './useBookingForm';
+import { useActivityTracker } from '@/api/activity-log';
 
 export type BookingFormProps = {
   service: ServiceListItem;
@@ -64,6 +66,13 @@ export function BookingForm({
     selectedDate,
   );
 
+  // Activity tracking
+  const { trackBookingStarted } = useActivityTracker();
+  const hasTrackedBookingStarted = useRef(false);
+
+  // QueryClient for refetching available time slots
+  const queryClient = useQueryClient();
+
   // Sync with parent when parent date changes
   useEffect(() => {
     if (selectedDate !== localSelectedDate) {
@@ -73,6 +82,21 @@ export function BookingForm({
       }
     }
   }, [selectedDate]);
+
+  // Track booking started when user selects a date (serious intent indicator)
+  useEffect(() => {
+    if (localSelectedDate && !hasTrackedBookingStarted.current) {
+      hasTrackedBookingStarted.current = true;
+      trackBookingStarted(service.id, {
+        service_name: service.name,
+        professional_id: service.professional.id,
+        professional_name: service.professional.name,
+        selected_date: localSelectedDate.toISOString(),
+        price: service.price,
+        source: 'date_selection',
+      });
+    }
+  }, [localSelectedDate, service, trackBookingStarted]);
 
   const { form, calculateTotalPrice, onSubmit, isPending } = useBookingForm({
     onSubmit: async (data: BookingFormValues) => {
@@ -105,10 +129,17 @@ export function BookingForm({
 
       // Call the onSubmitSuccess callback with the enhanced form data and price
       onSubmitSuccess(formDataWithCombinedDate, calculateTotalPrice());
+
+      // Force refetch of available time slots after booking
+      queryClient.invalidateQueries({ queryKey: ['availableTimeSlots'] });
     },
     service,
     extraServices,
   });
+  // Refetch available time slots on mount/page reload/navigation
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['availableTimeSlots'] });
+  }, [queryClient]);
 
   // Notify parent about submission state changes
   useEffect(() => {

@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Typography } from '@/components/ui/typography';
 import { CalendarDays, Clock, ChevronRight } from 'lucide-react';
-import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -16,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatCurrency } from '@/utils';
+import { getUserTimezone, formatDateTimeInTimezone } from '@/utils/timezone';
 
 // Define appointment type
 type AppointmentType = {
@@ -109,12 +109,14 @@ function FilterButtons({
   activeFilter,
   setActiveFilter,
   upcomingCount,
+  ongoingCount,
   completedCount,
   cancelledCount,
 }: {
   activeFilter: string;
   setActiveFilter: (filter: string) => void;
   upcomingCount: number;
+  ongoingCount: number;
   completedCount: number;
   cancelledCount: number;
 }) {
@@ -141,6 +143,18 @@ function FilterButtons({
         onClick={() => setActiveFilter('upcoming')}
       >
         Upcoming
+      </button>
+      <button
+        className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+          ongoingCount > 0 ? 'hover:bg-muted' : ''
+        } ${
+          activeFilter === 'ongoing'
+            ? 'bg-white shadow-sm'
+            : 'text-muted-foreground'
+        }`}
+        onClick={() => setActiveFilter('ongoing')}
+      >
+        Ongoing
       </button>
       <button
         className={`px-4 py-1.5 rounded-full text-sm font-medium ${
@@ -193,7 +207,7 @@ function AppointmentStatusBadge({
       return (
         <Badge
           variant="outline"
-          className="bg-orange-500/10 text-orange-500 border-orange-500/20"
+          className="bg-blue-500/10 text-blue-500 border-blue-500/20"
         >
           Ongoing
         </Badge>
@@ -254,9 +268,11 @@ function AppointmentTableEmpty() {
 function AppointmentTableCard({
   appointment,
   isProfessionalView,
+  userTimezone = 'UTC',
 }: {
   appointment: Appointment;
   isProfessionalView: boolean;
+  userTimezone?: string;
 }) {
   return (
     <Link href={`/bookings/${appointment.id}`}>
@@ -268,7 +284,13 @@ function AppointmentTableCard({
             </Typography>
             <div className="text-muted-foreground text-sm flex items-center mt-1">
               <CalendarDays className="mr-1 h-3 w-3" />
-              {format(appointment.date, 'MMM dd, yyyy')}
+              {
+                formatDateTimeInTimezone(
+                  appointment.date,
+                  userTimezone,
+                  'MMM dd, yyyy',
+                ).date
+              }
               <span className="mx-1">•</span>
               <Clock className="mr-1 h-3 w-3" />
               {appointment.time}
@@ -308,10 +330,12 @@ function DashboardTemplateAppointmentsTable({
   appointments,
   isLoading = false,
   isProfessionalView = false,
+  userTimezone = 'UTC',
 }: {
   appointments: Appointment[];
   isLoading?: boolean;
   isProfessionalView?: boolean;
+  userTimezone?: string;
 }) {
   const router = useRouter();
 
@@ -345,7 +369,15 @@ function DashboardTemplateAppointmentsTable({
                   <div className="flex flex-col">
                     <div className="flex items-center">
                       <CalendarDays className="mr-1 h-3 w-3 text-muted-foreground" />
-                      <span>{format(appointment.date, 'MMM dd, yyyy')}</span>
+                      <span>
+                        {
+                          formatDateTimeInTimezone(
+                            appointment.date,
+                            userTimezone,
+                            'MMM dd, yyyy',
+                          ).date
+                        }
+                      </span>
                     </div>
                     <div className="flex items-center text-muted-foreground">
                       <Clock className="mr-1 h-3 w-3" />
@@ -381,6 +413,7 @@ function DashboardTemplateAppointmentsTable({
             key={appointment.id}
             appointment={appointment}
             isProfessionalView={isProfessionalView}
+            userTimezone={userTimezone}
           />
         ))}
       </div>
@@ -394,6 +427,12 @@ export function DashboardAppointmentsPageClient({
   appointments,
 }: DashboardAppointmentsPageClientProps) {
   const [activeFilter, setActiveFilter] = useState('all');
+  const [userTimezone, setUserTimezone] = useState<string>('UTC');
+
+  // Get user's timezone on component mount
+  useEffect(() => {
+    setUserTimezone(getUserTimezone());
+  }, []);
 
   // Validate appointments array to ensure each item has required fields
   const validAppointments = Array.isArray(appointments)
@@ -414,6 +453,14 @@ export function DashboardAppointmentsPageClient({
     validAppointments as AppointmentWithBooking[]
   ).map((appointment: AppointmentWithBooking) => {
     const startTime = new Date(appointment.start_time);
+
+    // Format time in user's timezone
+    const { time: formattedTime } = formatDateTimeInTimezone(
+      startTime,
+      userTimezone,
+      'EEEE, MMMM d, yyyy',
+      'h:mm a',
+    );
 
     // Get service name with additional services indicator
     const serviceName = appointment.services?.name || 'Service';
@@ -451,7 +498,7 @@ export function DashboardAppointmentsPageClient({
     return {
       id: appointment.id,
       date: startTime,
-      time: format(startTime, 'h:mm a'),
+      time: formattedTime,
       serviceName,
       clientName,
       professionalName,
@@ -471,17 +518,21 @@ export function DashboardAppointmentsPageClient({
     return true;
   });
 
-  // Group appointments by status
+  // Group appointments by computed status for consistency
   const upcomingAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'upcoming',
+    (appointment) => appointment.computedStatus === 'upcoming',
+  );
+
+  const ongoingAppointments = filteredAppointments.filter(
+    (appointment) => appointment.computedStatus === 'ongoing',
   );
 
   const completedAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'completed',
+    (appointment) => appointment.computedStatus === 'completed',
   );
 
   const cancelledAppointments = filteredAppointments.filter(
-    (appointment) => appointment.status === 'cancelled',
+    (appointment) => appointment.computedStatus === 'cancelled',
   );
 
   // Table view with filters
@@ -496,12 +547,17 @@ export function DashboardAppointmentsPageClient({
           <Typography variant="small" className="text-muted-foreground">
             Showing {filteredAppointments.length} appointments
           </Typography>
+          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+            <Clock className="h-3 w-3" />
+            <span>Times shown in your timezone ({userTimezone})</span>
+          </div>
         </div>
         <div className="p-4">
           <FilterButtons
             activeFilter={activeFilter}
             setActiveFilter={setActiveFilter}
             upcomingCount={upcomingAppointments.length}
+            ongoingCount={ongoingAppointments.length}
             completedCount={completedAppointments.length}
             cancelledCount={cancelledAppointments.length}
           />
@@ -512,12 +568,15 @@ export function DashboardAppointmentsPageClient({
                 ? filteredAppointments
                 : activeFilter === 'upcoming'
                   ? upcomingAppointments
-                  : filteredAppointments.filter(
-                      (a) => a.status === activeFilter,
-                    )
+                  : activeFilter === 'ongoing'
+                    ? ongoingAppointments
+                    : filteredAppointments.filter(
+                        (a) => a.computedStatus === activeFilter,
+                      )
             }
             isLoading={false}
             isProfessionalView={isProfessional}
+            userTimezone={userTimezone}
           />
         </div>
       </div>

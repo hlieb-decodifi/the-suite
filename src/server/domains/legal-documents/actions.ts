@@ -2,7 +2,7 @@
  * Admin: Fetch the latest version of a legal document (for editing)
  */
 export async function getLegalDocumentAdminAction(
-  type: 'terms_and_conditions' | 'privacy_policy'
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy'
 ): Promise<LegalDocument | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -15,7 +15,7 @@ export async function getLegalDocumentAdminAction(
   if (error || !data) return null;
   return {
     id: data.id,
-    type: data.type as 'terms_and_conditions' | 'privacy_policy',
+    type: data.type as 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
     title: data.title,
     content: data.content,
     version: data.version,
@@ -26,27 +26,6 @@ export async function getLegalDocumentAdminAction(
   };
 }
 
-/**
- * Admin: Save a new version of a legal document
- */
-export async function updateLegalDocumentAdminAction(
-  type: 'terms_and_conditions' | 'privacy_policy',
-  content: string,
-  effectiveDate: string
-): Promise<boolean> {
-  const supabase = await createClient();
-  // Insert new version (do not overwrite)
-  const { error } = await supabase
-    .from('legal_documents')
-    .insert({
-      type,
-      content,
-      effective_date: effectiveDate,
-      is_published: true,
-      title: type === 'terms_and_conditions' ? 'Terms & Conditions' : 'Privacy Policy',
-    });
-  return !error;
-}
 
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createPublicClient } from '@supabase/supabase-js';
@@ -54,7 +33,7 @@ import type { Tables } from '@/../supabase/types';
 
 export type LegalDocument = {
   id: string;
-  type: 'terms_and_conditions' | 'privacy_policy';
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy';
   title: string;
   content: string;
   version: number;
@@ -72,7 +51,7 @@ type LegalDocumentRow = Tables<'legal_documents'>;
  * Uses public client to avoid cookies during static generation
  */
 export async function getLegalDocumentAction(
-  type: 'terms_and_conditions' | 'privacy_policy'
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy'
 ): Promise<{
   success: boolean;
   document?: LegalDocument;
@@ -113,7 +92,7 @@ export async function getLegalDocumentAction(
 
     const document: LegalDocument = {
       id: data.id,
-      type: data.type as 'terms_and_conditions' | 'privacy_policy',
+      type: data.type as 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
       title: data.title,
       content: data.content,
       version: data.version,
@@ -137,7 +116,7 @@ export async function getLegalDocumentAction(
  * Server Action: Get all versions of a legal document type (for admin use)
  */
 export async function getLegalDocumentVersionsAction(
-  type: 'terms_and_conditions' | 'privacy_policy'
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy'
 ): Promise<{
   success: boolean;
   documents?: LegalDocument[];
@@ -162,7 +141,7 @@ export async function getLegalDocumentVersionsAction(
 
     const documents: LegalDocument[] = (data || []).map((row: LegalDocumentRow) => ({
       id: row.id,
-      type: row.type as 'terms_and_conditions' | 'privacy_policy',
+      type: row.type as 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
       title: row.title,
       content: row.content,
       version: row.version,

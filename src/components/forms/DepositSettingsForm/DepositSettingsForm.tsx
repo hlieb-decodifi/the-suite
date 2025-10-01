@@ -58,12 +58,12 @@ const depositSettingsSchema = z
   .refine(
     (data) => {
       if (data.requires_deposit && data.deposit_type === 'fixed') {
-        return data.deposit_value !== undefined && data.deposit_value >= 0;
+        return data.deposit_value !== undefined && data.deposit_value >= 1;
       }
       return true;
     },
     {
-      message: 'Fixed amount must be 0 or greater',
+      message: 'Fixed amount must be at least $1',
       path: ['deposit_value'],
     },
   );
@@ -178,7 +178,7 @@ export function DepositSettingsForm({
                   <FormInput
                     className="bg-white/80"
                     type="number"
-                    min="0"
+                    min={depositType === 'fixed' ? '1' : '0'}
                     max={depositType === 'percentage' ? '100' : undefined}
                     step={depositType === 'percentage' ? '1' : '0.01'}
                     placeholder={depositType === 'percentage' ? '25' : '50.00'}
@@ -194,8 +194,8 @@ export function DepositSettingsForm({
                   />
                   <FormDescription>
                     {depositType === 'percentage'
-                      ? 'Enter a percentage between 0 and 100'
-                      : 'Enter a fixed dollar amount'}
+                      ? 'Enter a percentage between 0 and 100. Note: Minimum deposit amount is $1'
+                      : 'Enter a fixed dollar amount (minimum $1)'}
                   </FormDescription>
                 </div>
               )}

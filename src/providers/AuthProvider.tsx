@@ -33,14 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setIsLoading(true);
 
-        // Get the current session
+        // Get the current user (secure method)
         const {
-          data: { session },
-        } = await supabase.auth.getSession();
+          data: { user: authUser },
+          error,
+        } = await supabase.auth.getUser();
 
-        if (session) {
+        if (authUser && !error) {
+          // Get fresh session for this authenticated user
+          const { data: { session } } = await supabase.auth.getSession();
           setSession(session);
-          setUser(session.user);
+          setUser(authUser);
         } else {
           signOut();
         }

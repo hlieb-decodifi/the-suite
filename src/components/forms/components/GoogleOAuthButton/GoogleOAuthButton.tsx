@@ -2,7 +2,6 @@
 
 import { getGoogleOAuthUrlAction } from '@/api/auth/actions';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState } from 'react';
 import { UserType } from '@/components/forms/SignUpForm/schema';
 
@@ -12,6 +11,7 @@ export type GoogleOAuthButtonProps = {
   redirectTo?: string;
   role?: UserType; // Required for signup mode
   disabled?: boolean;
+  onValidationError?: () => void; // Callback for when validation fails
 };
 
 export function GoogleOAuthButton({
@@ -20,25 +20,34 @@ export function GoogleOAuthButton({
   redirectTo = '/profile',
   role,
   disabled = false,
+  onValidationError,
 }: GoogleOAuthButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const handleGoogleAuth = async () => {
     // Don't proceed if disabled
     if (disabled) return;
-    
+
+    // For signup mode, check if role is selected before proceeding
+    if (mode === 'signup' && !role) {
+      if (onValidationError) {
+        onValidationError();
+      }
+      return;
+    }
+
     setIsLoading(true);
-    
+
     try {
       // Use server action to get the OAuth URL
       const result = await getGoogleOAuthUrlAction(redirectTo, mode, role);
-      
+
       if (result.success && result.url) {
         // Redirect to Google OAuth
         window.location.href = result.url;
         return;
       }
-      
+
       console.error('Failed to get OAuth URL:', result.error);
       setIsLoading(false);
     } catch (error) {
@@ -47,7 +56,8 @@ export function GoogleOAuthButton({
     }
   };
 
-  const buttonText = mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google';
+  const buttonText =
+    mode === 'signin' ? 'Sign in with Google' : 'Sign up with Google';
   const loadingText = 'Redirecting...';
   const isButtonDisabled = isLoading || disabled;
 
@@ -88,23 +98,5 @@ export function GoogleOAuthButton({
     </Button>
   );
 
-  // If disabled due to no role selection in signup mode, show tooltip
-  if (disabled && mode === 'signup' && !role) {
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="w-full">
-              {button}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Please select whether you are a professional or client first</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-
   return button;
-} 
+}

@@ -1,8 +1,13 @@
 'use client';
 
 import { ReviewSection } from '@/app/bookings/[id]/balance/ReviewSection';
+import { TipSection } from '@/app/bookings/[id]/balance/TipSection';
 import { LeafletMap } from '@/components/common/LeafletMap';
-import { AddAdditionalServicesModal, NoShowModal } from '@/components/modals';
+import {
+  AddAdditionalServicesModal,
+  NoShowModal,
+  ReviewPromptModal,
+} from '@/components/modals';
 import { BookingCancellationModal } from '@/components/modals/BookingCancellationModal';
 import { SupportRequestModal } from '@/components/modals/SupportRequestModal/SupportRequestModal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,10 +27,12 @@ import { createOrGetConversationEnhanced } from '@/server/domains/messages/actio
 import { formatCurrency } from '@/utils/formatCurrency';
 import { formatDuration } from '@/utils/formatDuration';
 import { format } from 'date-fns';
+import { getUserTimezone, formatDateTimeInTimezone } from '@/utils/timezone';
 import { PhoneNumberFormat, PhoneNumberUtil } from 'google-libphonenumber';
 import {
   ArrowLeftIcon,
   CalendarIcon,
+  Clock,
   ClockIcon,
   CopyIcon,
   CreditCardIcon,
@@ -50,6 +57,23 @@ export type BookingDetailPageClientProps = {
   isClient: boolean;
   isProfessional: boolean;
   userId: string;
+  isAdmin?: boolean;
+  existingSupportRequest?: {
+    id: string;
+    status: string;
+    category?: string;
+  } | null;
+  reviewStatus?: {
+    canReview: boolean;
+    hasReview: boolean;
+    review: {
+      id: string;
+      score: number;
+      message: string;
+      createdAt: string;
+    } | null;
+  } | null;
+  showReviewPrompt?: boolean;
 };
 
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -101,6 +125,10 @@ export function BookingDetailPageClient({
   isClient,
   isProfessional,
   userId,
+  isAdmin = false,
+  existingSupportRequest = null,
+  reviewStatus = null,
+  showReviewPrompt = false,
 }: BookingDetailPageClientProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -110,43 +138,17 @@ export function BookingDetailPageClient({
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
-  const [existingSupportRequest, setExistingSupportRequest] = useState<{ id: string; status: string; category?: string } | null>(null);
-  const [isLoadingSupportRequest, setIsLoadingSupportRequest] = useState(true);
+  const [isReviewPromptModalOpen, setIsReviewPromptModalOpen] =
+    useState(showReviewPrompt);
+  const [userTimezone, setUserTimezone] = useState<string>('UTC');
 
   const router = useRouter();
   const { toast } = useToast();
 
-  // Check for existing support request for this appointment
+  // Get user's timezone on component mount
   useEffect(() => {
-    const checkExistingSupportRequest = async () => {
-      try {
-        setIsLoadingSupportRequest(true);
-        const { createClient } = await import('@/lib/supabase/client');
-        const supabase = createClient();
-
-        const { data: supportRequest, error } = await supabase
-          .from('support_requests')
-          .select('id, status, title, created_at, category')
-          .eq('appointment_id', appointment.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (!error && supportRequest) {
-          setExistingSupportRequest(supportRequest);
-        }
-      } catch (error) {
-        console.error('Error checking existing support request:', error);
-      } finally {
-        setIsLoadingSupportRequest(false);
-      }
-    };
-
-    if (appointment.id) {
-      checkExistingSupportRequest();
-    }
-  }, [appointment.id]);
-
+    setUserTimezone(getUserTimezone());
+  }, []);
   // Get date from start_time
   const startDateTime = new Date(appointment.start_time);
   const endDateTime = new Date(appointment.end_time);
@@ -175,6 +177,15 @@ export function BookingDetailPageClient({
             className="bg-primary/10 text-primary border-primary/20"
           >
             Upcoming
+          </Badge>
+        );
+      case 'ongoing':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-blue-500/10 text-blue-500 border-blue-500/20"
+          >
+            Ongoing
           </Badge>
         );
       case 'cancelled':
@@ -233,7 +244,7 @@ export function BookingDetailPageClient({
       appointmentData.computed_status || appointmentData.status;
 
     // Professionals can update status for upcoming appointments
-    if (isProfessional) {
+    if (isProfessional || isAdmin) {
       return computedStatus === 'upcoming';
     }
 
@@ -246,16 +257,53 @@ export function BookingDetailPageClient({
       appointmentData.computed_status || appointmentData.status;
 
     if (isProfessional) {
-      if (computedStatus === 'upcoming') {
+      if (computedStatus === 'ongoing') {
         return [{ value: 'completed', label: 'Mark as Completed' }];
       }
     }
     return [];
   };
 
-  const handleCopyBookingId = async () => {
+  // Check if there are any actions available for the current user
+  const hasAvailableActions = () => {
+    // Status update buttons
+    if (canUpdateStatus() && !isAdmin && getAvailableStatuses().length > 0) {
+      return true;
+    }
+
+    // Add additional services (professionals only, ongoing appointments)
+    if (isProfessional && appointmentData.computed_status === 'ongoing') {
+      return true;
+    }
+
+    // Cancel booking button
+    if (canCancelBooking()) {
+      return true;
+    }
+
+    // View/Create support request buttons
+    if (
+      (canViewRefund() && existingSupportRequest) ||
+      (canRequestRefund() && !existingSupportRequest)
+    ) {
+      return true;
+    }
+
+    // No show button (professionals only, completed appointments with online payments)
+    if (
+      isProfessional &&
+      appointmentData.computed_status === 'completed' &&
+      appointment.bookings.booking_payments?.payment_methods?.is_online
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleCopyBookingId = async (id: string) => {
     try {
-      await navigator.clipboard.writeText(appointment.id);
+      await navigator.clipboard.writeText(id);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
@@ -299,19 +347,26 @@ export function BookingDetailPageClient({
       appointmentData.computed_status || appointmentData.status;
 
     // Only clients can request refunds
-    if (isProfessional) return false;
+    if (isProfessional || isAdmin) return false;
 
     // Only for completed appointments
     if (computedStatus !== 'completed') return false;
 
-    // Only for card payments
+    console.log('computedStatus', computedStatus);
+
+    // Only existing payments
     const payment = appointmentData.bookings.booking_payments;
-    if (!payment || !payment.payment_methods?.is_online) return false;
+    if (!payment) return false;
 
     // Only if not already refunded
     if (payment.refunded_amount > 0 || payment.refunded_at) return false;
 
     return true;
+  };
+
+  // Check if support/refund request can be viewed
+  const canViewRefund = () => {
+    return existingSupportRequest;
   };
 
   const handleSupportRequestSuccess = () => {
@@ -359,8 +414,8 @@ export function BookingDetailPageClient({
     // Cannot cancel if already cancelled or completed
     if (['cancelled', 'completed'].includes(computedStatus)) return false;
 
-    // Both professionals and clients can cancel upcoming appointments
-    return computedStatus === 'upcoming';
+    // Only clients can cancel upcoming appointments
+    return computedStatus === 'upcoming' && isClient;
   };
 
   // Get professional or client name for cancellation modal
@@ -501,7 +556,7 @@ export function BookingDetailPageClient({
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-6">
           <Link
-            href="/dashboard/appointments"
+            href={isAdmin ? '/admin/appointments' : '/dashboard/appointments'}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeftIcon className="h-4 w-4" />
@@ -575,7 +630,7 @@ export function BookingDetailPageClient({
                         <Typography className="font-medium text-red-700 mb-2">
                           Refund Processed
                         </Typography>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* <div className="grid grid-cols-1 gap-2">
                           <div className="flex justify-between">
                             <Typography
                               variant="small"
@@ -583,16 +638,88 @@ export function BookingDetailPageClient({
                             >
                               Refunded Amount:
                             </Typography>
-                            <Typography
-                              variant="small"
-                              className="font-medium text-green-600"
-                            >
-                              {formatCurrency(
-                                appointment.bookings.booking_payments
-                                  .refunded_amount,
-                              )}
-                            </Typography>
                           </div>
+
+                          {isClient &&
+                            appointment.bookings.booking_payments.service_fee >
+                              0 &&
+                            (() => {
+                              const payment =
+                                appointment.bookings.booking_payments;
+                              const isOnlinePayment =
+                                payment.payment_methods?.is_online;
+                              const hasDeposit = payment.deposit_amount > 0;
+
+                              if (isOnlinePayment) {
+                                // Online payment: show breakdown of service amount + suite fee + deposit (if any)
+                                return (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <Typography
+                                        variant="small"
+                                        className="text-muted-foreground pl-4"
+                                      >
+                                        • Service Amount:{' '}
+                                        {formatCurrency(
+                                          payment.refunded_amount -
+                                            (payment.deposit_amount || 0),
+                                        )}
+                                      </Typography>
+                                    </div>
+                                    {hasDeposit && (
+                                      <div className="flex justify-between">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground pl-4"
+                                        >
+                                          • Deposit:{' '}
+                                          {formatCurrency(
+                                            payment.deposit_amount,
+                                          )}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                    <div className="flex justify-between">
+                                      <Typography
+                                        variant="small"
+                                        className="text-muted-foreground pl-4"
+                                      >
+                                        • Suite Fee:{' '}
+                                        {formatCurrency(payment.service_fee)}
+                                      </Typography>
+                                    </div>
+                                  </>
+                                );
+                              } else {
+                                // Cash payment: show suite fee + deposit (if any) refunded via card
+                                return (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <Typography
+                                        variant="small"
+                                        className="text-muted-foreground pl-4"
+                                      >
+                                        • Suite Fee refunded to card:{' '}
+                                        {formatCurrency(payment.service_fee)}
+                                      </Typography>
+                                    </div>
+                                    {hasDeposit && (
+                                      <div className="flex justify-between">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground pl-4"
+                                        >
+                                          • Deposit refunded to card:{' '}
+                                          {formatCurrency(
+                                            payment.deposit_amount,
+                                          )}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              }
+                            })()}
                           {appointment.bookings.booking_payments
                             .refunded_at && (
                             <div className="flex justify-between">
@@ -615,7 +742,7 @@ export function BookingDetailPageClient({
                               </Typography>
                             </div>
                           )}
-                        </div>
+                        </div> */}
                         {appointment.bookings.booking_payments
                           .refund_reason && (
                           <div className="mt-2">
@@ -767,17 +894,19 @@ export function BookingDetailPageClient({
                             {formatCurrency(subtotal)}
                           </Typography>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <Typography
-                            variant="small"
-                            className="text-muted-foreground"
-                          >
-                            Service Fee:
-                          </Typography>
-                          <Typography variant="small" className="font-medium">
-                            {formatCurrency(serviceFee)}
-                          </Typography>
-                        </div>
+                        {!isProfessional && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Service Fee:
+                            </Typography>
+                            <Typography variant="small" className="font-medium">
+                              {formatCurrency(serviceFee)}
+                            </Typography>
+                          </div>
+                        )}
                         {totalTips > 0 && (
                           <div className="flex justify-between items-center">
                             <Typography
@@ -813,23 +942,102 @@ export function BookingDetailPageClient({
                         )}
                         {(appointment.bookings.booking_payments
                           ?.balance_amount ?? 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <Typography
-                              variant="small"
-                              className="text-muted-foreground"
-                            >
-                              Balance Due
-                            </Typography>
-                            <Typography
-                              variant="small"
-                              className="font-medium text-amber-600"
-                            >
-                              {formatCurrency(
+                          <>
+                            {/* Check if this is a cash payment with deposit */}
+                            {(() => {
+                              const depositAmount =
                                 appointment.bookings.booking_payments
-                                  ?.balance_amount ?? 0,
-                              )}
-                            </Typography>
-                          </div>
+                                  ?.deposit_amount ?? 0;
+                              const isDeposit = depositAmount > 0;
+                              const isCashPayment =
+                                !appointment.bookings.booking_payments
+                                  ?.payment_methods?.is_online;
+                              const stripeBalance =
+                                appointment.bookings.booking_payments
+                                  ?.balance_amount ?? 0;
+                              const suiteFee =
+                                appointment.bookings.booking_payments
+                                  ?.service_fee ?? 0;
+
+                              if (isDeposit && isCashPayment) {
+                                // For cash payments with deposit: show both Stripe balance (suite fee) and cash balance (services + tips)
+                                const cashBalance =
+                                  subtotal + totalTips - depositAmount; // Services and tips paid in cash
+
+                                return (
+                                  <>
+                                    {/* Hide card balance for professionals when it's only suite fee */}
+                                    {!isProfessional && (
+                                      <div className="flex justify-between items-center">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground"
+                                        >
+                                          Card Balance Due (Suite Fee):
+                                        </Typography>
+                                        <Typography
+                                          variant="small"
+                                          className="font-medium text-amber-600"
+                                        >
+                                          {formatCurrency(suiteFee)}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                    {cashBalance > 0 && (
+                                      <div className="flex justify-between items-center">
+                                        <Typography
+                                          variant="small"
+                                          className="text-muted-foreground"
+                                        >
+                                          Cash Balance Due (At Appointment):
+                                        </Typography>
+                                        <Typography
+                                          variant="small"
+                                          className="font-medium text-amber-600"
+                                        >
+                                          {formatCurrency(cashBalance)}
+                                        </Typography>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              } else {
+                                // Regular balance due display
+                                // For professionals, hide balance if it's only suite fee (cash payment without deposit)
+                                const isCashWithoutDeposit =
+                                  isCashPayment && !isDeposit;
+                                const shouldHideBalanceForProfessional =
+                                  isProfessional &&
+                                  (isCashWithoutDeposit ||
+                                    stripeBalance <= serviceFee);
+
+                                if (shouldHideBalanceForProfessional) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div className="flex justify-between items-center">
+                                    <Typography
+                                      variant="small"
+                                      className="text-muted-foreground"
+                                    >
+                                      Balance Due:
+                                    </Typography>
+                                    <Typography
+                                      variant="small"
+                                      className="font-medium text-amber-600"
+                                    >
+                                      {formatCurrency(
+                                        isProfessional
+                                          ? stripeBalance - suiteFee
+                                          : stripeBalance,
+                                      )}
+                                    </Typography>
+                                  </div>
+                                );
+                              }
+                            })()}
+                          </>
                         )}
                         <Separator />
                         <div className="flex justify-between items-center">
@@ -837,7 +1045,11 @@ export function BookingDetailPageClient({
                             Total:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
-                            {formatCurrency(subtotal + serviceFee + totalTips)}
+                            {isProfessional
+                              ? formatCurrency(subtotal + totalTips)
+                              : formatCurrency(
+                                  subtotal + serviceFee + totalTips,
+                                )}
                           </Typography>
                         </div>
                       </div>
@@ -862,12 +1074,37 @@ export function BookingDetailPageClient({
                   Date & Time
                 </Typography>
                 <Typography variant="muted" className="mb-1">
-                  {format(startDateTime, 'EEEE, MMMM d, yyyy')}
+                  {
+                    formatDateTimeInTimezone(
+                      startDateTime,
+                      userTimezone,
+                      'EEEE, MMMM d, yyyy',
+                    ).date
+                  }
                 </Typography>
                 <Typography variant="muted">
-                  {format(startDateTime, 'h:mm a')} -{' '}
-                  {format(endDateTime, 'h:mm a')}
+                  {
+                    formatDateTimeInTimezone(
+                      startDateTime,
+                      userTimezone,
+                      'EEEE, MMMM d, yyyy',
+                      'h:mm a',
+                    ).time
+                  }{' '}
+                  -{' '}
+                  {
+                    formatDateTimeInTimezone(
+                      endDateTime,
+                      userTimezone,
+                      'EEEE, MMMM d, yyyy',
+                      'h:mm a',
+                    ).time
+                  }
                 </Typography>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <ClockIcon className="h-3 w-3" />
+                  <span>Times shown in your timezone ({userTimezone})</span>
+                </div>
               </div>
               {appointment.bookings.notes && (
                 <div>
@@ -895,7 +1132,10 @@ export function BookingDetailPageClient({
                 {/* Client Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
-                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
+                    <AvatarImage
+                      className="object-cover"
+                      src={getOtherPartyProfileData().avatar_url || ''}
+                    />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -980,7 +1220,10 @@ export function BookingDetailPageClient({
                 {/* Professional Profile Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                   <Avatar className="h-20 w-20 sm:h-24 sm:w-24 bg-white border-4 border-white shadow-md">
-                    <AvatarImage className="object-cover" src={getOtherPartyProfileData().avatar_url || ''} />
+                    <AvatarImage
+                      className="object-cover"
+                      src={getOtherPartyProfileData().avatar_url || ''}
+                    />
                     <AvatarFallback className="bg-primary/10 text-primary font-medium text-xl sm:text-2xl">
                       {getOtherPartyInitials()}
                     </AvatarFallback>
@@ -1013,21 +1256,23 @@ export function BookingDetailPageClient({
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        handleMessageClick(
-                          appointment.bookings.professionals!.user_id,
-                        )
-                      }
-                      disabled={isMessageLoading}
-                      className="flex items-center gap-2 sm:min-w-[140px]"
-                    >
-                      <MessageCircleIcon className="h-4 w-4" />
-                      {isMessageLoading
-                        ? 'Starting...'
-                        : 'Message Professional'}
-                    </Button>
+                    {!isAdmin && (
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          handleMessageClick(
+                            appointment.bookings.professionals!.user_id,
+                          )
+                        }
+                        disabled={isMessageLoading}
+                        className="flex items-center gap-2 sm:min-w-[140px]"
+                      >
+                        <MessageCircleIcon className="h-4 w-4" />
+                        {isMessageLoading
+                          ? 'Starting...'
+                          : 'Message Professional'}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       asChild
@@ -1144,33 +1389,37 @@ export function BookingDetailPageClient({
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Status & Actions */}
-          {canUpdateStatus() && (
+          {/* Actions Card - Only show if there are available actions */}
+          {hasAvailableActions() && (
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl">
-                  {appointmentData.computed_status === 'completed' || appointmentData.status === 'completed'
+                  {appointmentData.computed_status === 'completed' && isClient
                     ? 'Questions about this appointment'
-                    : 'Actions'
-                  }
+                    : 'Actions'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {getAvailableStatuses().map((statusOption) => (
-                  <Button
-                    key={statusOption.value}
-                    onClick={() => handleStatusUpdate(statusOption.value)}
-                    disabled={isUpdating}
-                    variant={
-                      statusOption.value === 'cancelled'
-                        ? 'destructiveOutline'
-                        : 'default'
-                    }
-                    className="w-full"
-                  >
-                    {isUpdating ? 'Updating...' : statusOption.label}
-                  </Button>
-                ))}
+                {/* Status Update Buttons - Only show if user can update status and is not admin */}
+                {canUpdateStatus() && !isAdmin && (
+                  <>
+                    {getAvailableStatuses().map((statusOption) => (
+                      <Button
+                        key={statusOption.value}
+                        onClick={() => handleStatusUpdate(statusOption.value)}
+                        disabled={isUpdating}
+                        variant={
+                          statusOption.value === 'cancelled'
+                            ? 'destructiveOutline'
+                            : 'default'
+                        }
+                        className="w-full"
+                      >
+                        {isUpdating ? 'Updating...' : statusOption.label}
+                      </Button>
+                    ))}
+                  </>
+                )}
 
                 {/* Add Additional Services Button */}
                 {isProfessional &&
@@ -1185,6 +1434,37 @@ export function BookingDetailPageClient({
                     </Button>
                   )}
 
+                {/* Ongoing Appointment No-Show Info */}
+                {isProfessional &&
+                  appointmentData.computed_status === 'ongoing' && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 cursor-help">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              <span className="font-medium">
+                                Client No-Show?
+                              </span>
+                            </div>
+                            <p className="text-xs mt-1 text-blue-600">
+                              Hover for more info about no-show marking
+                            </p>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            If your client hasn't shown up for this appointment,
+                            you'll be able to mark it as a no-show after the
+                            appointment time ends. You'll have 24 hours to take
+                            this action and charge up to 100% of the service
+                            amount.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+
                 {/* Cancel Booking Button */}
                 {canCancelBooking() && (
                   <Button
@@ -1196,41 +1476,39 @@ export function BookingDetailPageClient({
                   </Button>
                 )}
 
-                {/* Support Request Button or Reference */}
-                {canRequestRefund() && (
-                  existingSupportRequest ? (
-                    <Button
-                      asChild
-                      variant="outline"
-                      className="w-full relative"
+                {/* View Support Request Button - For professionals and admins */}
+                {canViewRefund() && existingSupportRequest && (
+                  <Button asChild variant="outline" className="w-full relative">
+                    <Link
+                      href={`/support-request/${existingSupportRequest.id}`}
                     >
-                      <Link href={`/support-request/${existingSupportRequest.id}`}>
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center">
-                            <FileTextIcon className="h-4 w-4 mr-2" />
-                            {existingSupportRequest.category === 'refund_request' 
-                              ? 'View Refund Request' 
-                              : 'View Support Request'}
-                          </div>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                          <FileTextIcon className="h-4 w-4 mr-2" />
+                          {existingSupportRequest.category === 'refund_request'
+                            ? 'View Refund Request'
+                            : 'View Support Request'}
                         </div>
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => setIsRefundModalOpen(true)}
-                      variant="destructiveOutline"
-                      className="w-full"
-                      disabled={isLoadingSupportRequest}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      {isLoadingSupportRequest ? 'Checking...' : 'Support Request'}
-                    </Button>
-                  )
+                      </div>
+                    </Link>
+                  </Button>
+                )}
+
+                {/* Support Request Button - For clients */}
+                {canRequestRefund() && !existingSupportRequest && (
+                  <Button
+                    onClick={() => setIsRefundModalOpen(true)}
+                    variant="destructiveOutline"
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Support Request
+                  </Button>
                 )}
 
                 {/* No Show Button - Professional only, for completed appointments */}
                 {isProfessional &&
-                  appointmentData.status === 'completed' &&
+                  appointmentData.computed_status === 'completed' &&
                   appointment.bookings.booking_payments?.payment_methods
                     ?.is_online && (
                     <Button
@@ -1257,27 +1535,16 @@ export function BookingDetailPageClient({
               <CardContent className="space-y-4">
                 {/* Payment Amount and Status */}
                 <div className="space-y-2">
-                  {/* Show total amount for professionals */}
-                  {isProfessional ? (
-                    <div className="flex justify-between items-center">
-                      <Typography className="font-bold text-primary text-lg">
-                        {formatCurrency(servicesTotal)}
-                      </Typography>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <Typography className="font-semibold">
-                          Total:
-                        </Typography>
-                        <Typography className="font-bold text-primary text-lg">
-                          {formatCurrency(
+                  <div className="flex justify-between items-center">
+                    <Typography className="font-semibold">Total:</Typography>
+                    <Typography className="font-bold text-primary text-lg">
+                      {isProfessional
+                        ? formatCurrency(servicesTotal + totalTips)
+                        : formatCurrency(
                             servicesTotal + serviceFee + totalTips,
                           )}
-                        </Typography>
-                      </div>
-                    </>
-                  )}
+                    </Typography>
+                  </div>
                 </div>
 
                 <Separator />
@@ -1312,28 +1579,59 @@ export function BookingDetailPageClient({
                       )}
                   </Typography>
                 </div>
+
+                {/* Tip Section - Show for completed appointments */}
+                {appointmentData.computed_status === 'completed' && (
+                  <>
+                    <Separator />
+                    <div>
+                      <Typography className="font-medium text-foreground mb-2">
+                        Tip
+                      </Typography>
+                      <TipSection
+                        bookingId={appointment.booking_id}
+                        professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                        currentTipAmount={
+                          appointment.bookings.booking_payments?.tip_amount || 0
+                        }
+                        postAppointmentTips={appointment.bookings.tips || []}
+                        serviceAmount={appointment.bookings.booking_services.reduce(
+                          (sum, service) => sum + service.price,
+                          0,
+                        )}
+                        isClient={isClient}
+                        professionalId={
+                          appointment.bookings.professionals?.user_id ||
+                          undefined
+                        }
+                        clientId={appointment.bookings.client_id || undefined}
+                        isCompletedAppointment={true}
+                      />
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
 
-          {/* Review Section - Show for completed appointments when user is client */}
-          {!isProfessional &&
-            appointmentData.computed_status === 'completed' && (
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <Star className="h-5 w-5 text-muted-foreground" />
-                    Review
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ReviewSection
-                    bookingId={appointment.booking_id}
-                    professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
-                  />
-                </CardContent>
-              </Card>
-            )}
+          {/* Review Section - Show for completed appointments when user is client or admin */}
+          {appointmentData.computed_status === 'completed' && reviewStatus && (
+            <Card className="shadow-sm" id="review-section">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Star className="h-5 w-5 text-muted-foreground" />
+                  Review
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ReviewSection
+                  bookingId={appointment.booking_id}
+                  professionalName={`${appointment.bookings.professionals?.users.first_name} ${appointment.bookings.professionals?.users.last_name}`}
+                  reviewStatus={reviewStatus}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Booking Details */}
           <Card className="shadow-sm">
@@ -1355,7 +1653,7 @@ export function BookingDetailPageClient({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handleCopyBookingId}
+                    onClick={() => handleCopyBookingId(appointment.booking_id)}
                     className="h-6 w-6 p-0"
                   >
                     <CopyIcon className="h-3 w-3" />
@@ -1430,6 +1728,21 @@ export function BookingDetailPageClient({
         )}
         onSuccess={handleNoShowSuccess}
       />
+
+      {/* Review Prompt Modal */}
+      {isClient &&
+        appointmentData.computed_status === 'completed' &&
+        !reviewStatus?.hasReview && (
+          <ReviewPromptModal
+            isOpen={isReviewPromptModalOpen}
+            onClose={() => setIsReviewPromptModalOpen(false)}
+            professionalName={getOtherPartyName()}
+            serviceName={
+              appointment.bookings.booking_services[0]?.services?.name ||
+              'Service'
+            }
+          />
+        )}
     </div>
   );
 }

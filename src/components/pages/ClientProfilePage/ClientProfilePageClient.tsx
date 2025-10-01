@@ -9,6 +9,7 @@ import type { ServiceListItem } from '@/components/templates/ServicesTemplate/ty
 import { AvatarUpload } from '@/components/common/AvatarUpload';
 import { SignOutButton } from '@/components/common/SignOutButton/SignOutButton';
 import { ChangeEmailForm, ChangePasswordForm } from '@/components/forms';
+import { ConvertOAuthToEmailForm } from '@/components/forms/ConvertOAuthToEmailForm';
 import {
   DetailsDisplay,
   DetailsForm,
@@ -36,6 +37,8 @@ import {
   canChangePassword,
   getOAuthProvider,
 } from '@/utils/auth';
+import { hasPassword } from '@/utils/hasPassword';
+import { SetPasswordForm } from '@/components/forms/SetPasswordForm/SetPasswordForm';
 import { User } from '@supabase/supabase-js';
 import {
   Edit2,
@@ -73,6 +76,7 @@ function InlineAccountSection({
 }) {
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isConvertOAuthOpen, setIsConvertOAuthOpen] = useState(false);
 
   const fullName = `${user.user_metadata?.first_name || ''} ${
     user.user_metadata?.last_name || ''
@@ -82,6 +86,7 @@ function InlineAccountSection({
   const canUserChangeEmail = canChangeEmail(user);
   const canUserChangePassword = canChangePassword(user);
   const oauthProvider = getOAuthProvider(user);
+  const userHasPassword = hasPassword(user);
 
   const handleEmailChangeSuccess = () => {
     setIsChangeEmailOpen(false);
@@ -89,6 +94,12 @@ function InlineAccountSection({
 
   const handlePasswordChangeSuccess = () => {
     setIsChangePasswordOpen(false);
+  };
+
+  const handleConvertOAuthSuccess = () => {
+    setIsConvertOAuthOpen(false);
+    // Reload page to reflect changes in auth providers
+    window.location.reload();
   };
 
   return (
@@ -139,42 +150,54 @@ function InlineAccountSection({
                 </Typography>
               </div>
 
-              {/* OAuth Information */}
-              {oauthProvider && (
+              {/* OAuth Information - Show only if both OAuth and email auth exist */}
+              {oauthProvider && canUserChangeEmail && (
                 <div className="p-3 bg-muted rounded-md">
                   <Typography variant="small" className="text-muted-foreground">
                     Signed in with{' '}
-                    {oauthProvider === 'google' ? 'Google' : oauthProvider}.
-                    Email and password changes are managed by your{' '}
-                    {oauthProvider === 'google' ? 'Google' : oauthProvider}{' '}
-                    account.
+                    {oauthProvider === 'google' ? 'Google' : oauthProvider}. You
+                    also have email/password authentication enabled.
                   </Typography>
                 </div>
               )}
 
-              {/* Email Change Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
-                onClick={() => setIsChangeEmailOpen(true)}
-                disabled={!canUserChangeEmail}
-              >
-                <Mail size={14} className="mr-2 text-primary" />
-                Change Email
-              </Button>
+              {/* Email Change/Add Button */}
+              {!canUserChangeEmail && oauthProvider ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                  onClick={() => setIsConvertOAuthOpen(true)}
+                >
+                  <Mail size={14} className="mr-2 text-primary" />
+                  Add Email Authentication
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                  onClick={() => setIsChangeEmailOpen(true)}
+                  disabled={!canUserChangeEmail}
+                >
+                  <Mail size={14} className="mr-2 text-primary" />
+                  Change Email
+                </Button>
+              )}
 
-              {/* Password Change Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
-                onClick={() => setIsChangePasswordOpen(true)}
-                disabled={!canUserChangePassword}
-              >
-                <Lock size={14} className="mr-2 text-primary" />
-                Change Password
-              </Button>
+              {/* Password/Set Password Button - Hide for OAuth-only users without email */}
+              {(canUserChangePassword || userHasPassword || !oauthProvider) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-sm font-medium text-foreground border-border hover:bg-muted hover:text-primary hover:border-primary"
+                  onClick={() => setIsChangePasswordOpen(true)}
+                  disabled={!canUserChangePassword && userHasPassword}
+                >
+                  <Lock size={14} className="mr-2 text-primary" />
+                  {userHasPassword ? 'Change Password' : 'Set Password'}
+                </Button>
+              )}
             </div>
 
             <Separator className="my-3" />
@@ -201,7 +224,7 @@ function InlineAccountSection({
         </DialogContent>
       </Dialog>
 
-      {/* Change Password Dialog */}
+      {/* Change/Set Password Dialog */}
       <Dialog
         open={isChangePasswordOpen}
         onOpenChange={setIsChangePasswordOpen}
@@ -212,10 +235,27 @@ function InlineAccountSection({
         >
           <DialogHeader>
             <DialogTitle className="text-2xl font-futura font-bold text-center">
-              Change Password
+              {userHasPassword ? 'Change Password' : 'Set Password'}
             </DialogTitle>
           </DialogHeader>
-          <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+          {userHasPassword ? (
+            <ChangePasswordForm onSubmit={handlePasswordChangeSuccess} />
+          ) : (
+            <SetPasswordForm userEmail={user.email || ''} />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert OAuth to Email Modal */}
+      <Dialog open={isConvertOAuthOpen} onOpenChange={setIsConvertOAuthOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Email Authentication</DialogTitle>
+          </DialogHeader>
+          <ConvertOAuthToEmailForm
+            onSuccess={handleConvertOAuthSuccess}
+            onCancel={() => setIsConvertOAuthOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </>

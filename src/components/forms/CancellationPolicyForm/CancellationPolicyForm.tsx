@@ -114,7 +114,7 @@ export function CancellationPolicyForm({
               name="cancellation_48h_charge_percentage"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>48+ hours notice (%)</FormLabel>
+                  <FormLabel>24-48 hours notice (%)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"

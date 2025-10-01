@@ -44,6 +44,7 @@ export type DetailedAppointmentType = {
       stripe_payment_intent_id?: string | null;
       stripe_payment_method_id?: string | null;
       stripe_checkout_session_id?: string | null;
+      deposit_payment_intent_id?: string | null;
       deposit_amount: number;
       balance_amount: number;
       payment_type: 'full' | 'deposit' | 'balance';
@@ -62,6 +63,17 @@ export type DetailedAppointmentType = {
         is_online: boolean;
       } | null;
     } | null;
+    tips: Array<{
+      id: string;
+      amount: number;
+      status: string;
+      stripe_payment_intent_id?: string | null;
+      refunded_amount: number;
+      refunded_at: string | null;
+      stripe_refund_id?: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
     professionals: {
       id: string;
       user_id: string;
@@ -107,7 +119,13 @@ export type DetailedAppointmentType = {
   };
 };
 
-export async function BookingDetailPage({ id }: { id: string }) {
+export async function BookingDetailPage({
+  id,
+  showReviewPrompt = false,
+}: {
+  id: string;
+  showReviewPrompt?: boolean;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -117,15 +135,40 @@ export async function BookingDetailPage({ id }: { id: string }) {
     redirect('/');
   }
 
-  const appointment = await getAppointmentById(id);
+  // Check if user is admin (via Supabase RPC)
+  let isAdmin = false;
+  try {
+    const { data } = await supabase.rpc('is_admin', {
+      user_uuid: user.id,
+    });
+    isAdmin = !!data;
+  } catch {
+    isAdmin = false;
+  }
+
+  const appointment = await getAppointmentById(id, isAdmin);
+
+  // If appointment not found, redirect to not found page
+  if (!appointment) {
+    notFound();
+  }
 
   const isProfessional =
     appointment.bookings.professionals?.user_id === user.id;
   const isClient = appointment.bookings.client_id === user.id;
 
-  if (!isProfessional && !isClient) {
+  if (!isProfessional && !isClient && !isAdmin) {
     notFound();
   }
+
+  // Fetch existing support request for this appointment
+  const existingSupportRequest = await getExistingSupportRequest(id, isAdmin);
+
+  // Fetch review status for this appointment
+  const reviewStatus = await getReviewStatusForAppointment(
+    appointment.booking_id,
+    isAdmin,
+  );
 
   return (
     <BookingDetailPageClient
@@ -133,6 +176,10 @@ export async function BookingDetailPage({ id }: { id: string }) {
       isProfessional={isProfessional}
       isClient={isClient}
       userId={user.id}
+      isAdmin={isAdmin}
+      existingSupportRequest={existingSupportRequest}
+      reviewStatus={reviewStatus}
+      showReviewPrompt={showReviewPrompt}
     />
   );
 }
@@ -140,9 +187,13 @@ export async function BookingDetailPage({ id }: { id: string }) {
 // Get appointment details by ID with enhanced data
 export async function getAppointmentById(
   appointmentId: string,
-): Promise<DetailedAppointmentType> {
+  isAdmin: boolean = false,
+): Promise<DetailedAppointmentType | null> {
   try {
-    const supabase = await createClient();
+    // Use admin client for admin users, else regular client
+    const supabase = isAdmin
+      ? (await import('@/lib/supabase/server')).createAdminClient()
+      : await createClient();
 
     // Fetch the appointment with all related data
     const { data, error } = await supabase
@@ -202,11 +253,23 @@ export async function getAppointmentById(
             stripe_payment_intent_id,
             stripe_payment_method_id,
             stripe_checkout_session_id,
+            deposit_payment_intent_id,
             payment_methods(
               id,
               name,
               is_online
             )
+          ),
+          tips(
+            id,
+            amount,
+            status,
+            stripe_payment_intent_id,
+            refunded_amount,
+            refunded_at,
+            stripe_refund_id,
+            created_at,
+            updated_at
           ),
           professionals:professional_profiles!inner(
             id,
@@ -257,11 +320,11 @@ export async function getAppointmentById(
 
     if (error) {
       console.error('Error fetching appointment:', error);
-      notFound();
+      return null;
     }
 
     if (!data) {
-      notFound();
+      return null;
     }
 
     // Transform the data to match the expected format
@@ -279,6 +342,7 @@ export async function getAppointmentById(
         client_id: data.bookings.client_id,
         professional_profile_id: data.bookings.professional_profile_id,
         booking_services: data.bookings.booking_services,
+        tips: data.bookings.tips || [],
         booking_payments: data.bookings.booking_payments
           ? {
               ...data.bookings.booking_payments,
@@ -298,6 +362,9 @@ export async function getAppointmentById(
                 data.bookings.booking_payments.stripe_payment_method_id ?? null,
               stripe_checkout_session_id:
                 data.bookings.booking_payments.stripe_checkout_session_id ??
+                null,
+              deposit_payment_intent_id:
+                data.bookings.booking_payments.deposit_payment_intent_id ??
                 null,
               authorization_expires_at:
                 data.bookings.booking_payments.authorization_expires_at ?? null,
@@ -343,9 +410,13 @@ export async function getAppointmentById(
                 first_name:
                   data.bookings.professionals.users.first_name ?? null,
                 last_name: data.bookings.professionals.users.last_name ?? null,
-                avatar_url: Array.isArray(data.bookings.professionals.users.profile_photos)
-                  ? (data.bookings.professionals.users.profile_photos[0]?.url ?? null)
-                  : (data.bookings.professionals.users.profile_photos?.url ?? null),
+                avatar_url: Array.isArray(
+                  data.bookings.professionals.users.profile_photos,
+                )
+                  ? (data.bookings.professionals.users.profile_photos[0]?.url ??
+                    null)
+                  : (data.bookings.professionals.users.profile_photos?.url ??
+                    null),
               },
             }
           : null,
@@ -379,86 +450,98 @@ export async function getAppointmentById(
       },
     };
 
-    console.log('Fetched appointment:', {
-      id: transformedData.id,
-      status: transformedData.status,
-      computed_status: transformedData.computed_status,
-      raw: data,
-    });
+    // console.log('Fetched appointment:', {
+    //   id: transformedData.id,
+    //   status: transformedData.status,
+    //   computed_status: transformedData.computed_status,
+    //   raw: data,
+    // });
 
     return transformedData;
   } catch (error) {
     console.error('Error in getAppointmentById:', error);
-    throw new Error('Failed to get appointment details');
+    // Return null instead of throwing, let the calling component handle the error
+    return null;
   }
 }
 
 // Check if user has permission to view this appointment
-function checkAppointmentPermission(
-  appointment: DetailedAppointmentType,
-  userId: string,
-  isProfessional: boolean,
-): boolean {
-  if (isProfessional) {
-    // Professional can only view their own appointments
-    return (
-      appointment.bookings.professionals?.user_id === userId ||
-      appointment.bookings.professionals?.users.id === userId
-    );
-  } else {
-    // Client can only view their own appointments
-    return (
-      appointment.bookings.client_id === userId ||
-      appointment.bookings.clients?.id === userId
-    );
+// Note: checkAppointmentPermission function removed - was only used by removed updateAppointmentStatus function
+
+// Note: updateAppointmentStatus function removed - was unused
+// All appointment status updates now handled by server actions or BookingDetailPage/actions.ts
+
+// Get existing support request for an appointment
+async function getExistingSupportRequest(
+  appointmentId: string,
+  isAdmin: boolean = false,
+): Promise<{
+  id: string;
+  status: string;
+  category?: string;
+} | null> {
+  try {
+    // Use admin client for admin users, else regular client
+    const supabase = isAdmin
+      ? (await import('@/lib/supabase/server')).createAdminClient()
+      : await createClient();
+
+    const { data: supportRequest, error } = await supabase
+      .from('support_requests')
+      .select('id, status, title, created_at, category')
+      .eq('appointment_id', appointmentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !supportRequest) {
+      return null;
+    }
+
+    return {
+      id: supportRequest.id,
+      status: supportRequest.status,
+      category: supportRequest.category,
+    };
+  } catch (error) {
+    console.error('Error fetching existing support request:', error);
+    return null;
   }
 }
 
-// Update appointment status
-export async function updateAppointmentStatus(
-  appointmentId: string,
-  status: string,
-  userId: string,
-  isProfessional: boolean,
-) {
+// Get review status for a booking
+async function getReviewStatusForAppointment(
+  bookingId: string,
+  isAdmin: boolean = false,
+): Promise<{
+  canReview: boolean;
+  hasReview: boolean;
+  review: {
+    id: string;
+    score: number;
+    message: string;
+    createdAt: string;
+  } | null;
+} | null> {
   try {
-    const supabase = await createClient();
-
-    // First verify that the user has permission to update this appointment
-    const appointment = await getAppointmentById(appointmentId);
-
-    const hasPermission = checkAppointmentPermission(
-      appointment,
-      userId,
-      isProfessional,
+    const { getReviewStatus } = await import(
+      '@/server/domains/reviews/actions'
     );
+    const result = await getReviewStatus(bookingId, isAdmin);
 
-    if (!hasPermission) {
-      throw new Error('You do not have permission to update this appointment');
+    console.log('Review status result:', { bookingId, isAdmin, result });
+
+    if (result.success && result.reviewStatus) {
+      return result.reviewStatus;
     }
 
-    // Update the appointment status
-    const { error: updateError } = await supabase
-      .from('appointments')
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', appointmentId);
-
-    if (updateError) {
-      throw new Error(`Failed to update appointment: ${updateError.message}`);
-    }
-
-    return { success: true };
+    console.log(
+      'Review status returned null:',
+      result.error || 'No review status data',
+    );
+    return null;
   } catch (error) {
-    console.error('Error updating appointment status:', error);
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Failed to update appointment status',
-    };
+    console.error('Error fetching review status:', error);
+    return null;
   }
 }

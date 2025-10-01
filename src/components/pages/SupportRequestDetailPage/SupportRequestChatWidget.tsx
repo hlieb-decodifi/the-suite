@@ -36,13 +36,27 @@ type SupportRequestChatWidgetProps = {
     last_name: string;
     profile_photo_url?: string | undefined;
   };
+  usersMap?:
+    | Record<
+        string,
+        {
+          id: string;
+          first_name: string;
+          last_name: string;
+          profile_photo_url?: string;
+        }
+      >
+    | undefined;
   readOnly?: boolean;
-  resolvedInfo?: {
-    status: string;
-    resolvedAt?: string | null;
-    resolvedBy?: string | null;
-    resolutionNotes?: string | null;
-  } | undefined;
+  resolvedInfo?:
+    | {
+        status: string;
+        resolvedAt?: string | null;
+        resolvedBy?: string | null;
+        resolutionNotes?: string | null;
+      }
+    | undefined;
+  initialMessages?: ChatMessage[] | undefined;
 };
 
 // Image compression utility
@@ -123,14 +137,19 @@ const compressImage = async (file: File, quality = 0.8): Promise<File> => {
   }
 };
 
-export function SupportRequestChatWidget({
-  conversationId,
-  currentUserId,
-  otherUser,
-  readOnly = false,
-  resolvedInfo,
-}: SupportRequestChatWidgetProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function SupportRequestChatWidget(props: SupportRequestChatWidgetProps) {
+  const {
+    conversationId,
+    currentUserId,
+    otherUser,
+    usersMap,
+    readOnly = false,
+    resolvedInfo,
+    initialMessages,
+  } = props;
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    initialMessages || [],
+  );
   const [conversation, setConversation] = useState<{
     id: string;
     other_user: {
@@ -139,10 +158,14 @@ export function SupportRequestChatWidget({
       last_name: string;
       profile_photo_url?: string | undefined;
     };
-  } | null>(otherUser ? {
-    id: conversationId,
-    other_user: otherUser
-  } : null);
+  } | null>(
+    otherUser
+      ? {
+          id: conversationId,
+          other_user: otherUser,
+        }
+      : null,
+  );
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImages, setSelectedImages] = useState<
@@ -164,7 +187,7 @@ export function SupportRequestChatWidget({
   // Scroll to first unread message or bottom if no unread messages
   const scrollToFirstUnreadOrBottom = (messages: ChatMessage[]) => {
     const firstUnreadMessage = messages.find(
-      (msg) => !msg.is_read && msg.sender_id !== currentUserId,
+      (msg) => !msg.read_by_current_user && msg.sender_id !== currentUserId,
     );
     if (firstUnreadMessage) {
       const messageElement = document.getElementById(
@@ -181,7 +204,7 @@ export function SupportRequestChatWidget({
     if (conversationId) {
       loadMessages(conversationId);
       markMessagesAsRead(conversationId);
-      
+
       // Only set minimal conversation object if otherUser is not provided
       if (!otherUser) {
         setConversation({
@@ -405,11 +428,7 @@ export function SupportRequestChatWidget({
     setIsLoading(true);
     try {
       const attachments = await uploadImages();
-      const result = await sendMessage(
-        conversationId,
-        newMessage,
-        attachments,
-      );
+      const result = await sendMessage(conversationId, newMessage, attachments);
 
       if (result.success) {
         setNewMessage('');
@@ -491,7 +510,7 @@ export function SupportRequestChatWidget({
         ) : messages.length === 0 ? (
           <div className="text-center py-8">
             <Typography className="text-muted-foreground">
-              No messages yet. {!readOnly && "Start the conversation!"}
+              No messages yet. {!readOnly && 'Start the conversation!'}
             </Typography>
           </div>
         ) : (
@@ -526,7 +545,7 @@ export function SupportRequestChatWidget({
                 )}
               </div>
             )}
-            
+
             {messages.map((message) => {
               const isExpanded = expandedMessageImages.has(message.id);
 
@@ -543,13 +562,26 @@ export function SupportRequestChatWidget({
                   {message.sender_id !== currentUserId && (
                     <Avatar className="h-5 w-5 lg:h-6 lg:w-6 mb-1 hidden sm:block">
                       <AvatarImage
-                        src={conversation?.other_user.profile_photo_url}
+                        src={
+                          usersMap &&
+                          usersMap[message.sender_id]?.profile_photo_url
+                            ? usersMap[message.sender_id]?.profile_photo_url
+                            : conversation?.other_user.profile_photo_url
+                        }
                       />
                       <AvatarFallback className="bg-muted text-foreground text-xs font-medium">
-                        {conversation ? getInitials(
-                          conversation.other_user.first_name,
-                          conversation.other_user.last_name,
-                        ) : ''}
+                        {usersMap?.[message.sender_id]?.first_name &&
+                        usersMap?.[message.sender_id]?.last_name
+                          ? getInitials(
+                              usersMap[message.sender_id]?.first_name ?? '',
+                              usersMap[message.sender_id]?.last_name ?? '',
+                            )
+                          : conversation
+                            ? getInitials(
+                                conversation.other_user.first_name,
+                                conversation.other_user.last_name,
+                              )
+                            : ''}
                       </AvatarFallback>
                     </Avatar>
                   )}
@@ -622,9 +654,7 @@ export function SupportRequestChatWidget({
                             ))}
                             {message.attachments.length > 2 && !isExpanded && (
                               <button
-                                onClick={() =>
-                                  toggleExpandedImages(message.id)
-                                }
+                                onClick={() => toggleExpandedImages(message.id)}
                                 className="relative w-20 h-20 bg-black/50 rounded-lg flex items-center justify-center text-white hover:bg-black/60 transition-colors"
                               >
                                 <span className="text-sm font-semibold">
@@ -694,9 +724,7 @@ export function SupportRequestChatWidget({
                               ))}
                             {message.attachments.length > 2 && (
                               <button
-                                onClick={() =>
-                                  toggleExpandedImages(message.id)
-                                }
+                                onClick={() => toggleExpandedImages(message.id)}
                                 className="relative w-20 h-20 bg-black/50 rounded-lg flex items-center justify-center text-white hover:bg-black/60 transition-colors"
                               >
                                 <span className="text-sm font-semibold">
@@ -826,8 +854,7 @@ export function SupportRequestChatWidget({
             <Button
               onClick={handleSendMessage}
               disabled={
-                isLoading ||
-                (!newMessage.trim() && selectedImages.length === 0)
+                isLoading || (!newMessage.trim() && selectedImages.length === 0)
               }
               size="icon"
               className="h-10 w-10 rounded-lg flex-shrink-0"

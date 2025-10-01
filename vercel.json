@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/cron/balance-notifications",
-      "schedule": "15 */2 * * *"
+      "schedule": "*/30 * * * *"
     }
   ]
 }

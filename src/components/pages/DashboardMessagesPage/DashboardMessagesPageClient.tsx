@@ -172,7 +172,7 @@ export function DashboardMessagesPageClient({
   // Scroll to first unread message or bottom if no unread messages
   const scrollToFirstUnreadOrBottom = (messages: ChatMessage[]) => {
     const firstUnreadMessage = messages.find(
-      (msg) => !msg.is_read && msg.sender_id !== currentUserId,
+      (msg) => !msg.read_by_current_user && msg.sender_id !== currentUserId,
     );
     if (firstUnreadMessage) {
       const messageElement = document.getElementById(
@@ -224,7 +224,9 @@ export function DashboardMessagesPageClient({
           '@/server/domains/messages/actions'
         );
         // Get conversationId from URL
-        const conversationId = searchParams ? searchParams.get('conversation') || undefined : undefined;
+        const conversationId = searchParams
+          ? searchParams.get('conversation') || undefined
+          : undefined;
         const result = await getConversations(conversationId);
         if (result.success && result.conversations) {
           setConversations(result.conversations);

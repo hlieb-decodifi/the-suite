@@ -1,8 +1,10 @@
+create extension if not exists "uuid-ossp";
+
 create extension if not exists "moddatetime" with schema "extensions";
 
 
 create table "public"."addresses" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "country" text,
     "state" text,
     "city" text,
@@ -19,7 +21,7 @@ create table "public"."addresses" (
 alter table "public"."addresses" enable row level security;
 
 create table "public"."admin_configs" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "key" text not null,
     "value" text not null,
     "description" text not null,
@@ -32,7 +34,7 @@ create table "public"."admin_configs" (
 alter table "public"."admin_configs" enable row level security;
 
 create table "public"."appointments" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "booking_id" uuid not null,
     "start_time" timestamp with time zone not null,
     "end_time" timestamp with time zone not null,
@@ -45,7 +47,7 @@ create table "public"."appointments" (
 alter table "public"."appointments" enable row level security;
 
 create table "public"."booking_payments" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "booking_id" uuid not null,
     "payment_method_id" uuid not null,
     "amount" numeric(10,2) not null,
@@ -78,7 +80,7 @@ create table "public"."booking_payments" (
 alter table "public"."booking_payments" enable row level security;
 
 create table "public"."booking_services" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "booking_id" uuid not null,
     "service_id" uuid not null,
     "price" numeric(10,2) not null,
@@ -90,7 +92,7 @@ create table "public"."booking_services" (
 alter table "public"."booking_services" enable row level security;
 
 create table "public"."bookings" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "client_id" uuid not null,
     "professional_profile_id" uuid not null,
     "status" text not null,
@@ -103,7 +105,7 @@ create table "public"."bookings" (
 alter table "public"."bookings" enable row level security;
 
 create table "public"."client_profiles" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid not null,
     "phone_number" text,
     "location" text,
@@ -116,7 +118,7 @@ create table "public"."client_profiles" (
 alter table "public"."client_profiles" enable row level security;
 
 create table "public"."contact_inquiries" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text not null,
     "email" text not null,
     "phone" text,
@@ -139,7 +141,7 @@ create table "public"."contact_inquiries" (
 alter table "public"."contact_inquiries" enable row level security;
 
 create table "public"."conversations" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "client_id" uuid not null,
     "professional_id" uuid not null,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now()),
@@ -150,7 +152,7 @@ create table "public"."conversations" (
 alter table "public"."conversations" enable row level security;
 
 create table "public"."customers" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid not null,
     "stripe_customer_id" text not null,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now())
@@ -160,7 +162,7 @@ create table "public"."customers" (
 alter table "public"."customers" enable row level security;
 
 create table "public"."email_templates" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text not null,
     "description" text,
     "tag" text not null,
@@ -179,7 +181,7 @@ create table "public"."email_templates" (
 alter table "public"."email_templates" enable row level security;
 
 create table "public"."legal_documents" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "type" text not null,
     "title" text not null,
     "content" text not null,
@@ -209,7 +211,7 @@ create table "public"."message_attachments" (
 alter table "public"."message_attachments" enable row level security;
 
 create table "public"."messages" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "conversation_id" uuid not null,
     "sender_id" uuid not null,
     "content" text not null,
@@ -222,7 +224,7 @@ create table "public"."messages" (
 alter table "public"."messages" enable row level security;
 
 create table "public"."payment_methods" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text not null,
     "is_online" boolean not null default false,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now())
@@ -232,7 +234,7 @@ create table "public"."payment_methods" (
 alter table "public"."payment_methods" enable row level security;
 
 create table "public"."portfolio_photos" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid not null,
     "url" text not null,
     "filename" text not null,
@@ -246,7 +248,7 @@ create table "public"."portfolio_photos" (
 alter table "public"."portfolio_photos" enable row level security;
 
 create table "public"."professional_payment_methods" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "professional_profile_id" uuid not null,
     "payment_method_id" uuid not null,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now())
@@ -256,7 +258,7 @@ create table "public"."professional_payment_methods" (
 alter table "public"."professional_payment_methods" enable row level security;
 
 create table "public"."professional_profiles" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid not null,
     "description" text,
     "profession" text,
@@ -290,7 +292,7 @@ create table "public"."professional_profiles" (
 alter table "public"."professional_profiles" enable row level security;
 
 create table "public"."professional_subscriptions" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "professional_profile_id" uuid not null,
     "subscription_plan_id" uuid not null,
     "status" text not null,
@@ -306,7 +308,7 @@ create table "public"."professional_subscriptions" (
 alter table "public"."professional_subscriptions" enable row level security;
 
 create table "public"."profile_photos" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid not null,
     "url" text not null,
     "filename" text not null,
@@ -318,7 +320,7 @@ create table "public"."profile_photos" (
 alter table "public"."profile_photos" enable row level security;
 
 create table "public"."refunds" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "appointment_id" uuid not null,
     "client_id" uuid not null,
     "professional_id" uuid not null,
@@ -341,7 +343,7 @@ create table "public"."refunds" (
 alter table "public"."refunds" enable row level security;
 
 create table "public"."reviews" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "appointment_id" uuid not null,
     "client_id" uuid not null,
     "professional_id" uuid not null,
@@ -355,7 +357,7 @@ create table "public"."reviews" (
 alter table "public"."reviews" enable row level security;
 
 create table "public"."roles" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text not null,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now()),
     "updated_at" timestamp with time zone not null default timezone('utc'::text, now())
@@ -365,7 +367,7 @@ create table "public"."roles" (
 alter table "public"."roles" enable row level security;
 
 create table "public"."service_limits" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "professional_profile_id" uuid not null,
     "max_services" integer not null default 50,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now()),
@@ -376,7 +378,7 @@ create table "public"."service_limits" (
 alter table "public"."service_limits" enable row level security;
 
 create table "public"."services" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "professional_profile_id" uuid not null,
     "name" text not null,
     "description" text,
@@ -396,7 +398,7 @@ create table "public"."services" (
 alter table "public"."services" enable row level security;
 
 create table "public"."subscription_plans" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text not null,
     "description" text,
     "price" numeric(10,2) not null,
@@ -3678,15 +3680,15 @@ CREATE TRIGGER update_admin_configs_updated_at BEFORE UPDATE ON public.admin_con
 
 CREATE TRIGGER enforce_no_double_booking BEFORE INSERT OR UPDATE ON public.appointments FOR EACH ROW EXECUTE FUNCTION check_professional_availability();
 
-CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.appointments FOR EACH ROW EXECUTE FUNCTION moddatetime('updated_at');
+CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.appointments FOR EACH ROW EXECUTE FUNCTION extensions.moddatetime('updated_at');
 
 CREATE TRIGGER update_contact_inquiries_updated_at BEFORE UPDATE ON public.contact_inquiries FOR EACH ROW EXECUTE FUNCTION update_contact_inquiries_updated_at();
 
-CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.email_templates FOR EACH ROW EXECUTE FUNCTION moddatetime('updated_at');
+CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.email_templates FOR EACH ROW EXECUTE FUNCTION extensions.moddatetime('updated_at');
 
 CREATE TRIGGER legal_document_versioning_trigger BEFORE INSERT OR UPDATE ON public.legal_documents FOR EACH ROW EXECUTE FUNCTION handle_legal_document_versioning();
 
-CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.message_attachments FOR EACH ROW EXECUTE FUNCTION moddatetime('updated_at');
+CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.message_attachments FOR EACH ROW EXECUTE FUNCTION extensions.moddatetime('updated_at');
 
 CREATE TRIGGER update_conversation_on_new_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION update_conversation_timestamp();
 

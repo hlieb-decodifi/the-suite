@@ -1,7 +1,7 @@
 import { BookingFormValues } from '@/components/forms/BookingForm';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
 import { useToast } from '@/components/ui/use-toast';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BookingDetailsState,
   createBookingDetails,
@@ -20,32 +20,47 @@ export type BookingModalProps = {
   isOpen: boolean;
   service: ServiceListItem;
   onBookingComplete?: (bookingId: string) => void;
+  selectedExtraServiceIds?: string[];
 };
 
 /**
  * Custom hook to manage booking states and data fetching with timezone awareness
  */
 export function useBookingState(props: BookingModalProps) {
+
+  // Destructure props at the top
+
   const { 
     isOpen, 
     service, 
-    onBookingComplete 
+    onBookingComplete,
+    selectedExtraServiceIds = [],
   } = props;
-  
+  const professional = service.professional;
+  const professionalProfileId = professional.profile_id || '';
+
+  // Use React Query to fetch additional services
+  const {
+    data: additionalServices = [],
+    isLoading: isLoadingAdditionalServices
+  } = useAdditionalServices(
+    professionalProfileId,
+    service.id,
+    isOpen
+  );
+
   // State for tracking booking process
   const { toast } = useToast();
   const [bookingCompleted, setBookingCompleted] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<BookingDetailsState>({});
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Get React Query client for cache invalidation
   const queryClient = useQueryClient();
-  
-  // Get professional info for API calls
-  const professional = service.professional;
-  const professionalProfileId = professional.profile_id || '';
-  
+
+
+
   // Get client's timezone
   const clientTimezone = getUserTimezone();
   
@@ -74,6 +89,9 @@ export function useBookingState(props: BookingModalProps) {
     staleTime: 1000 * 60 * 10, // 10 minutes
   });
   
+
+
+
   // Fetch available dates with timezone context
   const { 
     data: availableDays = [],
@@ -91,44 +109,32 @@ export function useBookingState(props: BookingModalProps) {
     selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null
   , [selectedDate]);
 
+  // Calculate total duration in minutes (main service + selected extra services)
+  const selectedExtraServices = useMemo(() => {
+    if (!Array.isArray(selectedExtraServiceIds) || !Array.isArray(additionalServices)) return [];
+    return additionalServices.filter((service) => selectedExtraServiceIds.includes(service.id));
+  }, [selectedExtraServiceIds, additionalServices]);
+
+  const totalDurationMinutes = useMemo(() => {
+    const extraDuration = selectedExtraServices.reduce((sum, s) => sum + (s.duration || 0), 0);
+    return (service.duration || 0) + extraDuration;
+  }, [service.duration, selectedExtraServices]);
+
   // Use the memoized formatted date for the API call with timezone context
   const { 
     data: availableTimeSlots = [], 
     isLoading: isLoadingTimeSlots,
-    refetch: refetchTimeSlots,
-    error: timeSlotsError
+    refetch: refetchTimeSlots
   } = useAvailableTimeSlots(
     professionalProfileId,
     formattedDate,
+    totalDurationMinutes,
     professionalTimezone,
     clientTimezone,
     isOpen && Boolean(selectedDate) && !isLoadingTimezone
   );
 
-  // Log time slots data and errors
-  useEffect(() => {
-    // console.log('Time slots query state:', {
-    //   professionalProfileId,
-    //   formattedDate,
-    //   professionalTimezone,
-    //   clientTimezone,
-    //   isEnabled: isOpen && Boolean(selectedDate) && !isLoadingTimezone,
-    //   availableTimeSlots,
-    //   isLoadingTimeSlots,
-    //   error: timeSlotsError
-    // });
-  }, [
-    professionalProfileId,
-    formattedDate,
-    professionalTimezone,
-    clientTimezone,
-    isOpen,
-    selectedDate,
-    isLoadingTimezone,
-    availableTimeSlots,
-    isLoadingTimeSlots,
-    timeSlotsError
-  ]);
+  // Removed unnecessary useEffect that was causing re-render loops
 
   // Use React Query to fetch payment methods
   const { 
@@ -139,15 +145,7 @@ export function useBookingState(props: BookingModalProps) {
     isOpen
   );
   
-  // Use React Query to fetch additional services
-  const {
-    data: additionalServices = [],
-    isLoading: isLoadingAdditionalServices
-  } = useAdditionalServices(
-    professionalProfileId,
-    service.id,
-    isOpen
-  );
+
   
   // Reset state when modal closes
   const handleOpenChange = (open: boolean) => {
@@ -177,7 +175,8 @@ export function useBookingState(props: BookingModalProps) {
       // Execute the server action to create the booking with Stripe payment
       const paymentResult = await createBookingWithStripePayment(
         formData,
-        professionalProfileId
+        professionalProfileId,
+        clientTimezone
       );
       
       if (!paymentResult.success) {

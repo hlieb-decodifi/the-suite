@@ -29,21 +29,36 @@ export function SignUpFormContent({
     formState: { errors },
     control,
     watch,
+    trigger,
+    setError,
   } = form;
 
-  const selectedRole = watch('userType');
+  // Watch the userType field to determine if Google OAuth should be enabled
+  const selectedUserType = watch('userType');
+
+  // Handle validation error for Google OAuth button
+  const handleGoogleOAuthValidationError = async () => {
+    // Trigger validation for userType field
+    const isValid = await trigger('userType');
+    if (!isValid) {
+      // Set a custom error if validation fails
+      setError('userType', {
+        type: 'manual',
+        message: 'Please select whether you are a professional or client',
+      });
+    }
+  };
 
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit(onSubmit)}>
-
         {/* Google OAuth Button */}
         <div className="mb-4">
           <GoogleOAuthButton
             mode="signup"
             redirectTo={redirectTo}
-            role={selectedRole}
-            disabled={!selectedRole}
+            role={selectedUserType}
+            onValidationError={handleGoogleOAuthValidationError}
           />
         </div>
 
@@ -81,7 +96,6 @@ export function SignUpFormContent({
         <div className="mt-2">
           <UserTypesFields errors={errors} control={control} />
         </div>
-
 
         <div className="pt-4">
           <Button

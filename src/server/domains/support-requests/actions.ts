@@ -1,4 +1,118 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+export { getAdminSupportRequestMessages } from './admin-actions';
+/**
+ * Get a single support request with all details (admin version)
+ */
+export async function getAdminSupportRequest(id: string): Promise<{
+  success: boolean;
+  supportRequest?: SupportRequestData;
+  error?: string;
+}> {
+  try {
+    // Use regular client to check user and role
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+    // Check admin role
+    const { data: isAdmin } = await supabase.rpc('is_admin', { user_uuid: user.id });
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: 'Not authorized',
+      };
+    }
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return {
+        success: false,
+        error: 'Invalid support request ID format',
+      };
+    }
+    // Use admin client to fetch support request with all related data
+    const adminSupabase = createAdminClient();
+    const { data: supportRequest, error } = await adminSupabase
+      .from('support_requests')
+      .select(`
+        *,
+        appointments(
+          id,
+          start_time,
+          end_time,
+          status,
+          bookings(
+            id,
+            booking_services(
+              services(
+                id,
+                name,
+                description,
+                price,
+                duration
+              )
+            ),
+            booking_payments(
+              id,
+              amount,
+              tip_amount,
+              service_fee,
+              deposit_amount,
+              status,
+              stripe_payment_intent_id,
+              refunded_amount,
+              refund_reason,
+              refunded_at,
+              payment_methods(
+                name,
+                is_online
+              )
+            )
+          )
+        ),
+        client_user:users!client_id(
+          id,
+          first_name,
+          last_name,
+          profile_photos(url)
+        ),
+        professional_user:users!professional_id(
+          id,
+          first_name,
+          last_name,
+          profile_photos(url)
+        ),
+        conversations(
+          id
+        )
+      `)
+      .eq('id', id)
+      .single();
+    if (error) {
+      console.error('Error fetching support request (admin):', error);
+      return {
+        success: false,
+        error: 'Support request not found',
+      };
+    }
+    return {
+      success: true,
+      supportRequest,
+    };
+  } catch (error) {
+    console.error('Error in getAdminSupportRequest:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred',
+    };
+  }
+}
 import { processStripeRefund } from '../refunds/stripe-refund';
 
 /**
@@ -154,7 +268,6 @@ export async function createSupportRequest({
       conversation_id: conversation.id,
       sender_id: clientId,
       content: `Support request opened: ${reason}`,
-      is_read: false,
     });
 
     if (messageError) {
@@ -229,7 +342,7 @@ export async function initiateRefund({
     }
 
     // Process the refund through Stripe
-    const { success, refundId, error: refundError } = await processStripeRefund(
+    const { success, error: refundError } = await processStripeRefund(
       support_request_id,
       refund_amount
     );
@@ -241,23 +354,19 @@ export async function initiateRefund({
       };
     }
 
-    // Update the support request with refund information
-    const { error: updateError } = await supabase
-      .from('support_requests')
-      .update({
-        refund_amount: refund_amount,
-        stripe_refund_id: refundId || null,
-        professional_notes: professional_notes || null,
-        status: 'in_progress' // Set to in_progress while waiting for Stripe webhook
-      })
-      .eq('id', support_request_id);
+    // Only update professional notes if provided, since processStripeRefund already handled the main update
+    if (professional_notes) {
+      const { error: updateError } = await supabase
+        .from('support_requests')
+        .update({
+          professional_notes: professional_notes
+        })
+        .eq('id', support_request_id);
 
-    if (updateError) {
-      console.error('Error updating support request:', updateError);
-      return {
-        success: false,
-        error: 'Failed to update support request with refund information',
-      };
+      if (updateError) {
+        console.error('Error updating support request notes:', updateError);
+        // Don't fail the entire operation for notes update failure
+      }
     }
 
     // Add a message to the conversation
@@ -268,7 +377,6 @@ export async function initiateRefund({
         content: `Refund of $${refund_amount.toFixed(2)} has been initiated. ${
           professional_notes ? `Note: ${professional_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
@@ -377,17 +485,18 @@ export async function getSupportRequests(): Promise<{
     const supportRequestsWithUnreadCount = await Promise.all(
       supportRequests.map(async (request) => {
         if (request.conversation_id) {
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', request.conversations?.id)
-            .eq('is_read', false)
-            .neq('sender_id', user.id);
+          const { data: unreadCount } = await supabase.rpc(
+            'get_unread_message_count',
+            {
+              p_conversation_id: request.conversation_id,
+              p_user_id: user.id,
+            }
+          );
 
           return {
             ...request,
-            unreadCount: count || 0,
-            conversationId: request.conversations?.id,
+            unreadCount: unreadCount || 0,
+            conversationId: request.conversation_id,
           };
         }
         return { ...request, unreadCount: 0 };
@@ -598,7 +707,6 @@ export async function resolveSupportRequest({
         content: `Support request has been resolved. ${
           resolution_notes ? `Resolution notes: ${resolution_notes}` : ''
         }`,
-        is_read: false,
       });
 
       if (messageError) {
@@ -690,7 +798,6 @@ export async function closeSupportRequest({
         conversation_id: supportRequest.conversation_id,
         sender_id: user.id,
         content: 'Support request has been closed without resolution.',
-        is_read: false,
       });
 
       if (messageError) {

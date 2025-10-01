@@ -17,11 +17,11 @@ import { cn } from '@/utils';
 import { User } from '@supabase/supabase-js';
 import {
   AlertTriangle,
+  Edit,
   Eye,
   EyeOff,
   LayoutDashboard,
   MessageCircle,
-  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -218,7 +218,6 @@ export function ProfilePageHeader({
                       : 'bg-background border-gray-300 text-gray-500',
                 )}
                 onClick={handlePublishClick}
-                disabled={!canPublish && !isPublished}
               >
                 {isPublished ? 'Unpublish Profile' : 'Publish Profile'}
               </Button>
@@ -245,8 +244,8 @@ export function ProfilePageHeader({
                 className="bg-background flex items-center gap-1.5"
                 onClick={onClosePreview}
               >
-                <X className="h-4 w-4" />
-                Close Preview
+                <Edit className="h-4 w-4" />
+                Edit Profile
               </Button>
             )}
           </div>
