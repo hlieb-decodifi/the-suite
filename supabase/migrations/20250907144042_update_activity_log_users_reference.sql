@@ -3,7 +3,7 @@ drop policy "Admins can view all support requests" on "public"."support_requests
 drop policy "Professionals can view support requests for their appointments" on "public"."support_requests";
 
 create table "public"."activity_log" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid,
     "session_id" text,
     "activity_type" text not null,

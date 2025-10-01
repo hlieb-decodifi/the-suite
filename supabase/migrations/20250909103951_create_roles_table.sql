@@ -71,7 +71,7 @@ drop index if exists "public"."roles_pkey";
 drop table "public"."roles";
 
 create table "public"."user_roles" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "user_id" uuid not null,
     "role" text not null default 'client'::text,
     "created_at" timestamp with time zone not null default timezone('utc'::text, now()),

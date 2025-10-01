@@ -1,5 +1,5 @@
 create table "public"."tips" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "booking_id" uuid not null,
     "client_id" uuid not null,
     "professional_id" uuid not null,

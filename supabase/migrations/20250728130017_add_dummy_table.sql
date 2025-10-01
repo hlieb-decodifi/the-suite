@@ -1,5 +1,5 @@
 create table "public"."dummy_table" (
-    "id" uuid not null default uuid_generate_v4(),
+    "id" uuid not null default extensions.uuid_generate_v4(),
     "name" text not null,
     "value" integer default 0,
     "is_active" boolean default true,
