@@ -291,23 +291,9 @@ export async function initiateRefundServerAction(formData: FormData) {
       };
     }
 
-    console.log('[SERVER-ACTION] Refund processed successfully, adding professional notes');
-    // Only update professional notes if provided, since processStripeRefund already handled the main update
-    if (professional_notes) {
-      const { error: updateError } = await supabase
-        .from('support_requests')
-        .update({
-          professional_notes: professional_notes
-        })
-        .eq('id', support_request_id);
-
-      if (updateError) {
-        console.error('[SERVER-ACTION] Error updating support request notes:', updateError);
-        // Don't fail the entire operation for notes update failure
-      }
-    }
-
-    // Add a message to the conversation
+    console.log('[SERVER-ACTION] Refund processed successfully, sending message and updating status');
+    
+    // Add a message to the conversation BEFORE resolving the support request
     if (supportRequest.conversation_id) {
       const { error: messageError } = await supabase.from('messages').insert({
         conversation_id: supportRequest.conversation_id,
@@ -321,6 +307,34 @@ export async function initiateRefundServerAction(formData: FormData) {
         console.error('[SERVER-ACTION] Error creating refund message:', messageError);
         // Don't return error as the refund was processed successfully
       }
+    }
+
+    // Now update support request status to resolved and add professional notes
+    const updateData: {
+      status: 'resolved';
+      resolved_at: string;
+      resolved_by: string;
+      resolution_notes: string;
+      professional_notes?: string;
+    } = {
+      status: 'resolved',
+      resolved_at: new Date().toISOString(),
+      resolved_by: user.id,
+      resolution_notes: 'Resolved via successful Stripe refund'
+    };
+
+    if (professional_notes) {
+      updateData.professional_notes = professional_notes;
+    }
+
+    const { error: updateError } = await supabase
+      .from('support_requests')
+      .update(updateData)
+      .eq('id', support_request_id);
+
+    if (updateError) {
+      console.error('[SERVER-ACTION] Error updating support request status:', updateError);
+      // Don't fail the entire operation for status update failure
     }
 
     console.log('[SERVER-ACTION] Refund initiation completed successfully');

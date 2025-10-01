@@ -352,9 +352,11 @@ export function BookingDetailPageClient({
     // Only for completed appointments
     if (computedStatus !== 'completed') return false;
 
-    // Only for card payments
+    console.log('computedStatus', computedStatus);
+
+    // Only existing payments
     const payment = appointmentData.bookings.booking_payments;
-    if (!payment || !payment.payment_methods?.is_online) return false;
+    if (!payment) return false;
 
     // Only if not already refunded
     if (payment.refunded_amount > 0 || payment.refunded_at) return false;

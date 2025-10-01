@@ -28,6 +28,8 @@ type RefundModalProps = {
     tipAmount?: number;
     serviceFee?: number;
     paymentMethod?: string;
+    isOnlinePayment?: boolean; // Whether payment method is online (card) or offline (cash)
+    balanceAmount?: number; // Balance amount from booking_payments table
   };
 };
 
@@ -40,7 +42,28 @@ export const RefundModal: React.FC<RefundModalProps> = ({
   onSuccess,
   paymentDetails,
 }) => {
-  const [refundAmount, setRefundAmount] = useState(originalAmount.toString());
+  // Calculate maximum refundable amount based on payment method
+  const calculateMaxRefundableAmount = () => {
+    if (!paymentDetails) return originalAmount;
+
+    const isOnlinePayment = paymentDetails.isOnlinePayment ?? true; // Default to online if not specified
+
+    if (isOnlinePayment) {
+      // For card payments: can refund full amount (deposit + balance + tips)
+      return originalAmount;
+    } else {
+      // For cash payments: can only refund amounts charged online (deposit + service fee)
+      const depositAmount = paymentDetails.depositAmount ?? 0;
+      const serviceFee = paymentDetails.serviceFee ?? 0;
+      return depositAmount + serviceFee;
+    }
+  };
+
+  const maxRefundableAmount = calculateMaxRefundableAmount();
+
+  const [refundAmount, setRefundAmount] = useState(
+    maxRefundableAmount.toString(),
+  );
   const [refundReason, setRefundReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -49,10 +72,14 @@ export const RefundModal: React.FC<RefundModalProps> = ({
     e.preventDefault();
 
     const amount = parseFloat(refundAmount);
-    if (isNaN(amount) || amount <= 0 || amount > originalAmount) {
+    if (isNaN(amount) || amount <= 0 || amount > maxRefundableAmount) {
+      const paymentType =
+        paymentDetails?.isOnlinePayment === false ? 'cash' : 'card';
+      const additionalInfo =
+        paymentType === 'cash' ? ' (deposit + service fee only)' : '';
       toast({
         title: 'Invalid Amount',
-        description: `Refund amount must be between $0.01 and $${originalAmount.toFixed(2)}`,
+        description: `Refund amount must be between $0.01 and $${maxRefundableAmount.toFixed(2)}${additionalInfo}`,
         variant: 'destructive',
       });
       return;
@@ -107,7 +134,7 @@ export const RefundModal: React.FC<RefundModalProps> = ({
   };
 
   const resetForm = () => {
-    setRefundAmount(originalAmount.toString());
+    setRefundAmount(maxRefundableAmount.toString());
     setRefundReason('');
   };
 
@@ -205,9 +232,25 @@ export const RefundModal: React.FC<RefundModalProps> = ({
                   <span>${originalAmount.toFixed(2)}</span>
                 </div>
 
+                <div className="flex justify-between items-center font-medium text-sm mt-1 text-primary">
+                  <span>Max Refundable:</span>
+                  <span>${maxRefundableAmount.toFixed(2)}</span>
+                </div>
+
                 {paymentDetails?.paymentMethod && (
                   <div className="text-xs text-muted-foreground mt-2">
                     Payment Method: {paymentDetails.paymentMethod}
+                  </div>
+                )}
+
+                {paymentDetails?.isOnlinePayment === false && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2 text-xs text-blue-800">
+                    <p className="font-medium">Cash Payment Notice:</p>
+                    <p>
+                      Only the deposit and service fee can be refunded as they
+                      were charged online. The service amount and tips were paid
+                      in cash.
+                    </p>
                   </div>
                 )}
               </div>
@@ -224,7 +267,7 @@ export const RefundModal: React.FC<RefundModalProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="refundAmount">
-                  Refund Amount (Max: ${originalAmount.toFixed(2)})
+                  Refund Amount (Max: ${maxRefundableAmount.toFixed(2)})
                   <span className="text-destructive">*</span>
                 </Label>
                 <Input
@@ -232,7 +275,7 @@ export const RefundModal: React.FC<RefundModalProps> = ({
                   type="number"
                   step="0.01"
                   min="0.01"
-                  max={originalAmount}
+                  max={maxRefundableAmount}
                   value={refundAmount}
                   onChange={(e) => setRefundAmount(e.target.value)}
                   placeholder="Enter refund amount"

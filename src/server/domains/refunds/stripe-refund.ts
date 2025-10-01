@@ -6,6 +6,7 @@ import { Database } from '@/../supabase/types';
 // Initialize Stripe with API key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
+
 /**
  * Process a refund through Stripe for a support request
  * Handles both deposit and balance payments correctly
@@ -47,6 +48,7 @@ export async function processStripeRefund(
       balance_amount?: number | null;
       amount?: number | null;
       status?: string | null;
+      service_fee?: number | null;
     } | null = null;
     
     if (supportRequest.booking_payment_id) {
@@ -123,6 +125,31 @@ export async function processStripeRefund(
       };
     }
 
+    // Get payment method details to check if it's a cash payment
+    const { data: paymentMethodData, error: paymentMethodError } = await adminSupabase
+      .from('booking_payments')
+      .select(`
+        payment_methods (
+          name,
+          is_online
+        )
+      `)
+      .eq('id', bookingPayment.id)
+      .single();
+
+    if (paymentMethodError || !paymentMethodData) {
+      console.error('[REFUND] Error fetching payment method:', paymentMethodError);
+      return {
+        success: false,
+        error: 'Could not determine payment method type',
+      };
+    }
+
+    const paymentMethod = paymentMethodData.payment_methods as { name: string; is_online: boolean };
+    const isCashPayment = !paymentMethod.is_online;
+    
+    console.log(`[REFUND] Payment method: ${paymentMethod.name}, is_online: ${paymentMethod.is_online}, is_cash: ${isCashPayment}`);
+
     // Get any tips for this booking that need to be included in refund calculations
     let bookingTips: Array<{
       id: string;
@@ -164,12 +191,36 @@ export async function processStripeRefund(
     const refundAmountCents = Math.round(refundAmount * 100);
     const depositAmountCents = Math.round((bookingPayment.deposit_amount || 0) * 100);
     const balanceAmountCents = Math.round((bookingPayment.balance_amount || 0) * 100);
+    const serviceFeeAmountCents = Math.round((bookingPayment.service_fee || 0) * 100);
+    
+    // For cash payments, only deposit + service fee can be refunded (amounts charged online)
+    // For card payments, full amount can be refunded
+    const maxRefundableAmountCents = isCashPayment 
+      ? depositAmountCents + serviceFeeAmountCents
+      : depositAmountCents + balanceAmountCents;
+    
+    if (isCashPayment) {
+      console.log(`[REFUND] Cash payment detected - only deposit ($${(depositAmountCents/100).toFixed(2)}) + service fee ($${(serviceFeeAmountCents/100).toFixed(2)}) = $${(maxRefundableAmountCents/100).toFixed(2)} can be refunded`);
+      console.log(`[REFUND] Balance ($${(balanceAmountCents/100).toFixed(2)}) and tips were paid in cash and cannot be refunded online`);
+    } else {
+      console.log(`[REFUND] Card payment detected - deposit ($${(depositAmountCents/100).toFixed(2)}) + balance ($${(balanceAmountCents/100).toFixed(2)}) = $${(maxRefundableAmountCents/100).toFixed(2)} can be refunded`);
+    }
+    
+    if (refundAmountCents > maxRefundableAmountCents) {
+      const maxRefundableAmount = maxRefundableAmountCents / 100;
+      console.error(`[REFUND] Refund amount $${refundAmount} exceeds maximum refundable amount $${maxRefundableAmount} for ${isCashPayment ? 'cash' : 'card'} payment`);
+      return {
+        success: false,
+        error: `Maximum refundable amount for ${isCashPayment ? 'cash' : 'card'} payment is $${maxRefundableAmount.toFixed(2)}${isCashPayment ? ' (deposit + service fee only)' : ''}`,
+      };
+    }
     
     let totalRefundedCents = 0;
     const refundIds: string[] = [];
 
     // STEP 1: Handle balance payment first (if exists and refund amount requires it)
-    if (bookingPayment.stripe_payment_intent_id && balanceAmountCents > 0) {
+    // For cash payments, skip balance refund since balance was paid in cash
+    if (bookingPayment.stripe_payment_intent_id && balanceAmountCents > 0 && !isCashPayment) {
       const balancePaymentIntentId = bookingPayment.stripe_payment_intent_id;
       
       // Retrieve the balance payment intent to check its status
@@ -250,9 +301,120 @@ export async function processStripeRefund(
     
     if (remainingRefundCents > 0 && bookingPayment.deposit_payment_intent_id && depositAmountCents > 0) {
       const depositPaymentIntentId = bookingPayment.deposit_payment_intent_id;
-      const depositRefundAmount = Math.min(remainingRefundCents, depositAmountCents);
       
-      console.log(`[REFUND] Creating deposit refund for $${depositRefundAmount/100}`);
+      // For cash payments, the deposit payment intent contains deposit + service fee
+      // For card payments, it only contains the deposit amount
+      const depositPaymentIntentAmount = isCashPayment 
+        ? depositAmountCents + serviceFeeAmountCents 
+        : depositAmountCents;
+      
+      const depositRefundAmount = Math.min(remainingRefundCents, depositPaymentIntentAmount);
+      
+      console.log(`[REFUND] Creating ${isCashPayment ? 'deposit+service fee' : 'deposit'} refund for $${depositRefundAmount/100} (${isCashPayment ? 'cash payment' : 'card payment'})`);
+      
+      // For cash payments, check the actual payment intent amount to avoid over-refunding
+      if (isCashPayment) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(depositPaymentIntentId);
+          const actualChargedAmount = paymentIntent.amount;
+          console.log(`[REFUND] Deposit payment intent actual charged amount: $${actualChargedAmount/100}, attempting to refund: $${depositRefundAmount/100}`);
+          
+          if (depositRefundAmount > actualChargedAmount) {
+            console.log(`[REFUND] Deposit payment intent doesn't contain service fee. Will refund deposit first, then try to refund service fee separately.`);
+            
+            // Step 1: Refund the full deposit amount
+            const depositRefund = await stripe.refunds.create({
+              payment_intent: depositPaymentIntentId,
+              amount: actualChargedAmount, // Refund the full deposit
+              metadata: {
+                support_request_id: supportRequestId,
+                refund_type: 'deposit_only'
+              }
+            });
+            
+            refundIds.push(depositRefund.id);
+            totalRefundedCents += actualChargedAmount;
+            console.log(`[REFUND] Successfully created deposit refund: ${depositRefund.id} for $${actualChargedAmount/100}`);
+            
+            // Step 2: Try to refund service fee from balance payment intent (if it exists and contains service fee)
+            const remainingToRefund = depositRefundAmount - actualChargedAmount; // This should be the service fee
+            
+            if (remainingToRefund > 0 && bookingPayment.stripe_payment_intent_id) {
+              console.log(`[REFUND] Attempting to refund remaining $${remainingToRefund/100} (service fee) from balance payment intent`);
+              
+              try {
+                const balancePaymentIntent = await stripe.paymentIntents.retrieve(bookingPayment.stripe_payment_intent_id);
+                console.log(`[REFUND] Balance payment intent amount: $${balancePaymentIntent.amount/100}, status: ${balancePaymentIntent.status}`);
+                
+                if (balancePaymentIntent.status === 'succeeded' && balancePaymentIntent.amount >= remainingToRefund) {
+                  // Payment is captured - create refund
+                  const serviceFeeRefund = await stripe.refunds.create({
+                    payment_intent: bookingPayment.stripe_payment_intent_id,
+                    amount: remainingToRefund,
+                    metadata: {
+                      support_request_id: supportRequestId,
+                      refund_type: 'service_fee_only'
+                    }
+                  });
+                  
+                  refundIds.push(serviceFeeRefund.id);
+                  totalRefundedCents += remainingToRefund;
+                  console.log(`[REFUND] Successfully created service fee refund: ${serviceFeeRefund.id} for $${remainingToRefund/100}`);
+                } else if (balancePaymentIntent.status === 'requires_capture' && balancePaymentIntent.amount >= remainingToRefund) {
+                  // Payment is uncaptured - cancel it to "refund" the service fee
+                  console.log(`[REFUND] Service fee payment is uncaptured. Canceling payment intent to refund $${remainingToRefund/100}`);
+                  
+                  try {
+                    await stripe.paymentIntents.cancel(bookingPayment.stripe_payment_intent_id);
+                    totalRefundedCents += remainingToRefund;
+                    console.log(`[REFUND] Successfully canceled uncaptured service fee payment intent for $${remainingToRefund/100}`);
+                  } catch (cancelError) {
+                    console.error('[REFUND] Error canceling uncaptured service fee payment intent:', cancelError);
+                  }
+                } else {
+                  console.log(`[REFUND] Cannot refund service fee from balance payment intent (status: ${balancePaymentIntent.status}, amount: $${balancePaymentIntent.amount/100})`);
+                }
+              } catch (serviceFeeRefundError) {
+                console.error('[REFUND] Error refunding service fee from balance payment intent:', serviceFeeRefundError);
+              }
+            }
+            
+            // Don't update support request status here - let the server action handle it
+            // This allows the message to be sent before the status changes to 'resolved'
+            
+            // Update booking payment status
+            const { error: paymentUpdateError } = await adminSupabase
+              .from('booking_payments')
+              .update({
+                status: totalRefundedCents >= (depositAmountCents + serviceFeeAmountCents) ? 'refunded' : 'partially_refunded',
+                refunded_amount: totalRefundedCents / 100,
+                refund_reason: 'Support request refund',
+                refunded_at: new Date().toISOString(),
+                refund_transaction_id: refundIds.join(','),
+              })
+              .eq('id', bookingPayment.id);
+              
+            if (paymentUpdateError) {
+              console.error('[REFUND] Error updating booking payment:', paymentUpdateError);
+            }
+            
+            console.log(`[REFUND] Process completed successfully. Total refunded: $${totalRefundedCents/100}`);
+            
+            const result: { success: boolean; refundId?: string; error?: string } = {
+              success: true,
+            };
+            
+            if (refundIds.length > 0 && refundIds[0]) {
+              result.refundId = refundIds[0];
+            }
+            
+            return result;
+          }
+        } catch (retrieveError) {
+          console.error('[REFUND] Error retrieving payment intent details:', retrieveError);
+          // Continue with original logic if retrieval fails
+        }
+      }
       
       try {
         const depositRefund = await stripe.refunds.create({
@@ -277,9 +439,10 @@ export async function processStripeRefund(
     }
 
     // STEP 3: Handle tips refund (if needed and any tips exist)
+    // For cash payments, skip tips refund since tips were paid in cash
     let remainingRefundCentsAfterMain = refundAmountCents - totalRefundedCents;
-    
-    if (remainingRefundCentsAfterMain > 0 && bookingTips.length > 0) {
+
+    if (remainingRefundCentsAfterMain > 0 && bookingTips.length > 0 && !isCashPayment) {
       console.log(`[REFUND] Processing tips refund for remaining amount: $${remainingRefundCentsAfterMain/100}`);
       
       for (const tip of bookingTips) {
