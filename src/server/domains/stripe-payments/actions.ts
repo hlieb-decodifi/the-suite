@@ -192,13 +192,15 @@ async function handleUnifiedPaymentFlow(
     // Calculate service amount and tip amount separately for proper deposit calculation
     const totalAmountCents = Math.round(totalPrice * 100);
     const tipAmountCents = Math.round((formData.tipAmount || 0) * 100);
-    const { getServiceFeeFromConfig } = await import('./stripe-operations');
+    const { getServiceFeeFromConfig } = await import(
+      '@/server/lib/service-fee'
+    );
     const serviceFeeResult = await getServiceFeeFromConfig();
     const serviceAmountCents =
       totalAmountCents - serviceFeeResult - tipAmountCents;
 
     // Calculate payment amounts with proper service/tip separation
-    const paymentCalculation = calculatePaymentAmounts(
+    const paymentCalculation = await calculatePaymentAmounts(
       totalAmountCents,
       professionalProfile,
       serviceAmountCents,
@@ -520,7 +522,7 @@ export async function getPaymentCalculation(
       };
     }
 
-    const calculation = calculatePaymentAmounts(
+    const calculation = await calculatePaymentAmounts(
       Math.round(totalAmount * 100),
       professionalProfile,
     );

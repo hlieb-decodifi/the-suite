@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
 import { revalidatePath } from 'next/cache';
 import { trackActivity } from '@/api/activity-log/actions';
+import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
 
 // Configure this API route to use Node.js Runtime for email functionality
 export const runtime = 'nodejs';
@@ -2024,7 +2025,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
             );
           } else {
             // Cash payment: only charge suite fee, service amount + tips paid in cash
-            uncapturedBalanceAmount = 100; // $1 suite fee in cents
+            uncapturedBalanceAmount = await getServiceFeeFromConfig(); // Suite fee in cents
             console.log(
               `🔍 Cash payment - balance amount (suite fee only): $${uncapturedBalanceAmount / 100}`,
             );

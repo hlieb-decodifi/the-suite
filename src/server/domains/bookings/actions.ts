@@ -5,6 +5,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
 import { handleDualPaymentCancellation } from './cancellation-helpers';
+import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
 import { format, toZonedTime } from 'date-fns-tz';
 import {
   sendBookingCancellationNoShowClient,
@@ -1680,7 +1681,8 @@ export async function cancelWithPolicyAction(
                           customer: customerId,
                           confirm: true,
                           payment_method_types: ['card'],
-                          application_fee_amount: 100, // $1 platform fee
+                          application_fee_amount:
+                            await getServiceFeeFromConfig(), // Platform fee from config
                           transfer_data: {
                             destination:
                               (professionalProfile as any)

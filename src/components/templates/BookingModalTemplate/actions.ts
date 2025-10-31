@@ -58,9 +58,7 @@ async function calculateTotalPrice(
   }
 
   // Get service fee from admin configuration
-  const { getServiceFeeFromConfig } = await import(
-    '@/server/domains/stripe-payments/stripe-operations'
-  );
+  const { getServiceFeeFromConfig } = await import('@/server/lib/service-fee');
   const serviceFeeInCents = await getServiceFeeFromConfig();
   const serviceFee = serviceFeeInCents / 100; // Convert to dollars
 

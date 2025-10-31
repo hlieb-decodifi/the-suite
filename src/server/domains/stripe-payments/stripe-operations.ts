@@ -1,6 +1,7 @@
 import { stripe } from '@/lib/stripe/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type { Stripe } from 'stripe';
+import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
 import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
 
 function createSupabaseAdminClient() {
@@ -591,28 +592,6 @@ export async function createServiceFeePaymentIntent(
           ? error.message
           : 'Unknown error creating service fee payment',
     };
-  }
-}
-
-/**
- * Get service fee from admin configuration
- */
-export async function getServiceFeeFromConfig(): Promise<number> {
-  try {
-    const { createClient } = await import('@/lib/supabase/server');
-    const supabase = await createClient();
-
-    const { data } = await supabase
-      .from('admin_configs')
-      .select('value')
-      .eq('key', 'service_fee_dollars')
-      .single();
-
-    const serviceFeeInDollars = parseFloat(data?.value || '1.0');
-    return Math.round(serviceFeeInDollars * 100); // Convert to cents
-  } catch (error) {
-    console.error('Error getting service fee from config:', error);
-    return 100; // Default to $1.00 in cents
   }
 }
 

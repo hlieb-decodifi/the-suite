@@ -230,11 +230,12 @@ export function DashboardPageClient({
                 const serviceName = appointment.services?.name || 'Service';
 
                 // Get price including service fee for both professionals and clients
+                // Note: Service fee should be loaded from admin config, but using fallback for display
                 const price =
                   appointment.services?.totalWithServiceFee ||
                   (appointment.services?.totalPrice ||
                     appointment.services?.price ||
-                    0) + 1.0;
+                    0) + 1.0; // Fallback service fee - should use getServiceFeeAction for accuracy
 
                 // Check if there are additional services
                 const hasAdditionalServices =

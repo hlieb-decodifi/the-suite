@@ -81,16 +81,17 @@ export async function getProfessionalProfileForPayment(
 /**
  * Enhanced payment calculation with deposit validation
  */
-export function calculatePaymentAmounts(
+export async function calculatePaymentAmounts(
   totalAmount: number, // in cents
   professionalProfile: ProfessionalProfileForPayment,
   serviceAmount?: number, // service amount only (without tips or fees) - in cents
   tipAmount?: number, // tip amount in cents
-): PaymentCalculation {
+): Promise<PaymentCalculation> {
   const { requires_deposit, deposit_type, deposit_value } = professionalProfile;
 
   // Get service fee from config
-  const serviceFee = 100; // $1 in cents, TODO: get from config
+  const { getServiceFeeFromConfig } = await import('@/server/lib/service-fee');
+  const serviceFee = await getServiceFeeFromConfig();
 
   // Calculate service amount if not provided (backward compatibility)
   const actualServiceAmount =

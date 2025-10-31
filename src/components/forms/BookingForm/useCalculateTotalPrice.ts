@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { BookingFormValues } from './schema';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
+import { getServiceFeeAction } from '@/server/lib/service-fee';
 
 type UseCalculateTotalPriceProps = {
   service: ServiceListItem;
@@ -20,9 +21,6 @@ export function useCalculateTotalPrice({
   useEffect(() => {
     async function loadServiceFee() {
       try {
-        const { getServiceFeeAction } = await import(
-          '@/server/domains/admin/actions'
-        );
         const result = await getServiceFeeAction();
         if (result.success && result.fee) {
           setServiceFee(result.fee);
