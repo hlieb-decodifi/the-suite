@@ -1,7 +1,8 @@
 import { Database } from '@/../supabase/types';
 
 // Database row type from Supabase schema
-export type PortfolioPhotoDB = Database['public']['Tables']['portfolio_photos']['Row'];
+export type PortfolioPhotoDB =
+  Database['public']['Tables']['portfolio_photos']['Row'];
 
 // UI representation type
 export type PortfolioPhotoUI = {
@@ -24,7 +25,7 @@ export type UploadPortfolioPhotoParams = {
   orderIndex?: number;
 };
 
-// Response types 
+// Response types
 export type PortfolioPhotosResponse = {
   success: boolean;
   photos?: PortfolioPhotoUI[];
@@ -35,4 +36,4 @@ export type PortfolioPhotoResponse = {
   success: boolean;
   photo?: PortfolioPhotoUI;
   error?: string;
-}; 
+};

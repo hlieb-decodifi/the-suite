@@ -4,10 +4,12 @@ function isPostgrestNotFoundError(error: unknown): boolean {
     return false;
   }
   const err = error as { code?: string; message?: string; status?: number };
-  const isPGRST116 = err.code === 'PGRST116' && typeof err.message === 'string' && err.message.includes('no rows returned');
+  const isPGRST116 =
+    err.code === 'PGRST116' &&
+    typeof err.message === 'string' &&
+    err.message.includes('no rows returned');
   return isPGRST116;
 }
-
 
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,11 +17,12 @@ import { useQuery } from '@tanstack/react-query';
 import { getClientProfileWithAddress } from '@/api/profiles/fetchers';
 import { useProfessionalProfileWithAddress } from '@/api/profiles/queriesProfessional';
 
-
-
 // Custom hook for browser geolocation
 export function useBrowserGeolocation() {
-  const [geoLocation, setGeoLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [geoLocation, setGeoLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [geoTried, setGeoTried] = useState(false);
   useEffect(() => {
     if (!geoLocation && !geoTried) {
@@ -33,7 +36,7 @@ export function useBrowserGeolocation() {
             setGeoTried(true);
           },
           () => setGeoTried(true),
-          { enableHighAccuracy: false, timeout: 5000 }
+          { enableHighAccuracy: false, timeout: 5000 },
         );
       } else {
         setGeoTried(true);
@@ -43,8 +46,6 @@ export function useBrowserGeolocation() {
 
   return geoLocation;
 }
-
-
 
 export function useUserDefaultLocation() {
   // Get the current user from auth store's getUser method

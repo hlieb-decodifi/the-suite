@@ -9,13 +9,22 @@ type Props = {
   initialMessages: Record<string, ChatMessage[]>;
 };
 
-export function AdminMessagesPageClient({ initialConversations, initialMessages }: Props) {
+export function AdminMessagesPageClient({
+  initialConversations,
+  initialMessages,
+}: Props) {
   // Provide a fetchMessages function that reads from the pre-fetched messages
-  const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
-    return initialMessages[conversationId] || [];
-  }, [initialMessages]);
+  const fetchMessages = useCallback(
+    async (conversationId: string): Promise<ChatMessage[]> => {
+      return initialMessages[conversationId] || [];
+    },
+    [initialMessages],
+  );
 
   return (
-    <AdminMessagesTemplate conversations={initialConversations} fetchMessages={fetchMessages} />
+    <AdminMessagesTemplate
+      conversations={initialConversations}
+      fetchMessages={fetchMessages}
+    />
   );
 }

@@ -1,1 +1,1 @@
-export { BookingCancellationModal } from './BookingCancellationModal'; 
+export { BookingCancellationModal } from './BookingCancellationModal';

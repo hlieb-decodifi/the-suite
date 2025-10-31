@@ -21,7 +21,7 @@ type ReviewStatus = {
 export async function submitReview(
   bookingId: string,
   score: number,
-  message: string
+  message: string,
 ): Promise<{
   success: boolean;
   review?: ReviewData;
@@ -29,13 +29,15 @@ export async function submitReview(
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated',
       };
     }
 
@@ -43,21 +45,22 @@ export async function submitReview(
     if (!score || score < 1 || score > 5) {
       return {
         success: false,
-        error: 'Score must be between 1 and 5'
+        error: 'Score must be between 1 and 5',
       };
     }
 
     if (!message || message.trim().length === 0) {
       return {
         success: false,
-        error: 'Review message is required'
+        error: 'Review message is required',
       };
     }
 
     // Get booking and appointment details
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         professional_profile_id,
@@ -66,14 +69,15 @@ export async function submitReview(
           status,
           computed_status
         )
-      `)
+      `,
+      )
       .eq('id', bookingId)
       .single();
 
     if (bookingError || !booking) {
       return {
         success: false,
-        error: 'Booking not found'
+        error: 'Booking not found',
       };
     }
 
@@ -81,34 +85,34 @@ export async function submitReview(
     if (booking.client_id !== user.id) {
       return {
         success: false,
-        error: 'Unauthorized'
+        error: 'Unauthorized',
       };
     }
 
     // Check if appointment exists and is completed
-    const appointment = Array.isArray(booking.appointments_with_status) 
-      ? booking.appointments_with_status[0] 
+    const appointment = Array.isArray(booking.appointments_with_status)
+      ? booking.appointments_with_status[0]
       : booking.appointments_with_status;
-    
+
     if (!appointment || !appointment.id) {
       return {
         success: false,
-        error: 'No appointment found for this booking'
+        error: 'No appointment found for this booking',
       };
     }
     const appointmentId = appointment.id;
-    
+
     if (!appointmentId) {
       return {
         success: false,
-        error: 'Invalid appointment ID'
+        error: 'Invalid appointment ID',
       };
     }
-    
+
     if (appointment.computed_status !== 'completed') {
       return {
         success: false,
-        error: 'Appointment must be completed to leave a review'
+        error: 'Appointment must be completed to leave a review',
       };
     }
 
@@ -122,7 +126,7 @@ export async function submitReview(
     if (profileError || !professionalProfile) {
       return {
         success: false,
-        error: 'Professional profile not found'
+        error: 'Professional profile not found',
       };
     }
 
@@ -136,7 +140,7 @@ export async function submitReview(
     if (existingReview) {
       return {
         success: false,
-        error: 'Review already exists for this appointment'
+        error: 'Review already exists for this appointment',
       };
     }
 
@@ -147,7 +151,7 @@ export async function submitReview(
         client_id: user.id,
         professional_id: professionalProfile.user_id,
         score,
-        message: message.trim()
+        message: message.trim(),
       })
       .select()
       .single();
@@ -156,7 +160,7 @@ export async function submitReview(
       console.error('Error creating review:', reviewError);
       return {
         success: false,
-        error: 'Failed to create review'
+        error: 'Failed to create review',
       };
     }
 
@@ -166,15 +170,14 @@ export async function submitReview(
         id: review.id,
         score: review.score,
         message: review.message,
-        createdAt: review.created_at
-      }
+        createdAt: review.created_at,
+      },
     };
-
   } catch (error) {
     console.error('Error creating review:', error);
     return {
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     };
   }
 }
@@ -184,7 +187,7 @@ export async function submitReview(
  */
 export async function getReviewStatus(
   bookingId: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
 ): Promise<{
   success: boolean;
   reviewStatus?: ReviewStatus;
@@ -193,21 +196,24 @@ export async function getReviewStatus(
   try {
     // Use admin client for admin queries to bypass RLS
     const supabase = isAdmin ? createAdminClient() : await createClient();
-    
+
     // Get the current user (always from regular client for user context)
     const userClient = await createClient();
-    const { data: { user } } = await userClient.auth.getUser();
+    const {
+      data: { user },
+    } = await userClient.auth.getUser();
     if (!user) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated',
       };
     }
 
     // First, get the appointment details to check review status
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
-      .select(`
+      .select(
+        `
         id,
         status,
         start_time,
@@ -227,14 +233,15 @@ export async function getReviewStatus(
           message,
           created_at
         )
-      `)
+      `,
+      )
       .eq('booking_id', bookingId)
       .single();
 
     if (appointmentError || !appointment) {
       return {
         success: false,
-        error: 'Appointment not found'
+        error: 'Appointment not found',
       };
     }
 
@@ -244,48 +251,54 @@ export async function getReviewStatus(
     // Check user authorization
     const isClient = booking.client_id === user.id;
     const isProfessional = professionalUserId === user.id;
-    
+
     if (!isClient && !isProfessional && !isAdmin) {
       return {
         success: false,
-        error: 'Unauthorized - You can only view reviews for your own appointments'
+        error:
+          'Unauthorized - You can only view reviews for your own appointments',
       };
     }
 
     // Get computed status using the function from schema
-    const { data: computedStatusData } = await supabase.rpc('get_appointment_computed_status', {
-      p_start_time: appointment.start_time,
-      p_end_time: appointment.end_time,
-      p_status: appointment.status
-    });
+    const { data: computedStatusData } = await supabase.rpc(
+      'get_appointment_computed_status',
+      {
+        p_start_time: appointment.start_time,
+        p_end_time: appointment.end_time,
+        p_status: appointment.status,
+      },
+    );
 
     const computedStatus = computedStatusData || appointment.status;
-    const existingReview = Array.isArray(appointment.reviews) && appointment.reviews.length > 0 
-      ? appointment.reviews[0] 
-      : appointment.reviews || null;
+    const existingReview =
+      Array.isArray(appointment.reviews) && appointment.reviews.length > 0
+        ? appointment.reviews[0]
+        : appointment.reviews || null;
 
     const reviewStatus: ReviewStatus = {
       // Only clients can create reviews, and only for completed appointments without existing reviews
       canReview: isClient && computedStatus === 'completed' && !existingReview,
       hasReview: !!existingReview,
-      review: existingReview ? {
-        id: existingReview.id,
-        score: existingReview.score,
-        message: existingReview.message,
-        createdAt: existingReview.created_at
-      } : null
+      review: existingReview
+        ? {
+            id: existingReview.id,
+            score: existingReview.score,
+            message: existingReview.message,
+            createdAt: existingReview.created_at,
+          }
+        : null,
     };
 
     return {
       success: true,
-      reviewStatus
+      reviewStatus,
     };
-
   } catch (error) {
     console.error('Error fetching review status:', error);
     return {
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     };
   }
-} 
+}

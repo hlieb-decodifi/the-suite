@@ -1,17 +1,21 @@
 // Section widget for the Admin Dashboard.
 // Displays support requests statistics.
 // Used as a section component in AdminDashboardOverviewPageClient.
-import React from 'react'
+import React from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Typography } from '@/components/ui/typography';
 
 type SupportRequestsWidgetProps = {
-  totalSupportRequests: number
-  newSupportRequests: number
-  dateRangeLabel: string
-}
+  totalSupportRequests: number;
+  newSupportRequests: number;
+  dateRangeLabel: string;
+};
 
-export function SupportRequestsWidget({ totalSupportRequests, newSupportRequests, dateRangeLabel }: SupportRequestsWidgetProps) {
+export function SupportRequestsWidget({
+  totalSupportRequests,
+  newSupportRequests,
+  dateRangeLabel,
+}: SupportRequestsWidgetProps) {
   return (
     <Card className="h-full">
       <CardHeader>
@@ -20,9 +24,11 @@ export function SupportRequestsWidget({ totalSupportRequests, newSupportRequests
       <CardContent>
         <Typography>Total support requests: {totalSupportRequests}</Typography>
         <Typography>
-          New support requests <span className="text-yellow-500">{dateRangeLabel}</span>: {newSupportRequests}
+          New support requests{' '}
+          <span className="text-yellow-500">{dateRangeLabel}</span>:{' '}
+          {newSupportRequests}
         </Typography>
       </CardContent>
     </Card>
-  )
+  );
 }

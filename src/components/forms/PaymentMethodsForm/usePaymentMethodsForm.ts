@@ -17,7 +17,9 @@ export function usePaymentMethodsForm({
   // isPending state is removed as it's handled by the parent via isSubmitting prop
 
   const form = useForm<PaymentMethodsFormValues>({
-    resolver: zodResolver(paymentMethodsSchema) as Resolver<PaymentMethodsFormValues>,
+    resolver: zodResolver(
+      paymentMethodsSchema,
+    ) as Resolver<PaymentMethodsFormValues>,
     // Initialize with provided defaults. Missing keys will be implicitly undefined/false.
     defaultValues: defaultValues ?? {},
     mode: 'onChange', // Or 'onBlur' or 'onSubmit' as needed
@@ -51,4 +53,4 @@ export function usePaymentMethodsForm({
     onSubmit: handleSubmit,
     // Removed isPending from return
   };
-} 
+}

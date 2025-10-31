@@ -15,7 +15,7 @@ export type OAuthPhotoUploadResult = {
 export async function uploadOAuthProfilePhoto(
   userId: string,
   photoUrl: string,
-  providerName: string = 'google'
+  providerName: string = 'google',
 ): Promise<OAuthPhotoUploadResult> {
   try {
     if (!photoUrl) {
@@ -48,16 +48,26 @@ export async function uploadOAuthProfilePhoto(
         'User-Agent': 'Mozilla/5.0 (compatible; Supabase/1.0)',
       },
     });
-    
+
     if (!response.ok) {
-      console.error('Failed to fetch photo:', response.status, response.statusText);
-      return { success: false, error: `Failed to fetch photo from OAuth provider: ${response.status}` };
+      console.error(
+        'Failed to fetch photo:',
+        response.status,
+        response.statusText,
+      );
+      return {
+        success: false,
+        error: `Failed to fetch photo from OAuth provider: ${response.status}`,
+      };
     }
 
-    console.log('Photo fetched successfully, content-type:', response.headers.get('content-type'));
+    console.log(
+      'Photo fetched successfully, content-type:',
+      response.headers.get('content-type'),
+    );
     const arrayBuffer = await response.arrayBuffer();
     console.log('Photo size:', arrayBuffer.byteLength, 'bytes');
-    
+
     const file = new File([arrayBuffer], `${providerName}_profile_photo.jpg`, {
       type: 'image/jpeg',
     });
@@ -68,7 +78,12 @@ export async function uploadOAuthProfilePhoto(
     const filePath = `${userId}/${fileName}`;
 
     // Upload to Supabase Storage
-    console.log('Uploading to storage bucket:', PROFILE_PHOTOS_BUCKET, 'path:', filePath);
+    console.log(
+      'Uploading to storage bucket:',
+      PROFILE_PHOTOS_BUCKET,
+      'path:',
+      filePath,
+    );
     const { error: uploadError, data: uploadData } = await supabase.storage
       .from(PROFILE_PHOTOS_BUCKET)
       .upload(filePath, file, {
@@ -80,7 +95,7 @@ export async function uploadOAuthProfilePhoto(
       console.error('Error uploading OAuth profile photo:', uploadError);
       return { success: false, error: uploadError.message };
     }
-    
+
     console.log('Upload successful:', uploadData);
 
     // Get public URL
@@ -91,11 +106,18 @@ export async function uploadOAuthProfilePhoto(
     if (!urlData?.publicUrl) {
       // Cleanup uploaded file if we can't get URL
       await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([filePath]);
-      return { success: false, error: 'Could not get public URL for the uploaded photo' };
+      return {
+        success: false,
+        error: 'Could not get public URL for the uploaded photo',
+      };
     }
 
     // Save to database
-    console.log('Saving to database:', { userId, url: urlData.publicUrl, filename: fileName });
+    console.log('Saving to database:', {
+      userId,
+      url: urlData.publicUrl,
+      filename: fileName,
+    });
     const { error: dbError, data: insertData } = await supabase
       .from('profile_photos')
       .insert({
@@ -111,14 +133,13 @@ export async function uploadOAuthProfilePhoto(
       await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([filePath]);
       return { success: false, error: dbError.message };
     }
-    
+
     console.log('Database insert successful:', insertData);
 
-    return { 
-      success: true, 
-      photoUrl: urlData.publicUrl 
+    return {
+      success: true,
+      photoUrl: urlData.publicUrl,
     };
-
   } catch (error) {
     console.error('Unexpected error uploading OAuth profile photo:', error);
     return {
@@ -126,4 +147,4 @@ export async function uploadOAuthProfilePhoto(
       error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
-} 
+}

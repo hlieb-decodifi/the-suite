@@ -1,1 +1,1 @@
-export { AboutUsTemplate } from './AboutUsTemplate'; 
+export { AboutUsTemplate } from './AboutUsTemplate';

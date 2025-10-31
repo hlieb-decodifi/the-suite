@@ -6,4 +6,4 @@
     "types": ["node", "@playwright/test"]
   },
   "include": ["tests/**/*", "playwright.config.ts"]
-} 
+}

@@ -1,13 +1,13 @@
 export type EmailRecipient = {
   email: string;
   name?: string;
-}
+};
 
 export type EmailResult = {
   success: boolean;
   messageId?: string;
   error?: string;
-}
+};
 
 export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
   booking_id: string;
@@ -21,7 +21,7 @@ export type BookingCancellationWithinAcceptedTimePeriodProfessionalParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 export type BookingCancellationWithinAcceptedTimePeriodClientParams = {
   booking_id: string;
@@ -36,7 +36,7 @@ export type BookingCancellationWithinAcceptedTimePeriodClientParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 // Booking Confirmation
 export type BookingConfirmationClientParams = {
@@ -58,7 +58,7 @@ export type BookingConfirmationClientParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 export type BookingConfirmationProfessionalParams = {
   address: string;
@@ -78,7 +78,7 @@ export type BookingConfirmationProfessionalParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 export type AppointmentCompletion2hafterClientParams = {
   booking_id: string;
@@ -94,7 +94,7 @@ export type AppointmentCompletion2hafterClientParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 export type AppointmentCompletion2hafterProfessionalParams = {
   booking_id: string;
@@ -110,7 +110,7 @@ export type AppointmentCompletion2hafterProfessionalParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 // Payment Related
 // Legacy template - to be replaced
@@ -128,7 +128,7 @@ export type BalanceNotificationParams = {
   time: string;
   website_url: string;
   support_email: string;
-}
+};
 
 // Contact Related
 export type ContactInquiryAdminParams = {
@@ -137,7 +137,7 @@ export type ContactInquiryAdminParams = {
   message: string;
   phone: string;
   topic: string;
-}
+};
 
 export type ContactInquiryConfirmationParams = {
   email: string;
@@ -146,7 +146,7 @@ export type ContactInquiryConfirmationParams = {
   message: string;
   phone: string;
   topic: string;
-}
+};
 
 export type BookingCancellationLessthan24h48hclientParams = {
   booking_id: string;
@@ -164,7 +164,7 @@ export type BookingCancellationLessthan24h48hclientParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 export type BookingCancellationLessthan24h48hprofessionalParams = {
   booking_id: string;
@@ -182,7 +182,7 @@ export type BookingCancellationLessthan24h48hprofessionalParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 // Incident Related
 export type BookingCancellationNoShowClientParams = {
@@ -201,7 +201,7 @@ export type BookingCancellationNoShowClientParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 export type BookingCancellationNoShowProfessionalParams = {
   booking_id: string;
@@ -217,13 +217,13 @@ export type BookingCancellationNoShowProfessionalParams = {
     name: string;
     price: number;
   }[];
-}
+};
 
 // Support Request Related
 export type SupportRequestCreationParams = {
   professional_name: string;
   support_request_url: string;
-}
+};
 
 export type SupportRequestRefundedClientParams = {
   address: string;
@@ -233,7 +233,7 @@ export type SupportRequestRefundedClientParams = {
   professional_name: string;
   refund_amount: number;
   refund_method: string;
-}
+};
 
 export type SupportRequestRefundedProfessionalParams = {
   address: string;
@@ -242,16 +242,16 @@ export type SupportRequestRefundedProfessionalParams = {
   date_and_time: string;
   professional_name: string;
   refund_amount: number;
-}
+};
 
 export type SupportRequestResolvedClientParams = {
   booking_id: string;
   client_name: string;
   professional_name: string;
-}
+};
 
 export type SupportRequestResolvedProfessionalParams = {
   booking_id: string;
   client_name: string;
   professional_name: string;
-}
+};

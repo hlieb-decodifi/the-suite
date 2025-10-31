@@ -3,14 +3,19 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { SupportRequestDetailPageClient } from './SupportRequestDetailPageClient';
-import { getSupportRequest, getAdminSupportRequest, getAdminSupportRequestMessages } from '@/server/domains/support-requests/actions';
+import {
+  getSupportRequest,
+  getAdminSupportRequest,
+  getAdminSupportRequestMessages,
+} from '@/server/domains/support-requests/actions';
 
 export type SupportRequestDetailPageProps = {
   id: string;
 };
 
-
-export async function SupportRequestDetailPage({ id }: SupportRequestDetailPageProps) {
+export async function SupportRequestDetailPage({
+  id,
+}: SupportRequestDetailPageProps) {
   const supabase = await createClient();
 
   // Get the current user

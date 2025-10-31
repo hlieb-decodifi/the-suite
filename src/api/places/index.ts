@@ -41,4 +41,4 @@ export {
 } from '@/utils/addressUtils';
 
 // Export UI components
-export { AddressAutocompleteInput } from '@/components/forms/AddressAutocompleteInput'; 
+export { AddressAutocompleteInput } from '@/components/forms/AddressAutocompleteInput';

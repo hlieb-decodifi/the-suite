@@ -53,7 +53,7 @@ const parseDuration = (
 export type UseServiceFormProps = {
   onSubmit: (data: ServiceFormValues) => Promise<void> | void;
   defaultValues?: Partial<
-    Omit<ServiceFormValues, "durationHours" | "durationMinutes">
+    Omit<ServiceFormValues, 'durationHours' | 'durationMinutes'>
   > & { duration?: string };
 };
 
@@ -69,11 +69,15 @@ export function useServiceForm({
 
   // Prepare default values carefully for exactOptionalPropertyTypes
   const formDefaultValues: Partial<ServiceFormValues> = {
-    name: defaultValues?.name ?? "",
-    description: defaultValues?.description ?? "",
+    name: defaultValues?.name ?? '',
+    description: defaultValues?.description ?? '',
     ...(defaultValues?.price !== undefined && { price: defaultValues.price }),
-    ...(parsedDuration.durationHours !== undefined && { durationHours: parsedDuration.durationHours }),
-    ...(parsedDuration.durationMinutes !== undefined && { durationMinutes: parsedDuration.durationMinutes }),
+    ...(parsedDuration.durationHours !== undefined && {
+      durationHours: parsedDuration.durationHours,
+    }),
+    ...(parsedDuration.durationMinutes !== undefined && {
+      durationMinutes: parsedDuration.durationMinutes,
+    }),
   };
 
   const form = useForm<ServiceFormValues>({
@@ -86,7 +90,7 @@ export function useServiceForm({
     async (data: ServiceFormValues) => {
       setIsPending(true);
 
-      // --- Normalize Duration --- 
+      // --- Normalize Duration ---
       const hoursInput = data.durationHours ?? 0;
       const minutesInput = data.durationMinutes; // Already required, will be a number
 
@@ -121,4 +125,4 @@ export function useServiceForm({
     // error,
     onSubmit: handleSubmit,
   };
-} 
+}

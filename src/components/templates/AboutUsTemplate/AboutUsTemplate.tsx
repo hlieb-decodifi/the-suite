@@ -1,8 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Typography } from '@/components/ui/typography';
-import {
-  ArrowRight
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 export function AboutUsTemplate() {
@@ -36,8 +34,8 @@ export function AboutUsTemplate() {
                 <br />
                 <span className="text-primary font-semibold">
                   {' '}
-                  These haircare deserts don't just disrupt routines — they steal
-                  time, create stress, and make basic grooming feel like a
+                  These haircare deserts don't just disrupt routines — they
+                  steal time, create stress, and make basic grooming feel like a
                   luxury.
                 </span>
               </Typography>
@@ -51,15 +49,19 @@ export function AboutUsTemplate() {
               By organizing on-site haircare events at schools and workplaces,
               we bring trusted stylists and barbers directly to the communities
               that need them most. The result is simple: less travel, more
-              access, and a reliable way for people to care for their hair — where
-              they already are.
+              access, and a reliable way for people to care for their hair —
+              where they already are.
             </Typography>
 
             <div className="bg-primary/10 rounded-lg p-8 lg:p-12 mb-12">
               <Typography className="text-lg lg:text-xl text-foreground leading-relaxed font-medium">
-                Our work is about more than just hair. It's about meeting everyday
-                needs in overlooked places{' '}
-              <span className="text-primary font-bold"> — because no one should have to travel 100 miles just to get their hair done.</span>
+                Our work is about more than just hair. It's about meeting
+                everyday needs in overlooked places{' '}
+                <span className="text-primary font-bold">
+                  {' '}
+                  — because no one should have to travel 100 miles just to get
+                  their hair done.
+                </span>
               </Typography>
             </div>
 

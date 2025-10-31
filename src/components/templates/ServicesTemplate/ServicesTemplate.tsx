@@ -68,8 +68,11 @@ export async function ServicesTemplate({
 // Get authentication status from server
 async function getAuthStatus(): Promise<AuthStatus> {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   if (!user || error) {
     return {
       isAuthenticated: false,
@@ -80,7 +83,7 @@ async function getAuthStatus(): Promise<AuthStatus> {
 
   // Use the RPC function is_client to determine if the user is a client
   const { data: isClient } = await supabase.rpc('is_client', {
-    user_uuid: user.id
+    user_uuid: user.id,
   });
 
   return {

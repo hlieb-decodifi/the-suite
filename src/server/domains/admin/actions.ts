@@ -14,11 +14,11 @@ export async function getServiceFeeAction(): Promise<{
   try {
     const serviceFeeInCents = await getServiceFeeFromConfig();
     const serviceFeeInDollars = serviceFeeInCents / 100;
-    
+
     return {
       success: true,
       fee: serviceFeeInDollars,
-      feeInCents: serviceFeeInCents
+      feeInCents: serviceFeeInCents,
     };
   } catch (error) {
     console.error('Error getting service fee:', error);
@@ -26,7 +26,7 @@ export async function getServiceFeeAction(): Promise<{
       success: false,
       error: 'Failed to get service fee',
       fee: 1.0,
-      feeInCents: 100
+      feeInCents: 100,
     };
   }
-} 
+}

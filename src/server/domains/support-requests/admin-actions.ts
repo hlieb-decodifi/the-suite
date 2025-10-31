@@ -15,11 +15,12 @@ export async function getAdminSupportRequestMessages(supportRequestId: string) {
   const adminSupabase = await createAdminClient();
 
   // Fetch the conversation id for this support request
-  const { data: supportRequest, error: supportRequestError } = await adminSupabase
-    .from('support_requests')
-    .select('conversation_id')
-    .eq('id', supportRequestId)
-    .single();
+  const { data: supportRequest, error: supportRequestError } =
+    await adminSupabase
+      .from('support_requests')
+      .select('conversation_id')
+      .eq('id', supportRequestId)
+      .single();
 
   if (supportRequestError || !supportRequest) {
     return { success: false, error: 'Support request not found' };
@@ -37,9 +38,19 @@ export async function getAdminSupportRequestMessages(supportRequestId: string) {
   }
 
   // Collect all unique sender IDs
-  const senderIds = Array.from(new Set((messages || []).map((msg) => msg.sender_id)));
+  const senderIds = Array.from(
+    new Set((messages || []).map((msg) => msg.sender_id)),
+  );
 
-  const usersMap: Record<string, { id: string; first_name: string; last_name: string; profile_photo_url?: string } > = {};
+  const usersMap: Record<
+    string,
+    {
+      id: string;
+      first_name: string;
+      last_name: string;
+      profile_photo_url?: string;
+    }
+  > = {};
   if (senderIds.length > 0) {
     // Fetch all users for these sender IDs, including profile photos
     const { data: users, error: usersError } = await adminSupabase

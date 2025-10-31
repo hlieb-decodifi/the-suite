@@ -4,11 +4,12 @@ import { ProfileData, HeaderFormValues } from '@/types/profiles';
 
 export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   const supabase = await createClient();
-  
+
   // Fetch user and profile info (including both client and professional profiles)
   const { data, error } = await supabase
     .from('users')
-    .select(`
+    .select(
+      `
       id,
       first_name,
       last_name,
@@ -26,7 +27,8 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
         phone_number
       ),
       profile_photos (url)
-    `)
+    `,
+    )
     .eq('id', userId)
     .single();
 
@@ -43,10 +45,10 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   // Determine if user is professional or client based on role
   const userRole = userRoleData?.role;
   const isProfessional = userRole === 'professional';
-  
+
   // Get phone number from appropriate profile type
-  const phoneNumber = isProfessional 
-    ? data.professional_profiles?.phone_number 
+  const phoneNumber = isProfessional
+    ? data.professional_profiles?.phone_number
     : data.client_profiles?.phone_number;
 
   // Transform from snake_case DB model to camelCase client model
@@ -67,11 +69,16 @@ export async function getProfileFromDb(userId: string): Promise<ProfileData> {
   };
 }
 
-export async function updateProfileHeaderInDb(userId: string, data: HeaderFormValues): Promise<void> {
+export async function updateProfileHeaderInDb(
+  userId: string,
+  data: HeaderFormValues,
+): Promise<void> {
   const supabase = await createClient();
-  
+
   // Using proper database types for your updates
-  const profileUpdate: Partial<Database['public']['Tables']['professional_profiles']['Update']> = {
+  const profileUpdate: Partial<
+    Database['public']['Tables']['professional_profiles']['Update']
+  > = {
     profession: data.profession || null,
     description: data.description || null,
     phone_number: data.phoneNumber || null,
@@ -80,57 +87,70 @@ export async function updateProfileHeaderInDb(userId: string, data: HeaderFormVa
     tiktok_url: data.tiktokUrl || null,
     updated_at: new Date().toISOString(),
   };
-  
+
   // Update professional profile
   const { error: profileError } = await supabase
     .from('professional_profiles')
     .update(profileUpdate)
     .eq('user_id', userId);
-  
-  if (profileError) throw new Error(`Profile update error: ${profileError.message}`);
-  
+
+  if (profileError)
+    throw new Error(`Profile update error: ${profileError.message}`);
+
   // Update user info
   const userUpdate: Partial<Database['public']['Tables']['users']['Update']> = {
     first_name: data.firstName,
     last_name: data.lastName,
     updated_at: new Date().toISOString(),
   };
-  
+
   const { error: userError } = await supabase
     .from('users')
     .update(userUpdate)
     .eq('id', userId);
-  
+
   if (userError) throw new Error(`User update error: ${userError.message}`);
 }
 
-export async function toggleProfilePublishStatusInDb(userId: string, isPublished: boolean): Promise<void> {
+export async function toggleProfilePublishStatusInDb(
+  userId: string,
+  isPublished: boolean,
+): Promise<void> {
   const supabase = await createClient();
-  
-  const profileUpdate: Partial<Database['public']['Tables']['professional_profiles']['Update']> = {
+
+  const profileUpdate: Partial<
+    Database['public']['Tables']['professional_profiles']['Update']
+  > = {
     is_published: isPublished,
     updated_at: new Date().toISOString(),
   };
-  
+
   const { error } = await supabase
     .from('professional_profiles')
     .update(profileUpdate)
     .eq('user_id', userId);
-  
-  if (error) throw new Error(`Profile publish status update error: ${error.message}`);
+
+  if (error)
+    throw new Error(`Profile publish status update error: ${error.message}`);
 }
 
-export async function updateSubscriptionStatusInDb(userId: string): Promise<void> {
+export async function updateSubscriptionStatusInDb(
+  userId: string,
+): Promise<void> {
   // This would be implemented with actual subscription logic
   // For now, we'll just simulate a successful operation
   console.log(`Subscription updated for user ${userId}`);
 }
 
-export async function setCookieConsentInDb(userId: string, consent: boolean): Promise<void> {
+export async function setCookieConsentInDb(
+  userId: string,
+  consent: boolean,
+): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('users')
     .update({ cookie_consent: consent, updated_at: new Date().toISOString() })
     .eq('id', userId);
-  if (error) throw new Error(`Failed to update cookie consent: ${error.message}`);
-} 
+  if (error)
+    throw new Error(`Failed to update cookie consent: ${error.message}`);
+}

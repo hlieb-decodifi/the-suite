@@ -1,1 +1,1 @@
-export * from './ServiceModal'; 
+export * from './ServiceModal';

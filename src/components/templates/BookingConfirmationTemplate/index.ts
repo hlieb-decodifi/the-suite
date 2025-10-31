@@ -1,2 +1,2 @@
 export { BookingConfirmationTemplate } from './BookingConfirmationTemplate';
-export type { BookingConfirmationTemplateProps } from './BookingConfirmationTemplate'; 
+export type { BookingConfirmationTemplateProps } from './BookingConfirmationTemplate';

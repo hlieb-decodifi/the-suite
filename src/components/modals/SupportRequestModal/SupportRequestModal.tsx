@@ -48,7 +48,7 @@ export function SupportRequestModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!reason.trim()) {
       return;
     }
@@ -68,17 +68,17 @@ export function SupportRequestModal({
 
       // Show success state
       setSuccess(true);
-      
+
       // Show success toast
       toast({
         title: 'Support request submitted',
         description: 'Your support request has been sent to the professional.',
         variant: 'default',
       });
-      
+
       // Call onSuccess callback
       onSuccess();
-      
+
       // Navigate to the created support request after a brief delay
       // This gives the user a chance to see the success message
       setTimeout(() => {
@@ -92,10 +92,11 @@ export function SupportRequestModal({
       }, 1500);
     } catch (err) {
       console.error('Error creating support request:', err);
-      
+
       toast({
         title: 'Failed to submit request',
-        description: err instanceof Error ? err.message : 'Please try again later.',
+        description:
+          err instanceof Error ? err.message : 'Please try again later.',
         variant: 'destructive',
       });
     } finally {
@@ -112,8 +113,9 @@ export function SupportRequestModal({
             Create Support Request
           </DialogTitle>
           <DialogDescription>
-            Submit a support request to discuss any issues with your appointment.
-            You'll be able to communicate directly with the professional.
+            Submit a support request to discuss any issues with your
+            appointment. You'll be able to communicate directly with the
+            professional.
           </DialogDescription>
         </DialogHeader>
 
@@ -125,7 +127,8 @@ export function SupportRequestModal({
               </div>
               <h3 className="text-lg font-medium">Support Request Created</h3>
               <p className="text-sm text-muted-foreground mt-2">
-                Your request has been submitted successfully. You will be redirected to the conversation shortly.
+                Your request has been submitted successfully. You will be
+                redirected to the conversation shortly.
               </p>
             </div>
           </div>
@@ -144,8 +147,9 @@ export function SupportRequestModal({
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-sm">
-                Your support request will start a conversation with the professional.
-                They will review your request and help resolve any issues.
+                Your support request will start a conversation with the
+                professional. They will review your request and help resolve any
+                issues.
               </AlertDescription>
             </Alert>
 
@@ -170,7 +174,7 @@ export function SupportRequestModal({
                   {reason.length}/500 characters
                 </div>
               </div>
-              
+
               <div className="flex justify-end gap-2 mt-4">
                 <Button
                   type="button"

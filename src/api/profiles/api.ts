@@ -1,10 +1,10 @@
 import { HeaderFormValues, ProfileData } from '@/types/profiles';
-import { 
-  getProfileAction, 
-  updateProfileHeaderAction, 
+import {
+  getProfileAction,
+  updateProfileHeaderAction,
   toggleProfilePublishStatusAction,
   updateSubscriptionStatusAction,
-  setCookieConsentAction
+  setCookieConsentAction,
 } from '@/server/domains/profiles/actions';
 
 export async function getProfile(userId: string) {
@@ -15,7 +15,10 @@ export async function getProfile(userId: string) {
   return result.data as ProfileData;
 }
 
-export async function updateProfileHeader(userId: string, data: HeaderFormValues) {
+export async function updateProfileHeader(
+  userId: string,
+  data: HeaderFormValues,
+) {
   const result = await updateProfileHeaderAction(userId, data);
   if (!result.success) {
     throw new Error(result.error || 'Failed to update profile');
@@ -23,8 +26,13 @@ export async function updateProfileHeader(userId: string, data: HeaderFormValues
   return result;
 }
 
-export async function toggleProfilePublishStatus(userId: string, isPublished: boolean) {
-  const result = await toggleProfilePublishStatusAction(userId, { isPublished });
+export async function toggleProfilePublishStatus(
+  userId: string,
+  isPublished: boolean,
+) {
+  const result = await toggleProfilePublishStatusAction(userId, {
+    isPublished,
+  });
   if (!result.success) {
     throw new Error(result.error || 'Failed to toggle publish status');
   }
@@ -45,4 +53,4 @@ export async function setCookieConsent(userId: string, consent: boolean) {
     throw new Error(result.error || 'Failed to update cookie consent');
   }
   return result;
-} 
+}

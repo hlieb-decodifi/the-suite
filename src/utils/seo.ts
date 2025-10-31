@@ -23,11 +23,12 @@ export function generateSEOMetadata({
   noIndex = false,
 }: SEOData): Metadata {
   const siteName = 'The Suite';
-  
+
   // Ensure description is within optimal length
-  const metaDescription = description.length > 160 
-    ? description.substring(0, 157) + '...' 
-    : description;
+  const metaDescription =
+    description.length > 160
+      ? description.substring(0, 157) + '...'
+      : description;
 
   // Add base keywords to every page
   const allKeywords = [
@@ -36,7 +37,7 @@ export function generateSEOMetadata({
     'wellness',
     'professional services',
     'appointment booking',
-    'The Suite'
+    'The Suite',
   ];
 
   return {
@@ -50,13 +51,15 @@ export function generateSEOMetadata({
       type,
       ...(canonicalUrl && { url: canonicalUrl }),
       siteName,
-      ...(imageUrl && { 
-        images: [{
-          url: imageUrl,
-          width: 1200,
-          height: 630,
-          alt: title,
-        }]
+      ...(imageUrl && {
+        images: [
+          {
+            url: imageUrl,
+            width: 1200,
+            height: 630,
+            alt: title,
+          },
+        ],
       }),
     },
     twitter: {
@@ -91,10 +94,12 @@ export function generateSlug(text: string): string {
 /**
  * Generate breadcrumb structured data
  */
-export function generateBreadcrumbStructuredData(breadcrumbs: Array<{
-  name: string;
-  url: string;
-}>) {
+export function generateBreadcrumbStructuredData(
+  breadcrumbs: Array<{
+    name: string;
+    url: string;
+  }>,
+) {
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -116,9 +121,12 @@ export function parseLocation(location?: string): {
   country?: string;
 } {
   if (!location) return {};
-  
-  const parts = location.split(',').map(part => part.trim()).filter(Boolean);
-  
+
+  const parts = location
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
   if (parts.length >= 2) {
     const result: { city?: string; state?: string; country?: string } = {};
     if (parts[0]) result.city = parts[0];
@@ -126,14 +134,14 @@ export function parseLocation(location?: string): {
     result.country = parts[2] || 'United States';
     return result;
   }
-  
+
   if (parts.length === 1 && parts[0]) {
     return {
       city: parts[0],
       country: 'United States',
     };
   }
-  
+
   return {};
 }
 
@@ -162,16 +170,16 @@ export function generateProfessionalKeywords({
     keywords.push(
       `${profession} in ${location}`,
       `${profession} ${location}`,
-      location
+      location,
     );
   }
 
   // Add service-related keywords
-  services.forEach(service => {
+  services.forEach((service) => {
     keywords.push(
       service,
       `${service} near me`,
-      location ? `${service} in ${location}` : `${service} booking`
+      location ? `${service} in ${location}` : `${service} booking`,
     );
   });
 
@@ -188,14 +196,16 @@ export function formatPriceForSEO(price: number): string {
 /**
  * Generate FAQ structured data for services
  */
-export function generateServiceFAQStructuredData(faqs: Array<{
-  question: string;
-  answer: string;
-}>) {
+export function generateServiceFAQStructuredData(
+  faqs: Array<{
+    question: string;
+    answer: string;
+  }>,
+) {
   return {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
-    mainEntity: faqs.map(faq => ({
+    mainEntity: faqs.map((faq) => ({
       '@type': 'Question',
       name: faq.question,
       acceptedAnswer: {

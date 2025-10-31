@@ -6,4 +6,4 @@ export const PLACEHOLDER_IMAGES = {
   ICON_LOCATION: '/images/figma/icon-location.svg',
   ICON_CALENDAR: '/images/figma/icon-calendar.svg',
   ICON_EXPERIENCE: '/images/figma/icon-experience.svg',
-}; 
+};

@@ -8,13 +8,13 @@ export type BaseEventProperties = {
   session_id?: string;
   user_agent?: string;
   referrer?: string;
-}
+};
 
 // Authentication events
 export type AuthEventProperties = {
   method?: string;
   user_id?: string;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 // Business events
 export type ServiceEventProperties = {
@@ -23,7 +23,7 @@ export type ServiceEventProperties = {
   professional_id?: string;
   service_category?: string;
   price?: number;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 export type BookingEventProperties = {
   booking_id: string;
@@ -32,7 +32,7 @@ export type BookingEventProperties = {
   value?: number;
   currency?: string;
   booking_date?: string;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 export type PaymentEventProperties = {
   transaction_id?: string;
@@ -42,7 +42,7 @@ export type PaymentEventProperties = {
   value: number;
   currency?: string;
   payment_status?: string;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 // Search and discovery events
 export type SearchEventProperties = {
@@ -50,20 +50,20 @@ export type SearchEventProperties = {
   result_count?: number;
   filters_applied?: string[];
   search_category?: string;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 export type FilterEventProperties = {
   filter_type: string;
   filter_value: string | number | boolean;
   total_results?: number;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 // Professional events
 export type ProfessionalEventProperties = {
   professional_id?: string;
   update_type?: string;
   service_count?: number;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 // Error tracking
 export type ErrorEventProperties = {
@@ -72,7 +72,7 @@ export type ErrorEventProperties = {
   error_stack?: string;
   component?: string;
   action?: string;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 // Page tracking
 export type PageEventProperties = {
@@ -80,7 +80,7 @@ export type PageEventProperties = {
   title?: string;
   previous_page?: string;
   time_on_page?: number;
-} & BaseEventProperties
+} & BaseEventProperties;
 
 // User identification
 export type UserProperties = {
@@ -91,15 +91,16 @@ export type UserProperties = {
   subscription_status?: string;
   professional_id?: string;
   client_id?: string;
-}
+};
 
 // Generic event properties for custom events
-export type CustomEventProperties = BaseEventProperties & Record<string, string | number | boolean | null | undefined>;
+export type CustomEventProperties = BaseEventProperties &
+  Record<string, string | number | boolean | null | undefined>;
 
 // Union type for all event properties
-export type AnalyticsEventProperties = 
+export type AnalyticsEventProperties =
   | AuthEventProperties
-  | ServiceEventProperties 
+  | ServiceEventProperties
   | BookingEventProperties
   | PaymentEventProperties
   | SearchEventProperties

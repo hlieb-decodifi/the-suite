@@ -183,9 +183,10 @@ export function BookingSuccessContent() {
                 Payment Information
               </p>
               <p className="text-xs text-blue-600 mt-1">
-                Your payment method has been saved and your booking is confirmed. 
-                Visit your booking details page to see complete payment information 
-                including what, when, and how payments will be processed.
+                Your payment method has been saved and your booking is
+                confirmed. Visit your booking details page to see complete
+                payment information including what, when, and how payments will
+                be processed.
               </p>
             </div>
           )}

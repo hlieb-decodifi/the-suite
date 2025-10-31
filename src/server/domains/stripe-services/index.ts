@@ -6,7 +6,7 @@ export type {
   ProfessionalProfileForStripe,
   PaymentMethodData,
   StripeProductStatus,
-  StripeSyncStatus
+  StripeSyncStatus,
 } from './types';
 
 // Export database operations
@@ -22,7 +22,7 @@ export {
   getServiceWithStripeData,
   getServicesWithSyncErrors,
   resetServiceSyncStatus,
-  getStripeSyncStats
+  getStripeSyncStats,
 } from './db';
 
 // Export Stripe operations for server actions
@@ -30,7 +30,7 @@ export {
   evaluateProfessionalStripeStatus,
   syncServiceWithStripe,
   archiveServiceFromStripe,
-  syncAllProfessionalServices
+  syncAllProfessionalServices,
 } from './stripe-operations';
 
 // Export Server Actions (these can be called directly from client components)
@@ -39,5 +39,5 @@ export {
   syncAllServicesAction,
   archiveServiceAction,
   getProfessionalStripeStatusAction,
-  onSubscriptionChangeAction
-} from './actions'; 
+  onSubscriptionChangeAction,
+} from './actions';

@@ -7,4 +7,4 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     name: 'The Suite',
     version: '1.0.0',
   },
-}); 
+});

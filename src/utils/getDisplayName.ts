@@ -4,8 +4,11 @@
  * @param fallback Fallback string if no name is available
  */
 export function getDisplayName(
-  user: { first_name?: string | null; last_name?: string | null; id?: string } | null | undefined,
-  fallback: string = 'Unknown User'
+  user:
+    | { first_name?: string | null; last_name?: string | null; id?: string }
+    | null
+    | undefined,
+  fallback: string = 'Unknown User',
 ): string {
   if (!user) return fallback;
   const fn = user.first_name?.trim() || '';

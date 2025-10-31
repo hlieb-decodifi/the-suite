@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  getPaymentsPendingCapture, 
-  markPaymentCaptured 
+import {
+  getPaymentsPendingCapture,
+  markPaymentCaptured,
 } from '@/server/domains/stripe-payments/db';
-import { 
-  capturePaymentIntent 
-} from '@/server/domains/stripe-payments/stripe-operations';
+import { capturePaymentIntent } from '@/server/domains/stripe-payments/stripe-operations';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +15,7 @@ export async function GET(request: NextRequest) {
   // Authenticate request - only allow execution from Vercel cron
   const authHeader = request.headers.get('authorization');
   console.log('🔐 Auth header present:', !!authHeader);
-  
+
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     console.log('❌ Unauthorized request - invalid auth header');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,8 +31,10 @@ export async function GET(request: NextRequest) {
 
     // Get payments that need to be captured
     const pendingCaptures = await getPaymentsPendingCapture(100);
-    
-    console.log(`[CRON] Found ${pendingCaptures.length} payments pending capture`);
+
+    console.log(
+      `[CRON] Found ${pendingCaptures.length} payments pending capture`,
+    );
 
     if (pendingCaptures.length === 0) {
       return NextResponse.json({
@@ -42,32 +42,38 @@ export async function GET(request: NextRequest) {
         message: 'No payments need capturing',
         processed: 0,
         errors: 0,
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       });
     }
 
     // Process each payment
     for (const payment of pendingCaptures) {
       try {
-        console.log(`[CRON] Capturing payment for booking: ${payment.booking_id}`);
+        console.log(
+          `[CRON] Capturing payment for booking: ${payment.booking_id}`,
+        );
 
         // Calculate amount to capture based on payment type
         let totalCaptureAmount: number;
-        
+
         if (payment.payment_type === 'deposit') {
           // For deposit payments, capture the balance amount + tip
           totalCaptureAmount = payment.balance_amount + payment.tip_amount;
-          console.log(`[CRON] Deposit payment detected - capturing balance: $${payment.balance_amount/100} + tip: $${payment.tip_amount/100} = $${totalCaptureAmount/100}`);
+          console.log(
+            `[CRON] Deposit payment detected - capturing balance: $${payment.balance_amount / 100} + tip: $${payment.tip_amount / 100} = $${totalCaptureAmount / 100}`,
+          );
         } else {
           // For full payments, capture the full amount + tip
           totalCaptureAmount = payment.amount + payment.tip_amount;
-          console.log(`[CRON] Full payment detected - capturing total: $${payment.amount/100} + tip: $${payment.tip_amount/100} = $${totalCaptureAmount/100}`);
+          console.log(
+            `[CRON] Full payment detected - capturing total: $${payment.amount / 100} + tip: $${payment.tip_amount / 100} = $${totalCaptureAmount / 100}`,
+          );
         }
 
         // Capture the payment intent
         const result = await capturePaymentIntent(
           payment.stripe_payment_intent_id,
-          totalCaptureAmount > 0 ? totalCaptureAmount : undefined
+          totalCaptureAmount > 0 ? totalCaptureAmount : undefined,
         );
 
         if (!result.success) {
@@ -77,30 +83,40 @@ export async function GET(request: NextRequest) {
         // Mark payment as captured in database
         const updateResult = await markPaymentCaptured(
           payment.id,
-          result.capturedAmount || totalCaptureAmount
+          result.capturedAmount || totalCaptureAmount,
         );
 
         if (!updateResult.success) {
-          throw new Error(updateResult.error || 'Failed to update payment status');
+          throw new Error(
+            updateResult.error || 'Failed to update payment status',
+          );
         }
 
         processedCount++;
-        console.log(`[CRON] Successfully captured payment for booking: ${payment.booking_id}, Amount: $${(result.capturedAmount || totalCaptureAmount) / 100}`);
+        console.log(
+          `[CRON] Successfully captured payment for booking: ${payment.booking_id}, Amount: $${(result.capturedAmount || totalCaptureAmount) / 100}`,
+        );
 
         // Payment confirmation emails have been removed
-        console.log(`[CRON] ℹ️ Payment confirmation emails are no longer sent for booking: ${payment.booking_id}`);
-
+        console.log(
+          `[CRON] ℹ️ Payment confirmation emails are no longer sent for booking: ${payment.booking_id}`,
+        );
       } catch (error) {
         errorCount++;
         const errorMessage = `Booking ${payment.booking_id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
         errors.push(errorMessage);
-        console.error(`[CRON] Error capturing payment for booking ${payment.booking_id}:`, error);
+        console.error(
+          `[CRON] Error capturing payment for booking ${payment.booking_id}:`,
+          error,
+        );
       }
     }
 
     const duration = Date.now() - startTime;
-    
-    console.log(`[CRON] Payment capture processing completed. Processed: ${processedCount}, Errors: ${errorCount}, Duration: ${duration}ms`);
+
+    console.log(
+      `[CRON] Payment capture processing completed. Processed: ${processedCount}, Errors: ${errorCount}, Duration: ${duration}ms`,
+    );
 
     return NextResponse.json({
       success: true,
@@ -108,19 +124,21 @@ export async function GET(request: NextRequest) {
       processed: processedCount,
       errors: errorCount,
       errorDetails: errors.length > 0 ? errors : undefined,
-      duration
+      duration,
     });
-
   } catch (error) {
     console.error('[CRON] Fatal error in payment capture processing:', error);
-    
-    return NextResponse.json({
-      success: false,
-      message: 'Fatal error in payment capture processing',
-      error: error instanceof Error ? error.message : 'Unknown error',
-      processed: processedCount,
-      errors: errorCount + 1,
-      duration: Date.now() - startTime
-    }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Fatal error in payment capture processing',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        processed: processedCount,
+        errors: errorCount + 1,
+        duration: Date.now() - startTime,
+      },
+      { status: 500 },
+    );
   }
-} 
+}

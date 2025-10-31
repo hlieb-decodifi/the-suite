@@ -1,4 +1,7 @@
-import { PaymentMethod, UpdateProfessionalPaymentMethodsPayload } from '@/types/payment_methods';
+import {
+  PaymentMethod,
+  UpdateProfessionalPaymentMethodsPayload,
+} from '@/types/payment_methods';
 import {
   getAvailablePaymentMethodsAction,
   getProfessionalPaymentMethodsAction,
@@ -11,7 +14,9 @@ import {
 export async function getAvailablePaymentMethods(): Promise<PaymentMethod[]> {
   const result = await getAvailablePaymentMethodsAction();
   if (!result.success) {
-    throw new Error(result.error || 'Failed to fetch available payment methods');
+    throw new Error(
+      result.error || 'Failed to fetch available payment methods',
+    );
   }
   return result.methods || [];
 }
@@ -19,14 +24,18 @@ export async function getAvailablePaymentMethods(): Promise<PaymentMethod[]> {
 /**
  * Fetch the payment methods accepted by a professional
  */
-export async function getProfessionalPaymentMethods(userId: string): Promise<PaymentMethod[]> {
+export async function getProfessionalPaymentMethods(
+  userId: string,
+): Promise<PaymentMethod[]> {
   const result = await getProfessionalPaymentMethodsAction(userId);
   if (!result.success) {
     // Don't throw error if it was just profile not found
     if (result.error === 'Professional profile not found.') {
       return [];
     }
-    throw new Error(result.error || 'Failed to fetch professional payment methods');
+    throw new Error(
+      result.error || 'Failed to fetch professional payment methods',
+    );
   }
   return result.methods || [];
 }
@@ -35,11 +44,11 @@ export async function getProfessionalPaymentMethods(userId: string): Promise<Pay
  * Update the payment methods accepted by a professional
  */
 export async function updateProfessionalPaymentMethods(
-  payload: UpdateProfessionalPaymentMethodsPayload
+  payload: UpdateProfessionalPaymentMethodsPayload,
 ) {
   const result = await updateProfessionalPaymentMethodsAction(payload);
   if (!result.success) {
     throw new Error(result.error || 'Failed to update payment methods');
   }
   return result;
-} 
+}

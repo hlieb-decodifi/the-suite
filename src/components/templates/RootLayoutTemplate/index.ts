@@ -1,1 +1,1 @@
-export * from './RootLayoutTemplate'; 
+export * from './RootLayoutTemplate';

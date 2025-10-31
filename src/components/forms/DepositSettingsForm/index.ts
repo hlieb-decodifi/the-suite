@@ -1,1 +1,4 @@
-export { DepositSettingsForm, type DepositSettingsFormValues } from './DepositSettingsForm'; 
+export {
+  DepositSettingsForm,
+  type DepositSettingsFormValues,
+} from './DepositSettingsForm';

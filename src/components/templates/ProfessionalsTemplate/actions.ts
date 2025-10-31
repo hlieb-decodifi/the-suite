@@ -2,7 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { ProfessionalListItem, PaginationInfo } from './types';
-import { getProfessionalRatingStats, shouldShowPublicReviews } from '@/api/reviews/api';
+import {
+  getProfessionalRatingStats,
+  shouldShowPublicReviews,
+} from '@/api/reviews/api';
 
 // Supabase project URL from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,18 +15,18 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
  */
 function getPublicImageUrl(path: string | undefined): string | undefined {
   if (!path) return undefined;
-  
+
   // If it's already a full URL, return it
   if (path.startsWith('http')) {
     return path;
   }
-  
+
   // Make sure the supabaseUrl is available
   if (!supabaseUrl) {
     console.error('NEXT_PUBLIC_SUPABASE_URL is not defined');
     return undefined;
   }
-  
+
   // Construct the storage URL
   // Format: {SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{PATH}
   const bucketName = 'profile-photos';
@@ -33,7 +36,9 @@ function getPublicImageUrl(path: string | undefined): string | undefined {
 /**
  * Maps raw professional data to the ProfessionalListItem type
  */
-async function mapProfessionalData(professional: unknown): Promise<ProfessionalListItem> {
+async function mapProfessionalData(
+  professional: unknown,
+): Promise<ProfessionalListItem> {
   // Safely type cast the professional object
   const professionalData = professional as {
     id: string;
@@ -66,33 +71,39 @@ async function mapProfessionalData(professional: unknown): Promise<ProfessionalL
 
   const user = professionalData?.user;
   const rawPhotoUrl = user?.profile_photo?.url;
-  
+
   // Generate proper public URL for the avatar
   const profilePhoto = getPublicImageUrl(rawPhotoUrl);
-  
+
   // Calculate service count
   const serviceCount = professionalData?.services?.length || 0;
-  
+
   // Get real review data
   let rating = 0;
   let reviewCount = 0;
   try {
     const ratingStats = await getProfessionalRatingStats(user?.id || '');
     const shouldShow = await shouldShowPublicReviews(user?.id || '');
-    
+
     if (shouldShow && ratingStats) {
       rating = ratingStats.averageRating;
       reviewCount = ratingStats.totalReviews;
     }
   } catch (error) {
-    console.error('Error fetching review stats for professional:', user?.id, error);
+    console.error(
+      'Error fetching review stats for professional:',
+      user?.id,
+      error,
+    );
   }
-  
+
   // Return mapped professional data
   return {
     id: professionalData.id,
     user_id: user?.id || 'unknown',
-    name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
+    name: user
+      ? `${user.first_name} ${user.last_name}`
+      : 'Unknown Professional',
     avatar: profilePhoto,
     profession: professionalData.profession || undefined,
     description: professionalData.description || undefined,
@@ -103,11 +114,13 @@ async function mapProfessionalData(professional: unknown): Promise<ProfessionalL
     isSubscribed: true, // TODO: Replace with dynamic subscription check
     joinedDate: professionalData.created_at,
     hide_full_address: professionalData.hide_full_address,
-    address: professionalData.address ? {
-      ...professionalData.address,
-      latitude: parseFloat(professionalData.address.latitude),
-      longitude: parseFloat(professionalData.address.longitude),
-    } : null,
+    address: professionalData.address
+      ? {
+          ...professionalData.address,
+          latitude: parseFloat(professionalData.address.latitude),
+          longitude: parseFloat(professionalData.address.longitude),
+        }
+      : null,
   };
 }
 
@@ -120,15 +133,18 @@ export type ProfessionalsWithPagination = {
 /**
  * Create empty pagination result
  */
-function createEmptyPaginationResult(page: number, pageSize: number): ProfessionalsWithPagination {
-  return { 
-    professionals: [], 
-    pagination: { 
-      currentPage: page, 
-      totalPages: 0, 
-      totalItems: 0, 
-      pageSize 
-    } 
+function createEmptyPaginationResult(
+  page: number,
+  pageSize: number,
+): ProfessionalsWithPagination {
+  return {
+    professionals: [],
+    pagination: {
+      currentPage: page,
+      totalPages: 0,
+      totalItems: 0,
+      pageSize,
+    },
   };
 }
 
@@ -138,19 +154,20 @@ function createEmptyPaginationResult(page: number, pageSize: number): Profession
 export async function getProfessionals(
   page = 1,
   pageSize = 12,
-  search?: string
+  search?: string,
 ): Promise<ProfessionalsWithPagination> {
   const supabase = await createClient();
-  
+
   try {
     // If search is provided, we need to search across both professional_profiles and users tables
     if (search && search.trim() !== '') {
       const trimmedSearch = search.trim();
-      
+
       // First, get all published professional profiles with user data
       const { data: allProfessionals, error: fetchError } = await supabase
         .from('professional_profiles')
-        .select(`
+        .select(
+          `
           id,
           user_id,
           profession,
@@ -179,7 +196,8 @@ export async function getProfessionals(
           services(
             id
           )
-        `)
+        `,
+        )
         .eq('is_published', true)
         .order('created_at', { ascending: false });
 
@@ -222,7 +240,9 @@ export async function getProfessionals(
         pageSize,
       };
 
-      const mappedProfessionals = await Promise.all(paginatedResults.map(mapProfessionalData));
+      const mappedProfessionals = await Promise.all(
+        paginatedResults.map(mapProfessionalData),
+      );
 
       return {
         professionals: mappedProfessionals,
@@ -247,7 +267,8 @@ export async function getProfessionals(
 
       const { data: professionals, error } = await supabase
         .from('professional_profiles')
-        .select(`
+        .select(
+          `
           id,
           user_id,
           profession,
@@ -276,7 +297,8 @@ export async function getProfessionals(
           services(
             id
           )
-        `)
+        `,
+        )
         .eq('is_published', true)
         .order('created_at', { ascending: false })
         .range(start, end);
@@ -293,7 +315,9 @@ export async function getProfessionals(
         pageSize,
       };
 
-      const mappedProfessionals = await Promise.all((professionals || []).map(mapProfessionalData));
+      const mappedProfessionals = await Promise.all(
+        (professionals || []).map(mapProfessionalData),
+      );
 
       return {
         professionals: mappedProfessionals,
@@ -312,7 +336,7 @@ export async function getProfessionals(
 export async function fetchProfessionalsAction(
   page: number,
   pageSize: number,
-  searchTerm: string
+  searchTerm: string,
 ): Promise<ProfessionalsWithPagination> {
   return getProfessionals(page, pageSize, searchTerm);
-} 
+}

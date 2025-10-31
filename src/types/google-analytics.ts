@@ -9,27 +9,27 @@ export type SiteTrafficMetrics = {
   bounceRate: number;
   averageSessionDuration: number;
   sessionsPerUser: number;
-}
+};
 
 export type DeviceTypeMetric = {
   device: string;
   sessions: number;
   percentage: number;
-}
+};
 
 export type TrafficSourceMetric = {
   source: string;
   medium: string;
   sessions: number;
   percentage: number;
-}
+};
 
 export type TopPageMetric = {
   page: string;
   pageViews: number;
   uniquePageViews: number;
   averageTimeOnPage: number;
-}
+};
 
 export type GoogleAnalyticsDashboardData = {
   siteTraffic: SiteTrafficMetrics;
@@ -40,11 +40,10 @@ export type GoogleAnalyticsDashboardData = {
     startDate: string;
     endDate: string;
   };
-}
+};
 
 export type GAApiResponse = {
   success: boolean;
   data?: GoogleAnalyticsDashboardData;
   error?: string;
-}
-
+};

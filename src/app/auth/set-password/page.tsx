@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { updatePasswordAction } from '@/api/auth/actions';
 import { ResetPasswordForm } from '@/components/forms/ResetPasswordForm/ResetPasswordForm';
@@ -37,7 +37,9 @@ export default function SetPasswordPage() {
         // If not found in query, try hash fragment
         if (!access_token || !refresh_token) {
           if (typeof window !== 'undefined' && window.location.hash) {
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const hashParams = new URLSearchParams(
+              window.location.hash.substring(1),
+            );
             access_token = access_token || hashParams.get('access_token');
             refresh_token = refresh_token || hashParams.get('refresh_token');
           }
@@ -58,9 +60,11 @@ export default function SetPasswordPage() {
           setError('Invalid or expired invitation link');
           return;
         }
-        
+
         // Get session for authenticated user
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         setUserEmail(user.email || null);
         setAccessToken(session?.access_token || null);
         setRefreshToken(session?.refresh_token || null);
@@ -73,25 +77,25 @@ export default function SetPasswordPage() {
     };
     verifyInviteToken();
     // Only run on mount and when searchParams changes
-     
   }, [searchParams]);
 
   const handleSubmit = async (
     data: ResetPasswordFormValues,
     at?: string | null,
-    rt?: string | null
+    rt?: string | null,
   ) => {
     setIsLoading(true);
     try {
       const result = await updatePasswordAction(
         data.password,
         at ?? accessToken,
-        rt ?? refreshToken
+        rt ?? refreshToken,
       );
       if (result.success) {
         toast({
           title: 'Password Set',
-          description: 'Your password has been set. You can now access your admin account.',
+          description:
+            'Your password has been set. You can now access your admin account.',
         });
         router.push('/admin');
       } else {
@@ -176,4 +180,3 @@ export default function SetPasswordPage() {
     </div>
   );
 }
-

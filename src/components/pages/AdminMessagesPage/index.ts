@@ -1,2 +1,2 @@
 export { default as AdminMessagesPage } from './AdminMessagesPage';
-export { AdminMessagesPageClient } from './AdminMessagesPageClient'; 
+export { AdminMessagesPageClient } from './AdminMessagesPageClient';

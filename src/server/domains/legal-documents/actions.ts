@@ -2,7 +2,7 @@
  * Admin: Fetch the latest version of a legal document (for editing)
  */
 export async function getLegalDocumentAdminAction(
-  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy'
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
 ): Promise<LegalDocument | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -15,7 +15,10 @@ export async function getLegalDocumentAdminAction(
   if (error || !data) return null;
   return {
     id: data.id,
-    type: data.type as 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
+    type: data.type as
+      | 'terms_and_conditions'
+      | 'privacy_policy'
+      | 'copyright_policy',
     title: data.title,
     content: data.content,
     version: data.version,
@@ -25,7 +28,6 @@ export async function getLegalDocumentAdminAction(
     updatedAt: data.updated_at,
   };
 }
-
 
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createPublicClient } from '@supabase/supabase-js';
@@ -51,7 +53,7 @@ type LegalDocumentRow = Tables<'legal_documents'>;
  * Uses public client to avoid cookies during static generation
  */
 export async function getLegalDocumentAction(
-  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy'
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
 ): Promise<{
   success: boolean;
   document?: LegalDocument;
@@ -77,22 +79,25 @@ export async function getLegalDocumentAction(
 
     if (error) {
       console.error('Error fetching legal document:', error);
-      return { 
-        success: false, 
-        error: 'Document not found' 
+      return {
+        success: false,
+        error: 'Document not found',
       };
     }
 
     if (!data) {
-      return { 
-        success: false, 
-        error: 'Document not found' 
+      return {
+        success: false,
+        error: 'Document not found',
       };
     }
 
     const document: LegalDocument = {
       id: data.id,
-      type: data.type as 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
+      type: data.type as
+        | 'terms_and_conditions'
+        | 'privacy_policy'
+        | 'copyright_policy',
       title: data.title,
       content: data.content,
       version: data.version,
@@ -105,9 +110,9 @@ export async function getLegalDocumentAction(
     return { success: true, document };
   } catch (error) {
     console.error('Error in getLegalDocumentAction:', error);
-    return { 
-      success: false, 
-      error: 'Failed to fetch document' 
+    return {
+      success: false,
+      error: 'Failed to fetch document',
     };
   }
 }
@@ -116,7 +121,7 @@ export async function getLegalDocumentAction(
  * Server Action: Get all versions of a legal document type (for admin use)
  */
 export async function getLegalDocumentVersionsAction(
-  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy'
+  type: 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
 ): Promise<{
   success: boolean;
   documents?: LegalDocument[];
@@ -133,30 +138,35 @@ export async function getLegalDocumentVersionsAction(
 
     if (error) {
       console.error('Error fetching legal document versions:', error);
-      return { 
-        success: false, 
-        error: 'Failed to fetch document versions' 
+      return {
+        success: false,
+        error: 'Failed to fetch document versions',
       };
     }
 
-    const documents: LegalDocument[] = (data || []).map((row: LegalDocumentRow) => ({
-      id: row.id,
-      type: row.type as 'terms_and_conditions' | 'privacy_policy' | 'copyright_policy',
-      title: row.title,
-      content: row.content,
-      version: row.version,
-      isPublished: row.is_published,
-      effectiveDate: row.effective_date,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    const documents: LegalDocument[] = (data || []).map(
+      (row: LegalDocumentRow) => ({
+        id: row.id,
+        type: row.type as
+          | 'terms_and_conditions'
+          | 'privacy_policy'
+          | 'copyright_policy',
+        title: row.title,
+        content: row.content,
+        version: row.version,
+        isPublished: row.is_published,
+        effectiveDate: row.effective_date,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }),
+    );
 
     return { success: true, documents };
   } catch (error) {
     console.error('Error in getLegalDocumentVersionsAction:', error);
-    return { 
-      success: false, 
-      error: 'Failed to fetch document versions' 
+    return {
+      success: false,
+      error: 'Failed to fetch document versions',
     };
   }
-} 
+}

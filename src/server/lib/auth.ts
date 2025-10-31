@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function requireAdminUser() {
   const supabase = await createClient();
-  const { data: sessionData, error: sessionError } = await supabase.auth.getUser();
+  const { data: sessionData, error: sessionError } =
+    await supabase.auth.getUser();
   const sessionUser = sessionData?.user;
   if (sessionError || !sessionUser) {
     return { success: false, error: 'Not authenticated' };

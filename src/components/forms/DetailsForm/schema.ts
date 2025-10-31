@@ -23,21 +23,24 @@ export const detailsFormSchema = z.object({
   phone: z
     .string()
     .optional()
-    .refine((phone) => {
-      // Allow empty/undefined phone numbers
-      if (!phone || phone.trim() === '') {
-        return true;
-      }
-      // If phone is just a country code (e.g., '+1', '+44'), treat as empty
-      const onlyCountryCode = /^\+\d{1,4}$/.test(phone.trim());
-      if (onlyCountryCode) {
-        return true;
-      }
-      // Validate using google-libphonenumber as recommended by react-international-phone
-      return isPhoneValid(phone);
-    }, {
-      message: 'Please enter a valid phone number for the selected country'
-    }),
+    .refine(
+      (phone) => {
+        // Allow empty/undefined phone numbers
+        if (!phone || phone.trim() === '') {
+          return true;
+        }
+        // If phone is just a country code (e.g., '+1', '+44'), treat as empty
+        const onlyCountryCode = /^\+\d{1,4}$/.test(phone.trim());
+        if (onlyCountryCode) {
+          return true;
+        }
+        // Validate using google-libphonenumber as recommended by react-international-phone
+        return isPhoneValid(phone);
+      },
+      {
+        message: 'Please enter a valid phone number for the selected country',
+      },
+    ),
 });
 
-export type DetailsFormValues = z.infer<typeof detailsFormSchema>; 
+export type DetailsFormValues = z.infer<typeof detailsFormSchema>;

@@ -1,1 +1,1 @@
-export { ProfessionalGrowthSection } from './ProfessionalGrowthSection'; 
+export { ProfessionalGrowthSection } from './ProfessionalGrowthSection';

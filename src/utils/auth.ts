@@ -5,10 +5,8 @@ import { User } from '@supabase/supabase-js';
  */
 export function isOAuthUser(user: User | null): boolean {
   if (!user?.identities) return false;
-  
-  return user.identities.some(identity => 
-    identity.provider === 'google'
-  );
+
+  return user.identities.some((identity) => identity.provider === 'google');
 }
 
 /**
@@ -16,7 +14,7 @@ export function isOAuthUser(user: User | null): boolean {
  */
 export function canChangeEmail(user: User | null): boolean {
   if (!user?.identities) return false;
-  return user.identities.some(identity => identity.provider === 'email');
+  return user.identities.some((identity) => identity.provider === 'email');
 }
 
 /**
@@ -24,7 +22,7 @@ export function canChangeEmail(user: User | null): boolean {
  */
 export function canChangePassword(user: User | null): boolean {
   if (!user?.identities) return false;
-  return user.identities.some(identity => identity.provider === 'email');
+  return user.identities.some((identity) => identity.provider === 'email');
 }
 
 /**
@@ -32,10 +30,10 @@ export function canChangePassword(user: User | null): boolean {
  */
 export function getOAuthProvider(user: User | null): string | null {
   if (!user?.identities) return null;
-  
-  const oauthIdentity = user.identities.find(identity => 
-    identity.provider !== 'email'
+
+  const oauthIdentity = user.identities.find(
+    (identity) => identity.provider !== 'email',
   );
-  
+
   return oauthIdentity?.provider || null;
-} 
+}

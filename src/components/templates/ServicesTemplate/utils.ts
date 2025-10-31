@@ -14,7 +14,7 @@ export function filterServices(
       const searchLower = filters.searchTerm.toLowerCase();
       const nameMatch = service.name.toLowerCase().includes(searchLower);
       const descriptionMatch = service.description
-      .toLowerCase()
+        .toLowerCase()
         .includes(searchLower);
       const professionalMatch = service.professional.name
         .toLowerCase()
@@ -42,7 +42,7 @@ export function filterServices(
 export function sortServices(
   services: ServiceListItem[],
   sortBy: SortOption,
-  userLocation?: { latitude: number; longitude: number } | null
+  userLocation?: { latitude: number; longitude: number } | null,
 ): ServiceListItem[] {
   const sortedServices = [...services];
   let result: ServiceListItem[];
@@ -57,8 +57,10 @@ export function sortServices(
       // If no user location, fallback to alphabetical by city
       if (!userLocation) {
         result = sortedServices.sort((a, b) => {
-          const locationA = a.professional.address_data?.city || a.professional.address || '';
-          const locationB = b.professional.address_data?.city || b.professional.address || '';
+          const locationA =
+            a.professional.address_data?.city || a.professional.address || '';
+          const locationB =
+            b.professional.address_data?.city || b.professional.address || '';
           const cityComparison = locationA.localeCompare(locationB);
           if (cityComparison !== 0) {
             return cityComparison;
@@ -68,8 +70,14 @@ export function sortServices(
       } else {
         // Sort by distance to user location
         result = sortedServices.sort((a, b) => {
-          const distA = getDistanceFromUser(userLocation, a.professional.address_data || undefined);
-          const distB = getDistanceFromUser(userLocation, b.professional.address_data || undefined);
+          const distA = getDistanceFromUser(
+            userLocation,
+            a.professional.address_data || undefined,
+          );
+          const distB = getDistanceFromUser(
+            userLocation,
+            b.professional.address_data || undefined,
+          );
           if (distA === distB) {
             return a.name.localeCompare(b.name);
           }
@@ -87,7 +95,7 @@ export function sortServices(
   return result.sort((a, b) => {
     const aSubscribed = a.isBookable || false;
     const bSubscribed = b.isBookable || false;
-    
+
     // If subscription status differs, prioritize subscribed professionals
     if (aSubscribed !== bSubscribed) {
       return aSubscribed ? -1 : 1;
@@ -107,7 +115,7 @@ export function sortServices(
  */
 function getDistanceFromUser(
   userLoc: { latitude: number; longitude: number },
-  addressData?: { latitude?: number; longitude?: number }
+  addressData?: { latitude?: number; longitude?: number },
 ): number {
   if (!addressData?.latitude || !addressData?.longitude) return Infinity;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -118,8 +126,7 @@ function getDistanceFromUser(
   const Δλ = toRad(addressData.longitude! - userLoc.longitude);
   const a =
     Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
-    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -130,11 +137,11 @@ function getDistanceFromUser(
 export function getPaginatedServices(
   filteredServices: ServiceListItem[],
   currentPage: number,
-  pageSize: number
+  pageSize: number,
 ): ServiceListItem[] {
   return filteredServices.slice(
     (currentPage - 1) * pageSize,
-    currentPage * pageSize
+    currentPage * pageSize,
   );
 }
 
@@ -144,7 +151,7 @@ export function getPaginatedServices(
 export function calculatePagination(
   totalItems: number,
   currentPage: number,
-  pageSize: number
+  pageSize: number,
 ) {
   const totalPages = Math.ceil(totalItems / pageSize);
   return {
@@ -165,7 +172,7 @@ export function getServicesForDisplay(
   filters: ServicesFilters,
   currentPage: number,
   pageSize: number,
-  userLocation?: { latitude: number; longitude: number } | null
+  userLocation?: { latitude: number; longitude: number } | null,
 ): ServiceListItem[] {
   // Always apply sorting to ensure subscribed professionals appear first
   // This handles all cases: no filters, search terms, and location filters
@@ -178,7 +185,7 @@ export function getServicesForDisplay(
 export function createFilteredPagination(
   services: ServiceListItem[],
   filters: ServicesFilters,
-  pageSize: number
+  pageSize: number,
 ): {
   currentPage: number;
   totalPages: number;
@@ -186,7 +193,7 @@ export function createFilteredPagination(
   pageSize: number;
 } {
   const filteredServices = filterServices(services, filters);
-  
+
   return {
     currentPage: 1,
     totalPages: Math.ceil(filteredServices.length / pageSize),
@@ -204,20 +211,20 @@ export function scrollToElement(element: HTMLElement | null, offset = 0): void {
 
   // Get the element's position relative to the viewport
   const rect = element.getBoundingClientRect();
-  
+
   // Get the current scroll position
   const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-  
+
   // Calculate the absolute position to scroll to
   // (element's position from top of page minus desired offset)
   const targetPosition = rect.top + scrollTop - offset;
-  
+
   // Scroll with a shorter delay for more immediate response
   window.scrollTo({
     top: targetPosition,
     behavior: 'smooth',
   });
-  
+
   // Add an additional scroll with zero delay as a fallback
   // to ensure scrolling happens reliably
   setTimeout(() => {
@@ -226,4 +233,4 @@ export function scrollToElement(element: HTMLElement | null, offset = 0): void {
       behavior: 'smooth',
     });
   }, 10);
-} 
+}

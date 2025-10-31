@@ -13,10 +13,10 @@ export type UseDetailsFormProps = {
   initialData?: DetailsFormValues | undefined;
 };
 
-export function useDetailsForm({ 
+export function useDetailsForm({
   onSubmit,
   user,
-  initialData
+  initialData,
 }: UseDetailsFormProps) {
   const [isPending, setIsPending] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -32,31 +32,35 @@ export function useDetailsForm({
     defaultValues,
   });
 
-  const handleSubmit = useCallback(async (data: DetailsFormValues) => {
-    try {
-      setIsPending(true);
-      setSaveSuccess(false);
-      
-      // Call the parent's onSubmit function
-      await onSubmit(data);
-      
-      toast({
-        title: "Profile updated",
-        description: "Your personal details have been updated successfully.",
-      });
-      
-      setSaveSuccess(true);
-    } catch (error) {
-      console.error('Error updating profile details:', error);
-      toast({
-        variant: "destructive",
-        title: "Update failed",
-        description: "Failed to update your profile details. Please try again."
-      });
-    } finally {
-      setIsPending(false);
-    }
-  }, [onSubmit]);
+  const handleSubmit = useCallback(
+    async (data: DetailsFormValues) => {
+      try {
+        setIsPending(true);
+        setSaveSuccess(false);
+
+        // Call the parent's onSubmit function
+        await onSubmit(data);
+
+        toast({
+          title: 'Profile updated',
+          description: 'Your personal details have been updated successfully.',
+        });
+
+        setSaveSuccess(true);
+      } catch (error) {
+        console.error('Error updating profile details:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Update failed',
+          description:
+            'Failed to update your profile details. Please try again.',
+        });
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [onSubmit],
+  );
 
   return {
     form,
@@ -64,4 +68,4 @@ export function useDetailsForm({
     saveSuccess,
     onSubmit: handleSubmit,
   };
-} 
+}

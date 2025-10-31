@@ -47,7 +47,8 @@ export function DashboardRefundsPageClient({
       <div className="space-y-6">
         <Typography variant="h1">Refunds</Typography>
         <div className="text-center py-8 text-red-600">
-          Refunds have been migrated to Support Requests. Please visit the Support Requests page.
+          Refunds have been migrated to Support Requests. Please visit the
+          Support Requests page.
         </div>
       </div>
     );
@@ -58,7 +59,8 @@ export function DashboardRefundsPageClient({
       <Typography variant="h1">Refunds</Typography>
       <div className="text-center py-8">
         <Typography className="text-muted-foreground">
-          Refunds have been migrated to Support Requests. Please visit the Support Requests page to manage refund requests.
+          Refunds have been migrated to Support Requests. Please visit the
+          Support Requests page to manage refund requests.
         </Typography>
       </div>
     </div>

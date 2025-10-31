@@ -44,7 +44,9 @@ export function LegalDocumentPageClient({
               <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-primary rounded-full"></span>
-                  <span>Effective Date: {formatDate(document.effectiveDate)}</span>
+                  <span>
+                    Effective Date: {formatDate(document.effectiveDate)}
+                  </span>
                 </div>
               </div>
             )}

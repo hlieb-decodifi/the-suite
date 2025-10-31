@@ -7,7 +7,9 @@ export type SetPasswordFormProps = {
 };
 
 export function SetPasswordForm({ userEmail }: SetPasswordFormProps) {
-  const { isPending, emailSent, sendResetEmail } = useSetPasswordForm({ userEmail });
+  const { isPending, emailSent, sendResetEmail } = useSetPasswordForm({
+    userEmail,
+  });
 
   return (
     <div className="space-y-6">
@@ -15,8 +17,10 @@ export function SetPasswordForm({ userEmail }: SetPasswordFormProps) {
         <div className="text-center">
           <div className="font-medium text-lg mb-2">Check your email</div>
           <div className="text-muted-foreground mb-4">
-            A password reset link has been sent to <span className="font-semibold">{userEmail}</span>.<br />
-            Please log out and follow the instructions in the email to set your password.
+            A password reset link has been sent to{' '}
+            <span className="font-semibold">{userEmail}</span>.<br />
+            Please log out and follow the instructions in the email to set your
+            password.
           </div>
         </div>
       ) : (

@@ -35,7 +35,14 @@ export type ActivityLogEntry = {
   id: string;
   user_id: string | null;
   session_id: string | null;
-  activity_type: 'page_view' | 'service_view' | 'professional_view' | 'booking_started' | 'booking_completed' | 'booking_cancelled' | 'search_performed';
+  activity_type:
+    | 'page_view'
+    | 'service_view'
+    | 'professional_view'
+    | 'booking_started'
+    | 'booking_completed'
+    | 'booking_cancelled'
+    | 'search_performed';
   entity_type: 'service' | 'professional' | 'booking' | null;
   entity_id: string | null;
   metadata: Record<string, unknown>;

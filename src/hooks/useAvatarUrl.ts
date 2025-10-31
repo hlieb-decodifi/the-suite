@@ -67,4 +67,4 @@ export function useAvatarUrl(
   }, [userId, trigger, enabled]);
 
   return { avatarUrl, isLoading };
-} 
+}

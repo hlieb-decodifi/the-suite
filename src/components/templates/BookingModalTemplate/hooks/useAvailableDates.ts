@@ -11,13 +11,23 @@ export function useAvailableDates(
   professionalProfileId: string,
   professionalTimezone: string = 'UTC',
   clientTimezone: string = 'UTC',
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: ['availableDates', professionalProfileId, professionalTimezone, clientTimezone],
-    queryFn: () => getAvailableDates(professionalProfileId, professionalTimezone, clientTimezone),
+    queryKey: [
+      'availableDates',
+      professionalProfileId,
+      professionalTimezone,
+      clientTimezone,
+    ],
+    queryFn: () =>
+      getAvailableDates(
+        professionalProfileId,
+        professionalTimezone,
+        clientTimezone,
+      ),
     enabled: Boolean(professionalProfileId) && enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
   });
-} 
+}

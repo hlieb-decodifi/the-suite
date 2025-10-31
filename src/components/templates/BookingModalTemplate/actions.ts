@@ -2,7 +2,10 @@
 
 import { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { getAvailableDaysWithTimezoneConversion, parseWorkingHoursFromDB } from '@/utils/timezone';
+import {
+  getAvailableDaysWithTimezoneConversion,
+  parseWorkingHoursFromDB,
+} from '@/utils/timezone';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { format } from 'date-fns';
 
@@ -12,21 +15,28 @@ import { format } from 'date-fns';
 async function calculateTotalPrice(
   serviceId: string,
   extraServiceIds: string[],
-  tipAmount: number
-): Promise<{ total: number; servicePrice: number; extraServicesPrice: number; serviceFee: number }> {
+  tipAmount: number,
+): Promise<{
+  total: number;
+  servicePrice: number;
+  extraServicesPrice: number;
+  serviceFee: number;
+}> {
   const supabase = await createClient();
-  
+
   // Get main service price
   const { data: serviceData, error: serviceError } = await supabase
     .from('services')
     .select('price')
     .eq('id', serviceId)
     .single();
-  
+
   if (serviceError || !serviceData) {
-    throw new Error(`Error fetching service: ${serviceError?.message || 'Service not found'}`);
+    throw new Error(
+      `Error fetching service: ${serviceError?.message || 'Service not found'}`,
+    );
   }
-  
+
   // Get extra services prices
   let extraServicesPrice = 0;
   if (extraServiceIds.length > 0) {
@@ -34,33 +44,44 @@ async function calculateTotalPrice(
       .from('services')
       .select('price')
       .in('id', extraServiceIds);
-    
+
     if (extraServicesError) {
-      throw new Error(`Error fetching extra services: ${extraServicesError.message}`);
+      throw new Error(
+        `Error fetching extra services: ${extraServicesError.message}`,
+      );
     }
-    
-    extraServicesPrice = extraServices.reduce((sum, service) => sum + Number(service.price), 0);
+
+    extraServicesPrice = extraServices.reduce(
+      (sum, service) => sum + Number(service.price),
+      0,
+    );
   }
-  
+
   // Get service fee from admin configuration
-  const { getServiceFeeFromConfig } = await import('@/server/domains/stripe-payments/stripe-operations');
+  const { getServiceFeeFromConfig } = await import(
+    '@/server/domains/stripe-payments/stripe-operations'
+  );
   const serviceFeeInCents = await getServiceFeeFromConfig();
   const serviceFee = serviceFeeInCents / 100; // Convert to dollars
-  
+
   // Calculate total
-  const total = Number(serviceData.price) + extraServicesPrice + serviceFee + (tipAmount || 0);
-  
-  return { 
-    total, 
-    servicePrice: Number(serviceData.price), 
-    extraServicesPrice, 
-    serviceFee 
+  const total =
+    Number(serviceData.price) +
+    extraServicesPrice +
+    serviceFee +
+    (tipAmount || 0);
+
+  return {
+    total,
+    servicePrice: Number(serviceData.price),
+    extraServicesPrice,
+    serviceFee,
   };
 }
 
 /**
  * Create a booking with associated records
- * 
+ *
  * @param formData The booking form data
  * @param professionalProfileId The ID of the professional's profile
  * @param clientTimezone The client's timezone for proper date conversion
@@ -69,18 +90,18 @@ async function calculateTotalPrice(
 export async function createBooking(
   formData: BookingFormValues & { dateWithTime: Date },
   professionalProfileId: string,
-  clientTimezone: string = 'UTC'
+  clientTimezone: string = 'UTC',
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
   const adminSupabase = await createAdminClient();
-  
+
   try {
     // Get the current user
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       throw new Error('Not authenticated');
     }
@@ -94,7 +115,10 @@ export async function createBooking(
           .eq('user_id', user.id);
 
         if (timezoneUpdateError) {
-          console.error('Failed to update client timezone:', timezoneUpdateError);
+          console.error(
+            'Failed to update client timezone:',
+            timezoneUpdateError,
+          );
           // Don't fail the booking if timezone update fails
         }
       } catch (error) {
@@ -102,18 +126,20 @@ export async function createBooking(
         // Don't fail the booking if timezone update fails
       }
     }
-    
+
     // Get the main service details
     const { data: mainService, error: mainServiceError } = await supabase
       .from('services')
       .select('id, name, price, duration')
       .eq('id', formData.serviceId)
       .single();
-    
+
     if (mainServiceError || !mainService) {
-      throw new Error(`Error getting main service: ${mainServiceError?.message}`);
+      throw new Error(
+        `Error getting main service: ${mainServiceError?.message}`,
+      );
     }
-    
+
     // Get extra service durations
     const extraServiceDurations: number[] = [];
     if (formData.extraServiceIds.length > 0) {
@@ -121,12 +147,14 @@ export async function createBooking(
         .from('services')
         .select('duration')
         .in('id', formData.extraServiceIds);
-      
+
       if (extraServicesError || !extraServices) {
-        throw new Error(`Error fetching extra services: ${extraServicesError?.message}`);
+        throw new Error(
+          `Error fetching extra services: ${extraServicesError?.message}`,
+        );
       }
-      
-      extraServices.forEach(service => {
+
+      extraServices.forEach((service) => {
         if (service.duration) {
           extraServiceDurations.push(service.duration);
         }
@@ -134,38 +162,40 @@ export async function createBooking(
     }
 
     // Calculate total duration
-    const totalDuration = mainService.duration + extraServiceDurations.reduce((sum, duration) => sum + duration, 0);
+    const totalDuration =
+      mainService.duration +
+      extraServiceDurations.reduce((sum, duration) => sum + duration, 0);
 
     // Properly convert appointment time from client timezone to UTC for database storage
     const localDate = new Date(formData.date);
     const [hoursStr, minutesStr] = formData.timeSlot.split(':');
     const hours = parseInt(hoursStr || '0', 10);
     const minutes = parseInt(minutesStr || '0', 10);
-    
+
     // Create the appointment start time in client's local time
     const appointmentDateInClientTz = new Date(localDate);
     appointmentDateInClientTz.setHours(hours, minutes, 0, 0);
 
     // Import timezone utilities for proper conversion
     const { fromZonedTime } = await import('date-fns-tz');
-    
+
     // Convert from client timezone to UTC for database storage
     const utcDate = fromZonedTime(appointmentDateInClientTz, clientTimezone);
-    const utcEndDate = new Date(utcDate.getTime() + (totalDuration * 60 * 1000));
+    const utcEndDate = new Date(utcDate.getTime() + totalDuration * 60 * 1000);
 
     console.log('Appointment times:', {
       clientLocalTime: appointmentDateInClientTz.toLocaleString(),
       clientTimezone,
       utcStart: utcDate.toISOString(),
       utcEnd: utcEndDate.toISOString(),
-      totalDuration
+      totalDuration,
     });
 
     // Calculate total price
     const { total: totalPrice, serviceFee } = await calculateTotalPrice(
       formData.serviceId,
       formData.extraServiceIds,
-      formData.tipAmount || 0
+      formData.tipAmount || 0,
     );
 
     // Get the payment method to check if it's online
@@ -191,20 +221,22 @@ export async function createBooking(
         })
         .select('id')
         .single();
-      
+
       if (bookingError || !booking) {
         throw new Error(`Error creating booking: ${bookingError?.message}`);
       }
-      
+
       // Create appointment record
-      console.log('About to create appointment with status: "ongoing", permitted statuses in schema are "completed", "cancelled", "ongoing"');
+      console.log(
+        'About to create appointment with status: "ongoing", permitted statuses in schema are "completed", "cancelled", "ongoing"',
+      );
       console.log('Appointment data:', {
         booking_id: booking.id,
         start_time: utcDate.toISOString(),
         end_time: utcEndDate.toISOString(),
-        status: 'ongoing' // Changed from 'active' to match allowed statuses
+        status: 'ongoing', // Changed from 'active' to match allowed statuses
       });
-      
+
       const { data: appointment, error: appointmentError } = await supabase
         .from('appointments')
         .insert({
@@ -215,15 +247,17 @@ export async function createBooking(
         })
         .select('id')
         .single();
-      
+
       if (appointmentError || !appointment) {
         console.error('Appointment creation error:', appointmentError);
         console.error('Error code:', appointmentError?.code);
         console.error('Error message:', appointmentError?.message);
         console.error('Error details:', appointmentError?.details);
-        throw new Error(`Error creating appointment: ${appointmentError?.message}`);
+        throw new Error(
+          `Error creating appointment: ${appointmentError?.message}`,
+        );
       }
-      
+
       // Insert main service into booking_services using admin client
       const { error: mainServiceInsertError } = await adminSupabase
         .from('booking_services')
@@ -233,37 +267,41 @@ export async function createBooking(
           price: mainService.price,
           duration: mainService.duration,
         });
-      
+
       if (mainServiceInsertError) {
-        throw new Error(`Error adding main service: ${mainServiceInsertError.message}`);
+        throw new Error(
+          `Error adding main service: ${mainServiceInsertError.message}`,
+        );
       }
-      
+
       // Insert extra services into booking_services
       if (formData.extraServiceIds.length > 0) {
         const { data: extraServices } = await supabase
           .from('services')
           .select('id, price, duration')
           .in('id', formData.extraServiceIds);
-        
+
         if (extraServices && extraServices.length > 0) {
-          const extraServicesData = extraServices.map(service => ({
+          const extraServicesData = extraServices.map((service) => ({
             booking_id: booking.id,
             service_id: service.id,
             price: service.price,
             duration: service.duration,
           }));
-          
+
           const { error: extraServicesError } = await adminSupabase
             .from('booking_services')
             .insert(extraServicesData);
-          
+
           if (extraServicesError) {
-            throw new Error(`Error adding extra services: ${extraServicesError.message}`);
+            throw new Error(
+              `Error adding extra services: ${extraServicesError.message}`,
+            );
           }
         }
       }
-      
-      // Calculate payment schedule for online payments  
+
+      // Calculate payment schedule for online payments
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const paymentRecord: any = {
         booking_id: booking.id,
@@ -279,23 +317,26 @@ export async function createBooking(
       // For online payments, calculate and set payment schedule
       if (paymentMethod?.is_online) {
         try {
-          const { data: scheduleData, error: scheduleError } = await supabase
-            .rpc('calculate_payment_schedule', {
+          const { data: scheduleData, error: scheduleError } =
+            await supabase.rpc('calculate_payment_schedule', {
               appointment_start_time: utcDate.toISOString(),
-              appointment_end_time: utcEndDate.toISOString()
+              appointment_end_time: utcEndDate.toISOString(),
             });
 
           if (!scheduleError && scheduleData && scheduleData.length > 0) {
             const schedule = scheduleData[0];
-            
+
             if (schedule?.should_pre_auth_now) {
               // Appointment is <6 days: Pre-auth happens immediately, no scheduling needed
               paymentRecord.capture_scheduled_for = schedule?.capture_date;
               paymentRecord.status = 'pending'; // Will be updated to 'authorized' when payment intent is created
-              console.log('Immediate pre-auth schedule (appointment <6 days):', {
-                captureDate: schedule?.capture_date,
-                immediatePreAuth: true
-              });
+              console.log(
+                'Immediate pre-auth schedule (appointment <6 days):',
+                {
+                  captureDate: schedule?.capture_date,
+                  immediatePreAuth: true,
+                },
+              );
             } else if (schedule) {
               // Appointment is >6 days: Schedule both pre-auth and capture
               paymentRecord.pre_auth_scheduled_for = schedule?.pre_auth_date;
@@ -303,7 +344,7 @@ export async function createBooking(
               console.log('Scheduled payment (appointment >6 days):', {
                 preAuthDate: schedule?.pre_auth_date,
                 captureDate: schedule?.capture_date,
-                scheduledPreAuth: true
+                scheduledPreAuth: true,
               });
             }
           }
@@ -317,17 +358,18 @@ export async function createBooking(
       const { error: paymentError } = await adminSupabase
         .from('booking_payments')
         .insert(paymentRecord);
-      
+
       if (paymentError) {
-        throw new Error(`Error creating payment record: ${paymentError.message}`);
+        throw new Error(
+          `Error creating payment record: ${paymentError.message}`,
+        );
       }
-      
+
       // Note: Confirmation emails are sent from Stripe webhook after payment confirmation
       // This ensures emails are only sent for successfully paid bookings
-      
+
       // Return the booking details
       return { bookingId: booking.id, totalPrice };
-      
     } catch (error) {
       console.error('Error in createBooking:', error);
       throw error;
@@ -353,7 +395,7 @@ function isSlotOverlapping(
   slotStartTime: string,
   slotEndTime: string,
   appointmentStartTime: string,
-  appointmentEndTime: string
+  appointmentEndTime: string,
 ): boolean {
   const slotStart = new Date(slotStartTime);
   const slotEnd = new Date(slotEndTime);
@@ -383,19 +425,25 @@ async function generateCrossMidnightSlots(
   clientSelectedDate: string,
   appointments: BookingAppointment[],
   requiredDurationMinutes: number,
-  dayOffset: number
+  dayOffset: number,
 ): Promise<string[]> {
   const slots: string[] = [];
-  
+
   // Create a date for the professional's working day
   const professionalWorkingDate = new Date(clientSelectedDate);
-  professionalWorkingDate.setDate(professionalWorkingDate.getDate() + dayOffset);
-  
+  professionalWorkingDate.setDate(
+    professionalWorkingDate.getDate() + dayOffset,
+  );
+
   // Generate time slots for this working day
   const workingStartMinutes = timeToMinutes(workingHours.startTime);
   const workingEndMinutes = timeToMinutes(workingHours.endTime);
-  
-  for (let minutes = workingStartMinutes; minutes <= workingEndMinutes - requiredDurationMinutes; minutes += 30) {
+
+  for (
+    let minutes = workingStartMinutes;
+    minutes <= workingEndMinutes - requiredDurationMinutes;
+    minutes += 30
+  ) {
     const hour = Math.floor(minutes / 60);
     const minute = minutes % 60;
 
@@ -405,30 +453,33 @@ async function generateCrossMidnightSlots(
 
     // Convert slot times to UTC for comparison
     const slotStartTime = fromZonedTime(slotDate, professionalTimezone);
-    const slotEndTime = fromZonedTime(new Date(slotDate.getTime() + (requiredDurationMinutes * 60 * 1000)), professionalTimezone);
+    const slotEndTime = fromZonedTime(
+      new Date(slotDate.getTime() + requiredDurationMinutes * 60 * 1000),
+      professionalTimezone,
+    );
 
     // Check for overlaps with existing appointments
-    const hasOverlap = (appointments || []).some(appointment => {
+    const hasOverlap = (appointments || []).some((appointment) => {
       if (!appointment.start_time || !appointment.end_time) return false;
       return isSlotOverlapping(
         slotStartTime.toISOString(),
         slotEndTime.toISOString(),
         appointment.start_time,
-        appointment.end_time
+        appointment.end_time,
       );
     });
 
     if (!hasOverlap) {
       // Convert the slot to the client's timezone
       const slotInClientTz = toZonedTime(slotStartTime, clientTimezone);
-      
+
       // Check if this slot falls on the client's selected date
       const slotClientDate = new Date(slotInClientTz);
       slotClientDate.setHours(0, 0, 0, 0);
-      
+
       const clientSelectedDateObj = new Date(clientSelectedDate);
       clientSelectedDateObj.setHours(0, 0, 0, 0);
-      
+
       if (slotClientDate.getTime() === clientSelectedDateObj.getTime()) {
         // Format the time in client timezone
         const clientTime = format(slotInClientTz, 'HH:mm');
@@ -436,7 +487,7 @@ async function generateCrossMidnightSlots(
       }
     }
   }
-  
+
   return slots;
 }
 
@@ -448,21 +499,21 @@ export async function getAvailableTimeSlots(
   date: string,
   requiredDurationMinutes: number = 30,
   professionalTimezone: string = 'UTC',
-  clientTimezone: string = 'UTC'
+  clientTimezone: string = 'UTC',
 ): Promise<string[]> {
   const supabase = await createClient();
 
   try {
-  // Create date objects for the start and end of the day in professional's timezone
-  // Use zonedTimeToUtc for accurate conversion (handles DST and IANA timezones)
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+    // Create date objects for the start and end of the day in professional's timezone
+    // Use zonedTimeToUtc for accurate conversion (handles DST and IANA timezones)
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
 
-  // Convert professional's local day start/end to UTC using fromZonedTime
-  const queryStartTime = fromZonedTime(startOfDay, professionalTimezone);
-  const queryEndTime = fromZonedTime(endOfDay, professionalTimezone);
+    // Convert professional's local day start/end to UTC using fromZonedTime
+    const queryStartTime = fromZonedTime(startOfDay, professionalTimezone);
+    const queryEndTime = fromZonedTime(endOfDay, professionalTimezone);
 
     // Get working hours
     const { data: workingHoursData, error: workingHoursError } = await supabase
@@ -477,23 +528,32 @@ export async function getAvailableTimeSlots(
     }
 
     // Parse working hours with timezone conversion
-    const workingHours = parseWorkingHoursFromDB(workingHoursData.working_hours, professionalTimezone);
-    
+    const workingHours = parseWorkingHoursFromDB(
+      workingHoursData.working_hours,
+      professionalTimezone,
+    );
+
     // Get all appointments that might overlap with any day (for cross-midnight checking)
     // Expand the query window to include adjacent days
-    const expandedStartTime = new Date(queryStartTime.getTime() - (24 * 60 * 60 * 1000)); // 1 day before
-    const expandedEndTime = new Date(queryEndTime.getTime() + (24 * 60 * 60 * 1000)); // 1 day after
-    
+    const expandedStartTime = new Date(
+      queryStartTime.getTime() - 24 * 60 * 60 * 1000,
+    ); // 1 day before
+    const expandedEndTime = new Date(
+      queryEndTime.getTime() + 24 * 60 * 60 * 1000,
+    ); // 1 day after
+
     const { data: appointments, error: appointmentsError } = await supabase
       .from('appointments')
-      .select(`
+      .select(
+        `
         start_time,
         end_time,
         bookings!inner (
           professional_profile_id,
           status
         )
-      `)
+      `,
+      )
       .eq('bookings.professional_profile_id', professionalProfileId)
       .neq('bookings.status', 'cancelled')
       .lt('start_time', expandedEndTime.toISOString())
@@ -503,65 +563,89 @@ export async function getAvailableTimeSlots(
       console.error('Error fetching appointments:', appointmentsError);
       return [];
     }
-  
+
     // Parse client's selected date
     const clientSelectedDateObj = new Date(date);
     clientSelectedDateObj.setHours(0, 0, 0, 0);
-    
-    // We need to check all professional working days to see which ones have slots 
+
+    // We need to check all professional working days to see which ones have slots
     // that fall on the client's selected date (due to timezone differences)
     const allSlots: string[] = [];
-    
-    console.log(`Finding available slots for client date ${date} (professional timezone: ${professionalTimezone}, client timezone: ${clientTimezone})`);
-    
+
+    console.log(
+      `Finding available slots for client date ${date} (professional timezone: ${professionalTimezone}, client timezone: ${clientTimezone})`,
+    );
+
     // For each day offset around the client's selected date, check which professional working days
     // might have slots that fall on this client date after timezone conversion
     for (let dayOffset = -1; dayOffset <= 1; dayOffset++) {
       const professionalDate = new Date(clientSelectedDateObj);
       professionalDate.setDate(professionalDate.getDate() + dayOffset);
-      
+
       const professionalDayOfWeek = professionalDate.getDay();
-      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayNames = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+      ];
       const professionalDayName = dayNames[professionalDayOfWeek];
-      
-      console.log(`Checking professional ${professionalDayName} (offset ${dayOffset}) for slots that fall on client date ${date}`);
-      
-      // Find all working day configurations that match this professional day
-      const matchingWorkingDays = workingHours.hours.filter(dayHours => 
-        dayHours.enabled && 
-        dayHours.startTime && 
-        dayHours.endTime && 
-        dayHours.day.toLowerCase() === professionalDayName?.toLowerCase()
+
+      console.log(
+        `Checking professional ${professionalDayName} (offset ${dayOffset}) for slots that fall on client date ${date}`,
       );
-      
+
+      // Find all working day configurations that match this professional day
+      const matchingWorkingDays = workingHours.hours.filter(
+        (dayHours) =>
+          dayHours.enabled &&
+          dayHours.startTime &&
+          dayHours.endTime &&
+          dayHours.day.toLowerCase() === professionalDayName?.toLowerCase(),
+      );
+
       for (const dayWorkingHours of matchingWorkingDays) {
-        console.log(`  Processing ${dayWorkingHours.day} working hours (${dayWorkingHours.startTime} - ${dayWorkingHours.endTime})`);
-        
+        console.log(
+          `  Processing ${dayWorkingHours.day} working hours (${dayWorkingHours.startTime} - ${dayWorkingHours.endTime})`,
+        );
+
         // Generate slots for this professional working day
         const daySlots = await generateCrossMidnightSlots(
-          { startTime: dayWorkingHours.startTime!, endTime: dayWorkingHours.endTime! },
+          {
+            startTime: dayWorkingHours.startTime!,
+            endTime: dayWorkingHours.endTime!,
+          },
           professionalTimezone,
           clientTimezone,
           date,
           appointments,
           requiredDurationMinutes,
-          dayOffset
+          dayOffset,
         );
-        
-        console.log(`    Found ${daySlots.length} slots from ${dayWorkingHours.day}: ${daySlots.join(', ')}`);
+
+        console.log(
+          `    Found ${daySlots.length} slots from ${dayWorkingHours.day}: ${daySlots.join(', ')}`,
+        );
         allSlots.push(...daySlots);
       }
     }
-    
+
     // Remove duplicates and sort
     const uniqueSlots = Array.from(new Set(allSlots));
     uniqueSlots.sort((a, b) => {
       const [aHour, aMin] = a.split(':').map(Number);
       const [bHour, bMin] = b.split(':').map(Number);
-      return ((aHour || 0) * 60 + (aMin || 0)) - ((bHour || 0) * 60 + (bMin || 0));
+      return (
+        (aHour || 0) * 60 + (aMin || 0) - ((bHour || 0) * 60 + (bMin || 0))
+      );
     });
-    
-    console.log(`Found ${uniqueSlots.length} available slots for client date ${date}`);
+
+    console.log(
+      `Found ${uniqueSlots.length} available slots for client date ${date}`,
+    );
     return uniqueSlots;
   } catch (error) {
     console.error('Error in getAvailableTimeSlots:', error);
@@ -580,10 +664,10 @@ export async function getAvailableTimeSlots(
 export async function getAvailableDates(
   professionalProfileId: string,
   professionalTimezone?: string,
-  clientTimezone?: string
+  clientTimezone?: string,
 ): Promise<string[]> {
   const supabase = await createClient();
-  
+
   try {
     // Get the professional's working hours and timezone
     const { data: professionalProfile, error: profileError } = await supabase
@@ -591,29 +675,29 @@ export async function getAvailableDates(
       .select('working_hours, timezone')
       .eq('id', professionalProfileId)
       .single();
-    
+
     if (profileError || !professionalProfile?.working_hours) {
       return [];
     }
-    
+
     // Use provided timezone or fetch from database
-    const profTimezone = professionalTimezone || professionalProfile.timezone || 'UTC';
+    const profTimezone =
+      professionalTimezone || professionalProfile.timezone || 'UTC';
     const targetTimezone = clientTimezone || profTimezone;
-    
+
     // Parse timezone-aware working hours
     const parsedWorkingHours = parseWorkingHoursFromDB(
-      professionalProfile.working_hours, 
-      profTimezone
+      professionalProfile.working_hours,
+      profTimezone,
     );
-    
+
     // Get available days with proper timezone conversion and day boundary crossing
     const availableDaysOfWeek = getAvailableDaysWithTimezoneConversion(
-      parsedWorkingHours, 
-      targetTimezone
+      parsedWorkingHours,
+      targetTimezone,
     );
-      
+
     return availableDaysOfWeek;
-    
   } catch (error) {
     console.error('Error getting available dates:', error);
     return [];
@@ -623,18 +707,18 @@ export async function getAvailableDates(
 /**
  * Get available payment methods
  */
-export async function getAvailablePaymentMethods(): Promise<Array<{ id: string; name: string }>> {
+export async function getAvailablePaymentMethods(): Promise<
+  Array<{ id: string; name: string }>
+> {
   const supabase = await createClient();
-  
+
   const { data, error: supabaseError } = await supabase
     .from('payment_methods')
     .select('id, name');
-  
+
   if (supabaseError) {
     return [];
   }
-  
+
   return data || [];
 }
-
- 

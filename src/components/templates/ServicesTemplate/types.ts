@@ -18,7 +18,7 @@ export type Professional = {
     latitude: number;
     longitude: number;
   } | null;
-}
+};
 export type ServiceListItem = {
   id: string;
   name: string;
@@ -57,4 +57,4 @@ export type PaginationInfo = {
   totalPages: number;
   totalItems: number;
   pageSize: number;
-}; 
+};

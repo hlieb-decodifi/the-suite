@@ -16,4 +16,4 @@ export type LoadingOverlayProps = React.HTMLAttributes<HTMLDivElement> & {
   loadingText?: string;
   /** Optional animation speed */
   speed?: LoaderSpeed;
-}; 
+};

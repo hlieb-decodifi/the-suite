@@ -25,7 +25,8 @@ export function PostHogDashboard() {
     return (
       <div className="bg-card border rounded-lg p-4 text-center">
         <p className="text-muted-foreground">
-          PostHog dashboard URL not configured. Please set NEXT_PUBLIC_POSTHOG_DASHBOARD_URL environment variable.
+          PostHog dashboard URL not configured. Please set
+          NEXT_PUBLIC_POSTHOG_DASHBOARD_URL environment variable.
         </p>
       </div>
     );
@@ -44,4 +45,3 @@ export function PostHogDashboard() {
     </div>
   );
 }
-

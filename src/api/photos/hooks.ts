@@ -11,7 +11,7 @@ export const QUERY_KEYS = {
 
 export function useAvatarUrlQuery(userId?: string) {
   const setStoreAvatarUrl = useAuthStore((state) => state.setAvatarUrl);
-  
+
   // Get current avatar URL from store for initial data
   const currentAvatarUrl = useAuthStore((state) => state.avatarUrl);
 
@@ -22,12 +22,12 @@ export function useAvatarUrlQuery(userId?: string) {
         return;
       }
       const url = await fetchProfilePhotoUrl(userId);
-      
+
       // Update the store when we get a new URL
       if (url) {
         setStoreAvatarUrl(url);
       }
-      
+
       return url;
     },
     // Use initial data from the store if available
@@ -43,13 +43,13 @@ export function useAvatarUrlQuery(userId?: string) {
 
 export function useUpdateProfilePhoto() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async ({ 
-      userId, 
-      formData 
-    }: { 
-      userId: string; 
+    mutationFn: async ({
+      userId,
+      formData,
+    }: {
+      userId: string;
       formData: FormData;
     }) => {
       const result = await updateProfilePhotoAction(userId, formData);
@@ -70,8 +70,11 @@ export function useUpdateProfilePhoto() {
       toast({
         variant: 'destructive',
         title: 'Upload Error',
-        description: error instanceof Error ? error.message : 'Failed to update profile photo',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Failed to update profile photo',
       });
     },
   });
-} 
+}

@@ -71,7 +71,7 @@ export function ProfileSettingsPageClient({
   const [isConvertOAuthOpen, setIsConvertOAuthOpen] = useState(false);
   const { toast } = useToast();
   const [messagingSettingsState, setMessagingSettingsState] = useState(
-    messagingSettings ?? { allow_messages: false }
+    messagingSettings ?? { allow_messages: false },
   );
 
   const canUserChangeEmail = canChangeEmail(user);
@@ -141,7 +141,9 @@ export function ProfileSettingsPageClient({
       if (result.success) {
         // Update local state directly for a more responsive and robust UI
         setMessagingSettingsState((prev) =>
-          prev ? { ...prev, allow_messages: allowMessages } : { allow_messages: allowMessages }
+          prev
+            ? { ...prev, allow_messages: allowMessages }
+            : { allow_messages: allowMessages },
         );
         toast({
           title: 'Success',
@@ -281,7 +283,9 @@ export function ProfileSettingsPageClient({
                       <div className="flex items-center gap-3">
                         <Mail size={18} />
                         <div className="text-left">
-                          <div className="font-medium">Add Email Authentication</div>
+                          <div className="font-medium">
+                            Add Email Authentication
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             Enable email changes and password login
                           </div>
@@ -309,19 +313,30 @@ export function ProfileSettingsPageClient({
                   )}
 
                   {/* Password/Set Password Button - Hide for OAuth-only users */}
-                  {(canUserChangePassword || userHasPassword || !oauthProvider) && (
+                  {(canUserChangePassword ||
+                    userHasPassword ||
+                    !oauthProvider) && (
                     <Button
                       variant="outline"
                       className="justify-start h-auto p-4"
                       onClick={() => setIsChangePasswordOpen(true)}
-                      disabled={(!canUserChangePassword && userHasPassword) || !isEditable}
+                      disabled={
+                        (!canUserChangePassword && userHasPassword) ||
+                        !isEditable
+                      }
                     >
                       <div className="flex items-center gap-3">
                         <Lock size={18} />
                         <div className="text-left">
-                          <div className="font-medium">{userHasPassword ? 'Change Password' : 'Set Password'}</div>
+                          <div className="font-medium">
+                            {userHasPassword
+                              ? 'Change Password'
+                              : 'Set Password'}
+                          </div>
                           <div className="text-sm text-muted-foreground">
-                            {userHasPassword ? 'Update your password' : 'Set a password for email login'}
+                            {userHasPassword
+                              ? 'Update your password'
+                              : 'Set a password for email login'}
                           </div>
                         </div>
                       </div>
@@ -367,11 +382,16 @@ export function ProfileSettingsPageClient({
                       onCheckedChange={handleMessagingToggle}
                       disabled={
                         isUpdatingMessagingSettings ||
-                        typeof messagingSettingsState?.allow_messages === 'undefined'
+                        typeof messagingSettingsState?.allow_messages ===
+                          'undefined'
                       }
                     />
-                    {typeof messagingSettingsState?.allow_messages === 'undefined' && (
-                      <Typography variant="small" className="text-muted-foreground ml-2">
+                    {typeof messagingSettingsState?.allow_messages ===
+                      'undefined' && (
+                      <Typography
+                        variant="small"
+                        className="text-muted-foreground ml-2"
+                      >
                         Loading messaging settings…
                       </Typography>
                     )}

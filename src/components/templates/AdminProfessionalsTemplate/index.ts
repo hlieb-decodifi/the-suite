@@ -1,1 +1,1 @@
-export { AdminProfessionalsTemplate } from './AdminProfessionalsTemplate'; 
+export { AdminProfessionalsTemplate } from './AdminProfessionalsTemplate';

@@ -15,8 +15,9 @@ export async function triggerCronJob(jobEndpoint: string): Promise<{
 }> {
   try {
     // Get the cron secret from environment variables (server-side only)
-    const cronSecret = process.env.CRON_SECRET || process.env.NEXT_PUBLIC_CRON_SECRET;
-    
+    const cronSecret =
+      process.env.CRON_SECRET || process.env.NEXT_PUBLIC_CRON_SECRET;
+
     if (!cronSecret) {
       console.error('CRON_SECRET not configured');
       return {
@@ -26,16 +27,19 @@ export async function triggerCronJob(jobEndpoint: string): Promise<{
     }
 
     // Get the base URL for the current environment
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      'http://localhost:3000';
     const url = `${baseUrl}${jobEndpoint}`;
 
     console.log(`[SERVER] Triggering cron job: ${url}`);
-    
+
     // Make the request with the secret
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${cronSecret}`,
+        Authorization: `Bearer ${cronSecret}`,
         'Content-Type': 'application/json',
       },
     });
@@ -44,7 +48,7 @@ export async function triggerCronJob(jobEndpoint: string): Promise<{
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       const result = await response.json();
-      
+
       if (response.ok) {
         console.log(`[SERVER] Cron job succeeded: ${jobEndpoint}`);
         return {
@@ -61,11 +65,14 @@ export async function triggerCronJob(jobEndpoint: string): Promise<{
     } else {
       // Handle non-JSON response
       const text = await response.text();
-      console.error(`[SERVER] Non-JSON response from cron job: ${jobEndpoint}`, {
-        status: response.status,
-        text: text.substring(0, 100),
-      });
-      
+      console.error(
+        `[SERVER] Non-JSON response from cron job: ${jobEndpoint}`,
+        {
+          status: response.status,
+          text: text.substring(0, 100),
+        },
+      );
+
       return {
         success: false,
         message: `Server returned non-JSON response (${response.status})`,

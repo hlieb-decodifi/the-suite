@@ -1,1 +1,1 @@
-export { BookingCompleted } from './BookingCompleted'; 
+export { BookingCompleted } from './BookingCompleted';

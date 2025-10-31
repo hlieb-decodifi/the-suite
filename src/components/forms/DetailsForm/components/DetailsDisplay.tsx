@@ -10,7 +10,7 @@ const formatPhoneNumber = (phone: string): string => {
   if (!phone || phone.trim() === '') {
     return '-';
   }
-  
+
   try {
     const parsed = phoneUtil.parseAndKeepRawInput(phone);
     if (phoneUtil.isValidNumber(parsed)) {

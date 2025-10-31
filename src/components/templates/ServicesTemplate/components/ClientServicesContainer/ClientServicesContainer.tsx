@@ -84,7 +84,9 @@ function useServerSearch(
       setIsLoading(true);
 
       // Update URL without navigation
-  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
+      const params = new URLSearchParams(
+        searchParams ? searchParams.toString() : '',
+      );
       if (searchTerm.trim()) {
         params.set('search', searchTerm.trim());
       } else {
@@ -204,7 +206,7 @@ export function ClientServicesContainer({
     initialSearchTerm,
     initialLocation,
     initialSortBy,
-    userDefaultLocation
+    userDefaultLocation,
   );
 
   // Set up server-side search without page reload

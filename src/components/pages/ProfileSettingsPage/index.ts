@@ -1,2 +1,2 @@
 export * from './ProfileSettingsPage';
-export * from './ProfileSettingsPageClient'; 
+export * from './ProfileSettingsPageClient';

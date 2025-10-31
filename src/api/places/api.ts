@@ -1,7 +1,5 @@
 // @ts-nocheck
- 
- 
- 
+
 import { googlePlacesClient } from '@/lib/google-places/client';
 import type {
   AutocompleteRequest,
@@ -21,10 +19,10 @@ import type {
  */
 function parseAddressComponents(
   place: Place,
-  addressComponents: AddressComponent[]
+  addressComponents: AddressComponent[],
 ): Partial<AddressData> {
   const componentMap: Record<string, string> = {};
-  
+
   // Create a map of component types to values
   addressComponents.forEach((component) => {
     component.types.forEach((type) => {
@@ -50,28 +48,34 @@ function parseAddressComponents(
   });
 
   // Build street address from components
-  const streetAddress = [
-    componentMap.street_number,
-    componentMap.route,
-  ].filter(Boolean).join(' ');
+  const streetAddress = [componentMap.street_number, componentMap.route]
+    .filter(Boolean)
+    .join(' ');
 
   const result: Partial<AddressData> = {};
-  
-  if (componentMap.street_number) result.street_number = componentMap.street_number;
+
+  if (componentMap.street_number)
+    result.street_number = componentMap.street_number;
   if (componentMap.route) result.route = componentMap.route;
   if (componentMap.locality) result.locality = componentMap.locality;
   if (componentMap.sublocality) result.sublocality = componentMap.sublocality;
-  if (componentMap.administrative_area_level_1) result.administrative_area_level_1 = componentMap.administrative_area_level_1;
-  if (componentMap.administrative_area_level_2) result.administrative_area_level_2 = componentMap.administrative_area_level_2;
+  if (componentMap.administrative_area_level_1)
+    result.administrative_area_level_1 =
+      componentMap.administrative_area_level_1;
+  if (componentMap.administrative_area_level_2)
+    result.administrative_area_level_2 =
+      componentMap.administrative_area_level_2;
   if (componentMap.country) result.country = componentMap.country;
-  if (componentMap.country_code) result.country_code = componentMap.country_code;
+  if (componentMap.country_code)
+    result.country_code = componentMap.country_code;
   if (componentMap.postal_code) result.postal_code = componentMap.postal_code;
-  
+
   // Legacy fields for backward compatibility
   if (componentMap.locality) result.city = componentMap.locality;
-  if (componentMap.administrative_area_level_1) result.state = componentMap.administrative_area_level_1;
+  if (componentMap.administrative_area_level_1)
+    result.state = componentMap.administrative_area_level_1;
   if (streetAddress) result.street_address = streetAddress;
-  
+
   return result;
 }
 
@@ -79,8 +83,11 @@ function parseAddressComponents(
  * Convert Google Places Place object to our AddressData format
  */
 function placeToAddressData(place: Place): AddressData {
-  const parsedComponents = parseAddressComponents(place, place.addressComponents || []);
-  
+  const parsedComponents = parseAddressComponents(
+    place,
+    place.addressComponents || [],
+  );
+
   return {
     google_place_id: place.id,
     formatted_address: place.formattedAddress,
@@ -116,7 +123,7 @@ export async function autocompleteAddresses(
     countries?: string[];
     language?: string;
     region?: string;
-  } = {}
+  } = {},
 ): Promise<AutocompleteResponse> {
   const request: AutocompleteRequest = {
     input,
@@ -162,7 +169,7 @@ export async function autocompleteAddresses(
   // Note: Autocomplete API uses 'suggestions' structure, not 'places'
   const fieldMask: AutocompleteField[] = [
     'suggestions.placePrediction.place',
-    'suggestions.placePrediction.placeId', 
+    'suggestions.placePrediction.placeId',
     'suggestions.placePrediction.text',
     'suggestions.placePrediction.types',
   ];
@@ -180,7 +187,7 @@ export async function getPlaceDetails(
     sessionToken?: string;
     language?: string;
     region?: string;
-  } = {}
+  } = {},
 ): Promise<AddressData> {
   const request: PlaceDetailsRequest = {
     name: `places/${placeId}`,
@@ -203,13 +210,16 @@ export async function getPlaceDetails(
   ];
 
   const response = await googlePlacesClient.getPlaceDetails(request, fieldMask);
-  
-  console.log('🔍 Place Details API Response:', JSON.stringify(response, null, 2));
-  
+
+  console.log(
+    '🔍 Place Details API Response:',
+    JSON.stringify(response, null, 2),
+  );
+
   if (!response) {
     throw new Error('Place Details API returned empty response');
   }
-  
+
   return placeToAddressData(response.place || response);
 }
 
@@ -232,7 +242,7 @@ export async function searchPlacesByText(
     region?: string;
     openNow?: boolean;
     priceLevel?: 'INEXPENSIVE' | 'MODERATE' | 'EXPENSIVE' | 'VERY_EXPENSIVE';
-  } = {}
+  } = {},
 ): Promise<AddressData[]> {
   const request: TextSearchRequest = {
     textQuery: query,
@@ -240,7 +250,9 @@ export async function searchPlacesByText(
     regionCode: options.region,
     maxResultCount: options.maxResults || 20,
     openNow: options.openNow,
-    priceLevels: options.priceLevel ? [`PRICE_LEVEL_${options.priceLevel}`] : undefined,
+    priceLevels: options.priceLevel
+      ? [`PRICE_LEVEL_${options.priceLevel}`]
+      : undefined,
   };
 
   // Add location bias if provided
@@ -304,7 +316,7 @@ export async function searchPlacesNearby(
     language?: string;
     region?: string;
     rankBy?: 'POPULARITY' | 'DISTANCE';
-  } = {}
+  } = {},
 ): Promise<AddressData[]> {
   const request: NearbySearchRequest = {
     locationRestriction: {
@@ -352,11 +364,11 @@ export function getPlacePhotoUrl(
   options: {
     maxHeight?: number;
     maxWidth?: number;
-  } = {}
+  } = {},
 ): string {
   return googlePlacesClient.getPlacePhotoUrl(
     photoName,
     options.maxHeight,
-    options.maxWidth
+    options.maxWidth,
   );
-} 
+}

@@ -4,7 +4,13 @@ import { requireAdminUser } from '@/server/lib/auth';
 /**
  * Fetch all general conversations for admin, filtered by last message date range.
  */
-export async function getAllGeneralConversationsForAdmin({ start, end }: { start: string; end: string }) {
+export async function getAllGeneralConversationsForAdmin({
+  start,
+  end,
+}: {
+  start: string;
+  end: string;
+}) {
   // 1. Check user is admin using shared utility
   const adminCheck = await requireAdminUser();
   if (!adminCheck.success) {
@@ -65,31 +71,40 @@ export async function getAllGeneralConversationsForAdmin({ start, end }: { start
   }
 
   // Assemble the result
-  const filtered = (conversations || []).map((conversation) => {
-    const lastMessage = lastMessagesMap.get(conversation.id);
-    if (!lastMessage) return null;
-    const lastMessageDate = new Date(lastMessage.created_at);
-    if (
-      lastMessageDate < new Date(start) ||
-      lastMessageDate > new Date(new Date(end).setHours(23, 59, 59, 999))
-    ) {
-      return null;
-    }
-    const clientUser = usersMap.get(conversation.client_id) || null;
-    const professionalUser = usersMap.get(conversation.professional_id) || null;
-    if (!clientUser) {
-      console.error('[AdminMessages] Client user not found for id:', conversation.client_id);
-    }
-    if (!professionalUser) {
-      console.error('[AdminMessages] Professional user not found for id:', conversation.professional_id);
-    }
-    return {
-      ...conversation,
-      last_message: lastMessage,
-      client_user: clientUser,
-      professional_user: professionalUser,
-    };
-  }).filter(Boolean);
+  const filtered = (conversations || [])
+    .map((conversation) => {
+      const lastMessage = lastMessagesMap.get(conversation.id);
+      if (!lastMessage) return null;
+      const lastMessageDate = new Date(lastMessage.created_at);
+      if (
+        lastMessageDate < new Date(start) ||
+        lastMessageDate > new Date(new Date(end).setHours(23, 59, 59, 999))
+      ) {
+        return null;
+      }
+      const clientUser = usersMap.get(conversation.client_id) || null;
+      const professionalUser =
+        usersMap.get(conversation.professional_id) || null;
+      if (!clientUser) {
+        console.error(
+          '[AdminMessages] Client user not found for id:',
+          conversation.client_id,
+        );
+      }
+      if (!professionalUser) {
+        console.error(
+          '[AdminMessages] Professional user not found for id:',
+          conversation.professional_id,
+        );
+      }
+      return {
+        ...conversation,
+        last_message: lastMessage,
+        client_user: clientUser,
+        professional_user: professionalUser,
+      };
+    })
+    .filter(Boolean);
 
   return { success: true, conversations: filtered };
 }

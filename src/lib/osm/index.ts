@@ -29,20 +29,22 @@ export type OSMSearchResult = {
 /**
  * Search for addresses using the OpenStreetMap Nominatim API
  */
-export async function searchAddresses(query: string): Promise<OSMSearchResult[]> {
+export async function searchAddresses(
+  query: string,
+): Promise<OSMSearchResult[]> {
   if (!query || query.length < 3) return [];
-  
+
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        query
+        query,
       )}&addressdetails=1&limit=5`,
       {
         headers: {
           'Accept-Language': 'en',
           'User-Agent': 'TheSuite Web App',
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -61,7 +63,7 @@ export async function searchAddresses(query: string): Promise<OSMSearchResult[]>
  */
 export function parseAddressComponents(result: OSMSearchResult) {
   const address = result.address;
-  
+
   return {
     country: address.country || '',
     state: address.state || '',
@@ -73,4 +75,4 @@ export function parseAddressComponents(result: OSMSearchResult) {
     latitude: result.lat,
     longitude: result.lon,
   };
-} 
+}
