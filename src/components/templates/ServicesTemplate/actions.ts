@@ -2,7 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { ServiceListItem, Professional, PaginationInfo } from './types';
-import { getProfessionalRatingStats, shouldShowPublicReviews } from '@/api/reviews/api';
+import {
+  getProfessionalRatingStats,
+  shouldShowPublicReviews,
+} from '@/api/reviews/api';
 
 // Supabase project URL from environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,18 +15,18 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
  */
 function getPublicImageUrl(path: string | undefined): string | undefined {
   if (!path) return undefined;
-  
+
   // If it's already a full URL, return it
   if (path.startsWith('http')) {
     return path;
   }
-  
+
   // Make sure the supabaseUrl is available
   if (!supabaseUrl) {
     console.error('NEXT_PUBLIC_SUPABASE_URL is not defined');
     return undefined;
   }
-  
+
   // Construct the storage URL
   const bucketName = 'profile-photos';
   return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${path}`;
@@ -68,50 +71,58 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
   const professionalProfile = serviceData.professional_profile;
   const user = professionalProfile?.user;
   const rawPhotoUrl = user?.profile_photo?.url;
-  
+
   // Generate proper public URL for the avatar
   const profilePhoto = getPublicImageUrl(rawPhotoUrl);
-  
+
   // Get real review data for professional
   let rating = 0;
   let reviewCount = 0;
   try {
     const ratingStats = await getProfessionalRatingStats(user?.id || '');
     const shouldShow = await shouldShowPublicReviews(user?.id || '');
-    
+
     if (shouldShow && ratingStats) {
       rating = ratingStats.averageRating;
       reviewCount = ratingStats.totalReviews;
     }
   } catch (error) {
-    console.error('Error fetching review stats for professional:', user?.id, error);
+    console.error(
+      'Error fetching review stats for professional:',
+      user?.id,
+      error,
+    );
   }
-  
+
   // Format address for display based on privacy settings
   const address = professionalProfile?.address;
   const hideFullAddress = professionalProfile?.hide_full_address || false;
   const displayAddress = address
     ? hideFullAddress
       ? `${address.city}, ${address.state}, ${address.country}`
-        .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
-        .trim()
+          .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+          .trim()
       : `${address.street_address}${address.apartment ? `, ${address.apartment}` : ''}, ${address.city}, ${address.state}, ${address.country}`
-        .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
-        .trim()
+          .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+          .trim()
     : professionalProfile?.location || 'Location not specified'; // Fallback to legacy location field
-  
+
   // Check subscription status for this professional
   const supabase = await createClient();
   let isBookable = false;
-  
+
   try {
     const { data: isSubscribed, error: subscriptionError } = await supabase.rpc(
       'is_professional_user_subscribed',
-      { prof_user_id: user?.id }
+      { prof_user_id: user?.id },
     );
-    
+
     if (subscriptionError) {
-      console.error('Error checking subscription status for professional:', user?.id, subscriptionError);
+      console.error(
+        'Error checking subscription status for professional:',
+        user?.id,
+        subscriptionError,
+      );
     } else {
       isBookable = !!isSubscribed;
     }
@@ -122,7 +133,9 @@ async function mapServiceData(service: unknown): Promise<ServiceListItem> {
   // Create professional object
   const professional: Professional = {
     id: user?.id || 'unknown',
-    name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
+    name: user
+      ? `${user.first_name} ${user.last_name}`
+      : 'Unknown Professional',
     avatar: profilePhoto ?? '', // Ensure avatar is always a string
     address: displayAddress,
     rating,
@@ -154,27 +167,30 @@ export type ServicesWithPagination = {
  */
 async function getPublishedProfileIds() {
   const supabase = await createClient();
-  
+
   const { data: publishedProfiles } = await supabase
     .from('professional_profiles')
     .select('id')
     .eq('is_published', true);
-  
-  return publishedProfiles?.map(profile => profile.id) || [];
+
+  return publishedProfiles?.map((profile) => profile.id) || [];
 }
 
 /**
  * Create empty pagination result
  */
-function createEmptyPaginationResult(page: number, pageSize: number): ServicesWithPagination {
-  return { 
-     services: [],
-     pagination: {
-       currentPage: page,
-       totalPages: 0,
-       totalItems: 0,
-       pageSize
-     }
+function createEmptyPaginationResult(
+  page: number,
+  pageSize: number,
+): ServicesWithPagination {
+  return {
+    services: [],
+    pagination: {
+      currentPage: page,
+      totalPages: 0,
+      totalItems: 0,
+      pageSize,
+    },
   };
 }
 
@@ -185,7 +201,7 @@ export async function getServices(
   page = 1,
   pageSize = 12,
   search?: string,
-  location?: string
+  location?: string,
 ): Promise<ServicesWithPagination> {
   // If we have location filtering, use the more comprehensive filtering function
   if (location && location.trim() !== '') {
@@ -200,12 +216,17 @@ export async function getServices(
     return createEmptyPaginationResult(page, pageSize);
   }
 
-  // If there's a search term, fetch paginated results server-side
+  // If there's a search term, fetch all services and filter server-side
   if (search && search.trim() !== '') {
     const trimmedSearch = search.trim();
-  const query = supabase
+
+    // We need to fetch all services with professional info to search by professional names
+    // Since Supabase doesn't support searching across joined tables in a single OR clause,
+    // we'll fetch all services and filter them server-side
+    const query = supabase
       .from('services')
-      .select(`
+      .select(
+        `
         id, 
         name, 
         description, 
@@ -234,11 +255,11 @@ export async function getServices(
             )
           )
         )
-      `)
+      `,
+      )
       .in('professional_profile_id', publishedProfileIds)
       .eq('is_archived', false)
-      .order('id', { ascending: true })
-      .or(`name.ilike.%${trimmedSearch}%,description.ilike.%${trimmedSearch}%`);
+      .order('id', { ascending: true });
 
     const { data: allServices, error } = await query;
     if (error) {
@@ -246,11 +267,34 @@ export async function getServices(
       return createEmptyPaginationResult(page, pageSize);
     }
 
-    const totalCount = (allServices || []).length;
+    // Filter services by search term (service name, description, or professional name)
+    const filteredServices = (allServices || []).filter((service) => {
+      const searchLower = trimmedSearch.toLowerCase();
+      const nameMatch = service.name.toLowerCase().includes(searchLower);
+      const descriptionMatch = service.description
+        ?.toLowerCase()
+        .includes(searchLower);
+
+      // Search in professional's first and last name
+      const professionalFirstName =
+        service.professional_profile?.user?.first_name || '';
+      const professionalLastName =
+        service.professional_profile?.user?.last_name || '';
+      const fullName =
+        `${professionalFirstName} ${professionalLastName}`.toLowerCase();
+      const professionalMatch =
+        fullName.includes(searchLower) ||
+        professionalFirstName.toLowerCase().includes(searchLower) ||
+        professionalLastName.toLowerCase().includes(searchLower);
+
+      return nameMatch || descriptionMatch || professionalMatch;
+    });
+
+    const totalCount = filteredServices.length;
     const totalPages = Math.ceil(totalCount / pageSize);
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    const paginatedResults = (allServices || []).slice(start, end);
+    const paginatedResults = filteredServices.slice(start, end);
 
     const pagination: PaginationInfo = {
       currentPage: page,
@@ -259,7 +303,9 @@ export async function getServices(
       pageSize,
     };
 
-    const mappedServices = await Promise.all(paginatedResults.map(mapServiceData));
+    const mappedServices = await Promise.all(
+      paginatedResults.map(mapServiceData),
+    );
 
     return {
       services: mappedServices,
@@ -270,7 +316,8 @@ export async function getServices(
   // No search term: use server-side pagination
   const query = supabase
     .from('services')
-    .select(`
+    .select(
+      `
       id, 
       name, 
       description, 
@@ -299,7 +346,8 @@ export async function getServices(
           )
         )
       )
-    `)
+    `,
+    )
     .in('professional_profile_id', publishedProfileIds)
     .eq('is_archived', false)
     .order('id', { ascending: true });
@@ -342,7 +390,9 @@ export async function getServices(
   };
 
   // Map the services to the expected format
-  const mappedServices = await Promise.all((services || []).map(mapServiceData));
+  const mappedServices = await Promise.all(
+    (services || []).map(mapServiceData),
+  );
 
   return {
     services: mappedServices,
@@ -356,7 +406,7 @@ export async function getServices(
 export async function fetchServicesAction(
   page: number,
   pageSize: number,
-  searchTerm: string
+  searchTerm: string,
 ): Promise<ServicesWithPagination> {
   return getServices(page, pageSize, searchTerm);
 }
@@ -368,22 +418,23 @@ export async function getFilteredServices(
   page = 1,
   pageSize = 12,
   serviceName?: string,
-  location?: string
+  location?: string,
 ): Promise<ServicesWithPagination> {
   const supabase = await createClient();
-  
+
   // Get published profile IDs
   const publishedProfileIds = await getPublishedProfileIds();
   if (publishedProfileIds.length === 0) {
     return createEmptyPaginationResult(page, pageSize);
   }
-  
+
   try {
     // For location filtering, we need to fetch all services and filter client-side
     // since we need to search across address components
-    let query = supabase
+    const query = supabase
       .from('services')
-      .select(`
+      .select(
+        `
         id, 
         name, 
         description, 
@@ -412,46 +463,67 @@ export async function getFilteredServices(
             )
           )
         )
-      `)
+      `,
+      )
       .in('professional_profile_id', publishedProfileIds)
       .eq('is_archived', false)
       .order('id', { ascending: true });
-    
-    // Add service name filter if provided
-    if (serviceName && serviceName.trim() !== '') {
-      const trimmedSearch = serviceName.trim().toLowerCase();
-      query = query.ilike('name', `%${trimmedSearch}%`);
-    }
-    
+
     const { data: allServices, error } = await query;
-    
+
     if (error) {
       console.error('Error fetching services for filtering:', error);
       return createEmptyPaginationResult(page, pageSize);
     }
-    
+
     let filteredServices = allServices || [];
-    
+
+    // Apply service name filter if provided (including professional names)
+    if (serviceName && serviceName.trim() !== '') {
+      const trimmedSearch = serviceName.trim().toLowerCase();
+      filteredServices = filteredServices.filter((service) => {
+        const nameMatch = service.name.toLowerCase().includes(trimmedSearch);
+        const descriptionMatch = service.description
+          ?.toLowerCase()
+          .includes(trimmedSearch);
+
+        // Search in professional's first and last name
+        const professionalFirstName =
+          service.professional_profile?.user?.first_name || '';
+        const professionalLastName =
+          service.professional_profile?.user?.last_name || '';
+        const fullName =
+          `${professionalFirstName} ${professionalLastName}`.toLowerCase();
+        const professionalMatch =
+          fullName.includes(trimmedSearch) ||
+          professionalFirstName.toLowerCase().includes(trimmedSearch) ||
+          professionalLastName.toLowerCase().includes(trimmedSearch);
+
+        return nameMatch || descriptionMatch || professionalMatch;
+      });
+    }
+
     // Apply location filter if provided
     if (location && location.trim() !== '') {
       const locationLower = location.trim().toLowerCase();
-      
+
       // Split location into individual search terms (city, country, etc.)
       const locationTerms = locationLower
         .split(',')
-        .map(term => term.trim())
-        .filter(term => term.length > 0);
-      
+        .map((term) => term.trim())
+        .filter((term) => term.length > 0);
+
       filteredServices = filteredServices.filter((service) => {
         const professionalProfile = service.professional_profile;
         if (!professionalProfile) return false;
-        
+
         // Check legacy location field
-        const legacyLocation = professionalProfile.location?.toLowerCase() || '';
-        
+        const legacyLocation =
+          professionalProfile.location?.toLowerCase() || '';
+
         // Check address components if address exists
         const address = professionalProfile.address;
-        
+
         // Collect all searchable address fields
         const searchableFields = [
           legacyLocation,
@@ -460,15 +532,15 @@ export async function getFilteredServices(
           address?.city?.toLowerCase() || '',
           address?.street_address?.toLowerCase() || '',
           address?.apartment?.toLowerCase() || '',
-        ].filter(field => field.length > 0);
-        
+        ].filter((field) => field.length > 0);
+
         // Check if ANY of the location terms match ANY of the searchable fields
-        const matches = locationTerms.some(term => 
-          searchableFields.some(field => 
-            field.includes(term) || term.includes(field)
-          )
+        const matches = locationTerms.some((term) =>
+          searchableFields.some(
+            (field) => field.includes(term) || term.includes(field),
+          ),
         );
-        
+
         return matches;
       });
 
@@ -484,23 +556,25 @@ export async function getFilteredServices(
         return aHasAddress ? -1 : 1;
       });
     }
-    
+
     // Calculate pagination for filtered results
     const totalCount = filteredServices.length;
     const totalPages = Math.ceil(totalCount / pageSize);
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
     const paginatedResults = filteredServices.slice(start, end);
-    
+
     const pagination: PaginationInfo = {
       currentPage: page,
       totalPages,
       totalItems: totalCount,
       pageSize,
     };
-    
-    const mappedServices = await Promise.all(paginatedResults.map(mapServiceData));
-    
+
+    const mappedServices = await Promise.all(
+      paginatedResults.map(mapServiceData),
+    );
+
     return {
       services: mappedServices,
       pagination,
@@ -509,4 +583,4 @@ export async function getFilteredServices(
     console.error('Unexpected error in getFilteredServices:', error);
     return createEmptyPaginationResult(page, pageSize);
   }
-} 
+}
