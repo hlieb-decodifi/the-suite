@@ -2652,7 +2652,8 @@ insert into admin_configs (key, value, description, data_type) values
   ('service_fee_dollars', '1.0', 'Service fee charged on transactions', 'decimal'),
   ('max_portfolio_photos', '20', 'Maximum number of portfolio photos per professional', 'integer'),
   ('max_services_default', '50', 'Default maximum number of services per professional', 'integer'),
-  ('review_edit_window_days', '7', 'Number of days clients can edit their reviews after creation', 'integer');
+  ('review_edit_window_days', '7', 'Number of days clients can edit their reviews after creation', 'integer'),
+  ('professional_fee_percentage', '3', 'Percentage fee charged to professionals on completed bookings', 'decimal');
 
 /**
 * RLS policies for admin configurations
