@@ -51,9 +51,9 @@ export function BookingPageClient({
   }, []);
 
   // Use the existing booking state hook with the page context
-  const selectedExtraServiceIds = useMemo(() => 
-    formData.extraServices?.map((s) => s.id) || [], 
-    [formData.extraServices]
+  const selectedExtraServiceIds = useMemo(
+    () => formData.extraServices?.map((s) => s.id) || [],
+    [formData.extraServices],
   );
   const {
     bookingCompleted,
@@ -110,7 +110,6 @@ export function BookingPageClient({
   const handleGoBack = () => {
     router.back();
   };
-
 
   // Ensure we always have an array of payment methods
   const availablePaymentMethods = Array.isArray(paymentMethods)

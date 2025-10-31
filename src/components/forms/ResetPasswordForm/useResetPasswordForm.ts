@@ -10,10 +10,10 @@ export type UseResetPasswordFormProps = {
   isLoading?: boolean;
 };
 
-export function useResetPasswordForm({ 
-  onSubmit, 
+export function useResetPasswordForm({
+  onSubmit,
   defaultValues,
-  isLoading = false
+  isLoading = false,
 }: UseResetPasswordFormProps) {
   const form = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -33,4 +33,4 @@ export function useResetPasswordForm({
     isPending: isLoading,
     onSubmit: handleSubmit,
   };
-} 
+}

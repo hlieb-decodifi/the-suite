@@ -33,10 +33,11 @@ export const ResolutionModal: React.FC<ResolutionModalProps> = ({
   const handleResolve = async () => {
     try {
       setIsSubmitting(true);
-      
+
       const result = await resolveSupportRequestAction({
         support_request_id: supportRequestId,
-        resolution_notes: 'Support request has been resolved by the professional.',
+        resolution_notes:
+          'Support request has been resolved by the professional.',
       });
 
       if (result.success) {
@@ -80,7 +81,8 @@ export const ResolutionModal: React.FC<ResolutionModalProps> = ({
             Resolve Support Request
           </DialogTitle>
           <DialogDescription>
-            Are you sure you want to mark this support request as resolved? This action will close the conversation and notify the client.
+            Are you sure you want to mark this support request as resolved? This
+            action will close the conversation and notify the client.
           </DialogDescription>
         </DialogHeader>
 
@@ -100,7 +102,10 @@ export const ResolutionModal: React.FC<ResolutionModalProps> = ({
               <strong>What happens when you resolve this request:</strong>
             </p>
             <ul className="mt-2 text-sm text-green-700 space-y-1">
-              <li>• The support request status will be changed to &quot;Resolved&quot;</li>
+              <li>
+                • The support request status will be changed to
+                &quot;Resolved&quot;
+              </li>
               <li>• A resolution message will be added to the conversation</li>
               <li>• The client will be notified of the resolution</li>
             </ul>

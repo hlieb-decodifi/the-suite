@@ -1,2 +1,2 @@
 export * from './ServiceForm';
-export * from './schema'; 
+export * from './schema';

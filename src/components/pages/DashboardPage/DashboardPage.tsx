@@ -221,13 +221,16 @@ export async function getDashboardSupportRequests(
     }
 
     // Order by created_at descending and apply limit if specified
-    supportRequestsQuery = supportRequestsQuery.order('created_at', { ascending: false });
+    supportRequestsQuery = supportRequestsQuery.order('created_at', {
+      ascending: false,
+    });
 
     if (limit) {
       supportRequestsQuery = supportRequestsQuery.limit(limit);
     }
 
-    const { data: supportRequestsData, error: supportRequestsError } = await supportRequestsQuery;
+    const { data: supportRequestsData, error: supportRequestsError } =
+      await supportRequestsQuery;
 
     if (supportRequestsError) {
       console.error('Error fetching support requests:', supportRequestsError);
@@ -239,15 +242,21 @@ export async function getDashboardSupportRequests(
     }
 
     // Get additional data for appointments and user names
-    const appointmentIds = supportRequestsData.map((r) => r.appointment_id).filter((id): id is string => Boolean(id));
+    const appointmentIds = supportRequestsData
+      .map((r) => r.appointment_id)
+      .filter((id): id is string => Boolean(id));
     const clientIds = supportRequestsData.map((r) => r.client_id);
-    const professionalIds = supportRequestsData.map((r) => r.professional_id).filter((id): id is string => Boolean(id));
+    const professionalIds = supportRequestsData
+      .map((r) => r.professional_id)
+      .filter((id): id is string => Boolean(id));
 
     // Fetch appointments data
-    const { data: appointmentsData } = appointmentIds.length > 0 ? await supabase
-      .from('appointments')
-      .select(
-        `
+    const { data: appointmentsData } =
+      appointmentIds.length > 0
+        ? await supabase
+            .from('appointments')
+            .select(
+              `
         id,
         start_time,
         end_time,
@@ -258,8 +267,9 @@ export async function getDashboardSupportRequests(
           )
         )
       `,
-      )
-      .in('id', appointmentIds) : { data: [] };
+            )
+            .in('id', appointmentIds)
+        : { data: [] };
 
     // Fetch user data
     const { data: usersData } = await supabase
@@ -274,48 +284,55 @@ export async function getDashboardSupportRequests(
     const usersMap = new Map(usersData?.map((u) => [u.id, u]) || []);
 
     // Transform the data to match the expected format
-    const transformedSupportRequests = supportRequestsData.map((supportRequest) => {
-      const appointment = supportRequest.appointment_id ? appointmentsMap.get(supportRequest.appointment_id) : null;
-      const clientUser = usersMap.get(supportRequest.client_id);
-      const professionalUser = supportRequest.professional_id ? usersMap.get(supportRequest.professional_id) : null;
+    const transformedSupportRequests = supportRequestsData.map(
+      (supportRequest) => {
+        const appointment = supportRequest.appointment_id
+          ? appointmentsMap.get(supportRequest.appointment_id)
+          : null;
+        const clientUser = usersMap.get(supportRequest.client_id);
+        const professionalUser = supportRequest.professional_id
+          ? usersMap.get(supportRequest.professional_id)
+          : null;
 
-      // Get client/professional name
-      const clientName = clientUser
-        ? `${clientUser.first_name} ${clientUser.last_name}`.trim()
-        : 'Client';
+        // Get client/professional name
+        const clientName = clientUser
+          ? `${clientUser.first_name} ${clientUser.last_name}`.trim()
+          : 'Client';
 
-      const professionalName = professionalUser
-        ? `${professionalUser.first_name} ${professionalUser.last_name}`.trim()
-        : 'Professional';
+        const professionalName = professionalUser
+          ? `${professionalUser.first_name} ${professionalUser.last_name}`.trim()
+          : 'Professional';
 
-      // Get service name from first booking service
-      const serviceName =
-        appointment?.bookings?.booking_services?.[0]?.services?.name ||
-        supportRequest.title || 'Support Request';
+        // Get service name from first booking service
+        const serviceName =
+          appointment?.bookings?.booking_services?.[0]?.services?.name ||
+          supportRequest.title ||
+          'Support Request';
 
-      // Create appointment date/time from start_time
-      const appointmentDate = appointment?.start_time
-        ? new Date(appointment.start_time)
-        : new Date();
+        // Create appointment date/time from start_time
+        const appointmentDate = appointment?.start_time
+          ? new Date(appointment.start_time)
+          : new Date();
 
-      return {
-        id: supportRequest.id,
-        appointmentId: supportRequest.appointment_id,
-        title: supportRequest.title,
-        description: supportRequest.description,
-        requestedAmount: supportRequest.requested_amount,
-        originalAmount: supportRequest.original_amount,
-        refundAmount: supportRequest.refund_amount,
-        status: supportRequest.status,
-        category: supportRequest.category,
-        createdAt: supportRequest.created_at,
-        updatedAt: supportRequest.updated_at,
-        serviceName,
-        clientName,
-        professionalName,
-        appointmentDate: appointmentDate.toISOString(),
-      };
-    });
+        return {
+          id: supportRequest.id,
+          appointmentId: supportRequest.appointment_id,
+          title: supportRequest.title,
+          description: supportRequest.description,
+          requestedAmount: supportRequest.requested_amount,
+          originalAmount: supportRequest.original_amount,
+          refundAmount: supportRequest.refund_amount,
+          status: supportRequest.status,
+          category: supportRequest.category,
+          createdAt: supportRequest.created_at,
+          updatedAt: supportRequest.updated_at,
+          serviceName,
+          clientName,
+          professionalName,
+          appointmentDate: appointmentDate.toISOString(),
+        };
+      },
+    );
 
     return transformedSupportRequests;
   } catch (error) {

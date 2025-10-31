@@ -1,1 +1,1 @@
-export * from './ServicesTemplateListSection'; 
+export * from './ServicesTemplateListSection';

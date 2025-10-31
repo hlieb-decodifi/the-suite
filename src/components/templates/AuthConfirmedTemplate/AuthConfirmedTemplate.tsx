@@ -18,8 +18,10 @@ import { useState } from 'react';
 export function AuthConfirmedTemplate() {
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const searchParams = useSearchParams();
-  
-  const verified = searchParams ? searchParams.get('verified') === 'true' : false;
+
+  const verified = searchParams
+    ? searchParams.get('verified') === 'true'
+    : false;
   const error = searchParams ? searchParams.get('error') : null;
 
   const handleLoginClick = () => {
@@ -30,10 +32,11 @@ export function AuthConfirmedTemplate() {
   if (!verified || error) {
     let errorTitle = 'Authentication Failed';
     let errorDescription = 'There was an issue with your authentication.';
-    
+
     if (error === 'user_not_found') {
       errorTitle = 'Account Not Found';
-      errorDescription = 'No account found with this email. Please sign up first or use the correct account.';
+      errorDescription =
+        'No account found with this email. Please sign up first or use the correct account.';
     } else if (error === 'invalid_role') {
       errorTitle = 'Invalid Role';
       errorDescription = 'The selected role is invalid. Please try again.';

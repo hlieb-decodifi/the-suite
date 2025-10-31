@@ -1,15 +1,15 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { 
-  syncServiceWithStripe, 
+import {
+  syncServiceWithStripe,
   syncAllProfessionalServices,
   archiveServiceFromStripe,
-  evaluateProfessionalStripeStatus
+  evaluateProfessionalStripeStatus,
 } from './stripe-operations';
-import { 
+import {
   getServiceWithStripeData,
-  getProfessionalProfileForStripe
+  getProfessionalProfileForStripe,
 } from './db';
 
 /**
@@ -23,14 +23,17 @@ export async function syncServiceAction(serviceId: string): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return {
         success: false,
         message: 'Authentication required',
-        error: 'User not authenticated'
+        error: 'User not authenticated',
       };
     }
 
@@ -40,7 +43,7 @@ export async function syncServiceAction(serviceId: string): Promise<{
       return {
         success: false,
         message: 'Service not found',
-        error: 'Service not found'
+        error: 'Service not found',
       };
     }
 
@@ -50,23 +53,23 @@ export async function syncServiceAction(serviceId: string): Promise<{
       return {
         success: false,
         message: 'Unauthorized',
-        error: 'You can only sync your own services'
+        error: 'You can only sync your own services',
       };
     }
 
     // Sync the service
     const result = await syncServiceWithStripe(service, user.id);
-    
+
     if (result.success) {
       return {
         success: true,
-        message: `Service "${service.name}" synced successfully with Stripe`
+        message: `Service "${service.name}" synced successfully with Stripe`,
       };
     } else {
       return {
         success: false,
         message: 'Failed to sync service with Stripe',
-        error: result.error || 'Unknown error occurred'
+        error: result.error || 'Unknown error occurred',
       };
     }
   } catch (error) {
@@ -74,7 +77,7 @@ export async function syncServiceAction(serviceId: string): Promise<{
     return {
       success: false,
       message: 'An unexpected error occurred',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -93,9 +96,12 @@ export async function syncAllServicesAction(): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return {
         success: false,
@@ -103,15 +109,15 @@ export async function syncAllServicesAction(): Promise<{
         totalServices: 0,
         successCount: 0,
         errorCount: 1,
-        errors: ['User not authenticated']
+        errors: ['User not authenticated'],
       };
     }
 
     // Sync all services
     const result = await syncAllProfessionalServices(user.id);
-    
+
     const success = result.errorCount === 0;
-    const message = success 
+    const message = success
       ? `Successfully synced ${result.successCount} services with Stripe`
       : `Synced ${result.successCount} services, ${result.errorCount} failed`;
 
@@ -121,7 +127,7 @@ export async function syncAllServicesAction(): Promise<{
       totalServices: result.totalServices,
       successCount: result.successCount,
       errorCount: result.errorCount,
-      errors: result.errors
+      errors: result.errors,
     };
   } catch (error) {
     console.error('Error in syncAllServicesAction:', error);
@@ -131,7 +137,7 @@ export async function syncAllServicesAction(): Promise<{
       totalServices: 0,
       successCount: 0,
       errorCount: 1,
-      errors: [error instanceof Error ? error.message : 'Unknown error']
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
     };
   }
 }
@@ -147,14 +153,17 @@ export async function archiveServiceAction(serviceId: string): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return {
         success: false,
         message: 'Authentication required',
-        error: 'User not authenticated'
+        error: 'User not authenticated',
       };
     }
 
@@ -164,7 +173,7 @@ export async function archiveServiceAction(serviceId: string): Promise<{
       return {
         success: false,
         message: 'Service not found',
-        error: 'Service not found'
+        error: 'Service not found',
       };
     }
 
@@ -174,23 +183,23 @@ export async function archiveServiceAction(serviceId: string): Promise<{
       return {
         success: false,
         message: 'Unauthorized',
-        error: 'You can only archive your own services'
+        error: 'You can only archive your own services',
       };
     }
 
     // Archive the service
     const result = await archiveServiceFromStripe(service, user.id);
-    
+
     if (result.success) {
       return {
         success: true,
-        message: `Service "${service.name}" archived from Stripe`
+        message: `Service "${service.name}" archived from Stripe`,
       };
     } else {
       return {
         success: false,
         message: 'Failed to archive service from Stripe',
-        error: result.error || 'Unknown error occurred'
+        error: result.error || 'Unknown error occurred',
       };
     }
   } catch (error) {
@@ -198,7 +207,7 @@ export async function archiveServiceAction(serviceId: string): Promise<{
     return {
       success: false,
       message: 'An unexpected error occurred',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -222,28 +231,31 @@ export async function getProfessionalStripeStatusAction(): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return {
         success: false,
-        error: 'User not authenticated'
+        error: 'User not authenticated',
       };
     }
 
     // Get the professional's Stripe status
     const status = await evaluateProfessionalStripeStatus(user.id);
-    
+
     return {
       success: true,
-      status
+      status,
     };
   } catch (error) {
     console.error('Error in getProfessionalStripeStatusAction:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -265,16 +277,16 @@ export async function onSubscriptionChangeAction(userId: string): Promise<{
   try {
     // Sync all services for this user
     const syncResult = await syncAllProfessionalServices(userId);
-    
+
     const success = syncResult.errorCount === 0;
-    const message = success 
+    const message = success
       ? `Subscription change processed: ${syncResult.successCount} services synced`
       : `Subscription change processed: ${syncResult.successCount} synced, ${syncResult.errorCount} failed`;
 
     return {
       success,
       message,
-      syncResult
+      syncResult,
     };
   } catch (error) {
     console.error('Error in onSubscriptionChangeAction:', error);
@@ -285,8 +297,8 @@ export async function onSubscriptionChangeAction(userId: string): Promise<{
         totalServices: 0,
         successCount: 0,
         errorCount: 1,
-        errors: [error instanceof Error ? error.message : 'Unknown error']
-      }
+        errors: [error instanceof Error ? error.message : 'Unknown error'],
+      },
     };
   }
-} 
+}

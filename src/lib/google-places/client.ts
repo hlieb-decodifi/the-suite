@@ -22,7 +22,9 @@ class GooglePlacesClient {
   constructor() {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
     if (!apiKey) {
-      throw new Error('Missing NEXT_PUBLIC_GOOGLE_PLACES_API_KEY environment variable');
+      throw new Error(
+        'Missing NEXT_PUBLIC_GOOGLE_PLACES_API_KEY environment variable',
+      );
     }
     this.apiKey = apiKey;
   }
@@ -32,7 +34,9 @@ class GooglePlacesClient {
    * Session tokens group autocomplete requests for billing purposes
    */
   generateSessionToken(sessionId?: string): string {
-    const token = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const token =
+      sessionId ||
+      `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     this.sessionTokens.set(token, {
       token,
       createdAt: new Date(),
@@ -46,7 +50,7 @@ class GooglePlacesClient {
   private cleanupExpiredTokens(): void {
     const now = new Date();
     const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
-    
+
     for (const [token, sessionToken] of this.sessionTokens.entries()) {
       if (sessionToken.createdAt < threeMinutesAgo) {
         this.sessionTokens.delete(token);
@@ -59,7 +63,7 @@ class GooglePlacesClient {
    */
   private async makeRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<T> {
     this.cleanupExpiredTokens();
 
@@ -80,7 +84,7 @@ class GooglePlacesClient {
       if (!response.ok) {
         const errorData: PlacesApiError = await response.json();
         throw new Error(
-          `Google Places API Error: ${errorData.error.message} (${errorData.error.status})`
+          `Google Places API Error: ${errorData.error.message} (${errorData.error.status})`,
         );
       }
 
@@ -99,11 +103,11 @@ class GooglePlacesClient {
    */
   async autocomplete(
     request: AutocompleteRequest,
-    fieldMask?: AutocompleteField[]
+    fieldMask?: AutocompleteField[],
   ): Promise<AutocompleteResponse> {
     const endpoint = '/places:autocomplete';
     const headers: Record<string, string> = {};
-    
+
     if (fieldMask) {
       headers['X-Goog-FieldMask'] = fieldMask.join(',');
     }
@@ -121,11 +125,11 @@ class GooglePlacesClient {
    */
   async getPlaceDetails(
     request: PlaceDetailsRequest,
-    fieldMask?: string[]
+    fieldMask?: string[],
   ): Promise<PlaceDetailsResponse> {
     const endpoint = `/${request.name}`;
     const params = new URLSearchParams();
-    
+
     if (request.languageCode) {
       params.append('languageCode', request.languageCode);
     }
@@ -138,7 +142,7 @@ class GooglePlacesClient {
 
     const queryString = params.toString();
     const fullEndpoint = queryString ? `${endpoint}?${queryString}` : endpoint;
-    
+
     const headers: Record<string, string> = {};
     if (fieldMask) {
       headers['X-Goog-FieldMask'] = fieldMask.join(',');
@@ -156,11 +160,11 @@ class GooglePlacesClient {
    */
   async textSearch(
     request: TextSearchRequest,
-    fieldMask?: PlaceField[]
+    fieldMask?: PlaceField[],
   ): Promise<TextSearchResponse> {
     const endpoint = '/places:searchText';
     const headers: Record<string, string> = {};
-    
+
     if (fieldMask) {
       headers['X-Goog-FieldMask'] = fieldMask.join(',');
     }
@@ -178,11 +182,11 @@ class GooglePlacesClient {
    */
   async nearbySearch(
     request: NearbySearchRequest,
-    fieldMask?: PlaceField[]
+    fieldMask?: PlaceField[],
   ): Promise<NearbySearchResponse> {
     const endpoint = '/places:searchNearby';
     const headers: Record<string, string> = {};
-    
+
     if (fieldMask) {
       headers['X-Goog-FieldMask'] = fieldMask.join(',');
     }
@@ -201,7 +205,7 @@ class GooglePlacesClient {
   async getPlacePhoto(request: PlacePhotoRequest): Promise<Blob> {
     const endpoint = `/${request.name}/media`;
     const params = new URLSearchParams();
-    
+
     if (request.maxHeightPx) {
       params.append('maxHeightPx', request.maxHeightPx.toString());
     }
@@ -235,11 +239,11 @@ class GooglePlacesClient {
   getPlacePhotoUrl(
     photoName: string,
     maxHeightPx?: number,
-    maxWidthPx?: number
+    maxWidthPx?: number,
   ): string {
     const params = new URLSearchParams();
     params.append('key', this.apiKey);
-    
+
     if (maxHeightPx) {
       params.append('maxHeightPx', maxHeightPx.toString());
     }
@@ -255,4 +259,4 @@ class GooglePlacesClient {
 export const googlePlacesClient = new GooglePlacesClient();
 
 // Also export the class for testing
-export { GooglePlacesClient }; 
+export { GooglePlacesClient };

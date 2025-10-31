@@ -2,7 +2,13 @@
 
 import { ServiceFormValues } from '@/components/forms/ServiceForm';
 import { revalidatePath } from 'next/cache';
-import { getServicesForUser, upsertService as dbUpsertService, deleteService as dbDeleteService, archiveService as dbArchiveService, unarchiveService as dbUnarchiveService } from './db';
+import {
+  getServicesForUser,
+  upsertService as dbUpsertService,
+  deleteService as dbDeleteService,
+  archiveService as dbArchiveService,
+  unarchiveService as dbUnarchiveService,
+} from './db';
 import type { Service } from './db';
 import type { ServiceUI } from '@/types/services';
 import { formatDuration } from '@/utils/formatDuration';
@@ -14,7 +20,7 @@ import { createClient } from '@/lib/supabase/server';
 function convertToMinutes(hours?: number, minutes?: number): number {
   const h = hours ?? 0;
   const m = minutes ?? 0;
-  return (h * 60) + m;
+  return h * 60 + m;
 }
 
 /**
@@ -48,7 +54,7 @@ export async function getServices({
 }) {
   try {
     const result = await getServicesForUser({ userId, page, pageSize, search });
-    
+
     return {
       success: true,
       services: result.services.map(serviceToUI),
@@ -57,13 +63,14 @@ export async function getServices({
         pageSize: result.pageSize,
         total: result.total,
         totalPages: result.totalPages,
-      }
+      },
     };
   } catch (error) {
     console.error('Error in getServices action:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch services',
+      error:
+        error instanceof Error ? error.message : 'Failed to fetch services',
     };
   }
 }
@@ -82,13 +89,16 @@ export async function upsertService({
     // Check if duration is valid
     const durationMinutes = convertToMinutes(
       data.durationHours,
-      data.durationMinutes
+      data.durationMinutes,
     );
-    
+
     if (durationMinutes <= 0) {
-      return { success: false, error: 'Duration must be greater than 0 minutes.' };
+      return {
+        success: false,
+        error: 'Duration must be greater than 0 minutes.',
+      };
     }
-    
+
     // Create base service data without id
     const baseServiceData = {
       name: data.name,
@@ -96,17 +106,17 @@ export async function upsertService({
       price: data.price,
       duration: durationMinutes,
     };
-    
+
     // Add id if it exists
-    const serviceData = data.id 
+    const serviceData = data.id
       ? { ...baseServiceData, id: data.id }
       : baseServiceData;
-    
+
     const result = await dbUpsertService({ userId, serviceData });
-    
+
     // Revalidate the path to show updated data
     revalidatePath('/profile');
-    
+
     return { success: true, service: serviceToUI(result) };
   } catch (error) {
     console.error('Error in upsertService action:', error);
@@ -129,16 +139,17 @@ export async function deleteService({
 }) {
   try {
     await dbDeleteService({ userId, serviceId });
-    
+
     // Revalidate the path to show updated data
     revalidatePath('/profile');
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error in deleteService action:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete service',
+      error:
+        error instanceof Error ? error.message : 'Failed to delete service',
     };
   }
 }
@@ -155,16 +166,17 @@ export async function archiveService({
 }) {
   try {
     await dbArchiveService({ userId, serviceId });
-    
+
     // Revalidate the path to show updated data
     revalidatePath('/profile');
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error in archiveService action:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to archive service',
+      error:
+        error instanceof Error ? error.message : 'Failed to archive service',
     };
   }
 }
@@ -181,16 +193,17 @@ export async function unarchiveService({
 }) {
   try {
     await dbUnarchiveService({ userId, serviceId });
-    
+
     // Revalidate the path to show updated data
     revalidatePath('/profile');
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error in unarchiveService action:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to unarchive service',
+      error:
+        error instanceof Error ? error.message : 'Failed to unarchive service',
     };
   }
 }
@@ -280,4 +293,4 @@ export async function getServiceLimitInfo({ userId }: { userId: string }) {
       error: 'Failed to get service limit information',
     };
   }
-} 
+}

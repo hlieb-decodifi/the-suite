@@ -14,12 +14,14 @@ export type PaymentMethod = {
 /**
  * Fetches payment methods for a professional profile
  */
-async function fetchPaymentMethods(profileId: string): Promise<PaymentMethod[]> {
+async function fetchPaymentMethods(
+  profileId: string,
+): Promise<PaymentMethod[]> {
   if (!profileId) return [];
-  
+
   try {
     const supabase = createClient();
-    
+
     // First get the payment method IDs linked to this professional profile
     const { data: methodLinks, error: methodsError } = await supabase
       .from('professional_payment_methods')
@@ -32,7 +34,7 @@ async function fetchPaymentMethods(profileId: string): Promise<PaymentMethod[]> 
     }
 
     // Extract the payment method IDs
-    const methodIds = methodLinks.map(link => link.payment_method_id);
+    const methodIds = methodLinks.map((link) => link.payment_method_id);
 
     // Now fetch the actual payment methods
     const { data: methods, error: paymentMethodsError } = await supabase
@@ -46,7 +48,6 @@ async function fetchPaymentMethods(profileId: string): Promise<PaymentMethod[]> 
     }
 
     return methods || [];
-      
   } catch (error) {
     console.error('Unexpected error in fetchPaymentMethods:', error);
     return [];
@@ -64,4 +65,4 @@ export function usePaymentMethods(profileId: string, enabled = true) {
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
   });
-} 
+}

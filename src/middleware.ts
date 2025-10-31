@@ -33,28 +33,30 @@ export async function middleware(request: NextRequest) {
           });
         },
       },
-    }
+    },
   );
-  
+
   // Refresh the session
   await supabase.auth.getSession();
-  
+
   // Check if accessing protected routes and redirect if not authenticated
   const { pathname } = request.nextUrl;
-  
+
   // List of protected routes that require authentication
   const protectedRoutes = ['/dashboard', '/profile', '/settings'];
-  
-  if (protectedRoutes.some(route => pathname.startsWith(route))) {
-    const { data: { session } } = await supabase.auth.getSession();
-    
+
+  if (protectedRoutes.some((route) => pathname.startsWith(route))) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     if (!session) {
       // Redirect unauthenticated users to home page
       const redirectUrl = new URL('/', request.url);
       return NextResponse.redirect(redirectUrl);
     }
   }
-  
+
   return response;
 }
 

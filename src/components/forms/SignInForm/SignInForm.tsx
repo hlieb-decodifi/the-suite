@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { SignInFormContent } from './components/SignInFormContent';
@@ -40,7 +39,6 @@ export function SignInForm({
   const email = searchParams?.get('email') || '';
 
   const showModal = googleError === 'no_account' && email;
-
 
   const handleSecondary = () => {
     // Switch to signup form, pre-fill email

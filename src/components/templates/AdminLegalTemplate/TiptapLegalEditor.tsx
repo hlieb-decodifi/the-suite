@@ -6,7 +6,13 @@ import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
 import Underline from '@tiptap/extension-underline';
 
-export default function TiptapLegalEditor({ value, onChange }: { value: string; onChange: (html: string) => void }) {
+export default function TiptapLegalEditor({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (html: string) => void;
+}) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -42,14 +48,68 @@ export default function TiptapLegalEditor({ value, onChange }: { value: string; 
   return (
     <div>
       <div className="mb-2 flex gap-2 lexical-toolbar">
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleBold().run()}>Bold</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleItalic().run()}>Italic</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleUnderline().run()}>Underline</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleBulletList().run()}>Bullet List</button>
-        <button type="button" className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition" onClick={() => editor.chain().focus().toggleOrderedList().run()}>Numbered List</button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+        >
+          Bold
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+        >
+          Italic
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+        >
+          Underline
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 1 }).run()
+          }
+        >
+          H1
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 2 }).run()
+          }
+        >
+          H2
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 3 }).run()
+          }
+        >
+          H3
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          Bullet List
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1 rounded bg-muted text-black border hover:bg-primary hover:text-white transition"
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        >
+          Numbered List
+        </button>
       </div>
       <EditorContent editor={editor} />
       <style>{`

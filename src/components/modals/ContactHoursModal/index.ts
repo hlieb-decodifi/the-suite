@@ -1,1 +1,1 @@
-export * from './ContactHoursModal'; 
+export * from './ContactHoursModal';

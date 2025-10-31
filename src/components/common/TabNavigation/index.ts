@@ -1,1 +1,5 @@
-export { TabNavigation, type TabNavigationProps, type TabItem } from './TabNavigation'; 
+export {
+  TabNavigation,
+  type TabNavigationProps,
+  type TabItem,
+} from './TabNavigation';

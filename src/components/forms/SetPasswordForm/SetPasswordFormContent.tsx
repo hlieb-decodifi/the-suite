@@ -54,11 +54,7 @@ export function SetPasswordFormContent({
             )}
           </FormFieldWrapper>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isPending}
-          >
+          <Button type="submit" className="w-full" disabled={isPending}>
             Set Password
           </Button>
         </form>

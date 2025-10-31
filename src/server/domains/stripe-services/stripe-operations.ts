@@ -4,22 +4,24 @@ import type {
   ServiceWithStripe,
   ProfessionalStripeStatus,
   StripeSyncResult,
-  StripeProductStatus
+  StripeProductStatus,
 } from './types';
 import {
   getProfessionalProfileForStripe,
   professionalHasCreditCardPayment,
   markServiceSyncSuccess,
-  markServiceSyncError
+  markServiceSyncError,
 } from './db';
 
 /**
  * Evaluate professional's Stripe status to determine sync behavior
  */
-export async function evaluateProfessionalStripeStatus(userId: string): Promise<ProfessionalStripeStatus> {
+export async function evaluateProfessionalStripeStatus(
+  userId: string,
+): Promise<ProfessionalStripeStatus> {
   try {
     const profile = await getProfessionalProfileForStripe(userId);
-    
+
     if (!profile) {
       return {
         shouldSyncToStripe: false,
@@ -28,20 +30,28 @@ export async function evaluateProfessionalStripeStatus(userId: string): Promise<
         hasSubscription: false,
         isPublished: false,
         isStripeConnected: false,
-        hasCreditCardPayment: false
+        hasCreditCardPayment: false,
       };
     }
 
     const hasSubscription = await checkProfessionalSubscription(profile.id);
     const isPublished = profile.is_published;
-    const isStripeConnected = profile.stripe_connect_status === 'complete' && !!profile.stripe_account_id;
-    const hasCreditCardPayment = await professionalHasCreditCardPayment(profile.id);
+    const isStripeConnected =
+      profile.stripe_connect_status === 'complete' &&
+      !!profile.stripe_account_id;
+    const hasCreditCardPayment = await professionalHasCreditCardPayment(
+      profile.id,
+    );
 
     // Determine if we should sync to Stripe
     const shouldSyncToStripe = hasSubscription;
 
     // Determine if products should be active (live) in Stripe
-    const shouldBeActive = hasSubscription && isPublished && isStripeConnected && hasCreditCardPayment;
+    const shouldBeActive =
+      hasSubscription &&
+      isPublished &&
+      isStripeConnected &&
+      hasCreditCardPayment;
 
     let reason = '';
     if (!hasSubscription) {
@@ -50,7 +60,8 @@ export async function evaluateProfessionalStripeStatus(userId: string): Promise<
       const missing = [];
       if (!isPublished) missing.push('profile not published');
       if (!isStripeConnected) missing.push('Stripe Connect not completed');
-      if (!hasCreditCardPayment) missing.push('Credit Card payment method not enabled');
+      if (!hasCreditCardPayment)
+        missing.push('Credit Card payment method not enabled');
       reason = `Services will be synced as draft - missing: ${missing.join(', ')}`;
     } else {
       reason = 'All conditions met - services will be active in Stripe';
@@ -63,7 +74,7 @@ export async function evaluateProfessionalStripeStatus(userId: string): Promise<
       hasSubscription,
       isPublished,
       isStripeConnected,
-      hasCreditCardPayment
+      hasCreditCardPayment,
     };
   } catch (error) {
     console.error('Error evaluating professional Stripe status:', error);
@@ -74,7 +85,7 @@ export async function evaluateProfessionalStripeStatus(userId: string): Promise<
       hasSubscription: false,
       isPublished: false,
       isStripeConnected: false,
-      hasCreditCardPayment: false
+      hasCreditCardPayment: false,
     };
   }
 }
@@ -84,7 +95,7 @@ export async function evaluateProfessionalStripeStatus(userId: string): Promise<
  */
 export async function createStripeProduct(
   service: ServiceWithStripe,
-  stripeAccountId: string
+  stripeAccountId: string,
 ): Promise<StripeSyncResult> {
   try {
     const productData: {
@@ -96,8 +107,8 @@ export async function createStripeProduct(
       metadata: {
         service_id: service.id,
         professional_profile_id: service.professional_profile_id,
-        created_by: 'the-suite-app'
-      }
+        created_by: 'the-suite-app',
+      },
     };
 
     // Only include description if it's not empty
@@ -106,18 +117,21 @@ export async function createStripeProduct(
     }
 
     const product = await stripe.products.create(productData, {
-      stripeAccount: stripeAccountId
+      stripeAccount: stripeAccountId,
     });
 
     return {
       success: true,
-      productId: product.id
+      productId: product.id,
     };
   } catch (error) {
     console.error('Error creating Stripe product:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating product'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating product',
     };
   }
 }
@@ -128,35 +142,39 @@ export async function createStripeProduct(
 export async function createStripePrice(
   service: ServiceWithStripe,
   productId: string,
-  stripeAccountId: string
+  stripeAccountId: string,
 ): Promise<StripeSyncResult> {
   try {
     // Convert price to cents
     const unitAmount = Math.round(service.price * 100);
 
-    const price = await stripe.prices.create({
-      product: productId,
-      unit_amount: unitAmount,
-      currency: 'usd', // TODO: Make this configurable
-      metadata: {
-        service_id: service.id,
-        professional_profile_id: service.professional_profile_id,
-        duration_minutes: service.duration.toString(),
-        created_by: 'the-suite-app'
-      }
-    }, {
-      stripeAccount: stripeAccountId
-    });
+    const price = await stripe.prices.create(
+      {
+        product: productId,
+        unit_amount: unitAmount,
+        currency: 'usd', // TODO: Make this configurable
+        metadata: {
+          service_id: service.id,
+          professional_profile_id: service.professional_profile_id,
+          duration_minutes: service.duration.toString(),
+          created_by: 'the-suite-app',
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
 
     return {
       success: true,
-      priceId: price.id
+      priceId: price.id,
     };
   } catch (error) {
     console.error('Error creating Stripe price:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating price'
+      error:
+        error instanceof Error ? error.message : 'Unknown error creating price',
     };
   }
 }
@@ -166,13 +184,13 @@ export async function createStripePrice(
  */
 export async function updateStripeProduct(
   service: ServiceWithStripe,
-  stripeAccountId: string
+  stripeAccountId: string,
 ): Promise<StripeSyncResult> {
   try {
     if (!service.stripe_product_id) {
       return {
         success: false,
-        error: 'No Stripe product ID found for service'
+        error: 'No Stripe product ID found for service',
       };
     }
 
@@ -186,8 +204,8 @@ export async function updateStripeProduct(
         service_id: service.id,
         professional_profile_id: service.professional_profile_id,
         updated_by: 'the-suite-app',
-        last_updated: new Date().toISOString()
-      }
+        last_updated: new Date().toISOString(),
+      },
     };
 
     // Only include description if it's not empty
@@ -196,18 +214,21 @@ export async function updateStripeProduct(
     }
 
     await stripe.products.update(service.stripe_product_id, updateData, {
-      stripeAccount: stripeAccountId
+      stripeAccount: stripeAccountId,
     });
 
     return {
       success: true,
-      productId: service.stripe_product_id
+      productId: service.stripe_product_id,
     };
   } catch (error) {
     console.error('Error updating Stripe product:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error updating product'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error updating product',
     };
   }
 }
@@ -218,25 +239,32 @@ export async function updateStripeProduct(
 export async function updateStripeProductStatus(
   productId: string,
   active: boolean,
-  stripeAccountId: string
+  stripeAccountId: string,
 ): Promise<StripeSyncResult> {
   try {
-    await stripe.products.update(productId, {
-      active
-    }, {
-      stripeAccount: stripeAccountId
-    });
+    await stripe.products.update(
+      productId,
+      {
+        active,
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
 
     return {
       success: true,
       productId,
-      status: active ? 'active' : 'inactive'
+      status: active ? 'active' : 'inactive',
     };
   } catch (error) {
     console.error('Error updating Stripe product status:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error updating product status'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error updating product status',
     };
   }
 }
@@ -246,29 +274,36 @@ export async function updateStripeProductStatus(
  */
 export async function archiveStripeProduct(
   productId: string,
-  stripeAccountId: string
+  stripeAccountId: string,
 ): Promise<StripeSyncResult> {
   try {
-    await stripe.products.update(productId, {
-      active: false,
-      metadata: {
-        archived_at: new Date().toISOString(),
-        archived_by: 'the-suite-app'
-      }
-    }, {
-      stripeAccount: stripeAccountId
-    });
+    await stripe.products.update(
+      productId,
+      {
+        active: false,
+        metadata: {
+          archived_at: new Date().toISOString(),
+          archived_by: 'the-suite-app',
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    );
 
     return {
       success: true,
       productId,
-      status: 'inactive'
+      status: 'inactive',
     };
   } catch (error) {
     console.error('Error archiving Stripe product:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error archiving product'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error archiving product',
     };
   }
 }
@@ -279,18 +314,18 @@ export async function archiveStripeProduct(
  */
 export async function syncServiceWithStripe(
   service: ServiceWithStripe,
-  userId: string
+  userId: string,
 ): Promise<StripeSyncResult> {
   try {
     // Get professional status
     const professionalStatus = await evaluateProfessionalStripeStatus(userId);
-    
+
     // If professional shouldn't sync to Stripe, skip
     if (!professionalStatus.shouldSyncToStripe) {
       await markServiceSyncSuccess(service.id, '', '', 'draft');
       return {
         success: true,
-        status: 'draft'
+        status: 'draft',
       };
     }
 
@@ -303,7 +338,7 @@ export async function syncServiceWithStripe(
       await markServiceSyncError(service.id, error);
       return {
         success: false,
-        error
+        error,
       };
     }
 
@@ -315,56 +350,87 @@ export async function syncServiceWithStripe(
       // Create new product
       productResult = await createStripeProduct(service, stripeAccountId);
       if (!productResult.success || !productResult.productId) {
-        await markServiceSyncError(service.id, productResult.error || 'Failed to create product');
+        await markServiceSyncError(
+          service.id,
+          productResult.error || 'Failed to create product',
+        );
         return productResult;
       }
 
       // Create price for the new product
-      priceResult = await createStripePrice(service, productResult.productId, stripeAccountId);
+      priceResult = await createStripePrice(
+        service,
+        productResult.productId,
+        stripeAccountId,
+      );
       if (!priceResult.success || !priceResult.priceId) {
-        await markServiceSyncError(service.id, priceResult.error || 'Failed to create price');
+        await markServiceSyncError(
+          service.id,
+          priceResult.error || 'Failed to create price',
+        );
         return priceResult;
       }
     } else {
       // Update existing product
       productResult = await updateStripeProduct(service, stripeAccountId);
       if (!productResult.success) {
-        await markServiceSyncError(service.id, productResult.error || 'Failed to update product');
+        await markServiceSyncError(
+          service.id,
+          productResult.error || 'Failed to update product',
+        );
         return productResult;
       }
 
       // Check if price needs to be updated (price changes require new price object in Stripe)
       const currentPrice = Math.round(service.price * 100);
       try {
-        const existingPrice = service.stripe_price_id 
-          ? await stripe.prices.retrieve(service.stripe_price_id, { stripeAccount: stripeAccountId })
+        const existingPrice = service.stripe_price_id
+          ? await stripe.prices.retrieve(service.stripe_price_id, {
+              stripeAccount: stripeAccountId,
+            })
           : null;
 
         if (!existingPrice || existingPrice.unit_amount !== currentPrice) {
           // Create new price
-          priceResult = await createStripePrice(service, service.stripe_product_id, stripeAccountId);
+          priceResult = await createStripePrice(
+            service,
+            service.stripe_product_id,
+            stripeAccountId,
+          );
           if (!priceResult.success || !priceResult.priceId) {
-            await markServiceSyncError(service.id, priceResult.error || 'Failed to create new price');
+            await markServiceSyncError(
+              service.id,
+              priceResult.error || 'Failed to create new price',
+            );
             return priceResult;
           }
         } else {
           priceResult = {
             success: true,
-            priceId: service.stripe_price_id || ''
+            priceId: service.stripe_price_id || '',
           };
         }
       } catch {
         // If we can't retrieve the existing price, create a new one
-        priceResult = await createStripePrice(service, service.stripe_product_id, stripeAccountId);
+        priceResult = await createStripePrice(
+          service,
+          service.stripe_product_id,
+          stripeAccountId,
+        );
         if (!priceResult.success || !priceResult.priceId) {
-          await markServiceSyncError(service.id, priceResult.error || 'Failed to create replacement price');
+          await markServiceSyncError(
+            service.id,
+            priceResult.error || 'Failed to create replacement price',
+          );
           return priceResult;
         }
       }
     }
 
     // Determine the target status
-    const targetStatus: StripeProductStatus = professionalStatus.shouldBeActive ? 'active' : 'draft';
+    const targetStatus: StripeProductStatus = professionalStatus.shouldBeActive
+      ? 'active'
+      : 'draft';
 
     // Update product status if needed
     const shouldBeActiveInStripe = targetStatus === 'active';
@@ -372,10 +438,13 @@ export async function syncServiceWithStripe(
       const statusResult = await updateStripeProductStatus(
         productResult.productId,
         shouldBeActiveInStripe,
-        stripeAccountId
+        stripeAccountId,
       );
       if (!statusResult.success) {
-        await markServiceSyncError(service.id, statusResult.error || 'Failed to update product status');
+        await markServiceSyncError(
+          service.id,
+          statusResult.error || 'Failed to update product status',
+        );
         return statusResult;
       }
     }
@@ -386,14 +455,14 @@ export async function syncServiceWithStripe(
         service.id,
         productResult.productId,
         priceResult.priceId,
-        targetStatus
+        targetStatus,
       );
 
       return {
         success: true,
         productId: productResult.productId,
         priceId: priceResult.priceId,
-        status: targetStatus
+        status: targetStatus,
       };
     }
 
@@ -401,18 +470,19 @@ export async function syncServiceWithStripe(
     await markServiceSyncError(service.id, error);
     return {
       success: false,
-      error
+      error,
     };
   } catch (error) {
     console.error('Error syncing service with Stripe:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error syncing service';
-    
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error syncing service';
+
     // Mark sync as failed in database
     await markServiceSyncError(service.id, errorMessage);
-    
+
     return {
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
   }
 }
@@ -422,14 +492,14 @@ export async function syncServiceWithStripe(
  */
 export async function archiveServiceFromStripe(
   service: ServiceWithStripe,
-  userId: string
+  userId: string,
 ): Promise<StripeSyncResult> {
   try {
     if (!service.stripe_product_id) {
       await markServiceSyncSuccess(service.id, '', '', 'inactive');
       return {
         success: true,
-        status: 'inactive'
+        status: 'inactive',
       };
     }
 
@@ -439,37 +509,51 @@ export async function archiveServiceFromStripe(
 
     if (!stripeAccountId) {
       // No Stripe account, just mark as archived in our database
-      await markServiceSyncSuccess(service.id, service.stripe_product_id, service.stripe_price_id || '', 'inactive');
+      await markServiceSyncSuccess(
+        service.id,
+        service.stripe_product_id,
+        service.stripe_price_id || '',
+        'inactive',
+      );
       return {
         success: true,
-        status: 'inactive'
+        status: 'inactive',
       };
     }
 
-    const result = await archiveStripeProduct(service.stripe_product_id, stripeAccountId);
-    
+    const result = await archiveStripeProduct(
+      service.stripe_product_id,
+      stripeAccountId,
+    );
+
     if (result.success) {
       // Mark as archived in our database
       await markServiceSyncSuccess(
         service.id,
         service.stripe_product_id,
         service.stripe_price_id || '',
-        'inactive'
+        'inactive',
       );
     } else {
-      await markServiceSyncError(service.id, result.error || 'Failed to archive product');
+      await markServiceSyncError(
+        service.id,
+        result.error || 'Failed to archive product',
+      );
     }
 
     return result;
   } catch (error) {
     console.error('Error archiving service from Stripe:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error archiving service';
-    
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : 'Unknown error archiving service';
+
     await markServiceSyncError(service.id, errorMessage);
-    
+
     return {
       success: false,
-      error: errorMessage
+      error: errorMessage,
     };
   }
 }
@@ -490,7 +574,7 @@ export async function syncAllProfessionalServices(userId: string): Promise<{
         totalServices: 0,
         successCount: 0,
         errorCount: 1,
-        errors: ['Professional profile not found']
+        errors: ['Professional profile not found'],
       };
     }
 
@@ -502,18 +586,20 @@ export async function syncAllProfessionalServices(userId: string): Promise<{
       totalServices: services.length,
       successCount: 0,
       errorCount: 0,
-      errors: [] as string[]
+      errors: [] as string[],
     };
 
     // Sync each service
     for (const service of services) {
       const syncResult = await syncServiceWithStripe(service, userId);
-      
+
       if (syncResult.success) {
         result.successCount++;
       } else {
         result.errorCount++;
-        result.errors.push(`${service.name}: ${syncResult.error || 'Unknown error'}`);
+        result.errors.push(
+          `${service.name}: ${syncResult.error || 'Unknown error'}`,
+        );
       }
     }
 
@@ -524,7 +610,7 @@ export async function syncAllProfessionalServices(userId: string): Promise<{
       totalServices: 0,
       successCount: 0,
       errorCount: 1,
-      errors: [error instanceof Error ? error.message : 'Unknown error']
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
     };
   }
-} 
+}

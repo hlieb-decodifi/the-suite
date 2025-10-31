@@ -1,1 +1,1 @@
-export * from './EmailConfirmationTemplate'; 
+export * from './EmailConfirmationTemplate';

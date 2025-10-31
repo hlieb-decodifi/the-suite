@@ -7,4 +7,4 @@ export function AdminClientsTemplate() {
       {/* TODO: Implement clients list and search */}
     </section>
   );
-} 
+}

@@ -1,2 +1,2 @@
 export * from './ForgotPasswordForm';
-export * from './schema'; 
+export * from './schema';

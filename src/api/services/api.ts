@@ -1,14 +1,14 @@
-import { 
-  getServices as getServicesAction, 
-  upsertService as upsertServiceAction, 
-  deleteService as deleteServiceAction 
+import {
+  getServices as getServicesAction,
+  upsertService as upsertServiceAction,
+  deleteService as deleteServiceAction,
 } from '@/server/domains/services/actions';
-import type { 
-  ServiceUI, 
-  ServiceParams, 
-  UpsertServiceParams, 
+import type {
+  ServiceUI,
+  ServiceParams,
+  UpsertServiceParams,
   DeleteServiceParams,
-  PaginatedResponse
+  PaginatedResponse,
 } from '@/types/services';
 
 /**
@@ -21,11 +21,11 @@ export async function getServices({
   search = '',
 }: ServiceParams): Promise<ServiceUI[]> {
   const result = await getServicesAction({ userId, page, pageSize, search });
-  
+
   if (!result.success) {
     throw new Error(result.error || 'Failed to fetch services');
   }
-  
+
   return result.services ?? [];
 }
 
@@ -39,15 +39,15 @@ export async function getServicesWithPagination({
   search = '',
 }: ServiceParams): Promise<PaginatedResponse<ServiceUI>> {
   const result = await getServicesAction({ userId, page, pageSize, search });
-  
+
   if (!result.success) {
     throw new Error(result.error || 'Failed to fetch services');
   }
-  
+
   if (!result.services || !result.pagination) {
     throw new Error('Server returned invalid data format');
   }
-  
+
   return {
     data: result.services,
     pagination: result.pagination,
@@ -58,15 +58,15 @@ export async function getServicesWithPagination({
  * Create or update a service
  */
 export async function upsertService({
-  userId, 
+  userId,
   data,
 }: UpsertServiceParams): Promise<ServiceUI> {
   const result = await upsertServiceAction({ userId, data });
-  
+
   if (!result.success || !result.service) {
     throw new Error(result.error || 'Failed to save service');
   }
-  
+
   return result.service;
 }
 
@@ -78,8 +78,8 @@ export async function deleteService({
   serviceId,
 }: Omit<DeleteServiceParams, 'serviceName'>): Promise<void> {
   const result = await deleteServiceAction({ userId, serviceId });
-  
+
   if (!result.success) {
     throw new Error(result.error || 'Failed to delete service');
   }
-} 
+}

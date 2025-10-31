@@ -7,4 +7,4 @@ export function AdminProfessionalsTemplate() {
       {/* TODO: Implement professionals list and filters */}
     </section>
   );
-} 
+}

@@ -1,9 +1,11 @@
-
-"use server";
+'use server';
 import { updateProfessionalMaxServices } from '@/lib/admin/updateProfessionalMaxServices';
 import { fetchProfessionalDetails } from '@/lib/admin/fetchProfessionalDetails';
 
-export async function updateProfessionalMaxServicesAction(userId: string, maxServices: number) {
+export async function updateProfessionalMaxServicesAction(
+  userId: string,
+  maxServices: number,
+) {
   if (!userId) return { success: false, error: 'Missing userId' };
   if (typeof maxServices !== 'number' || maxServices < 1) {
     return { success: false, error: 'Invalid maxServices' };

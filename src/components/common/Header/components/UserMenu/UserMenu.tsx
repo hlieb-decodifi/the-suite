@@ -46,7 +46,10 @@ export function UserMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem asChild>
-          <Link href={isAdmin ? '/admin' : '/dashboard'} className="w-full cursor-pointer">
+          <Link
+            href={isAdmin ? '/admin' : '/dashboard'}
+            className="w-full cursor-pointer"
+          >
             Dashboard
           </Link>
         </DropdownMenuItem>

@@ -9,7 +9,10 @@ export type BookingDetailsState = {
 /**
  * Creates booking details from form data
  */
-export function createBookingDetails(formData: BookingFormValues, price: number): BookingDetailsState {
+export function createBookingDetails(
+  formData: BookingFormValues,
+  price: number,
+): BookingDetailsState {
   return {
     date: formData.date,
     timeSlot: formData.timeSlot,
@@ -23,10 +26,10 @@ export function createBookingDetails(formData: BookingFormValues, price: number)
 export function resetBookingState(
   setBookingCompleted: (value: boolean) => void,
   setBookingDetails: (value: BookingDetailsState) => void,
-  delay = 300
+  delay = 300,
 ): void {
   setTimeout(() => {
     setBookingCompleted(false);
     setBookingDetails({});
   }, delay);
-} 
+}

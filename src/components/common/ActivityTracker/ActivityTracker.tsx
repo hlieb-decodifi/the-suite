@@ -22,10 +22,10 @@ export function ActivityTracker({
   entityId,
   metadata,
 }: ActivityTrackerProps) {
-  const { 
-    trackPageView: trackPage, 
-    trackServiceView, 
-    trackProfessionalView 
+  const {
+    trackPageView: trackPage,
+    trackServiceView,
+    trackProfessionalView,
   } = useActivityTracker();
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export function ActivityTracker({
  */
 export function withActivityTracking<P extends object>(
   Component: React.ComponentType<P>,
-  trackingConfig: Omit<ActivityTrackerProps, 'children'>
+  trackingConfig: Omit<ActivityTrackerProps, 'children'>,
 ) {
   return function WrappedComponent(props: P) {
     return (

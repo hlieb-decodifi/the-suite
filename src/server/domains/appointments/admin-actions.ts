@@ -10,22 +10,28 @@ import { createClient } from '@/lib/supabase/server';
 export async function updateAppointmentTimesAction(
   appointmentId: string,
   startTime: string,
-  endTime: string
+  endTime: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
 
     // Check if user is admin
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Unauthorized: User not found' };
     }
 
     // Verify admin role
-    const { data: isAdminData, error: adminError } = await supabase.rpc('is_admin', {
-      user_uuid: user.id,
-    });
+    const { data: isAdminData, error: adminError } = await supabase.rpc(
+      'is_admin',
+      {
+        user_uuid: user.id,
+      },
+    );
 
     if (adminError || !isAdminData) {
       return { success: false, error: 'Unauthorized: Admin access required' };
@@ -43,11 +49,19 @@ export async function updateAppointmentTimesAction(
 
     if (updateError) {
       console.error('Error updating appointment times:', updateError);
-      return { success: false, error: `Failed to update appointment: ${updateError.message}` };
+      return {
+        success: false,
+        error: `Failed to update appointment: ${updateError.message}`,
+      };
     }
 
     // Update payment scheduling times based on new appointment times
-    await updatePaymentSchedulingTimes(adminSupabase, appointmentId, startTime, endTime);
+    await updatePaymentSchedulingTimes(
+      adminSupabase,
+      appointmentId,
+      startTime,
+      endTime,
+    );
 
     return { success: true };
   } catch (error) {
@@ -66,10 +80,13 @@ async function updatePaymentSchedulingTimes(
   adminSupabase: ReturnType<typeof createAdminClient>,
   appointmentId: string,
   appointmentStartTime: string,
-  appointmentEndTime: string
+  appointmentEndTime: string,
 ): Promise<void> {
   try {
-    console.log('[updatePaymentSchedulingTimes] Updating payment scheduling for appointment:', appointmentId);
+    console.log(
+      '[updatePaymentSchedulingTimes] Updating payment scheduling for appointment:',
+      appointmentId,
+    );
 
     // Get booking ID from appointment
     const { data: appointment, error: appointmentError } = await adminSupabase
@@ -79,25 +96,33 @@ async function updatePaymentSchedulingTimes(
       .single();
 
     if (appointmentError || !appointment) {
-      console.error('[updatePaymentSchedulingTimes] Failed to get booking ID:', appointmentError);
+      console.error(
+        '[updatePaymentSchedulingTimes] Failed to get booking ID:',
+        appointmentError,
+      );
       return;
     }
 
     // Calculate payment schedule based on new appointment times
-    const { data: scheduleData, error: scheduleError } = await adminSupabase
-      .rpc('calculate_payment_schedule', {
+    const { data: scheduleData, error: scheduleError } =
+      await adminSupabase.rpc('calculate_payment_schedule', {
         appointment_start_time: appointmentStartTime,
-        appointment_end_time: appointmentEndTime
+        appointment_end_time: appointmentEndTime,
       });
 
     if (scheduleError || !scheduleData || scheduleData.length === 0) {
-      console.error('[updatePaymentSchedulingTimes] Failed to calculate payment schedule:', scheduleError);
+      console.error(
+        '[updatePaymentSchedulingTimes] Failed to calculate payment schedule:',
+        scheduleError,
+      );
       return;
     }
 
     const schedule = scheduleData[0];
     if (!schedule) {
-      console.error('[updatePaymentSchedulingTimes] Schedule data is undefined');
+      console.error(
+        '[updatePaymentSchedulingTimes] Schedule data is undefined',
+      );
       return;
     }
 
@@ -141,12 +166,18 @@ async function updatePaymentSchedulingTimes(
       .eq('booking_id', appointment.booking_id);
 
     if (paymentUpdateError) {
-      console.error('[updatePaymentSchedulingTimes] Failed to update payment scheduling:', paymentUpdateError);
+      console.error(
+        '[updatePaymentSchedulingTimes] Failed to update payment scheduling:',
+        paymentUpdateError,
+      );
     } else {
-      console.log('[updatePaymentSchedulingTimes] Successfully updated payment scheduling:', {
-        bookingId: appointment.booking_id,
-        updates: paymentUpdateData,
-      });
+      console.log(
+        '[updatePaymentSchedulingTimes] Successfully updated payment scheduling:',
+        {
+          bookingId: appointment.booking_id,
+          updates: paymentUpdateData,
+        },
+      );
     }
   } catch (error) {
     console.error('[updatePaymentSchedulingTimes] Unexpected error:', error);
@@ -157,7 +188,7 @@ async function updatePaymentSchedulingTimes(
  * Admin action to make an appointment ongoing (start time = now - 10 minutes, end time = now + 50 minutes)
  */
 export async function makeAppointmentOngoingAction(
-  appointmentId: string
+  appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const now = new Date();
   const startTime = new Date(now.getTime() - 10 * 60 * 1000); // 10 minutes ago
@@ -166,7 +197,7 @@ export async function makeAppointmentOngoingAction(
   return updateAppointmentTimesAction(
     appointmentId,
     startTime.toISOString(),
-    endTime.toISOString()
+    endTime.toISOString(),
   );
 }
 
@@ -175,7 +206,7 @@ export async function makeAppointmentOngoingAction(
  */
 export async function makeAppointmentCompletedAction(
   appointmentId: string,
-  hoursAgo: number = 2
+  hoursAgo: number = 2,
 ): Promise<{ success: boolean; error?: string }> {
   const now = new Date();
   const endTime = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000); // specified hours ago
@@ -184,7 +215,7 @@ export async function makeAppointmentCompletedAction(
   return updateAppointmentTimesAction(
     appointmentId,
     startTime.toISOString(),
-    endTime.toISOString()
+    endTime.toISOString(),
   );
 }
 
@@ -193,7 +224,7 @@ export async function makeAppointmentCompletedAction(
  */
 export async function makeAppointmentUpcomingAction(
   appointmentId: string,
-  hoursFromNow: number = 24
+  hoursFromNow: number = 24,
 ): Promise<{ success: boolean; error?: string }> {
   const now = new Date();
   const startTime = new Date(now.getTime() + hoursFromNow * 60 * 60 * 1000); // specified hours from now
@@ -202,7 +233,7 @@ export async function makeAppointmentUpcomingAction(
   return updateAppointmentTimesAction(
     appointmentId,
     startTime.toISOString(),
-    endTime.toISOString()
+    endTime.toISOString(),
   );
 }
 
@@ -210,7 +241,7 @@ export async function makeAppointmentUpcomingAction(
  * Admin action to simulate payment pre-auth being scheduled (appointment > 6 days away)
  */
 export async function makePaymentPreAuthScheduledAction(
-  appointmentId: string
+  appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const now = new Date();
   const startTime = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
@@ -219,7 +250,7 @@ export async function makePaymentPreAuthScheduledAction(
   return updateAppointmentTimesAction(
     appointmentId,
     startTime.toISOString(),
-    endTime.toISOString()
+    endTime.toISOString(),
   );
 }
 
@@ -227,7 +258,7 @@ export async function makePaymentPreAuthScheduledAction(
  * Admin action to simulate payment pre-auth being placed immediately (appointment ≤ 6 days away)
  */
 export async function makePaymentPreAuthPlacedAction(
-  appointmentId: string
+  appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const now = new Date();
   const startTime = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
@@ -236,7 +267,7 @@ export async function makePaymentPreAuthPlacedAction(
   return updateAppointmentTimesAction(
     appointmentId,
     startTime.toISOString(),
-    endTime.toISOString()
+    endTime.toISOString(),
   );
 }
 
@@ -244,7 +275,7 @@ export async function makePaymentPreAuthPlacedAction(
  * Admin action to simulate payment capture being ready (appointment ended, ready for capture)
  */
 export async function makePaymentCaptureReadyAction(
-  appointmentId: string
+  appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const now = new Date();
   const endTime = new Date(now.getTime() - 2 * 60 * 60 * 1000); // ended 2 hours ago
@@ -253,6 +284,6 @@ export async function makePaymentCaptureReadyAction(
   return updateAppointmentTimesAction(
     appointmentId,
     startTime.toISOString(),
-    endTime.toISOString()
+    endTime.toISOString(),
   );
 }

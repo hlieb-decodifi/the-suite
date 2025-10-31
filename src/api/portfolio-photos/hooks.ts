@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/components/ui/use-toast';
-import { 
-  getPortfolioPhotos, 
-  uploadPortfolioPhoto, 
+import {
+  getPortfolioPhotos,
+  uploadPortfolioPhoto,
   deletePortfolioPhoto,
-  updatePortfolioPhoto
+  updatePortfolioPhoto,
 } from './api';
 
 // Query keys
@@ -32,13 +32,15 @@ export function usePortfolioPhotos(userId: string) {
  */
 export function useUploadPortfolioPhoto() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: uploadPortfolioPhoto,
     onSuccess: (newPhoto, { userId }) => {
       // Update the query cache with the new photo
-      queryClient.invalidateQueries({ queryKey: PORTFOLIO_PHOTO_KEYS.list(userId) });
-      
+      queryClient.invalidateQueries({
+        queryKey: PORTFOLIO_PHOTO_KEYS.list(userId),
+      });
+
       toast({
         title: 'Success',
         description: 'Portfolio photo uploaded successfully!',
@@ -48,7 +50,10 @@ export function useUploadPortfolioPhoto() {
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: error instanceof Error ? error.message : 'Failed to upload portfolio photo',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Failed to upload portfolio photo',
       });
     },
   });
@@ -59,14 +64,16 @@ export function useUploadPortfolioPhoto() {
  */
 export function useDeletePortfolioPhoto() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: ({ id, userId }: { id: string; userId: string }) => 
+    mutationFn: ({ id, userId }: { id: string; userId: string }) =>
       deletePortfolioPhoto(id, userId),
     onSuccess: (_, { userId }) => {
       // Invalidate the portfolio photos list
-      queryClient.invalidateQueries({ queryKey: PORTFOLIO_PHOTO_KEYS.list(userId) });
-      
+      queryClient.invalidateQueries({
+        queryKey: PORTFOLIO_PHOTO_KEYS.list(userId),
+      });
+
       toast({
         title: 'Success',
         description: 'Portfolio photo deleted successfully!',
@@ -76,7 +83,10 @@ export function useDeletePortfolioPhoto() {
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
-        description: error instanceof Error ? error.message : 'Failed to delete portfolio photo',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Failed to delete portfolio photo',
       });
     },
   });
@@ -87,21 +97,23 @@ export function useDeletePortfolioPhoto() {
  */
 export function useUpdatePortfolioPhoto() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: ({ 
-      id, 
-      userId, 
-      updates 
-    }: { 
-      id: string; 
-      userId: string; 
-      updates: { description?: string; orderIndex?: number } 
+    mutationFn: ({
+      id,
+      userId,
+      updates,
+    }: {
+      id: string;
+      userId: string;
+      updates: { description?: string; orderIndex?: number };
     }) => updatePortfolioPhoto(id, userId, updates),
     onSuccess: (updatedPhoto, { userId }) => {
       // Invalidate the portfolio photos list
-      queryClient.invalidateQueries({ queryKey: PORTFOLIO_PHOTO_KEYS.list(userId) });
-      
+      queryClient.invalidateQueries({
+        queryKey: PORTFOLIO_PHOTO_KEYS.list(userId),
+      });
+
       toast({
         title: 'Success',
         description: 'Portfolio photo updated successfully!',
@@ -111,8 +123,11 @@ export function useUpdatePortfolioPhoto() {
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: error instanceof Error ? error.message : 'Failed to update portfolio photo',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Failed to update portfolio photo',
       });
     },
   });
-} 
+}

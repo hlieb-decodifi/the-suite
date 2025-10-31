@@ -2,10 +2,7 @@
 
 import { useToast } from '@/components/ui/use-toast';
 import { formatErrorMessage, getErrorTitle } from '@/utils/errorHandler';
-import { 
-  UseMutationResult, 
-  UseQueryResult 
-} from '@tanstack/react-query';
+import { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 
 /**
  * Hook that provides error handling functions for React Query operations
@@ -31,7 +28,7 @@ export function useQueryErrorHandler() {
     mutationResult: UseMutationResult<TData, TError, TVariables, TContext>,
     options?: {
       onSuccess?: (data: TData) => void;
-    }
+    },
   ) => {
     if (mutationResult.isError && mutationResult.error) {
       handleError(mutationResult.error);
@@ -41,10 +38,10 @@ export function useQueryErrorHandler() {
   };
 
   /**
-   * Utility to easily handle the result of a query 
+   * Utility to easily handle the result of a query
    */
   const handleQueryResult = <TData, TError>(
-    queryResult: UseQueryResult<TData, TError>
+    queryResult: UseQueryResult<TData, TError>,
   ) => {
     if (queryResult.isError && queryResult.error) {
       handleError(queryResult.error);
@@ -57,4 +54,4 @@ export function useQueryErrorHandler() {
     handleMutationResult,
     handleQueryResult,
   };
-} 
+}

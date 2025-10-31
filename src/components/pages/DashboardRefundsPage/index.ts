@@ -1,2 +1,2 @@
 export { DashboardRefundsPage } from './DashboardRefundsPage';
-export { DashboardRefundsPageClient } from './DashboardRefundsPageClient'; 
+export { DashboardRefundsPageClient } from './DashboardRefundsPageClient';

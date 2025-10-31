@@ -29,18 +29,19 @@ type ServiceResponse = {
  * Fetches additional services for a professional profile
  */
 async function fetchAdditionalServices(
-  profileId: string, 
-  excludeServiceId: string
+  profileId: string,
+  excludeServiceId: string,
 ): Promise<ServiceListItem[]> {
   if (!profileId) return [];
-  
+
   try {
     const supabase = createClient();
-    
+
     // Fetch all services for this professional profile except the current one
     const { data, error } = await supabase
       .from('services')
-      .select(`
+      .select(
+        `
         id, 
         name, 
         description, 
@@ -58,7 +59,8 @@ async function fetchAdditionalServices(
             )
           )
         )
-      `)
+      `,
+      )
       .eq('professional_profile_id', profileId)
       .neq('id', excludeServiceId); // Exclude the current service
 
@@ -72,11 +74,11 @@ async function fetchAdditionalServices(
     }
 
     // Transform the services data to match our ServiceListItem type
-    return (data as unknown as ServiceResponse[]).map(service => {
+    return (data as unknown as ServiceResponse[]).map((service) => {
       const professionalProfile = service.professional_profile;
       const user = professionalProfile?.user;
       const profilePhoto = user?.profile_photo?.url;
-      
+
       return {
         id: service.id,
         name: service.name,
@@ -86,7 +88,9 @@ async function fetchAdditionalServices(
         isBookable: true, // TODO: Replace with dynamic subscription check
         professional: {
           id: user?.id || 'unknown',
-          name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
+          name: user
+            ? `${user.first_name} ${user.last_name}`
+            : 'Unknown Professional',
           avatar: profilePhoto ?? '',
           address: professionalProfile?.location || 'Location not specified',
           rating: 0,
@@ -94,10 +98,9 @@ async function fetchAdditionalServices(
           profile_id: professionalProfile?.id,
           hide_full_address: false,
           address_data: null,
-        }
+        },
       };
     });
-      
   } catch (error) {
     console.error('Unexpected error in fetchAdditionalServices:', error);
     return [];
@@ -110,7 +113,7 @@ async function fetchAdditionalServices(
 export function useAdditionalServices(
   profileId: string,
   excludeServiceId: string,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ['additionalServices', profileId, excludeServiceId],
@@ -119,4 +122,4 @@ export function useAdditionalServices(
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
   });
-} 
+}

@@ -131,11 +131,11 @@ function checkBasicValidation(
 function minutesToTimeString(minutes: number): string {
   const hours24 = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  
+
   // Convert to 12-hour format
   let displayHour = hours24;
   let period = 'AM';
-  
+
   if (hours24 === 0) {
     displayHour = 12; // Midnight becomes 12 AM
   } else if (hours24 === 12) {
@@ -146,7 +146,7 @@ function minutesToTimeString(minutes: number): string {
     period = 'PM';
   }
   // AM hours 1-11 stay the same, period stays AM
-  
+
   return `${displayHour.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')} ${period}`;
 }
 
@@ -185,9 +185,7 @@ function validateTimeSlotSelection(
 }
 
 // Function to disable time slots that don't have enough consecutive availability
-function disableInvalidTimeSlots(
-  timeSlots: TimeSlot[],
-): TimeSlot[] {
+function disableInvalidTimeSlots(timeSlots: TimeSlot[]): TimeSlot[] {
   // Since the backend getAvailableTimeSlots already filters out conflicting slots,
   // we should trust it and not disable any additional slots here.
   // The backend knows about existing bookings and availability better than the frontend.
@@ -217,7 +215,7 @@ function highlightSelectedTimeSlots(
   for (let i = 0; i < updatedSlots.length; i++) {
     const slot = updatedSlots[i];
     if (!slot) continue;
-    
+
     // Highlight this slot if it's within the service duration
     if (slot.minutes >= startMinutes && slot.minutes < endMinutes) {
       slot.isHighlighted = true;
@@ -266,10 +264,28 @@ function useProcessedTimeSlots(
     }
 
     // Only convert if backendReturnedProfessionalTimezone is true
-    let convertedSlots: { id: string; time: string; minutes: number; isSelected: boolean; isDisabled: boolean; isHighlighted: boolean; original: string }[] = [];
-    if (backendReturnedProfessionalTimezone && professionalTimezone && clientTimezone && professionalTimezone !== clientTimezone) {
+    let convertedSlots: {
+      id: string;
+      time: string;
+      minutes: number;
+      isSelected: boolean;
+      isDisabled: boolean;
+      isHighlighted: boolean;
+      original: string;
+    }[] = [];
+    if (
+      backendReturnedProfessionalTimezone &&
+      professionalTimezone &&
+      clientTimezone &&
+      professionalTimezone !== clientTimezone
+    ) {
       convertedSlots = availableTimeSlots.map((slot) => {
-        const { time } = convertTimeToClientTimezone(slot, professionalTimezone, clientTimezone, selectedDate);
+        const { time } = convertTimeToClientTimezone(
+          slot,
+          professionalTimezone,
+          clientTimezone,
+          selectedDate,
+        );
         return {
           id: slot,
           time,
@@ -319,7 +335,15 @@ function useProcessedTimeSlots(
       timeSlots: processedSlots,
       validationStatus,
     };
-  }, [availableTimeSlots, selectedDate, selectedTimeSlot, requiredSlots, professionalTimezone, clientTimezone, backendReturnedProfessionalTimezone]);
+  }, [
+    availableTimeSlots,
+    selectedDate,
+    selectedTimeSlot,
+    requiredSlots,
+    professionalTimezone,
+    clientTimezone,
+    backendReturnedProfessionalTimezone,
+  ]);
 }
 
 // DatePicker subcomponent
@@ -531,7 +555,9 @@ export function BookingFormDateTimePicker({
   professionalTimezone,
   clientTimezone,
   backendReturnedProfessionalTimezone = false,
-}: BookingFormDateTimePickerProps & { backendReturnedProfessionalTimezone?: boolean }) {
+}: BookingFormDateTimePickerProps & {
+  backendReturnedProfessionalTimezone?: boolean;
+}) {
   // Use synchronized date state
   const { localDate, handleLocalDateChange } = useSynchronizedDateState(
     selectedDate,
@@ -558,7 +584,7 @@ export function BookingFormDateTimePicker({
     requiredSlots,
     professionalTimezone,
     clientTimezone,
-    backendReturnedProfessionalTimezone
+    backendReturnedProfessionalTimezone,
   );
 
   // Handle slot selection

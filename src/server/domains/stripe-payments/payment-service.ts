@@ -1,13 +1,13 @@
 import type {
   StripeCheckoutParams,
   PaymentProcessingResult,
-  BookingWithPaymentData
+  BookingWithPaymentData,
 } from './types';
 import {
   getProfessionalProfileForPayment,
   calculatePaymentAmounts,
   createBookingPaymentRecord,
-  updateBookingPaymentWithSession
+  updateBookingPaymentWithSession,
 } from './db';
 import { createStripeCheckoutSession } from './stripe-operations';
 
@@ -18,17 +18,18 @@ export async function processBookingPayment(
   bookingData: BookingWithPaymentData,
   paymentMethodId: string,
   serviceFee: number,
-  tipAmount: number = 0
+  tipAmount: number = 0,
 ): Promise<PaymentProcessingResult> {
   try {
-    const { bookingId, totalPrice, paymentCalculation, professionalProfile } = bookingData;
+    const { bookingId, totalPrice, paymentCalculation, professionalProfile } =
+      bookingData;
 
     if (!professionalProfile.stripe_account_id) {
       return {
         success: false,
         error: 'Professional has not connected their Stripe account',
         requiresPayment: false,
-        paymentType: 'full'
+        paymentType: 'full',
       };
     }
 
@@ -63,7 +64,7 @@ export async function processBookingPayment(
       paymentMethodId,
       paymentCalculation,
       serviceFee,
-      tipAmount
+      tipAmount,
     );
 
     if (!paymentRecordResult.success) {
@@ -71,7 +72,7 @@ export async function processBookingPayment(
         success: false,
         error: paymentRecordResult.error || 'Failed to create payment record',
         requiresPayment: false,
-        paymentType
+        paymentType,
       };
     }
 
@@ -93,8 +94,8 @@ export async function processBookingPayment(
         professional_profile_id: professionalProfile.id,
         total_amount: totalAmountInCents.toString(),
         service_fee: (serviceFee * 100).toString(),
-        tip_amount: (tipAmount * 100).toString()
-      }
+        tip_amount: (tipAmount * 100).toString(),
+      },
     };
 
     const checkoutResult = await createStripeCheckoutSession(checkoutParams);
@@ -104,20 +105,23 @@ export async function processBookingPayment(
         success: false,
         error: checkoutResult.error || 'Failed to create checkout session',
         requiresPayment: true,
-        paymentType
+        paymentType,
       };
     }
 
     // Update payment record with session ID
     if (checkoutResult.sessionId) {
-      await updateBookingPaymentWithSession(bookingId, checkoutResult.sessionId);
+      await updateBookingPaymentWithSession(
+        bookingId,
+        checkoutResult.sessionId,
+      );
     }
 
     const result: PaymentProcessingResult = {
       success: true,
       bookingId,
       requiresPayment: true,
-      paymentType
+      paymentType,
     };
 
     if (checkoutResult.checkoutUrl) {
@@ -125,14 +129,16 @@ export async function processBookingPayment(
     }
 
     return result;
-
   } catch (error) {
     console.error('Error processing booking payment:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error processing payment',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error processing payment',
       requiresPayment: false,
-      paymentType: 'full'
+      paymentType: 'full',
     };
   }
 }
@@ -147,18 +153,20 @@ export async function createBookingWithPayment(
   paymentMethodId: string,
   serviceFee: number,
   tipAmount: number = 0,
-  clientId: string
+  clientId: string,
 ): Promise<PaymentProcessingResult> {
   try {
     // Get professional profile for payment processing
-    const professionalProfile = await getProfessionalProfileForPayment(professionalProfileId);
-    
+    const professionalProfile = await getProfessionalProfileForPayment(
+      professionalProfileId,
+    );
+
     if (!professionalProfile) {
       return {
         success: false,
         error: 'Professional profile not found',
         requiresPayment: false,
-        paymentType: 'full'
+        paymentType: 'full',
       };
     }
 
@@ -166,8 +174,11 @@ export async function createBookingWithPayment(
     const bookingWithPaymentData: BookingWithPaymentData = {
       bookingId,
       totalPrice,
-      paymentCalculation: calculatePaymentAmounts(Math.round(totalPrice * 100), professionalProfile),
-      professionalProfile
+      paymentCalculation: calculatePaymentAmounts(
+        Math.round(totalPrice * 100),
+        professionalProfile,
+      ),
+      professionalProfile,
     };
 
     // Update the checkout params to use the correct client ID
@@ -175,7 +186,7 @@ export async function createBookingWithPayment(
       bookingWithPaymentData,
       paymentMethodId,
       serviceFee,
-      tipAmount
+      tipAmount,
     );
 
     // Fix the client ID in the checkout URL if needed
@@ -189,42 +200,48 @@ export async function createBookingWithPayment(
         depositAmount: bookingWithPaymentData.paymentCalculation.depositAmount,
         balanceAmount: bookingWithPaymentData.paymentCalculation.balanceAmount,
         paymentType: result.paymentType,
-        requiresBalancePayment: bookingWithPaymentData.paymentCalculation.requiresBalancePayment,
+        requiresBalancePayment:
+          bookingWithPaymentData.paymentCalculation.requiresBalancePayment,
         metadata: {
           booking_id: bookingId,
           professional_profile_id: professionalProfile.id,
           total_amount: (totalPrice * 100).toString(),
           service_fee: (serviceFee * 100).toString(),
-          tip_amount: (tipAmount * 100).toString()
-        }
+          tip_amount: (tipAmount * 100).toString(),
+        },
       };
 
       const checkoutResult = await createStripeCheckoutSession(checkoutParams);
-      
+
       if (checkoutResult.success && checkoutResult.sessionId) {
-        await updateBookingPaymentWithSession(bookingId, checkoutResult.sessionId);
-        
+        await updateBookingPaymentWithSession(
+          bookingId,
+          checkoutResult.sessionId,
+        );
+
         const updatedResult: PaymentProcessingResult = {
-          ...result
+          ...result,
         };
-        
+
         if (checkoutResult.checkoutUrl) {
           updatedResult.checkoutUrl = checkoutResult.checkoutUrl;
         }
-        
+
         return updatedResult;
       }
     }
 
     return result;
-
   } catch (error) {
     console.error('Error creating booking with payment:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating booking with payment',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating booking with payment',
       requiresPayment: false,
-      paymentType: 'full'
+      paymentType: 'full',
     };
   }
-} 
+}

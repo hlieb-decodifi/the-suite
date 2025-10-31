@@ -8,14 +8,14 @@ import { useState } from 'react';
 export function useAuthModals() {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
-  
+
   const handlers = {
     handleSignUpClick: () => setIsSignUpModalOpen(true),
     handleSignInClick: () => setIsSignInModalOpen(true),
     handleModalClose: () => setIsSignUpModalOpen(false),
     handleSignInModalClose: () => setIsSignInModalOpen(false),
   };
-  
+
   return {
     isSignUpModalOpen,
     isSignInModalOpen,
@@ -23,4 +23,4 @@ export function useAuthModals() {
     setIsSignInModalOpen,
     handlers,
   };
-} 
+}

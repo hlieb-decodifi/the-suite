@@ -8,8 +8,12 @@ export function addressDataToLegacyFormat(addressData: AddressData) {
     country: addressData.country || '',
     state: addressData.state || addressData.administrative_area_level_1 || '',
     city: addressData.city || addressData.locality || '',
-    street_address: addressData.street_address || 
-      [addressData.street_number, addressData.route].filter(Boolean).join(' ') || '',
+    street_address:
+      addressData.street_address ||
+      [addressData.street_number, addressData.route]
+        .filter(Boolean)
+        .join(' ') ||
+      '',
   };
 }
 
@@ -18,24 +22,29 @@ export function addressDataToLegacyFormat(addressData: AddressData) {
  */
 export function formatAddressDisplay(
   addressData: AddressData,
-  format: 'short' | 'medium' | 'full' = 'medium'
+  format: 'short' | 'medium' | 'full' = 'medium',
 ): string {
   switch (format) {
     case 'short':
-      return [addressData.locality || addressData.city, addressData.administrative_area_level_1 || addressData.state]
+      return [
+        addressData.locality || addressData.city,
+        addressData.administrative_area_level_1 || addressData.state,
+      ]
         .filter(Boolean)
         .join(', ');
-    
+
     case 'full':
       return addressData.formatted_address;
-    
+
     case 'medium':
     default:
       return [
         addressData.street_address,
         addressData.locality || addressData.city,
         addressData.administrative_area_level_1 || addressData.state,
-      ].filter(Boolean).join(', ');
+      ]
+        .filter(Boolean)
+        .join(', ');
   }
 }
 
@@ -44,16 +53,16 @@ export function formatAddressDisplay(
  */
 export function validateAddressData(
   addressData: AddressData,
-  requiredFields: (keyof AddressData)[] = ['formatted_address', 'country']
+  requiredFields: (keyof AddressData)[] = ['formatted_address', 'country'],
 ): { isValid: boolean; missingFields: string[] } {
   const missingFields: string[] = [];
-  
+
   for (const field of requiredFields) {
     if (!addressData[field]) {
       missingFields.push(field);
     }
   }
-  
+
   return {
     isValid: missingFields.length === 0,
     missingFields,
@@ -81,16 +90,18 @@ export function getAddressCoordinates(addressData: AddressData): {
  */
 export function calculateDistance(
   coord1: { latitude: number; longitude: number },
-  coord2: { latitude: number; longitude: number }
+  coord2: { latitude: number; longitude: number },
 ): number {
   const R = 6371; // Earth's radius in kilometers
-  const dLat = (coord2.latitude - coord1.latitude) * Math.PI / 180;
-  const dLon = (coord2.longitude - coord1.longitude) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(coord1.latitude * Math.PI / 180) * Math.cos(coord2.latitude * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const dLat = ((coord2.latitude - coord1.latitude) * Math.PI) / 180;
+  const dLon = ((coord2.longitude - coord1.longitude) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((coord1.latitude * Math.PI) / 180) *
+      Math.cos((coord2.latitude * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c; // Distance in kilometers
   return distance;
 }
@@ -105,11 +116,11 @@ export function isAddressInBounds(
     south: number;
     east: number;
     west: number;
-  }
+  },
 ): boolean {
   const coords = getAddressCoordinates(addressData);
   if (!coords) return false;
-  
+
   return (
     coords.latitude >= bounds.south &&
     coords.latitude <= bounds.north &&
@@ -121,14 +132,20 @@ export function isAddressInBounds(
 /**
  * Normalize address components for consistent formatting
  */
-export function normalizeAddressComponents(addressData: AddressData): AddressData {
+export function normalizeAddressComponents(
+  addressData: AddressData,
+): AddressData {
   const normalized = {
     ...addressData,
     // Ensure legacy fields are populated from Google Places data
     city: addressData.city || addressData.locality || '',
     state: addressData.state || addressData.administrative_area_level_1 || '',
-    street_address: addressData.street_address || 
-      [addressData.street_number, addressData.route].filter(Boolean).join(' ') || '',
+    street_address:
+      addressData.street_address ||
+      [addressData.street_number, addressData.route]
+        .filter(Boolean)
+        .join(' ') ||
+      '',
   };
 
   // Ensure country code is uppercase if it exists
@@ -144,11 +161,11 @@ export function normalizeAddressComponents(addressData: AddressData): AddressDat
  */
 export function createLocationBiasFromAddress(
   addressData: AddressData,
-  radiusKm: number = 50
+  radiusKm: number = 50,
 ): { latitude: number; longitude: number; radius: number } | null {
   const coords = getAddressCoordinates(addressData);
   if (!coords) return null;
-  
+
   return {
     latitude: coords.latitude,
     longitude: coords.longitude,
@@ -174,10 +191,12 @@ export function isBusinessLocation(addressData: AddressData): boolean {
     'spa',
     'lodging',
   ];
-  
-  return addressData.place_types?.some(type => 
-    businessTypes.some(businessType => type.includes(businessType))
-  ) || false;
+
+  return (
+    addressData.place_types?.some((type) =>
+      businessTypes.some((businessType) => type.includes(businessType)),
+    ) || false
+  );
 }
 
 /**
@@ -190,10 +209,14 @@ export function isResidentialLocation(addressData: AddressData): boolean {
     'subpremise',
     'residential',
   ];
-  
-  return addressData.place_types?.some(type => 
-    residentialTypes.some(residentialType => type.includes(residentialType))
-  ) || false;
+
+  return (
+    addressData.place_types?.some((type) =>
+      residentialTypes.some((residentialType) =>
+        type.includes(residentialType),
+      ),
+    ) || false
+  );
 }
 
 /**
@@ -201,29 +224,31 @@ export function isResidentialLocation(addressData: AddressData): boolean {
  */
 export function formatAddressForContext(
   addressData: AddressData,
-  context: 'form' | 'profile' | 'booking' | 'search'
+  context: 'form' | 'profile' | 'booking' | 'search',
 ): string {
   switch (context) {
     case 'form':
       // Simple format for form display
       return formatAddressDisplay(addressData, 'medium');
-    
+
     case 'profile':
       // Professional profile format
       return [
         addressData.locality || addressData.city,
         addressData.administrative_area_level_1 || addressData.state,
         addressData.country,
-      ].filter(Boolean).join(', ');
-    
+      ]
+        .filter(Boolean)
+        .join(', ');
+
     case 'booking':
       // Full address for bookings
       return addressData.formatted_address;
-    
+
     case 'search':
       // Short format for search results
       return formatAddressDisplay(addressData, 'short');
-    
+
     default:
       return addressData.formatted_address;
   }
@@ -233,18 +258,16 @@ export function formatAddressForContext(
  * Validates if the current form fields match the stored lat/lng coordinates
  * Returns true if coordinates are still valid, false if manual changes invalidate them
  */
-export function validateAddressCoordinates(
-  formValues: {
-    country?: string;
-    state?: string;
-    city?: string;
-    streetAddress?: string;
-    apartment?: string;
-    latitude?: number;
-    longitude?: number;
-    googlePlaceId?: string;
-  }
-): { isValid: boolean; shouldClearCoordinates: boolean; reason?: string } {
+export function validateAddressCoordinates(formValues: {
+  country?: string;
+  state?: string;
+  city?: string;
+  streetAddress?: string;
+  apartment?: string;
+  latitude?: number;
+  longitude?: number;
+  googlePlaceId?: string;
+}): { isValid: boolean; shouldClearCoordinates: boolean; reason?: string } {
   // If no coordinates exist, validation passes (no coordinates to validate)
   if (!formValues.latitude || !formValues.longitude) {
     return { isValid: true, shouldClearCoordinates: false };
@@ -257,18 +280,19 @@ export function validateAddressCoordinates(
 
   // If we have coordinates and Google Place ID, we assume they were set by Google Places
   // In this case, we should validate if manual changes warrant clearing coordinates
-  
+
   // For now, we'll be conservative and keep coordinates unless major address components change
   // A more sophisticated approach would geocode the current address to verify coordinates
-  
+
   // Check if major address components are empty (suggests significant manual changes)
-  const hasEmptyMajorComponents = !formValues.country || !formValues.city || !formValues.streetAddress;
-  
+  const hasEmptyMajorComponents =
+    !formValues.country || !formValues.city || !formValues.streetAddress;
+
   if (hasEmptyMajorComponents) {
-    return { 
-      isValid: false, 
-      shouldClearCoordinates: true, 
-      reason: 'Major address components are missing' 
+    return {
+      isValid: false,
+      shouldClearCoordinates: true,
+      reason: 'Major address components are missing',
     };
   }
 
@@ -282,7 +306,7 @@ export function validateAddressCoordinates(
  */
 export function createAddressValidator(
   setValue: (field: string, value: unknown) => void,
-  debounceMs: number = 2000
+  debounceMs: number = 2000,
 ) {
   let timeoutId: ReturnType<typeof setTimeout>;
 
@@ -297,16 +321,19 @@ export function createAddressValidator(
     googlePlaceId?: string;
   }) {
     clearTimeout(timeoutId);
-    
+
     timeoutId = setTimeout(() => {
       const validation = validateAddressCoordinates(formValues);
-      
+
       if (validation.shouldClearCoordinates) {
-        console.log('Address validation: Clearing coordinates due to manual changes:', validation.reason);
+        console.log(
+          'Address validation: Clearing coordinates due to manual changes:',
+          validation.reason,
+        );
         setValue('latitude', undefined);
         setValue('longitude', undefined);
         setValue('googlePlaceId', '');
       }
     }, debounceMs);
   };
-} 
+}

@@ -1,5 +1,12 @@
 import React, { useRef, useLayoutEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 export type BookingsActivityGraphProps = {
   data: Array<{ date: string; count: number }>;
@@ -28,7 +35,7 @@ export function BookingsActivityGraph({ data }: BookingsActivityGraphProps) {
   }
 
   const yAxisWidth = 20;
-  const counts = data.map(d => d.count);
+  const counts = data.map((d) => d.count);
   const min = Math.min(...counts, 0);
   const max = Math.max(...counts, 5);
 
@@ -43,7 +50,10 @@ export function BookingsActivityGraph({ data }: BookingsActivityGraphProps) {
         style={{ width: yAxisWidth }}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
+          <AreaChart
+            data={data}
+            margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+          >
             <YAxis
               domain={[min, max]}
               tick={{ fontSize: 12, fill: '#6b7280' }}
@@ -61,7 +71,10 @@ export function BookingsActivityGraph({ data }: BookingsActivityGraphProps) {
       <div className="overflow-x-auto w-full">
         <div style={{ width: chartWidth, height: 160 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ left: 36, right: 36, top: 10, bottom: 0 }}>
+            <AreaChart
+              data={data}
+              margin={{ left: 36, right: 36, top: 10, bottom: 0 }}
+            >
               <defs>
                 <linearGradient id="colorBookings" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8} />
@@ -77,7 +90,11 @@ export function BookingsActivityGraph({ data }: BookingsActivityGraphProps) {
                 interval={0}
               />
               <Tooltip
-                contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', fontSize: 13 }}
+                contentStyle={{
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  fontSize: 13,
+                }}
                 labelStyle={{ color: '#6b7280' }}
                 cursor={{ fill: '#fbbf2422' }}
               />
@@ -96,4 +113,4 @@ export function BookingsActivityGraph({ data }: BookingsActivityGraphProps) {
       </div>
     </div>
   );
-} 
+}

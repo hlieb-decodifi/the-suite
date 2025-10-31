@@ -15,11 +15,11 @@ export async function RefundReviewPage({ refundId }: { refundId: string }) {
     redirect('/');
   }
 
-  // Since refunds are now handled as support requests, 
+  // Since refunds are now handled as support requests,
   // redirect to the support request detail page
   // The refundId should correspond to a support request ID
   redirect(`/support-request/${refundId}`);
-  
+
   // This return will never be reached due to redirect, but TypeScript needs it
   return null;
 }

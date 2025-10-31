@@ -18,8 +18,10 @@ const missingEnvVars = Object.entries(requiredEnvVars)
 
 if (missingEnvVars.length > 0) {
   console.error('Missing required environment variables:');
-  missingEnvVars.forEach(key => console.error(`- ${key}`));
-  console.error('\nPlease ensure these variables are set in your .env.local file');
+  missingEnvVars.forEach((key) => console.error(`- ${key}`));
+  console.error(
+    '\nPlease ensure these variables are set in your .env.local file',
+  );
   process.exit(1);
 }
 
@@ -57,20 +59,26 @@ type BrevoTemplatesResponse = {
 async function syncTemplateToBrevo(template: EmailTemplate) {
   try {
     // First check if template exists by tag
-    const checkResponse = await fetch('https://api.brevo.com/v3/smtp/templates', {
-      headers: {
-        'api-key': BREVO_API_KEY,
-        'content-type': 'application/json',
+    const checkResponse = await fetch(
+      'https://api.brevo.com/v3/smtp/templates',
+      {
+        headers: {
+          'api-key': BREVO_API_KEY,
+          'content-type': 'application/json',
+        },
       },
-    });
+    );
 
     if (!checkResponse.ok) {
-      throw new Error(`Failed to fetch templates from Brevo: ${checkResponse.statusText}`);
+      throw new Error(
+        `Failed to fetch templates from Brevo: ${checkResponse.statusText}`,
+      );
     }
 
-    const existingTemplates = (await checkResponse.json()) as BrevoTemplatesResponse;
+    const existingTemplates =
+      (await checkResponse.json()) as BrevoTemplatesResponse;
     const existingTemplate = existingTemplates.templates?.find(
-      (t) => t.tag === template.tag
+      (t) => t.tag === template.tag,
     );
 
     // if (template.tag === 'BookingConfirmationClient') {
@@ -103,41 +111,51 @@ async function syncTemplateToBrevo(template: EmailTemplate) {
             'content-type': 'application/json',
           },
           body: JSON.stringify(templateData),
-        }
+        },
       );
 
       const responseText = await updateResponse.text();
-      console.log(`Update response for ${template.name} (Status ${updateResponse.status}):`, responseText);
-      
+      console.log(
+        `Update response for ${template.name} (Status ${updateResponse.status}):`,
+        responseText,
+      );
+
       if (!updateResponse.ok) {
         throw new Error(
-          `Failed to update template: ${template.name}. Status: ${updateResponse.status}. Response: ${responseText}`
+          `Failed to update template: ${template.name}. Status: ${updateResponse.status}. Response: ${responseText}`,
         );
       }
 
-      console.log(`Successfully updated template: ${template.name} (ID: ${existingTemplate.id})`);
+      console.log(
+        `Successfully updated template: ${template.name} (ID: ${existingTemplate.id})`,
+      );
       return existingTemplate.id;
     } else {
       // Create new template
       console.log(`Creating template: ${template.name}`);
-      const createResponse = await fetch('https://api.brevo.com/v3/smtp/templates', {
-        method: 'POST',
-        headers: {
-          'api-key': BREVO_API_KEY,
-          'content-type': 'application/json',
+      const createResponse = await fetch(
+        'https://api.brevo.com/v3/smtp/templates',
+        {
+          method: 'POST',
+          headers: {
+            'api-key': BREVO_API_KEY,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(templateData),
         },
-        body: JSON.stringify(templateData),
-      });
+      );
 
       if (!createResponse.ok) {
         const errorData = await createResponse.json().catch(() => ({}));
         throw new Error(
-          `Failed to create template: ${template.name}. Status: ${createResponse.status}. Error: ${JSON.stringify(errorData)}`
+          `Failed to create template: ${template.name}. Status: ${createResponse.status}. Error: ${JSON.stringify(errorData)}`,
         );
       }
 
       const newTemplate = (await createResponse.json()) as { id: number };
-      console.log(`Successfully created template: ${template.name} (ID: ${newTemplate.id})`);
+      console.log(
+        `Successfully created template: ${template.name} (ID: ${newTemplate.id})`,
+      );
       return newTemplate.id;
     }
   } catch (error) {
@@ -169,7 +187,12 @@ async function main() {
     console.log(`Found ${templates.length} templates to sync`);
 
     // Track results
-    const results: { name: string; id: number | null; status: 'success' | 'error'; error?: string }[] = [];
+    const results: {
+      name: string;
+      id: number | null;
+      status: 'success' | 'error';
+      error?: string;
+    }[] = [];
 
     // Sync each template
     for (const template of templates) {
@@ -178,7 +201,7 @@ async function main() {
         results.push({
           name: template.name,
           id: templateId,
-          status: 'success'
+          status: 'success',
         });
       } catch (error) {
         console.error(`Failed to sync template ${template.name}:`, error);
@@ -186,7 +209,7 @@ async function main() {
           name: template.name,
           id: null,
           status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -194,7 +217,7 @@ async function main() {
     // Print summary
     console.log('\nSync Summary:');
     console.log('=============');
-    results.forEach(result => {
+    results.forEach((result) => {
       if (result.status === 'success') {
         console.log(`✓ ${result.name} (ID: ${result.id})`);
       } else {
@@ -202,12 +225,11 @@ async function main() {
       }
     });
 
-    const successCount = results.filter(r => r.status === 'success').length;
-    const errorCount = results.filter(r => r.status === 'error').length;
+    const successCount = results.filter((r) => r.status === 'success').length;
+    const errorCount = results.filter((r) => r.status === 'error').length;
     console.log('\nFinal Results:');
     console.log(`Successfully synced: ${successCount}`);
     console.log(`Failed: ${errorCount}`);
-
   } catch (error) {
     console.error('Error during template sync:', error);
     process.exit(1);

@@ -1,5 +1,9 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getClientProfileWithAddress, updateClientLocation, updateUserDetails } from './fetchers';
+import {
+  getClientProfileWithAddress,
+  updateClientLocation,
+  updateUserDetails,
+} from './fetchers';
 import { AddressFormData, DetailFormData } from './types';
 import { User } from '@supabase/supabase-js';
 
@@ -15,7 +19,13 @@ export function useClientProfile(userId: string) {
 // Hook to update user details
 export function useUpdateUserDetails() {
   return useMutation({
-    mutationFn: ({ user, details }: { user: User, details: DetailFormData }) => {
+    mutationFn: ({
+      user,
+      details,
+    }: {
+      user: User;
+      details: DetailFormData;
+    }) => {
       return updateUserDetails(user, details);
     },
   });
@@ -24,11 +34,11 @@ export function useUpdateUserDetails() {
 // Hook to update location
 export function useUpdateLocation() {
   return useMutation({
-    mutationFn: ({ 
-      userId, 
-      addressData, 
-      existingAddressId 
-    }: { 
+    mutationFn: ({
+      userId,
+      addressData,
+      existingAddressId,
+    }: {
       userId: string;
       addressData: AddressFormData;
       existingAddressId: string | null;
@@ -36,4 +46,4 @@ export function useUpdateLocation() {
       return updateClientLocation(userId, addressData, existingAddressId);
     },
   });
-} 
+}

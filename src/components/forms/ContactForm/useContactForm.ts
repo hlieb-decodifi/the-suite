@@ -13,10 +13,10 @@ export type UseContactFormProps = {
   onSuccess?: () => void;
 };
 
-export function useContactForm({ 
-  onSubmit, 
+export function useContactForm({
+  onSubmit,
   defaultValues,
-  onSuccess
+  onSuccess,
 }: UseContactFormProps = {}) {
   const [isPending, setIsPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -33,41 +33,46 @@ export function useContactForm({
     },
   });
 
-  const handleSubmit = useCallback(async (data: ContactFormData) => {
-    try {
-      setIsPending(true);
-      setSubmitError(null);
-      
-      // Call the server action for contact form submission
-      const result = await submitContactInquiry(data);
-      
-      if (!result.success) {
-        setSubmitError(result.error || 'Failed to send message. Please try again.');
-        return;
+  const handleSubmit = useCallback(
+    async (data: ContactFormData) => {
+      try {
+        setIsPending(true);
+        setSubmitError(null);
+
+        // Call the server action for contact form submission
+        const result = await submitContactInquiry(data);
+
+        if (!result.success) {
+          setSubmitError(
+            result.error || 'Failed to send message. Please try again.',
+          );
+          return;
+        }
+
+        // Call the onSubmit callback if provided
+        onSubmit?.(data);
+
+        // Show success toast
+        toast({
+          title: 'Message Sent!',
+          description:
+            'Thank you for contacting us. We will get back to you shortly.',
+        });
+
+        // Reset form on success
+        form.reset();
+
+        // Call success callback if provided
+        onSuccess?.();
+      } catch (error) {
+        console.error('Error submitting contact form:', error);
+        setSubmitError('An unexpected error occurred. Please try again.');
+      } finally {
+        setIsPending(false);
       }
-      
-      // Call the onSubmit callback if provided
-      onSubmit?.(data);
-      
-      // Show success toast
-      toast({
-        title: "Message Sent!",
-        description: "Thank you for contacting us. We will get back to you shortly."
-      });
-      
-      // Reset form on success
-      form.reset();
-      
-      // Call success callback if provided
-      onSuccess?.();
-      
-    } catch (error) {
-      console.error('Error submitting contact form:', error);
-      setSubmitError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsPending(false);
-    }
-  }, [onSubmit, onSuccess, form]);
+    },
+    [onSubmit, onSuccess, form],
+  );
 
   return {
     form,
@@ -75,4 +80,4 @@ export function useContactForm({
     submitError,
     onSubmit: handleSubmit,
   };
-} 
+}

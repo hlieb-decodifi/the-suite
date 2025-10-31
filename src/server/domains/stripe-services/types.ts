@@ -84,4 +84,4 @@ export type PaymentMethodData = {
   id: string;
   name: string;
   is_online: boolean;
-}; 
+};

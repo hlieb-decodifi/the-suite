@@ -1,1 +1,1 @@
-export * from './ServicesTemplatePagination'; 
+export * from './ServicesTemplatePagination';

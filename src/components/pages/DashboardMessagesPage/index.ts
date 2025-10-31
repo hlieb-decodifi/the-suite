@@ -1,2 +1,2 @@
 export { DashboardMessagesPage } from './DashboardMessagesPage';
-export { DashboardMessagesPageClient } from './DashboardMessagesPageClient'; 
+export { DashboardMessagesPageClient } from './DashboardMessagesPageClient';

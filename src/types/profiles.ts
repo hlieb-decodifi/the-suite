@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 // Database types from Supabase schema
 export type ProfileDB = Database['public']['Tables']['users']['Row'];
-export type ProfessionalProfileDB = Database['public']['Tables']['professional_profiles']['Row'];
+export type ProfessionalProfileDB =
+  Database['public']['Tables']['professional_profiles']['Row'];
 
 // Client-side types
 export type ProfileData = {
@@ -21,7 +22,7 @@ export type ProfileData = {
   isSubscribed: boolean;
   cookieConsent: boolean;
   isAdmin?: boolean;
-}
+};
 
 // Validation schemas
 export const headerFormSchema = z.object({
@@ -41,4 +42,4 @@ export const publishToggleSchema = z.object({
 
 // Form values types
 export type HeaderFormValues = z.infer<typeof headerFormSchema>;
-export type PublishToggleValues = z.infer<typeof publishToggleSchema>; 
+export type PublishToggleValues = z.infer<typeof publishToggleSchema>;

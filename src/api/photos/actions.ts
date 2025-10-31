@@ -29,7 +29,10 @@ export async function updateProfilePhotoAction(
 
   // Server-side validation
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    return { success: false, error: `File size exceeds the limit of ${MAX_FILE_SIZE_MB}MB.` };
+    return {
+      success: false,
+      error: `File size exceeds the limit of ${MAX_FILE_SIZE_MB}MB.`,
+    };
   }
 
   const supabase = await createClient();
@@ -47,11 +50,11 @@ export async function updateProfilePhotoAction(
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('Error checking existing profile photo:', fetchError);
     } else if (existingPhoto && existingPhoto.filename) {
-        oldFilePath = `${userId}/${existingPhoto.filename}`;
-        recordExists = true;
+      oldFilePath = `${userId}/${existingPhoto.filename}`;
+      recordExists = true;
     }
-  } catch(e) {
-    console.error('Error fetching existing photo:', e)
+  } catch (e) {
+    console.error('Error fetching existing photo:', e);
   }
 
   // --- 2. Upload new photo to Storage ---
@@ -72,25 +75,31 @@ export async function updateProfilePhotoAction(
       return { success: false, error: uploadError.message };
     }
 
-    // --- 3. Get Public URL --- 
+    // --- 3. Get Public URL ---
     const { data: urlData } = supabase.storage
-       .from(PROFILE_PHOTOS_BUCKET)
-       .getPublicUrl(newFilePath);
-       
+      .from(PROFILE_PHOTOS_BUCKET)
+      .getPublicUrl(newFilePath);
+
     if (!urlData || !urlData.publicUrl) {
-        // Cleanup uploaded file if we can't get URL
-        await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([newFilePath]).catch(e => console.error("Cleanup failed after URL fetch error", e));
-        return { success: false, error: 'Could not get public URL for the uploaded photo.' };
+      // Cleanup uploaded file if we can't get URL
+      await supabase.storage
+        .from(PROFILE_PHOTOS_BUCKET)
+        .remove([newFilePath])
+        .catch((e) => console.error('Cleanup failed after URL fetch error', e));
+      return {
+        success: false,
+        error: 'Could not get public URL for the uploaded photo.',
+      };
     }
     const publicUrl = urlData.publicUrl;
 
     // --- 4. Update or Insert Database Record with FILENAME and URL ---
     let dbError: { message: string } | null = null;
     const photoData = {
-        user_id: userId,
-        url: publicUrl,
-        filename: newFileName,
-        updated_at: new Date().toISOString(),
+      user_id: userId,
+      url: publicUrl,
+      filename: newFileName,
+      updated_at: new Date().toISOString(),
     };
     const insertData = { ...photoData, created_at: new Date().toISOString() };
 
@@ -105,14 +114,16 @@ export async function updateProfilePhotoAction(
       // INSERT new record
       const { error } = await supabase
         .from('profile_photos')
-        .insert(insertData as Database['public']['Tables']['profile_photos']['Insert']);
+        .insert(
+          insertData as Database['public']['Tables']['profile_photos']['Insert'],
+        );
       dbError = error;
     }
 
     if (dbError) {
-        console.error('Error saving profile_photos record:', dbError);
-        await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([newFilePath]);
-        return { success: false, error: dbError.message };
+      console.error('Error saving profile_photos record:', dbError);
+      await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([newFilePath]);
+      return { success: false, error: dbError.message };
     }
 
     // --- 5. Delete old photo from Storage (if necessary and different) ---
@@ -128,14 +139,18 @@ export async function updateProfilePhotoAction(
     // --- 6. Revalidate and return success ---
     revalidatePath('/profile');
     return { success: true }; // No need to return URL/filePath
-
   } catch (error) {
     console.error('Server error updating profile photo:', error);
-     await supabase.storage.from(PROFILE_PHOTOS_BUCKET).remove([newFilePath]).catch(e => console.error("Cleanup failed", e));
+    await supabase.storage
+      .from(PROFILE_PHOTOS_BUCKET)
+      .remove([newFilePath])
+      .catch((e) => console.error('Cleanup failed', e));
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : 'Server error updating profile photo',
+        error instanceof Error
+          ? error.message
+          : 'Server error updating profile photo',
     };
   }
-} 
+}

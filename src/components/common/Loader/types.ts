@@ -7,9 +7,9 @@ export type LoaderVariantProps = {
   size?: LoaderSize;
 };
 
-export type LoaderProps = React.HTMLAttributes<HTMLDivElement> & 
+export type LoaderProps = React.HTMLAttributes<HTMLDivElement> &
   LoaderVariantProps & {
     className?: ClassValue;
     /** Controls the animation speed. Defaults to normal. */
     speed?: LoaderSpeed;
-  }; 
+  };

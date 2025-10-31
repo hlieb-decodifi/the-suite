@@ -17,32 +17,48 @@ export async function replaceBalancePaymentWithAdditionalServices(
   customerId: string,
   paymentMethodId: string,
   professionalStripeAccountId?: string,
-  metadata?: Record<string, string>
-): Promise<{ success: boolean; newPaymentIntentId?: string; updatedAmount?: number; error?: string; immediatePayment?: boolean }> {
+  metadata?: Record<string, string>,
+): Promise<{
+  success: boolean;
+  newPaymentIntentId?: string;
+  updatedAmount?: number;
+  error?: string;
+  immediatePayment?: boolean;
+}> {
   try {
-    console.log('[replaceBalancePaymentWithAdditionalServices] Starting replacement:', {
-      paymentIntentId,
-      originalAmount: originalAmount / 100,
-      additionalAmount: additionalAmount / 100,
-      newTotal: (originalAmount + additionalAmount) / 100,
-    });
+    console.log(
+      '[replaceBalancePaymentWithAdditionalServices] Starting replacement:',
+      {
+        paymentIntentId,
+        originalAmount: originalAmount / 100,
+        additionalAmount: additionalAmount / 100,
+        newTotal: (originalAmount + additionalAmount) / 100,
+      },
+    );
 
     // First, retrieve the payment intent to check its current status
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    
-    console.log('[replaceBalancePaymentWithAdditionalServices] Current PaymentIntent status:', {
-      id: paymentIntent.id,
-      status: paymentIntent.status,
-      amount: paymentIntent.amount,
-      amount_capturable: paymentIntent.amount_capturable,
-    });
+
+    console.log(
+      '[replaceBalancePaymentWithAdditionalServices] Current PaymentIntent status:',
+      {
+        id: paymentIntent.id,
+        status: paymentIntent.status,
+        amount: paymentIntent.amount,
+        amount_capturable: paymentIntent.amount_capturable,
+      },
+    );
 
     if (paymentIntent.status === 'succeeded') {
       // Payment has already been captured, create an immediate payment for additional services only
-      console.log('[replaceBalancePaymentWithAdditionalServices] Payment already captured, creating immediate payment for additional services only');
-      
-      const { createBalancePaymentIntent } = await import('./stripe-operations');
-      
+      console.log(
+        '[replaceBalancePaymentWithAdditionalServices] Payment already captured, creating immediate payment for additional services only',
+      );
+
+      const { createBalancePaymentIntent } = await import(
+        './stripe-operations'
+      );
+
       // Create an immediate payment intent for additional services (not uncaptured)
       const newPaymentResult = await createBalancePaymentIntent(
         '', // bookingId - not needed for immediate payment
@@ -58,7 +74,7 @@ export async function replaceBalancePaymentWithAdditionalServices(
           original_payment_intent: paymentIntentId,
           original_status: 'succeeded',
           payment_type: 'additional_services_immediate',
-        }
+        },
       );
 
       if (!newPaymentResult.success || !newPaymentResult.paymentIntentId) {
@@ -68,11 +84,14 @@ export async function replaceBalancePaymentWithAdditionalServices(
         };
       }
 
-      console.log('[replaceBalancePaymentWithAdditionalServices] Successfully processed immediate payment for additional services:', {
-        originalId: paymentIntentId,
-        newId: newPaymentResult.paymentIntentId,
-        additionalAmount: additionalAmount,
-      });
+      console.log(
+        '[replaceBalancePaymentWithAdditionalServices] Successfully processed immediate payment for additional services:',
+        {
+          originalId: paymentIntentId,
+          newId: newPaymentResult.paymentIntentId,
+          additionalAmount: additionalAmount,
+        },
+      );
 
       return {
         success: true,
@@ -81,7 +100,7 @@ export async function replaceBalancePaymentWithAdditionalServices(
         immediatePayment: true, // Flag to indicate this was charged immediately
       };
     }
-    
+
     if (paymentIntent.status !== 'requires_capture') {
       return {
         success: false,
@@ -91,16 +110,22 @@ export async function replaceBalancePaymentWithAdditionalServices(
 
     const newTotalAmount = originalAmount + additionalAmount;
 
-    console.log('[replaceBalancePaymentWithAdditionalServices] Step 1: Canceling existing payment intent');
+    console.log(
+      '[replaceBalancePaymentWithAdditionalServices] Step 1: Canceling existing payment intent',
+    );
 
     // Step 1: Cancel the existing payment intent
     await stripe.paymentIntents.cancel(paymentIntentId);
 
-    console.log('[replaceBalancePaymentWithAdditionalServices] Step 2: Creating new payment intent with updated amount');
+    console.log(
+      '[replaceBalancePaymentWithAdditionalServices] Step 2: Creating new payment intent with updated amount',
+    );
 
     // Step 2: Create a new uncaptured payment intent with the new total amount
-    const { createUncapturedPaymentIntent } = await import('./stripe-operations');
-    
+    const { createUncapturedPaymentIntent } = await import(
+      './stripe-operations'
+    );
+
     const newPaymentResult = await createUncapturedPaymentIntent(
       newTotalAmount,
       customerId,
@@ -113,7 +138,7 @@ export async function replaceBalancePaymentWithAdditionalServices(
         original_amount: originalAmount.toString(),
         replaced_payment_intent: paymentIntentId,
       },
-      paymentMethodId
+      paymentMethodId,
     );
 
     if (!newPaymentResult.success || !newPaymentResult.paymentIntentId) {
@@ -123,21 +148,26 @@ export async function replaceBalancePaymentWithAdditionalServices(
       };
     }
 
-    console.log('[replaceBalancePaymentWithAdditionalServices] Successfully replaced payment intent:', {
-      oldId: paymentIntentId,
-      newId: newPaymentResult.paymentIntentId,
-      amount: newTotalAmount,
-    });
+    console.log(
+      '[replaceBalancePaymentWithAdditionalServices] Successfully replaced payment intent:',
+      {
+        oldId: paymentIntentId,
+        newId: newPaymentResult.paymentIntentId,
+        amount: newTotalAmount,
+      },
+    );
 
     return {
       success: true,
       newPaymentIntentId: newPaymentResult.paymentIntentId,
       updatedAmount: newTotalAmount,
     };
-
   } catch (error) {
-    console.error('[replaceBalancePaymentWithAdditionalServices] Error replacing payment intent:', error);
-    
+    console.error(
+      '[replaceBalancePaymentWithAdditionalServices] Error replacing payment intent:',
+      error,
+    );
+
     if (error instanceof Stripe.errors.StripeError) {
       return {
         success: false,
@@ -147,7 +177,10 @@ export async function replaceBalancePaymentWithAdditionalServices(
 
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error replacing payment intent',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error replacing payment intent',
     };
   }
 }
@@ -171,16 +204,24 @@ export async function processAdditionalServicesBalancePayment({
   customerId: string;
   paymentMethodId: string;
   professionalStripeAccountId?: string;
-}): Promise<{ success: boolean; newPaymentIntentId?: string; updatedAmount?: number; error?: string; immediatePayment?: boolean }> {
-  
-  console.log('[processAdditionalServicesBalancePayment] Starting payment processing:', {
-    balancePaymentIntentId,
-    originalAmount: originalAmount / 100,
-    additionalAmount: additionalAmount / 100,
-    bookingId,
-    customerId,
-    paymentMethodId,
-  });
+}): Promise<{
+  success: boolean;
+  newPaymentIntentId?: string;
+  updatedAmount?: number;
+  error?: string;
+  immediatePayment?: boolean;
+}> {
+  console.log(
+    '[processAdditionalServicesBalancePayment] Starting payment processing:',
+    {
+      balancePaymentIntentId,
+      originalAmount: originalAmount / 100,
+      additionalAmount: additionalAmount / 100,
+      bookingId,
+      customerId,
+      paymentMethodId,
+    },
+  );
 
   try {
     // Replace the existing balance payment intent with a new one including additional services
@@ -195,35 +236,52 @@ export async function processAdditionalServicesBalancePayment({
         additional_services_added: 'true',
         additional_amount: additionalAmount.toString(),
         booking_id: bookingId,
-      }
+      },
     );
 
     if (!replaceResult.success) {
-      console.error('[processAdditionalServicesBalancePayment] Failed to replace payment intent:', replaceResult.error);
+      console.error(
+        '[processAdditionalServicesBalancePayment] Failed to replace payment intent:',
+        replaceResult.error,
+      );
       return {
         success: false,
         error: replaceResult.error || 'Unknown error replacing payment intent',
       };
     }
 
-    console.log('[processAdditionalServicesBalancePayment] Successfully replaced balance payment intent:', {
-      oldPaymentIntentId: balancePaymentIntentId,
-      newPaymentIntentId: replaceResult.newPaymentIntentId,
-      newAmount: replaceResult.updatedAmount ? replaceResult.updatedAmount / 100 : 'unknown',
-    });
+    console.log(
+      '[processAdditionalServicesBalancePayment] Successfully replaced balance payment intent:',
+      {
+        oldPaymentIntentId: balancePaymentIntentId,
+        newPaymentIntentId: replaceResult.newPaymentIntentId,
+        newAmount: replaceResult.updatedAmount
+          ? replaceResult.updatedAmount / 100
+          : 'unknown',
+      },
+    );
 
     return {
       success: true,
-      ...(replaceResult.newPaymentIntentId && { newPaymentIntentId: replaceResult.newPaymentIntentId }),
-      ...(replaceResult.updatedAmount !== undefined && { updatedAmount: replaceResult.updatedAmount }),
+      ...(replaceResult.newPaymentIntentId && {
+        newPaymentIntentId: replaceResult.newPaymentIntentId,
+      }),
+      ...(replaceResult.updatedAmount !== undefined && {
+        updatedAmount: replaceResult.updatedAmount,
+      }),
       immediatePayment: false, // This is a regular replacement, not immediate payment
     };
-
   } catch (error) {
-    console.error('[processAdditionalServicesBalancePayment] Unexpected error:', error);
+    console.error(
+      '[processAdditionalServicesBalancePayment] Unexpected error:',
+      error,
+    );
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error processing balance payment',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error processing balance payment',
     };
   }
 }
@@ -232,21 +290,26 @@ export async function processAdditionalServicesBalancePayment({
  * Check if we can update a balance payment intent (must be uncaptured)
  */
 export async function canUpdateBalancePayment(
-  paymentIntentId: string
+  paymentIntentId: string,
 ): Promise<{ canUpdate: boolean; currentAmount?: number; error?: string }> {
   try {
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    
+
     return {
       canUpdate: paymentIntent.status === 'requires_capture',
       currentAmount: paymentIntent.amount,
     };
-
   } catch (error) {
-    console.error('[canUpdateBalancePayment] Error checking payment intent:', error);
+    console.error(
+      '[canUpdateBalancePayment] Error checking payment intent:',
+      error,
+    );
     return {
       canUpdate: false,
-      error: error instanceof Error ? error.message : 'Error checking payment intent',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Error checking payment intent',
     };
   }
 }

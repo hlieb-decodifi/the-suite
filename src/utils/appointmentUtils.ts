@@ -10,7 +10,7 @@
  */
 export function calculateAppointmentTimes(
   startTime: string,
-  totalDurationMinutes: number
+  totalDurationMinutes: number,
 ): {
   appointmentStart: Date;
   appointmentEnd: Date;
@@ -18,17 +18,21 @@ export function calculateAppointmentTimes(
 } {
   // Parse the ISO string to Date
   const appointmentStart = new Date(startTime);
-  
+
   // Add total duration to get end time
-  const appointmentEnd = new Date(appointmentStart.getTime() + (totalDurationMinutes * 60 * 1000));
-  
+  const appointmentEnd = new Date(
+    appointmentStart.getTime() + totalDurationMinutes * 60 * 1000,
+  );
+
   // Add 12 hours to end time for capture schedule
-  const captureScheduledFor = new Date(appointmentEnd.getTime() + (12 * 60 * 60 * 1000));
-  
+  const captureScheduledFor = new Date(
+    appointmentEnd.getTime() + 12 * 60 * 60 * 1000,
+  );
+
   return {
     appointmentStart,
     appointmentEnd,
-    captureScheduledFor
+    captureScheduledFor,
   };
 }
 
@@ -37,6 +41,8 @@ export function calculateAppointmentTimes(
  * @param services - Array of services with duration property
  * @returns Total duration in minutes
  */
-export function calculateTotalDuration(services: { duration: number }[]): number {
+export function calculateTotalDuration(
+  services: { duration: number }[],
+): number {
   return services.reduce((sum, service) => sum + service.duration, 0);
-} 
+}

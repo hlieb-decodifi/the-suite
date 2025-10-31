@@ -1,5 +1,9 @@
 import { WorkingHoursEntry } from '@/types/working_hours';
-import { getWorkingHoursAction, updateWorkingHoursAction, getProfessionalTimezoneAction } from '@/server/domains/working_hours/actions';
+import {
+  getWorkingHoursAction,
+  updateWorkingHoursAction,
+  getProfessionalTimezoneAction,
+} from '@/server/domains/working_hours/actions';
 
 /**
  * Get working hours and timezone for a professional profile
@@ -24,7 +28,7 @@ export async function getWorkingHours(userId: string): Promise<{
 export async function updateWorkingHours(
   userId: string,
   hoursData: WorkingHoursEntry[],
-  timezone?: string
+  timezone?: string,
 ): Promise<void> {
   const result = await updateWorkingHoursAction(userId, hoursData, timezone);
   if (!result.success) {
@@ -41,4 +45,4 @@ export async function getProfessionalTimezone(userId: string): Promise<string> {
     throw new Error(result.error || 'Failed to fetch timezone');
   }
   return result.timezone || 'UTC';
-} 
+}

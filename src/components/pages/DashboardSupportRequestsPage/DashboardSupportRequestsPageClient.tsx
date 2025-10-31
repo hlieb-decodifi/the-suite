@@ -150,11 +150,7 @@ function FilterButtons({
 }
 
 // Helper component to render the status badge
-function SupportRequestStatusBadge({
-  status,
-}: {
-  status: string;
-}) {
+function SupportRequestStatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'pending':
       return (
@@ -237,26 +233,30 @@ function SupportRequestTableCard({
   return (
     <Link href={`/support-request/${supportRequest.id}`}>
       <div className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="flex justify-between items-start">
-            <div>
-              <div className="flex items-center">
-                <Typography className="font-medium">
-                  {supportRequest.title}
-                </Typography>
-                {supportRequest.unreadCount && supportRequest.unreadCount > 0 && (
-                  <MessageBadge count={supportRequest.unreadCount} size="sm" className="ml-2" />
-                )}
-              </div>
-              <div className="text-muted-foreground text-sm flex items-center mt-1">
-                <MessageSquare className="mr-1 h-3 w-3" />
-                {format(supportRequest.date, 'MMM d, yyyy')}
-                <span className="mx-1">•</span>
-                <Clock className="mr-1 h-3 w-3" />
-                {format(supportRequest.date, 'h:mm a')}
-              </div>
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center">
+              <Typography className="font-medium">
+                {supportRequest.title}
+              </Typography>
+              {supportRequest.unreadCount && supportRequest.unreadCount > 0 && (
+                <MessageBadge
+                  count={supportRequest.unreadCount}
+                  size="sm"
+                  className="ml-2"
+                />
+              )}
             </div>
-            <SupportRequestStatusBadge status={supportRequest.status} />
+            <div className="text-muted-foreground text-sm flex items-center mt-1">
+              <MessageSquare className="mr-1 h-3 w-3" />
+              {format(supportRequest.date, 'MMM d, yyyy')}
+              <span className="mx-1">•</span>
+              <Clock className="mr-1 h-3 w-3" />
+              {format(supportRequest.date, 'h:mm a')}
+            </div>
           </div>
+          <SupportRequestStatusBadge status={supportRequest.status} />
+        </div>
 
         <div className="mt-3 pt-3 border-t flex justify-between items-center">
           <div>
@@ -314,16 +314,23 @@ function DashboardTemplateSupportRequestsTable({
               <TableRow
                 key={supportRequest.id}
                 className="hover:bg-muted/50 cursor-pointer"
-                onClick={() => router.push(`/support-request/${supportRequest.id}`)}
+                onClick={() =>
+                  router.push(`/support-request/${supportRequest.id}`)
+                }
               >
                 <TableCell>
                   <div className="flex flex-col">
                     <div className="flex items-center">
                       <MessageSquare className="mr-1 h-3 w-3 text-muted-foreground" />
                       <span>{format(supportRequest.date, 'MMM d, yyyy')}</span>
-                      {supportRequest.unreadCount && supportRequest.unreadCount > 0 && (
-                        <MessageBadge count={supportRequest.unreadCount} size="sm" className="ml-2" />
-                      )}
+                      {supportRequest.unreadCount &&
+                        supportRequest.unreadCount > 0 && (
+                          <MessageBadge
+                            count={supportRequest.unreadCount}
+                            size="sm"
+                            className="ml-2"
+                          />
+                        )}
                     </div>
                     <div className="flex items-center text-muted-foreground">
                       <Clock className="mr-1 h-3 w-3" />
@@ -333,7 +340,9 @@ function DashboardTemplateSupportRequestsTable({
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">
-                    {supportRequest.serviceName || supportRequest.title || 'General Inquiry'}
+                    {supportRequest.serviceName ||
+                      supportRequest.title ||
+                      'General Inquiry'}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -377,7 +386,9 @@ export function DashboardSupportRequestsPageClient({
   status,
   category,
 }: DashboardSupportRequestsPageClientProps) {
-  const [supportRequestsData, setSupportRequestsData] = useState<SupportRequestType[]>([]);
+  const [supportRequestsData, setSupportRequestsData] = useState<
+    SupportRequestType[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -388,10 +399,12 @@ export function DashboardSupportRequestsPageClient({
       try {
         setIsLoading(true);
         setError(null);
-        
-        const { getSupportRequests } = await import('@/server/domains/support-requests/client-actions');
+
+        const { getSupportRequests } = await import(
+          '@/server/domains/support-requests/client-actions'
+        );
         const result = await getSupportRequests();
-        
+
         if (result.success && result.supportRequests) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setSupportRequestsData(result.supportRequests as any[]);
@@ -411,58 +424,66 @@ export function DashboardSupportRequestsPageClient({
 
   // Validate support requests array to ensure each item has required fields
   const validSupportRequests = Array.isArray(supportRequestsData)
-    ? supportRequestsData.filter((supportRequest): supportRequest is SupportRequestType => {
-        return (
-          typeof supportRequest === 'object' &&
-          supportRequest !== null &&
-          typeof supportRequest.id === 'string' &&
-          typeof supportRequest.title === 'string' &&
-          typeof supportRequest.created_at === 'string' &&
-          typeof supportRequest.status === 'string'
-        );
-      })
+    ? supportRequestsData.filter(
+        (supportRequest): supportRequest is SupportRequestType => {
+          return (
+            typeof supportRequest === 'object' &&
+            supportRequest !== null &&
+            typeof supportRequest.id === 'string' &&
+            typeof supportRequest.title === 'string' &&
+            typeof supportRequest.created_at === 'string' &&
+            typeof supportRequest.status === 'string'
+          );
+        },
+      )
     : [];
 
   // Transform support requests into the format needed for the table
-  const transformedSupportRequests: SupportRequest[] = validSupportRequests.map((supportRequest) => {
-    const createdDate = new Date(supportRequest.created_at);
+  const transformedSupportRequests: SupportRequest[] = validSupportRequests.map(
+    (supportRequest) => {
+      const createdDate = new Date(supportRequest.created_at);
 
-    // Extract client and professional names from the joined user data
-    const clientName = supportRequest.client_user 
-      ? `${supportRequest.client_user.first_name || ''} ${supportRequest.client_user.last_name || ''}`.trim()
-      : undefined;
-    
-    const professionalName = supportRequest.professional_user 
-      ? `${supportRequest.professional_user.first_name || ''} ${supportRequest.professional_user.last_name || ''}`.trim()
-      : undefined;
+      // Extract client and professional names from the joined user data
+      const clientName = supportRequest.client_user
+        ? `${supportRequest.client_user.first_name || ''} ${supportRequest.client_user.last_name || ''}`.trim()
+        : undefined;
 
-    // Extract service name from appointments -> bookings -> booking_services -> services
-    const serviceName = supportRequest.appointments?.bookings?.[0]?.booking_services?.[0]?.services?.name;
+      const professionalName = supportRequest.professional_user
+        ? `${supportRequest.professional_user.first_name || ''} ${supportRequest.professional_user.last_name || ''}`.trim()
+        : undefined;
 
-    return {
-      id: supportRequest.id,
-      date: createdDate,
-      title: supportRequest.title,
-      description: supportRequest.description,
-      clientName: clientName || 'Client',
-      professionalName: professionalName || 'Professional',
-      status: supportRequest.status,
-      amount: supportRequest.requested_amount || undefined,
-      serviceName: serviceName,
-      unreadCount: supportRequest.unreadCount || 0,
-      conversationId: supportRequest.conversations?.id,
-    };
-  });
+      // Extract service name from appointments -> bookings -> booking_services -> services
+      const serviceName =
+        supportRequest.appointments?.bookings?.[0]?.booking_services?.[0]
+          ?.services?.name;
+
+      return {
+        id: supportRequest.id,
+        date: createdDate,
+        title: supportRequest.title,
+        description: supportRequest.description,
+        clientName: clientName || 'Client',
+        professionalName: professionalName || 'Professional',
+        status: supportRequest.status,
+        amount: supportRequest.requested_amount || undefined,
+        serviceName: serviceName,
+        unreadCount: supportRequest.unreadCount || 0,
+        conversationId: supportRequest.conversations?.id,
+      };
+    },
+  );
 
   // Filter support requests based on selected filters
-  const filteredSupportRequests = transformedSupportRequests.filter((supportRequest) => {
-    // Status filter
-    if (activeFilter !== 'all' && supportRequest.status !== activeFilter) {
-      return false;
-    }
+  const filteredSupportRequests = transformedSupportRequests.filter(
+    (supportRequest) => {
+      // Status filter
+      if (activeFilter !== 'all' && supportRequest.status !== activeFilter) {
+        return false;
+      }
 
-    return true;
-  });
+      return true;
+    },
+  );
 
   // Group support requests by status
   const pendingSupportRequests = filteredSupportRequests.filter(
@@ -480,8 +501,8 @@ export function DashboardSupportRequestsPageClient({
   );
 
   // Sort by date (newest first)
-  const sortedSupportRequests = filteredSupportRequests.sort((a, b) => 
-    b.date.getTime() - a.date.getTime()
+  const sortedSupportRequests = filteredSupportRequests.sort(
+    (a, b) => b.date.getTime() - a.date.getTime(),
   );
 
   if (error) {

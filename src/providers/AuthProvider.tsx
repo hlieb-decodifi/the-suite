@@ -41,7 +41,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (authUser && !error) {
           // Get fresh session for this authenticated user
-          const { data: { session } } = await supabase.auth.getSession();
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
           setSession(session);
           setUser(authUser);
         } else {

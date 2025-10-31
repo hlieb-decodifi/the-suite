@@ -64,4 +64,4 @@ export type ServiceLimitInfo = {
   maxServices: number;
   remaining: number;
   isAtLimit: boolean;
-}; 
+};

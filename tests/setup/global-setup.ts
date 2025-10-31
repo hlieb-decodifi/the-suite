@@ -7,4 +7,4 @@ async function globalSetup(config: FullConfig) {
   // - Configuring test environment variables
 }
 
-export default globalSetup; 
+export default globalSetup;

@@ -1,4 +1,4 @@
 export * from './LocationForm';
 export * from './schema';
 export * from './useLocationForm';
-export * from './components/LocationDisplay'; 
+export * from './components/LocationDisplay';

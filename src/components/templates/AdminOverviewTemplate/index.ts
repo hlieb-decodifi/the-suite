@@ -1,3 +1,3 @@
-export * from './AdminOverviewTemplate'
+export * from './AdminOverviewTemplate';
 export { AdminOverviewTemplate } from './AdminOverviewTemplate';
-export * from './components' 
+export * from './components';

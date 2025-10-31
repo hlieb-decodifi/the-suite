@@ -1,1 +1,1 @@
-export * from './EmailVerificationTemplate'; 
+export * from './EmailVerificationTemplate';

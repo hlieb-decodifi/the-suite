@@ -13,14 +13,14 @@ export const DEFAULT_COMPRESSION_OPTIONS = {
 
 /**
  * Compresses an image file according to given options
- * 
+ *
  * @param file The image file to compress
  * @param options Compression options that override the defaults
  * @returns Promise resolving to the compressed file
  */
 export async function compressImage(
   file: File,
-  defaultOptions = {}
+  defaultOptions = {},
 ): Promise<File> {
   const options = { ...DEFAULT_COMPRESSION_OPTIONS, ...defaultOptions };
   try {

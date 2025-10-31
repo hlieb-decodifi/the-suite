@@ -1,1 +1,1 @@
-export * from './GoogleOAuthButton'; 
+export * from './GoogleOAuthButton';

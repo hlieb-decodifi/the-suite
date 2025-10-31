@@ -45,8 +45,8 @@ export function useBookingForm({
         await onSubmit(data);
       } catch (err) {
         console.error('Booking submission failed:', err);
-        form.setError('root.serverError', { 
-          message: 'Failed to create booking. Please try again.' 
+        form.setError('root.serverError', {
+          message: 'Failed to create booking. Please try again.',
         });
       } finally {
         setIsPending(false);
@@ -85,4 +85,4 @@ export function useBookingForm({
     calculateTotalPrice,
     onSubmit: handleSubmit,
   };
-} 
+}

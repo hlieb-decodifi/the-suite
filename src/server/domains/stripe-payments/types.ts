@@ -64,4 +64,4 @@ export type BookingWithPaymentData = {
   totalPrice: number;
   paymentCalculation: PaymentCalculation;
   professionalProfile: ProfessionalProfileForPayment;
-}; 
+};

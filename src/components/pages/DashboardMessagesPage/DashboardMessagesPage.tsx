@@ -3,9 +3,16 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardMessagesPageClient } from './DashboardMessagesPageClient';
-import { getConversations, getAvailableProfessionals } from '@/server/domains/messages/actions';
+import {
+  getConversations,
+  getAvailableProfessionals,
+} from '@/server/domains/messages/actions';
 
-export async function DashboardMessagesPage({ searchParams }: { searchParams: { conversation?: string } }) {
+export async function DashboardMessagesPage({
+  searchParams,
+}: {
+  searchParams: { conversation?: string };
+}) {
   const supabase = await createClient();
 
   // Get the current user
@@ -27,7 +34,9 @@ export async function DashboardMessagesPage({ searchParams }: { searchParams: { 
 
   // Fetch conversations, passing conversationId if present
   const conversationsResult = await getConversations(conversationId);
-  const conversations = conversationsResult.success ? conversationsResult.conversations || [] : [];
+  const conversations = conversationsResult.success
+    ? conversationsResult.conversations || []
+    : [];
 
   // For clients, also fetch available professionals
   let availableProfessionals: Array<{
@@ -40,11 +49,13 @@ export async function DashboardMessagesPage({ searchParams }: { searchParams: { 
 
   if (!isProfessional) {
     const professionalsResult = await getAvailableProfessionals();
-    availableProfessionals = professionalsResult.success ? professionalsResult.professionals || [] : [];
+    availableProfessionals = professionalsResult.success
+      ? professionalsResult.professionals || []
+      : [];
   }
 
   return (
-    <DashboardMessagesPageClient 
+    <DashboardMessagesPageClient
       isProfessional={!!isProfessional}
       initialConversations={conversations}
       availableProfessionals={availableProfessionals}

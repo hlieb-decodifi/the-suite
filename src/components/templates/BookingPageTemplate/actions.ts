@@ -11,18 +11,18 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
  */
 function getPublicImageUrl(path: string | undefined): string | undefined {
   if (!path) return undefined;
-  
+
   // If it's already a full URL, return it
   if (path.startsWith('http')) {
     return path;
   }
-  
+
   // Make sure the supabaseUrl is available
   if (!supabaseUrl) {
     console.error('NEXT_PUBLIC_SUPABASE_URL is not defined');
     return undefined;
   }
-  
+
   // Construct the storage URL
   const bucketName = 'profile-photos';
   return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${path}`;
@@ -31,13 +31,16 @@ function getPublicImageUrl(path: string | undefined): string | undefined {
 /**
  * Fetches a single service with all necessary booking information
  */
-export async function getServiceForBooking(serviceId: string): Promise<ServiceListItem | null> {
+export async function getServiceForBooking(
+  serviceId: string,
+): Promise<ServiceListItem | null> {
   const supabase = await createClient();
-  
+
   try {
     const { data: service, error } = await supabase
       .from('services')
-      .select(`
+      .select(
+        `
         id, 
         name, 
         description, 
@@ -68,7 +71,8 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
             )
           )
         )
-      `)
+      `,
+      )
       .eq('id', serviceId)
       .single();
 
@@ -78,13 +82,13 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
     }
 
     // Handle the nested relationship structure
-    const professionalProfile = Array.isArray(service.professional_profile) 
-      ? service.professional_profile[0] 
+    const professionalProfile = Array.isArray(service.professional_profile)
+      ? service.professional_profile[0]
       : service.professional_profile;
-    const user = Array.isArray(professionalProfile?.user) 
-      ? professionalProfile.user[0] 
+    const user = Array.isArray(professionalProfile?.user)
+      ? professionalProfile.user[0]
       : professionalProfile?.user;
-    
+
     // Check if service is bookable
     if (!professionalProfile?.is_published) {
       return null;
@@ -93,14 +97,14 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
     // Check if professional profile is subscribed using the new RPC function
     const { data: isSubscribed, error: subscriptionError } = await supabase.rpc(
       'is_professional_user_subscribed',
-      { prof_user_id: service.professional_profile?.user?.id }
+      { prof_user_id: service.professional_profile?.user?.id },
     );
-    
+
     if (subscriptionError) {
       console.error('Error checking subscription status:', subscriptionError);
       return null;
     }
-    
+
     if (!isSubscribed) {
       return null;
     }
@@ -108,20 +112,22 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
     // Handle profile_photo structure safely - it might not exist
     let profilePhotoUrl: string | undefined = undefined;
     if (user?.profile_photo) {
-      const profilePhotoData = Array.isArray(user.profile_photo) 
-        ? user.profile_photo[0] 
+      const profilePhotoData = Array.isArray(user.profile_photo)
+        ? user.profile_photo[0]
         : user.profile_photo;
       const rawPhotoUrl = profilePhotoData?.url;
       profilePhotoUrl = getPublicImageUrl(rawPhotoUrl);
     }
-    
+
     // Format address from address data
-    const formatAddress = (address: {
-      street_address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      country?: string | null;
-    } | null) => {
+    const formatAddress = (
+      address: {
+        street_address?: string | null;
+        city?: string | null;
+        state?: string | null;
+        country?: string | null;
+      } | null,
+    ) => {
       if (!address) return null;
       const parts = [
         address.street_address,
@@ -132,21 +138,29 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
       return parts.length > 0 ? parts.join(', ') : null;
     };
 
-    const addressData = Array.isArray(professionalProfile?.address) 
-      ? professionalProfile.address[0] 
+    const addressData = Array.isArray(professionalProfile?.address)
+      ? professionalProfile.address[0]
       : professionalProfile?.address;
 
     const formattedAddress = formatAddress(addressData);
-    const displayAddress = professionalProfile?.hide_full_address && addressData
-      ? `${addressData.city}, ${addressData.state}, ${addressData.country}`.replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '').trim()
-      : formattedAddress;
+    const displayAddress =
+      professionalProfile?.hide_full_address && addressData
+        ? `${addressData.city}, ${addressData.state}, ${addressData.country}`
+            .replace(/^,\s*|,\s*$|(?:,\s*){2,}/g, '')
+            .trim()
+        : formattedAddress;
 
     // Create professional object
     const professional = {
       id: user?.id || 'unknown',
-      name: user ? `${user.first_name} ${user.last_name}` : 'Unknown Professional',
+      name: user
+        ? `${user.first_name} ${user.last_name}`
+        : 'Unknown Professional',
       avatar: profilePhotoUrl ?? '', // Ensure avatar is always a string
-      address: displayAddress || professionalProfile?.location || 'Location not specified',
+      address:
+        displayAddress ||
+        professionalProfile?.location ||
+        'Location not specified',
       rating: 4.5, // Mock data, would come from reviews table
       reviewCount: 0, // Mock data, would come from reviews count
       profile_id: professionalProfile?.id,
@@ -168,4 +182,4 @@ export async function getServiceForBooking(serviceId: string): Promise<ServiceLi
     console.error('Error in getServiceForBooking:', error);
     return null;
   }
-} 
+}

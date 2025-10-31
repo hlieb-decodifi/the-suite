@@ -15,10 +15,10 @@ export type UseSignInFormProps = {
   redirectTo?: string;
 };
 
-export function useSignInForm({ 
-  onSubmit, 
+export function useSignInForm({
+  onSubmit,
   defaultValues,
-  redirectTo = '/profile'
+  redirectTo = '/profile',
 }: UseSignInFormProps) {
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
@@ -33,57 +33,60 @@ export function useSignInForm({
     },
   });
 
-  const handleSubmit = useCallback(async (data: SignInFormValues) => {
-    try {
-      setIsPending(true);
-      
-      // Call the server action for sign in
-      const result = await signInAction(data);
-      
-      if (!result.success) {
+  const handleSubmit = useCallback(
+    async (data: SignInFormValues) => {
+      try {
+        setIsPending(true);
+
+        // Call the server action for sign in
+        const result = await signInAction(data);
+
+        if (!result.success) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign in failed',
+            description: result.error || 'Invalid email or password',
+          });
+          return;
+        }
+
+        // Update the auth store with user and session data
+        if (result.user) setUser(result.user);
+        if (result.session) setSession(result.session);
+
+        // Call the onSubmit callback passed from parent
+        onSubmit(data);
+
         toast({
-          variant: "destructive",
-          title: "Sign in failed",
-          description: result.error || "Invalid email or password"
+          title: 'Signed in successfully',
+          description: 'Welcome back!',
         });
-        return;
+
+        // Redirect based on admin status
+        if (result.isAdmin) {
+          router.push('/admin');
+          return;
+        }
+        if (redirectTo) {
+          router.push(redirectTo);
+        }
+      } catch (error) {
+        console.error('Error submitting form:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Sign in failed',
+          description: 'Failed to sign in. Please try again.',
+        });
+      } finally {
+        setIsPending(false);
       }
-      
-      // Update the auth store with user and session data
-      if (result.user) setUser(result.user);
-      if (result.session) setSession(result.session);
-      
-      // Call the onSubmit callback passed from parent
-      onSubmit(data);
-      
-      toast({
-        title: "Signed in successfully",
-        description: "Welcome back!"
-      });
-      
-      // Redirect based on admin status
-      if (result.isAdmin) {
-        router.push('/admin');
-        return;
-      }
-      if (redirectTo) {
-        router.push(redirectTo);
-      }
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      toast({
-        variant: "destructive",
-        title: "Sign in failed",
-        description: "Failed to sign in. Please try again."
-      });
-    } finally {
-      setIsPending(false);
-    }
-  }, [onSubmit, router, redirectTo, setUser, setSession]);
+    },
+    [onSubmit, router, redirectTo, setUser, setSession],
+  );
 
   return {
     form,
     isPending,
     onSubmit: handleSubmit,
   };
-} 
+}

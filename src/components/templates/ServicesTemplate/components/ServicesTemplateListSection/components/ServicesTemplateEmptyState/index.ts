@@ -1,1 +1,1 @@
-export * from './ServicesTemplateEmptyState'; 
+export * from './ServicesTemplateEmptyState';

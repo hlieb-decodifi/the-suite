@@ -20,7 +20,13 @@ const DEFAULT_TIME_SLOTS = [
 ];
 
 // Default working days
-const DEFAULT_WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DEFAULT_WORKING_DAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+];
 
 // Helper function to generate time slots based on start and end hours
 function generateTimeSlots(startHour: number, endHour: number): string[] {
@@ -36,10 +42,10 @@ function generateTimeSlots(startHour: number, endHour: number): string[] {
 // Helper to parse time string to hour
 function parseTimeToHour(timeString: string | null): number | null {
   if (!timeString) return null;
-  
+
   const parts = timeString.split(':');
   if (parts.length < 2) return null;
-  
+
   // Ensure we're parsing a string not undefined
   const hourStr = parts[0] || '';
   const hour = parseInt(hourStr);
@@ -63,11 +69,11 @@ async function fetchWorkingDays(professionalId: string): Promise<string[]> {
 
     // Parse working hours from JSON
     const workingHours = professionalData.working_hours as WorkingHoursEntry[];
-    
+
     // Find all enabled days
     const enabledDays = workingHours
-      .filter(day => day.enabled && day.startTime && day.endTime)
-      .map(day => day.day);
+      .filter((day) => day.enabled && day.startTime && day.endTime)
+      .map((day) => day.day);
 
     return enabledDays.length > 0 ? enabledDays : DEFAULT_WORKING_DAYS;
   } catch (error) {
@@ -78,8 +84,8 @@ async function fetchWorkingDays(professionalId: string): Promise<string[]> {
 
 // Fetch time slots for a specific day
 async function fetchTimeSlotsForDay(
-  professionalId: string, 
-  dayOfWeek: string
+  professionalId: string,
+  dayOfWeek: string,
 ): Promise<string[]> {
   try {
     const supabase = createClient();
@@ -99,7 +105,7 @@ async function fetchTimeSlotsForDay(
 
     // Find the working hours for the selected day
     const dayHours = workingHours.find(
-      (hours) => hours.day === dayOfWeek && hours.enabled
+      (hours) => hours.day === dayOfWeek && hours.enabled,
     );
 
     if (!dayHours) {
@@ -157,14 +163,14 @@ export function useTimeSlots(professionalId?: string, selectedDate?: Date) {
       }
 
       setIsLoading(true);
-      
+
       const dayOfWeek = new Intl.DateTimeFormat('en-US', {
         weekday: 'long',
       }).format(selectedDate);
 
       const slots = await fetchTimeSlotsForDay(professionalId, dayOfWeek);
       setAvailableTimeSlots(slots);
-      
+
       setIsLoading(false);
     }
 
@@ -172,4 +178,4 @@ export function useTimeSlots(professionalId?: string, selectedDate?: Date) {
   }, [professionalId, selectedDate]);
 
   return { availableTimeSlots, availableDays, isLoading };
-} 
+}

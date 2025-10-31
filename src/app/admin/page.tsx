@@ -2,4 +2,4 @@ import AdminOverviewPage from '@/components/pages/AdminOverviewPage/AdminOvervie
 
 export default function AdminPage() {
   return <AdminOverviewPage />;
-} 
+}

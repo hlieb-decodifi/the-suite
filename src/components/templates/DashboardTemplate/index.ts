@@ -5,4 +5,4 @@ export { DashboardTemplateAppointmentsWidget } from './components/DashboardTempl
 export { DashboardTemplateMessagesWidget } from './components/DashboardTemplateMessagesWidget/DashboardTemplateMessagesWidget';
 export { DashboardTemplateRefundsWidget } from './components/DashboardTemplateRefundsWidget/DashboardTemplateRefundsWidget';
 export { DashboardTemplateProfessionalStats } from './components/DashboardTemplateProfessionalStats/DashboardTemplateProfessionalStats';
-export { DashboardTemplateDateRangePicker } from './components/DashboardTemplateDateRangePicker/DashboardTemplateDateRangePicker'; 
+export { DashboardTemplateDateRangePicker } from './components/DashboardTemplateDateRangePicker/DashboardTemplateDateRangePicker';

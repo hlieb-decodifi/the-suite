@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
  * This replaces the deprecated is_subscribed field which was removed for security
  */
 export async function checkProfessionalSubscription(
-  professionalProfileId: string
+  professionalProfileId: string,
 ): Promise<boolean> {
   const supabase = await createClient();
 
@@ -33,13 +33,13 @@ export async function checkProfessionalSubscription(
  * Uses the secure RPC function that bypasses RLS
  */
 export async function checkProfessionalSubscriptionByUserId(
-  userId: string
+  userId: string,
 ): Promise<boolean> {
   const supabase = await createClient();
 
   const { data: isSubscribed, error } = await supabase.rpc(
     'is_professional_user_subscribed',
-    { prof_user_id: userId }
+    { prof_user_id: userId },
   );
 
   if (error) {
@@ -54,7 +54,7 @@ export async function checkProfessionalSubscriptionByUserId(
  * Get subscription details for a professional
  */
 export async function getProfessionalSubscriptionDetails(
-  professionalProfileId: string
+  professionalProfileId: string,
 ): Promise<{
   isSubscribed: boolean;
   subscriptionDetails?: {
@@ -68,13 +68,15 @@ export async function getProfessionalSubscriptionDetails(
 
   const { data, error } = await supabase
     .from('professional_subscriptions')
-    .select(`
+    .select(
+      `
       status,
       end_date,
       stripe_subscription_id,
       cancel_at_period_end,
       subscription_plans(name)
-    `)
+    `,
+    )
     .eq('professional_profile_id', professionalProfileId)
     .eq('status', 'active')
     .single();
@@ -93,7 +95,9 @@ export async function getProfessionalSubscriptionDetails(
   return {
     isSubscribed: true,
     subscriptionDetails: {
-      planName: (data.subscription_plans as { name: string } | null)?.name || 'Professional Plan',
+      planName:
+        (data.subscription_plans as { name: string } | null)?.name ||
+        'Professional Plan',
       nextBillingDate: data.end_date || new Date().toISOString(),
       status: data.status,
       cancelAtPeriodEnd: data.cancel_at_period_end || false,

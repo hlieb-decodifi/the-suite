@@ -27,13 +27,18 @@ export type ProfessionalRatingStats = {
 /**
  * Get professional's rating statistics
  */
-export async function getProfessionalRatingStats(professionalId: string): Promise<ProfessionalRatingStats | null> {
+export async function getProfessionalRatingStats(
+  professionalId: string,
+): Promise<ProfessionalRatingStats | null> {
   try {
     const supabase = await createClient();
-    
-    const { data, error } = await supabase.rpc('get_professional_rating_stats', {
-      p_professional_id: professionalId
-    });
+
+    const { data, error } = await supabase.rpc(
+      'get_professional_rating_stats',
+      {
+        p_professional_id: professionalId,
+      },
+    );
 
     if (error) {
       console.error('Error fetching professional rating stats:', error);
@@ -74,33 +79,34 @@ export async function getProfessionalRatingStats(professionalId: string): Promis
  * @param forOwnProfile - Whether this is for the professional's own profile (bypasses min requirement)
  */
 export async function getProfessionalReviews(
-  professionalId: string, 
-  forOwnProfile: boolean = false
+  professionalId: string,
+  forOwnProfile: boolean = false,
 ): Promise<ReviewData[]> {
   try {
     const supabase = await createClient();
-    
+
     // First get the minimum reviews threshold from admin config
     const { data: minReviewsData } = await supabase.rpc('get_admin_config', {
       config_key: 'min_reviews_to_display',
     });
-    
+
     const minReviews = parseInt(minReviewsData || '5');
-    
+
     // Get the total review count for this professional
     const stats = await getProfessionalRatingStats(professionalId);
     const totalReviews = stats?.totalReviews || 0;
-    
+
     // If it's for own profile, always show reviews regardless of count
     // Otherwise, check if they meet the minimum threshold
     if (!forOwnProfile && totalReviews < minReviews) {
       return [];
     }
-    
+
     // Fetch the actual reviews with simplified query
     const { data: reviews, error } = await supabase
       .from('reviews')
-      .select(`
+      .select(
+        `
         id,
         appointment_id,
         client_id,
@@ -109,7 +115,8 @@ export async function getProfessionalReviews(
         message,
         created_at,
         updated_at
-      `)
+      `,
+      )
       .eq('professional_id', professionalId)
       .order('created_at', { ascending: false });
 
@@ -136,14 +143,14 @@ export async function getProfessionalReviews(
           message: review.message,
           createdAt: review.created_at,
           updatedAt: review.updated_at,
-          clientName: clientData 
-            ? `${clientData.first_name} ${clientData.last_name}` 
+          clientName: clientData
+            ? `${clientData.first_name} ${clientData.last_name}`
             : 'Anonymous Client',
-          clientAvatar: Array.isArray(clientData?.profile_photos) 
-            ? clientData.profile_photos[0]?.url 
+          clientAvatar: Array.isArray(clientData?.profile_photos)
+            ? clientData.profile_photos[0]?.url
             : clientData?.profile_photos?.url,
         };
-      })
+      }),
     );
 
     return reviewsWithClients;
@@ -156,24 +163,26 @@ export async function getProfessionalReviews(
 /**
  * Check if professional meets minimum review threshold for public display
  */
-export async function shouldShowPublicReviews(professionalId: string): Promise<boolean> {
+export async function shouldShowPublicReviews(
+  professionalId: string,
+): Promise<boolean> {
   try {
     const supabase = await createClient();
-    
+
     // Get the minimum reviews threshold from admin config
     const { data: minReviewsData } = await supabase.rpc('get_admin_config', {
       config_key: 'min_reviews_to_display',
     });
-    
+
     const minReviews = parseInt(minReviewsData || '5');
-    
+
     // Get the total review count for this professional
     const stats = await getProfessionalRatingStats(professionalId);
     const totalReviews = stats?.totalReviews || 0;
-    
+
     return totalReviews >= minReviews;
   } catch (error) {
     console.error('Error in shouldShowPublicReviews:', error);
     return false;
   }
-} 
+}

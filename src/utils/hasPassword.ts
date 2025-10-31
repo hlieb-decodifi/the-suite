@@ -4,9 +4,9 @@ import { User } from '@supabase/supabase-js';
 export function hasPassword(user: User | null): boolean {
   // Debug logging
 
-    console.log('[hasPassword] user:', user);
-    console.log('[hasPassword] identities:', user?.identities);
+  console.log('[hasPassword] user:', user);
+  console.log('[hasPassword] identities:', user?.identities);
 
   if (!user?.identities) return false;
-  return user.identities.some(identity => identity.provider === 'email');
+  return user.identities.some((identity) => identity.provider === 'email');
 }

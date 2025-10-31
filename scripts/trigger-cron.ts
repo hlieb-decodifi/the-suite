@@ -3,7 +3,7 @@
 /**
  * Script to manually trigger cron jobs for development/staging
  * Usage: npx tsx scripts/trigger-cron.ts [job-name] [environment]
- * 
+ *
  * Examples:
  * npx tsx scripts/trigger-cron.ts balance-notifications staging
  * npx tsx scripts/trigger-cron.ts capture-payments production
@@ -12,22 +12,27 @@
 
 const CRON_JOBS = {
   'balance-notifications': '/api/cron/balance-notifications',
-  'capture-payments': '/api/cron/capture-payments', 
-  'pre-auth-payments': '/api/cron/pre-auth-payments'
+  'capture-payments': '/api/cron/capture-payments',
+  'pre-auth-payments': '/api/cron/pre-auth-payments',
 } as const;
 
 type CronJobName = keyof typeof CRON_JOBS | 'all';
 
-async function triggerCronJob(jobName: CronJobName, environment: 'staging' | 'production' | 'local' = 'staging') {
+async function triggerCronJob(
+  jobName: CronJobName,
+  environment: 'staging' | 'production' | 'local' = 'staging',
+) {
   const baseUrls = {
     local: 'http://localhost:3000',
-    staging: process.env.STAGING_URL || 'https://the-suite-git-develop-decodifi.vercel.app',
-    production: process.env.PRODUCTION_URL || 'https://your-production-url.com'
+    staging:
+      process.env.STAGING_URL ||
+      'https://the-suite-git-develop-decodifi.vercel.app',
+    production: process.env.PRODUCTION_URL || 'https://your-production-url.com',
   };
 
   const baseUrl = baseUrls[environment];
   // Use environment variable for local development
-  const cronSecret = process.env.CRON_SECRET
+  const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
     console.error('❌ CRON_SECRET environment variable is required');
@@ -35,13 +40,20 @@ async function triggerCronJob(jobName: CronJobName, environment: 'staging' | 'pr
   }
 
   if (!baseUrl) {
-    console.error(`❌ Base URL for ${environment} environment is not configured`);
+    console.error(
+      `❌ Base URL for ${environment} environment is not configured`,
+    );
     process.exit(1);
   }
 
-  const jobsToRun = jobName === 'all' ? Object.keys(CRON_JOBS) as (keyof typeof CRON_JOBS)[] : [jobName as keyof typeof CRON_JOBS];
+  const jobsToRun =
+    jobName === 'all'
+      ? (Object.keys(CRON_JOBS) as (keyof typeof CRON_JOBS)[])
+      : [jobName as keyof typeof CRON_JOBS];
 
-  console.log(`🚀 Triggering cron jobs on ${environment} environment: ${jobsToRun.join(', ')}`);
+  console.log(
+    `🚀 Triggering cron jobs on ${environment} environment: ${jobsToRun.join(', ')}`,
+  );
 
   for (const job of jobsToRun) {
     const endpoint = CRON_JOBS[job];
@@ -54,7 +66,7 @@ async function triggerCronJob(jobName: CronJobName, environment: 'staging' | 'pr
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${cronSecret}`,
+          Authorization: `Bearer ${cronSecret}`,
           'Content-Type': 'application/json',
         },
       });
@@ -70,7 +82,9 @@ async function triggerCronJob(jobName: CronJobName, environment: 'staging' | 'pr
           console.log(`   ⚠️ Errors: ${result.errors || 0}`);
           console.log(`   ⏱️ Duration: ${result.duration || 0}ms`);
           if (result.errorDetails) {
-            console.log(`   🔍 Error details: ${result.errorDetails.slice(0, 3).join(', ')}${result.errorDetails.length > 3 ? '...' : ''}`);
+            console.log(
+              `   🔍 Error details: ${result.errorDetails.slice(0, 3).join(', ')}${result.errorDetails.length > 3 ? '...' : ''}`,
+            );
           }
         } else {
           console.error(`❌ ${job} failed:`, result);
@@ -81,10 +95,14 @@ async function triggerCronJob(jobName: CronJobName, environment: 'staging' | 'pr
         if (response.ok) {
           console.log(`✅ ${job} completed with non-JSON response:`);
           console.log(`   Status: ${response.status} ${response.statusText}`);
-          console.log(`   Response (first 100 chars): ${text.substring(0, 100)}...`);
+          console.log(
+            `   Response (first 100 chars): ${text.substring(0, 100)}...`,
+          );
         } else {
           console.error(`❌ ${job} failed with status ${response.status}:`);
-          console.error(`   Response (first 100 chars): ${text.substring(0, 100)}...`);
+          console.error(
+            `   Response (first 100 chars): ${text.substring(0, 100)}...`,
+          );
         }
       }
     } catch (error) {
@@ -98,7 +116,10 @@ async function triggerCronJob(jobName: CronJobName, environment: 'staging' | 'pr
 // Parse command line arguments
 const args = process.argv.slice(2);
 const jobName = (args[0] || 'all') as CronJobName;
-const environment = (args[1] || 'staging') as 'staging' | 'production' | 'local';
+const environment = (args[1] || 'staging') as
+  | 'staging'
+  | 'production'
+  | 'local';
 
 // Validate job name
 if (jobName !== 'all' && !CRON_JOBS[jobName as keyof typeof CRON_JOBS]) {

@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { Address } from './types';
 
-async function getProfessionalProfileWithAddress(userId: string): Promise<{ address: Address | null }> {
+async function getProfessionalProfileWithAddress(
+  userId: string,
+): Promise<{ address: Address | null }> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('professional_profiles')

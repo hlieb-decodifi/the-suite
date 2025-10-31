@@ -9,7 +9,7 @@ type AuthState = {
   isAuthenticated: boolean;
   avatarUrl: string | null;
   hasHydrated: boolean;
-  
+
   // Actions
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
@@ -17,11 +17,11 @@ type AuthState = {
   setAvatarUrl: (url: string | null) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
   signOut: () => void;
-  
+
   // Derived state
   getUser: () => User | null;
   getSession: () => Session | null;
-}
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -32,34 +32,37 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       avatarUrl: null,
       hasHydrated: false,
-      
+
       // Actions
-      setUser: (user) => set({ 
-        user, 
-        isAuthenticated: !!user,
-        avatarUrl: null,
-      }),
-      
-      setSession: (session) => set({ 
-        session,
-        user: session?.user || get().user,
-        isAuthenticated: !!session,
-        avatarUrl: null,
-      }),
-      
+      setUser: (user) =>
+        set({
+          user,
+          isAuthenticated: !!user,
+          avatarUrl: null,
+        }),
+
+      setSession: (session) =>
+        set({
+          session,
+          user: session?.user || get().user,
+          isAuthenticated: !!session,
+          avatarUrl: null,
+        }),
+
       setIsLoading: (isLoading) => set({ isLoading }),
-      
+
       setAvatarUrl: (url) => set({ avatarUrl: url }),
-      
+
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
-      
-      signOut: () => set({ 
-        user: null,
-        session: null,
-        isAuthenticated: false,
-        avatarUrl: null,
-      }),
-      
+
+      signOut: () =>
+        set({
+          user: null,
+          session: null,
+          isAuthenticated: false,
+          avatarUrl: null,
+        }),
+
       // Derived state
       getUser: () => get().user,
       getSession: () => get().session,
@@ -86,6 +89,6 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
-    }
-  )
-); 
+    },
+  ),
+);

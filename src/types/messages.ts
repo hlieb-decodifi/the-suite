@@ -26,7 +26,7 @@ export type MessageAttachment = {
   file_name: string;
   file_size: number;
   created_at: string;
-}
+};
 
 export type ChatMessage = {
   id: string;
@@ -38,7 +38,7 @@ export type ChatMessage = {
   attachments?: MessageAttachment[];
   // Read status is now tracked separately via message_read_status table
   read_by_current_user?: boolean;
-}
+};
 
 export type Conversation = {
   id: string;
@@ -46,7 +46,7 @@ export type Conversation = {
   professional_id: string;
   created_at: string;
   updated_at: string;
-}
+};
 
 export type ConversationWithUser = {
   id: string;
@@ -62,15 +62,15 @@ export type ConversationWithUser = {
   };
   last_message?: ChatMessage | undefined;
   unread_count: number;
-}
+};
 
 export type MessageUser = {
   id: string;
   first_name: string;
   last_name: string;
   name: string; // Computed from first_name + last_name
-}
+};
 
 export type ChatMessageWithUser = {
   user: MessageUser;
-} & ChatMessage 
+} & ChatMessage;

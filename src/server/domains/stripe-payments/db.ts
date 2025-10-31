@@ -3,7 +3,7 @@ import { Database } from '@/../supabase/types';
 import type {
   ProfessionalProfileForPayment,
   PaymentCalculation,
-  BookingPaymentWithStripe
+  BookingPaymentWithStripe,
 } from './types';
 import { formatDuration } from '@/utils/formatDuration';
 
@@ -14,8 +14,9 @@ function createSupabaseAdminClient() {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseServiceKey) {
     throw new Error('Missing Supabase service role key');
@@ -27,13 +28,16 @@ function createSupabaseAdminClient() {
 /**
  * Get professional profile data needed for payment processing
  */
-export async function getProfessionalProfileForPayment(professionalProfileId: string): Promise<ProfessionalProfileForPayment | null> {
+export async function getProfessionalProfileForPayment(
+  professionalProfileId: string,
+): Promise<ProfessionalProfileForPayment | null> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('professional_profiles')
-      .select(`
+      .select(
+        `
         id,
         user_id,
         requires_deposit,
@@ -43,7 +47,8 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
           stripe_account_id,
           stripe_connect_status
         )
-      `)
+      `,
+      )
       .eq('id', professionalProfileId)
       .single();
 
@@ -56,10 +61,16 @@ export async function getProfessionalProfileForPayment(professionalProfileId: st
       id: data.id,
       user_id: data.user_id,
       requires_deposit: data.requires_deposit ?? false,
-      deposit_type: (data.deposit_type as 'percentage' | 'fixed') ?? 'percentage',
+      deposit_type:
+        (data.deposit_type as 'percentage' | 'fixed') ?? 'percentage',
       deposit_value: data.deposit_value,
-      stripe_account_id: data.professional_stripe_connect?.stripe_account_id || null,
-      stripe_connect_status: (data.professional_stripe_connect?.stripe_connect_status || 'not_connected') as 'not_connected' | 'pending' | 'complete'
+      stripe_account_id:
+        data.professional_stripe_connect?.stripe_account_id || null,
+      stripe_connect_status: (data.professional_stripe_connect
+        ?.stripe_connect_status || 'not_connected') as
+        | 'not_connected'
+        | 'pending'
+        | 'complete',
     };
   } catch (error) {
     console.error('Error in getProfessionalProfileForPayment:', error);
@@ -74,19 +85,16 @@ export function calculatePaymentAmounts(
   totalAmount: number, // in cents
   professionalProfile: ProfessionalProfileForPayment,
   serviceAmount?: number, // service amount only (without tips or fees) - in cents
-  tipAmount?: number // tip amount in cents
+  tipAmount?: number, // tip amount in cents
 ): PaymentCalculation {
-  const {
-    requires_deposit,
-    deposit_type,
-    deposit_value
-  } = professionalProfile;
+  const { requires_deposit, deposit_type, deposit_value } = professionalProfile;
 
   // Get service fee from config
   const serviceFee = 100; // $1 in cents, TODO: get from config
 
   // Calculate service amount if not provided (backward compatibility)
-  const actualServiceAmount = serviceAmount || (totalAmount - serviceFee - (tipAmount || 0));
+  const actualServiceAmount =
+    serviceAmount || totalAmount - serviceFee - (tipAmount || 0);
 
   if (!requires_deposit || !deposit_value) {
     // No deposit required - full payment
@@ -96,12 +104,12 @@ export function calculatePaymentAmounts(
       balanceAmount: totalAmount,
       requiresDeposit: false,
       requiresBalancePayment: true,
-      isFullPayment: true
+      isFullPayment: true,
     };
   }
 
   let depositAmount: number;
-  
+
   if (deposit_type === 'percentage') {
     // Calculate deposit based on service amount only (excluding tips and fees)
     depositAmount = Math.round(actualServiceAmount * (deposit_value / 100));
@@ -111,7 +119,7 @@ export function calculatePaymentAmounts(
     // Fixed amount deposit - if it's bigger than service amount, cap it
     depositAmount = Math.min(
       Math.round(deposit_value * 100), // Convert to cents
-      actualServiceAmount // Cap at service amount
+      actualServiceAmount, // Cap at service amount
     );
     // Enforce minimum deposit of $1 (100 cents) for fixed deposits
     depositAmount = Math.max(depositAmount, 100);
@@ -126,7 +134,7 @@ export function calculatePaymentAmounts(
     balanceAmount,
     requiresDeposit: true,
     requiresBalancePayment: balanceAmount > 0,
-    isFullPayment: depositAmount >= actualServiceAmount // Only compare with service amount
+    isFullPayment: depositAmount >= actualServiceAmount, // Only compare with service amount
   };
 }
 
@@ -139,10 +147,10 @@ export async function createBookingPaymentRecord(
   paymentCalculation: PaymentCalculation,
   serviceFee: number,
   tipAmount: number = 0,
-  stripeCheckoutSessionId?: string
+  stripeCheckoutSessionId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const paymentData = {
       booking_id: bookingId,
@@ -152,10 +160,12 @@ export async function createBookingPaymentRecord(
       balance_amount: paymentCalculation.balanceAmount / 100,
       tip_amount: tipAmount,
       service_fee: serviceFee,
-      payment_type: paymentCalculation.isFullPayment ? 'full' : 'deposit' as const,
+      payment_type: paymentCalculation.isFullPayment
+        ? 'full'
+        : ('deposit' as const),
       requires_balance_payment: paymentCalculation.requiresBalancePayment,
       status: stripeCheckoutSessionId ? 'pending' : 'completed',
-      stripe_checkout_session_id: stripeCheckoutSessionId || null
+      stripe_checkout_session_id: stripeCheckoutSessionId || null,
     };
 
     const { error } = await supabase
@@ -170,9 +180,9 @@ export async function createBookingPaymentRecord(
     return { success: true };
   } catch (error) {
     console.error('Error in createBookingPaymentRecord:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -182,16 +192,16 @@ export async function createBookingPaymentRecord(
  */
 export async function updateBookingPaymentWithSession(
   bookingId: string,
-  sessionId: string
+  sessionId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('booking_payments')
       .update({
         stripe_checkout_session_id: sessionId,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId);
 
@@ -203,9 +213,9 @@ export async function updateBookingPaymentWithSession(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentWithSession:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -217,35 +227,40 @@ export async function updateBookingPaymentWithUncapturedIntent(
   bookingId: string,
   paymentIntentId: string,
   captureDate: Date,
-  balanceAmount: number
+  balanceAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createSupabaseAdminClient();
-    
+
     const { error } = await supabase
       .from('booking_payments')
       .update({
         stripe_payment_intent_id: paymentIntentId,
         capture_method: 'manual',
         capture_scheduled_for: captureDate.toISOString(),
-        authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        authorization_expires_at: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000,
+        ).toISOString(), // 7 days from now
         status: 'authorized',
         balance_amount: balanceAmount,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId);
 
     if (error) {
-      console.error('Error updating booking payment with uncaptured intent:', error);
+      console.error(
+        'Error updating booking payment with uncaptured intent:',
+        error,
+      );
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentWithUncapturedIntent:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -257,32 +272,35 @@ export async function updateBookingPaymentWithScheduledBalance(
   bookingId: string,
   captureDate: Date,
   balanceAmount: number,
-  status: string
+  status: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createSupabaseAdminClient();
-    
+
     const { error } = await supabase
       .from('booking_payments')
       .update({
         capture_scheduled_for: captureDate.toISOString(),
         balance_amount: balanceAmount,
         status: status, // 'pending_balance_payment' indicates balance payment intent needs to be created
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId);
 
     if (error) {
-      console.error('Error updating booking payment with scheduled balance:', error);
+      console.error(
+        'Error updating booking payment with scheduled balance:',
+        error,
+      );
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentWithScheduledBalance:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -290,9 +308,11 @@ export async function updateBookingPaymentWithScheduledBalance(
 /**
  * Get booking payment by checkout session ID
  */
-export async function getBookingPaymentBySessionId(sessionId: string): Promise<BookingPaymentWithStripe | null> {
+export async function getBookingPaymentBySessionId(
+  sessionId: string,
+): Promise<BookingPaymentWithStripe | null> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('booking_payments')
@@ -318,14 +338,14 @@ export async function getBookingPaymentBySessionId(sessionId: string): Promise<B
 export async function updateBookingPaymentStatus(
   bookingId: string,
   status: string,
-  stripePaymentIntentId?: string
+  stripePaymentIntentId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const updateData: Record<string, string> = {
       status,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     if (stripePaymentIntentId) {
@@ -345,9 +365,9 @@ export async function updateBookingPaymentStatus(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentStatus:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -358,19 +378,21 @@ export async function updateBookingPaymentStatus(
 export async function updateBookingPaymentForStripe(
   bookingId: string,
   paymentCalculation: PaymentCalculation,
-  stripeCheckoutSessionId?: string
+  stripeCheckoutSessionId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const updateData = {
       deposit_amount: paymentCalculation.depositAmount / 100, // Convert back to dollars
       balance_amount: paymentCalculation.balanceAmount / 100,
-      payment_type: paymentCalculation.isFullPayment ? 'full' : 'deposit' as const,
+      payment_type: paymentCalculation.isFullPayment
+        ? 'full'
+        : ('deposit' as const),
       requires_balance_payment: paymentCalculation.requiresBalancePayment,
       status: stripeCheckoutSessionId ? 'pending' : 'completed',
       stripe_checkout_session_id: stripeCheckoutSessionId || null,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase
@@ -386,9 +408,9 @@ export async function updateBookingPaymentForStripe(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentForStripe:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -397,13 +419,13 @@ export async function updateBookingPaymentForStripe(
  * Delete a booking and all its related records (for cancelled checkouts)
  */
 export async function deleteBookingAndRelatedRecords(
-  bookingId: string
+  bookingId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     // Delete in reverse order of dependencies
-    
+
     // 1. Delete booking payment
     const { error: paymentError } = await supabase
       .from('booking_payments')
@@ -451,9 +473,9 @@ export async function deleteBookingAndRelatedRecords(
     return { success: true };
   } catch (error) {
     console.error('Error in deleteBookingAndRelatedRecords:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -463,10 +485,10 @@ export async function deleteBookingAndRelatedRecords(
  */
 export async function getOrCreateStripeCustomer(
   userId: string,
-  userEmail?: string
+  userEmail?: string,
 ): Promise<{ success: boolean; customerId?: string; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     // First, check if customer already exists in our database
     const { data: existingCustomer, error: fetchError } = await supabase
@@ -475,29 +497,30 @@ export async function getOrCreateStripeCustomer(
       .eq('user_id', userId)
       .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // PGRST116 = no rows returned
       console.error('Error fetching existing customer:', fetchError);
       return { success: false, error: fetchError.message };
     }
 
     // If customer exists, return their Stripe customer ID
     if (existingCustomer?.stripe_customer_id) {
-      return { 
-        success: true, 
-        customerId: existingCustomer.stripe_customer_id 
+      return {
+        success: true,
+        customerId: existingCustomer.stripe_customer_id,
       };
     }
 
     // Customer doesn't exist, create new one in Stripe
     const { stripe } = await import('@/lib/stripe/server');
-    
+
     const customerData: {
       metadata: { user_id: string };
       email?: string;
     } = {
       metadata: {
-        user_id: userId
-      }
+        user_id: userId,
+      },
     };
 
     // Add email if provided
@@ -508,33 +531,30 @@ export async function getOrCreateStripeCustomer(
     const stripeCustomer = await stripe.customers.create(customerData);
 
     // Save the customer to our database
-    const { error: insertError } = await supabase
-      .from('customers')
-      .insert({
-        user_id: userId,
-        stripe_customer_id: stripeCustomer.id
-      });
+    const { error: insertError } = await supabase.from('customers').insert({
+      user_id: userId,
+      stripe_customer_id: stripeCustomer.id,
+    });
 
     if (insertError) {
       console.error('Error saving customer to database:', insertError);
       // Even if we can't save to DB, return the Stripe customer ID
       // This prevents blocking the payment flow
-      return { 
-        success: true, 
-        customerId: stripeCustomer.id 
+      return {
+        success: true,
+        customerId: stripeCustomer.id,
       };
     }
 
-    return { 
-      success: true, 
-      customerId: stripeCustomer.id 
+    return {
+      success: true,
+      customerId: stripeCustomer.id,
     };
-
   } catch (error) {
     console.error('Error in getOrCreateStripeCustomer:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -542,9 +562,11 @@ export async function getOrCreateStripeCustomer(
 /**
  * Get Stripe customer ID for a user (if exists)
  */
-export async function getStripeCustomerId(userId: string): Promise<string | null> {
+export async function getStripeCustomerId(
+  userId: string,
+): Promise<string | null> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('customers')
@@ -569,10 +591,10 @@ export async function getStripeCustomerId(userId: string): Promise<string | null
  */
 export async function saveCustomerFromStripeSession(
   userId: string,
-  stripeCustomerId: string
+  stripeCustomerId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     // Check if customer already exists
     const { data: existingCustomer } = await supabase
@@ -587,12 +609,10 @@ export async function saveCustomerFromStripeSession(
     }
 
     // Insert new customer record
-    const { error } = await supabase
-      .from('customers')
-      .insert({
-        user_id: userId,
-        stripe_customer_id: stripeCustomerId
-      });
+    const { error } = await supabase.from('customers').insert({
+      user_id: userId,
+      stripe_customer_id: stripeCustomerId,
+    });
 
     if (error) {
       console.error('Error saving customer from Stripe session:', error);
@@ -600,12 +620,11 @@ export async function saveCustomerFromStripeSession(
     }
 
     return { success: true };
-
   } catch (error) {
     console.error('Error in saveCustomerFromStripeSession:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -615,29 +634,28 @@ export async function saveCustomerFromStripeSession(
  */
 export async function updateStripeCustomerEmail(
   userId: string,
-  newEmail: string
+  newEmail: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const customerId = await getStripeCustomerId(userId);
-    
+
     if (!customerId) {
       // No customer exists yet, will be created with correct email on next checkout
       return { success: true };
     }
 
     const { stripe } = await import('@/lib/stripe/server');
-    
+
     await stripe.customers.update(customerId, {
-      email: newEmail
+      email: newEmail,
     });
 
     return { success: true };
-
   } catch (error) {
     console.error('Error updating Stripe customer email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -650,16 +668,18 @@ export async function updateBookingPaymentWithScheduling(
   preAuthDate: Date,
   captureDate: Date,
   shouldPreAuthNow: boolean,
-  paymentIntentId?: string
+  paymentIntentId?: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const updateData: Record<string, string | number | null> = {
       // Only set pre_auth_scheduled_for if NOT doing immediate authorization
-      pre_auth_scheduled_for: shouldPreAuthNow ? null : preAuthDate.toISOString(),
+      pre_auth_scheduled_for: shouldPreAuthNow
+        ? null
+        : preAuthDate.toISOString(),
       capture_scheduled_for: captureDate.toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     if (shouldPreAuthNow && paymentIntentId) {
@@ -681,9 +701,9 @@ export async function updateBookingPaymentWithScheduling(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentWithScheduling:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -691,21 +711,24 @@ export async function updateBookingPaymentWithScheduling(
 /**
  * Get payments that need pre-authorization
  */
-export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
-  id: string;
-  booking_id: string;
-  amount: number;
-  customer_id: string;
-  professional_stripe_account_id: string;
-  pre_auth_scheduled_for: string;
-  stripe_payment_method_id: string | null;
-}[]> {
+export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
+  {
+    id: string;
+    booking_id: string;
+    amount: number;
+    customer_id: string;
+    professional_stripe_account_id: string;
+    pre_auth_scheduled_for: string;
+    stripe_payment_method_id: string | null;
+  }[]
+> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('booking_payments')
-      .select(`
+      .select(
+        `
         id,
         booking_id,
         amount,
@@ -725,7 +748,8 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
             )
           )
         )
-      `)
+      `,
+      )
       .lte('pre_auth_scheduled_for', new Date().toISOString())
       .is('pre_auth_placed_at', null)
       .not('pre_auth_scheduled_for', 'is', null)
@@ -736,18 +760,24 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
       return [];
     }
 
-    return (data || []).map(payment => ({
+    return (data || []).map((payment) => ({
       id: payment.id,
       booking_id: payment.booking_id,
       amount: Math.round(payment.amount * 100), // Convert to cents
-      customer_id: (payment.bookings as unknown as { 
-        users: { customers: { stripe_customer_id: string } } 
-      }).users.customers.stripe_customer_id,
-      professional_stripe_account_id: (payment.bookings as unknown as { 
-        professional_profiles: { professional_stripe_connect: { stripe_account_id: string } } 
-      }).professional_profiles.professional_stripe_connect.stripe_account_id,
+      customer_id: (
+        payment.bookings as unknown as {
+          users: { customers: { stripe_customer_id: string } };
+        }
+      ).users.customers.stripe_customer_id,
+      professional_stripe_account_id: (
+        payment.bookings as unknown as {
+          professional_profiles: {
+            professional_stripe_connect: { stripe_account_id: string };
+          };
+        }
+      ).professional_profiles.professional_stripe_connect.stripe_account_id,
       pre_auth_scheduled_for: payment.pre_auth_scheduled_for!,
-      stripe_payment_method_id: payment.stripe_payment_method_id
+      stripe_payment_method_id: payment.stripe_payment_method_id,
     }));
   } catch (error) {
     console.error('Error in getPaymentsPendingPreAuth:', error);
@@ -758,22 +788,25 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<{
 /**
  * Get payments that need to be captured
  */
-export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
-  id: string;
-  booking_id: string;
-  stripe_payment_intent_id: string;
-  amount: number;
-  tip_amount: number;
-  balance_amount: number;
-  payment_type: string;
-  capture_scheduled_for: string;
-}[]> {
+export async function getPaymentsPendingCapture(limit: number = 50): Promise<
+  {
+    id: string;
+    booking_id: string;
+    stripe_payment_intent_id: string;
+    amount: number;
+    tip_amount: number;
+    balance_amount: number;
+    payment_type: string;
+    capture_scheduled_for: string;
+  }[]
+> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('booking_payments')
-      .select(`
+      .select(
+        `
         id,
         booking_id,
         stripe_payment_intent_id,
@@ -782,7 +815,8 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
         balance_amount,
         payment_type,
         capture_scheduled_for
-      `)
+      `,
+      )
       .lte('capture_scheduled_for', new Date().toISOString())
       .in('status', ['authorized', 'pre_auth_scheduled'])
       .not('stripe_payment_intent_id', 'is', null)
@@ -794,7 +828,7 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
       return [];
     }
 
-    return (data || []).map(payment => ({
+    return (data || []).map((payment) => ({
       id: payment.id,
       booking_id: payment.booking_id,
       stripe_payment_intent_id: payment.stripe_payment_intent_id!,
@@ -802,7 +836,7 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
       tip_amount: Math.round((payment.tip_amount || 0) * 100), // Convert to cents
       balance_amount: Math.round((payment.balance_amount || 0) * 100), // Convert to cents
       payment_type: payment.payment_type!,
-      capture_scheduled_for: payment.capture_scheduled_for!
+      capture_scheduled_for: payment.capture_scheduled_for!,
     }));
   } catch (error) {
     console.error('Error in getPaymentsPendingCapture:', error);
@@ -815,10 +849,10 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<{
  */
 export async function markPaymentPreAuthorized(
   paymentId: string,
-  paymentIntentId: string
+  paymentIntentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('booking_payments')
@@ -827,7 +861,7 @@ export async function markPaymentPreAuthorized(
         pre_auth_placed_at: new Date().toISOString(),
         pre_auth_scheduled_for: null, // Clear the scheduled date since auth is now placed
         status: 'authorized',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', paymentId);
 
@@ -839,9 +873,9 @@ export async function markPaymentPreAuthorized(
     return { success: true };
   } catch (error) {
     console.error('Error in markPaymentPreAuthorized:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -851,10 +885,10 @@ export async function markPaymentPreAuthorized(
  */
 export async function markPaymentCaptured(
   paymentId: string,
-  capturedAmount: number
+  capturedAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('booking_payments')
@@ -863,7 +897,7 @@ export async function markPaymentCaptured(
         status: 'completed',
         amount: capturedAmount / 100, // Convert back to dollars
         capture_scheduled_for: null, // Clear the scheduled capture date
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', paymentId);
 
@@ -875,9 +909,9 @@ export async function markPaymentCaptured(
     return { success: true };
   } catch (error) {
     console.error('Error in markPaymentCaptured:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -885,32 +919,36 @@ export async function markPaymentCaptured(
 /**
  * Get appointments needing balance notifications (includes both card and cash payments)
  */
-export async function getAppointmentsNeedingBalanceNotification(limit: number = 50): Promise<{
-  appointment_id: string;
-  booking_id: string;
-  client_email: string;
-  client_name: string;
-  client_timezone: string;
-  professional_name: string;
-  professional_email: string;
-  professional_address: string;
-  professional_timezone: string;
-  start_time: string;
-  total_amount: number;
-  service_fee: number;
-  deposit_amount: number | undefined;
-  balance_amount: number;
-  tip_amount: number;
-  payment_method_name: string;
-  is_cash_payment: boolean;
-  services: {
-    duration: string; // Formatted duration like "1h 30m"
-    name: string;
-    price: number;
-  }[];
-}[]> {
+export async function getAppointmentsNeedingBalanceNotification(
+  limit: number = 50,
+): Promise<
+  {
+    appointment_id: string;
+    booking_id: string;
+    client_email: string;
+    client_name: string;
+    client_timezone: string;
+    professional_name: string;
+    professional_email: string;
+    professional_address: string;
+    professional_timezone: string;
+    start_time: string;
+    total_amount: number;
+    service_fee: number;
+    deposit_amount: number | undefined;
+    balance_amount: number;
+    tip_amount: number;
+    payment_method_name: string;
+    is_cash_payment: boolean;
+    services: {
+      duration: string; // Formatted duration like "1h 30m"
+      name: string;
+      price: number;
+    }[];
+  }[]
+> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     // Calculate the timestamp for 2 hours ago
     const twoHoursAgo = new Date();
@@ -924,7 +962,10 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
       .limit(limit);
 
     if (appointmentsError) {
-      console.error('Error fetching completed appointments:', appointmentsError);
+      console.error(
+        'Error fetching completed appointments:',
+        appointmentsError,
+      );
       return [];
     }
 
@@ -933,8 +974,9 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     }
 
     // Filter appointments that are >2 hours past end time and have valid IDs and times
-    const eligibleAppointments = appointments.filter(appointment => {
-      if (!appointment.end_time || !appointment.id || !appointment.start_time) return false;
+    const eligibleAppointments = appointments.filter((appointment) => {
+      if (!appointment.end_time || !appointment.id || !appointment.start_time)
+        return false;
       const appointmentEndTime = new Date(appointment.end_time);
       return appointmentEndTime <= twoHoursAgo;
     });
@@ -943,12 +985,15 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
       return [];
     }
 
-    const bookingIds = eligibleAppointments.map(a => a.booking_id).filter((id): id is string => id !== null);
+    const bookingIds = eligibleAppointments
+      .map((a) => a.booking_id)
+      .filter((id): id is string => id !== null);
 
     // Get booking payments with payment methods
     const { data: payments, error: paymentsError } = await supabase
       .from('booking_payments')
-      .select(`
+      .select(
+        `
         booking_id,
         amount,
         deposit_amount,
@@ -960,7 +1005,8 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
         balance_notification_sent_at,
         payment_method_id,
         payment_methods!inner(name, is_online)
-      `)
+      `,
+      )
       .in('booking_id', bookingIds)
       .is('balance_notification_sent_at', null)
       .in('status', ['authorized', 'completed']);
@@ -975,11 +1021,16 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     }
 
     // Filter payments based on conditions
-    const eligiblePayments = payments.filter(payment => {
-      const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
-      const cardCondition = payment.status === 'authorized' && payment.requires_balance_payment;
-      const cashCondition = payment.status === 'completed' && !paymentMethod.is_online;
-      
+    const eligiblePayments = payments.filter((payment) => {
+      const paymentMethod = payment.payment_methods as {
+        name: string;
+        is_online: boolean;
+      };
+      const cardCondition =
+        payment.status === 'authorized' && payment.requires_balance_payment;
+      const cashCondition =
+        payment.status === 'completed' && !paymentMethod.is_online;
+
       return cardCondition || cashCondition;
     });
 
@@ -988,10 +1039,11 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     }
 
     // Get booking details
-    const finalBookingIds = eligiblePayments.map(p => p.booking_id);
+    const finalBookingIds = eligiblePayments.map((p) => p.booking_id);
     const { data: bookings, error: bookingsError } = await supabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         professional_profile_id,
@@ -1006,7 +1058,8 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
             description
           )
         )
-      `)
+      `,
+      )
       .in('id', finalBookingIds);
 
     if (bookingsError || !bookings) {
@@ -1015,20 +1068,31 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     }
 
     // Get user details - client and professional
-    const clientIds = bookings.map(b => b.client_id);
-    const professionalProfileIds = bookings.map(b => b.professional_profile_id);
+    const clientIds = bookings.map((b) => b.client_id);
+    const professionalProfileIds = bookings.map(
+      (b) => b.professional_profile_id,
+    );
 
     // Get client auth users (for email)
-    const clientsResult = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const clientsResult = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
     const authUsers = clientsResult.data?.users || [];
 
     // Get professional profiles with address and timezone
-    const { data: professionalProfiles, error: professionalsError } = await supabase
-      .from('professional_profiles')
-      .select('id, user_id, address:address_id(street_address, apartment, city, state, country), timezone')
-      .in('id', professionalProfileIds);
+    const { data: professionalProfiles, error: professionalsError } =
+      await supabase
+        .from('professional_profiles')
+        .select(
+          'id, user_id, address:address_id(street_address, apartment, city, state, country), timezone',
+        )
+        .in('id', professionalProfileIds);
     if (professionalsError || !professionalProfiles) {
-      console.error('Error fetching professional profiles:', professionalsError);
+      console.error(
+        'Error fetching professional profiles:',
+        professionalsError,
+      );
       return [];
     }
 
@@ -1036,83 +1100,106 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
     const { data: allUsers, error: usersError } = await supabase
       .from('users')
       .select('id, first_name, last_name, client_profiles(*)')
-      .in('id', [...clientIds, ...professionalProfiles.map(p => p.user_id)]);
+      .in('id', [...clientIds, ...professionalProfiles.map((p) => p.user_id)]);
     if (usersError || !allUsers) {
       console.error('Error fetching users:', usersError);
       return [];
     }
 
     // Build the final result
-      // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
-      function ianaToAbbreviation(iana: string | undefined): string {
-        if (!iana) return '';
-        try {
-          const dtf = new Intl.DateTimeFormat('en-US', {
-            timeZone: iana,
-            timeZoneName: 'short'
-          });
-          const parts = dtf.formatToParts(new Date());
-          const tzPart = parts.find(p => p.type === 'timeZoneName');
-          return tzPart ? tzPart.value : iana;
-        } catch {
-          return iana;
-        }
+    // Helper to convert IANA timezone to abbreviation using Intl.DateTimeFormat
+    function ianaToAbbreviation(iana: string | undefined): string {
+      if (!iana) return '';
+      try {
+        const dtf = new Intl.DateTimeFormat('en-US', {
+          timeZone: iana,
+          timeZoneName: 'short',
+        });
+        const parts = dtf.formatToParts(new Date());
+        const tzPart = parts.find((p) => p.type === 'timeZoneName');
+        return tzPart ? tzPart.value : iana;
+      } catch {
+        return iana;
       }
+    }
 
-      return eligiblePayments.map(payment => {
-        const appointment = eligibleAppointments.find(a => a.booking_id === payment.booking_id)!;
-        const booking = bookings.find(b => b.id === payment.booking_id)!;
-        const paymentMethod = payment.payment_methods as { name: string; is_online: boolean };
+    return eligiblePayments.map((payment) => {
+      const appointment = eligibleAppointments.find(
+        (a) => a.booking_id === payment.booking_id,
+      )!;
+      const booking = bookings.find((b) => b.id === payment.booking_id)!;
+      const paymentMethod = payment.payment_methods as {
+        name: string;
+        is_online: boolean;
+      };
 
-        // Find client details
-        const clientUser = allUsers.find(u => u.id === booking.client_id)!;
-        const clientAuth = authUsers.find(u => u.id === booking.client_id);
-        const clientTimezone: string = (Array.isArray(clientUser.client_profiles) 
-          ? clientUser.client_profiles[0]?.timezone 
+      // Find client details
+      const clientUser = allUsers.find((u) => u.id === booking.client_id)!;
+      const clientAuth = authUsers.find((u) => u.id === booking.client_id);
+      const clientTimezone: string =
+        (Array.isArray(clientUser.client_profiles)
+          ? clientUser.client_profiles[0]?.timezone
           : clientUser.client_profiles?.timezone) || 'UTC';
 
-        // Find professional details
-        const professionalProfile = professionalProfiles.find(p => p.id === booking.professional_profile_id)!;
-        const professionalUser = allUsers.find(u => u.id === professionalProfile.user_id)!;
-        const professionalAuth = authUsers.find(u => u.id === professionalProfile.user_id);
-        const professionalAddress = professionalProfile.address
-          ? [professionalProfile.address.street_address, professionalProfile.address.apartment, professionalProfile.address.city, professionalProfile.address.state, professionalProfile.address.country].filter(Boolean).join(', ')
-          : '';
-        const professionalTimezone = professionalProfile.timezone || '';
-        const professionalTimezoneAbbr = ianaToAbbreviation(professionalTimezone);
+      // Find professional details
+      const professionalProfile = professionalProfiles.find(
+        (p) => p.id === booking.professional_profile_id,
+      )!;
+      const professionalUser = allUsers.find(
+        (u) => u.id === professionalProfile.user_id,
+      )!;
+      const professionalAuth = authUsers.find(
+        (u) => u.id === professionalProfile.user_id,
+      );
+      const professionalAddress = professionalProfile.address
+        ? [
+            professionalProfile.address.street_address,
+            professionalProfile.address.apartment,
+            professionalProfile.address.city,
+            professionalProfile.address.state,
+            professionalProfile.address.country,
+          ]
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      const professionalTimezone = professionalProfile.timezone || '';
+      const professionalTimezoneAbbr = ianaToAbbreviation(professionalTimezone);
 
-        // Format services data for email templates
-        const services = (booking.booking_services || []).map((bs: { 
-          duration: number; 
-          services?: { name?: string }; 
-          price: number; 
+      // Format services data for email templates
+      const services = (booking.booking_services || []).map(
+        (bs: {
+          duration: number;
+          services?: { name?: string };
+          price: number;
         }) => ({
           duration: formatDuration(bs.duration),
           name: bs.services?.name || 'Unknown Service',
-          price: bs.price
-        }));
+          price: bs.price,
+        }),
+      );
 
-        return {
-          appointment_id: appointment.id!,
-          booking_id: payment.booking_id,
-          client_email: clientAuth?.email || '',
-          client_name: `${clientUser.first_name} ${clientUser.last_name}`,
-          client_timezone: clientTimezone,
-          professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-          professional_email: professionalAuth?.email || '',
-          professional_address: professionalAddress,
-          professional_timezone: professionalTimezoneAbbr,
-          start_time: appointment.start_time!,
-          total_amount: payment.amount + (payment.tip_amount || 0) + payment.service_fee,
-          service_fee: payment.service_fee,
-          deposit_amount: payment.deposit_amount,
-          balance_amount: payment.balance_amount,
-          tip_amount: payment.tip_amount || 0,
-          payment_method_name: paymentMethod.name,
-          is_cash_payment: !paymentMethod.is_online,
-          services: services
-        };
-      });
+      return {
+        appointment_id: appointment.id!,
+        booking_id: payment.booking_id,
+        client_email: clientAuth?.email || '',
+        client_name: `${clientUser.first_name} ${clientUser.last_name}`,
+        client_timezone: clientTimezone,
+        professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        professional_email: professionalAuth?.email || '',
+        professional_address: professionalAddress,
+        professional_timezone: professionalTimezoneAbbr,
+        start_time: appointment.start_time!,
+        total_amount:
+          payment.amount + (payment.tip_amount || 0) + payment.service_fee,
+        service_fee: payment.service_fee,
+        deposit_amount: payment.deposit_amount,
+        balance_amount: payment.balance_amount,
+        tip_amount: payment.tip_amount || 0,
+        payment_method_name: paymentMethod.name,
+        is_cash_payment: !paymentMethod.is_online,
+        services: services,
+      };
+    });
   } catch (error) {
     console.error('Error in getAppointmentsNeedingBalanceNotification:', error);
     return [];
@@ -1123,16 +1210,16 @@ export async function getAppointmentsNeedingBalanceNotification(limit: number = 
  * Mark balance notification as sent
  */
 export async function markBalanceNotificationSent(
-  bookingId: string
+  bookingId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('booking_payments')
       .update({
         balance_notification_sent_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId);
 
@@ -1144,9 +1231,9 @@ export async function markBalanceNotificationSent(
     return { success: true };
   } catch (error) {
     console.error('Error in markBalanceNotificationSent:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -1156,16 +1243,16 @@ export async function markBalanceNotificationSent(
  */
 export async function updatePaymentTipAmount(
   bookingId: string,
-  tipAmount: number
+  tipAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('booking_payments')
       .update({
         tip_amount: tipAmount,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId);
 
@@ -1177,9 +1264,9 @@ export async function updatePaymentTipAmount(
     return { success: true };
   } catch (error) {
     console.error('Error in updatePaymentTipAmount:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -1187,7 +1274,9 @@ export async function updatePaymentTipAmount(
 /**
  * Get booking details for payment confirmation emails
  */
-export async function getBookingDetailsForConfirmation(bookingId: string): Promise<{
+export async function getBookingDetailsForConfirmation(
+  bookingId: string,
+): Promise<{
   success: boolean;
   booking?: {
     id: string;
@@ -1205,12 +1294,13 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
   error?: string;
 }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     // Get booking with all related data
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         professional_profile_id,
@@ -1228,7 +1318,8 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
         professional_profiles!inner(
           user_id
         )
-      `)
+      `,
+      )
       .eq('id', bookingId)
       .single();
 
@@ -1237,8 +1328,12 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
     }
 
     // Get user emails using admin client
-    const { data: clientUser, error: clientError } = await supabase.auth.admin.getUserById(booking.client_id);
-    const { data: professionalUser, error: professionalError } = await supabase.auth.admin.getUserById(booking.professional_profiles.user_id);
+    const { data: clientUser, error: clientError } =
+      await supabase.auth.admin.getUserById(booking.client_id);
+    const { data: professionalUser, error: professionalError } =
+      await supabase.auth.admin.getUserById(
+        booking.professional_profiles.user_id,
+      );
 
     if (clientError || !clientUser.user?.email) {
       return { success: false, error: 'Client email not found' };
@@ -1261,31 +1356,41 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
       .eq('id', booking.professional_profiles.user_id)
       .single();
 
-    const appointment = Array.isArray(booking.appointments) ? booking.appointments[0] : booking.appointments;
-    const payment = Array.isArray(booking.booking_payments) ? booking.booking_payments[0] : booking.booking_payments;
-    const service = Array.isArray(booking.booking_services) ? booking.booking_services[0] : booking.booking_services;
+    const appointment = Array.isArray(booking.appointments)
+      ? booking.appointments[0]
+      : booking.appointments;
+    const payment = Array.isArray(booking.booking_payments)
+      ? booking.booking_payments[0]
+      : booking.booking_payments;
+    const service = Array.isArray(booking.booking_services)
+      ? booking.booking_services[0]
+      : booking.booking_services;
 
     return {
       success: true,
       booking: {
         id: booking.id,
         clientEmail: clientUser.user.email,
-        clientName: clientData ? `${clientData.first_name} ${clientData.last_name}` : 'Client',
+        clientName: clientData
+          ? `${clientData.first_name} ${clientData.last_name}`
+          : 'Client',
         professionalEmail: professionalUser.user.email,
-        professionalName: professionalData ? `${professionalData.first_name} ${professionalData.last_name}` : 'Professional',
+        professionalName: professionalData
+          ? `${professionalData.first_name} ${professionalData.last_name}`
+          : 'Professional',
         appointmentDate: appointment?.start_time || '',
         appointmentTime: appointment?.start_time || '',
         serviceName: service?.services?.name || 'Service',
         totalAmount: payment.amount,
         tipAmount: payment.tip_amount || 0,
-        capturedAmount: payment.amount + (payment.tip_amount || 0)
-      }
+        capturedAmount: payment.amount + (payment.tip_amount || 0),
+      },
     };
   } catch (error) {
     console.error('Error in getBookingDetailsForConfirmation:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -1295,16 +1400,16 @@ export async function getBookingDetailsForConfirmation(bookingId: string): Promi
  */
 export async function updateBookingPaymentAmount(
   bookingId: string,
-  amount: number
+  amount: number,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('booking_payments')
       .update({
         amount: amount, // Amount in dollars
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId);
 
@@ -1316,9 +1421,9 @@ export async function updateBookingPaymentAmount(
     return { success: true };
   } catch (error) {
     console.error('Error in updateBookingPaymentAmount:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
-} 
+}

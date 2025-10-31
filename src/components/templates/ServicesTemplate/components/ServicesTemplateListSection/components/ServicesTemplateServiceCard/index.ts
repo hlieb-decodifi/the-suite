@@ -1,1 +1,1 @@
-export * from './ServicesTemplateServiceCard'; 
+export * from './ServicesTemplateServiceCard';

@@ -37,4 +37,4 @@ export type PaginationInfo = {
 export type ProfessionalsFilters = {
   searchTerm: string;
   location: string;
-}; 
+};
