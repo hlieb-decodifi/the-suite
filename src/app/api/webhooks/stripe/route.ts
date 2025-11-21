@@ -1163,14 +1163,29 @@ async function handleAccountUpdated(account: Stripe.Account) {
   }
 
   try {
-    // Determine simple status based on account capabilities
-    let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
+    // Determine status based on account capabilities and requirements
+    let connectStatus: 'not_connected' | 'pending' | 'in_review' | 'complete' = 'pending';
     const wasComplete = account.charges_enabled && account.payouts_enabled;
 
     if (wasComplete) {
       connectStatus = 'complete';
     } else if (!account.details_submitted) {
       connectStatus = 'not_connected';
+    } else if (
+      account.requirements?.pending_verification &&
+      account.requirements.pending_verification.length > 0
+    ) {
+      // Account is under review by Stripe
+      connectStatus = 'in_review';
+    } else if (
+      account.requirements?.currently_due &&
+      account.requirements.currently_due.length === 0 &&
+      account.requirements?.past_due &&
+      account.requirements.past_due.length === 0 &&
+      account.details_submitted
+    ) {
+      // Details are submitted, no requirements due, but not yet enabled - likely under review
+      connectStatus = 'in_review';
     }
 
     // Enhanced logging for restricted/pending accounts
@@ -1293,14 +1308,31 @@ async function handleCapabilityUpdated(capability: Stripe.Capability) {
         `Important capability ${capability.id} updated to status: ${capability.status}`,
       );
 
+
       // Refresh the account status to get the latest capability information
-      let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
+      let connectStatus: 'not_connected' | 'pending' | 'in_review' | 'complete' = 'pending';
 
       if (account.charges_enabled && account.payouts_enabled) {
         connectStatus = 'complete';
       } else if (!account.details_submitted) {
         connectStatus = 'not_connected';
+      } else if (
+        account.requirements?.pending_verification &&
+        account.requirements.pending_verification.length > 0
+      ) {
+        // Account is under review by Stripe
+        connectStatus = 'in_review';
+      } else if (
+        account.requirements?.currently_due &&
+        account.requirements.currently_due.length === 0 &&
+        account.requirements?.past_due &&
+        account.requirements.past_due.length === 0 &&
+        account.details_submitted
+      ) {
+        // Details are submitted, no requirements due, but not yet enabled - likely under review
+        connectStatus = 'in_review';
       }
+
 
       // Update our database
       const updateResult = await updateStripeConnectStatus(userId, {

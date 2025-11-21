@@ -42,6 +42,12 @@ type ConnectStatus = {
   isConnected: boolean;
   accountId?: string;
   connectStatus?: string;
+  requirements?: {
+    currently_due: string[];
+    eventually_due: string[];
+    past_due: string[];
+    disabled_reason?: string | null;
+  };
 } | null;
 
 export async function ProfileSubscriptionPage({

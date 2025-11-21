@@ -177,7 +177,7 @@ create table professional_stripe_connect (
   id uuid primary key default extensions.uuid_generate_v4(),
   professional_profile_id uuid references professional_profiles not null unique,
   stripe_account_id text,
-  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'complete')),
+  stripe_connect_status text default 'not_connected' not null check (stripe_connect_status in ('not_connected', 'pending', 'in_review', 'complete')),
   stripe_connect_updated_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
