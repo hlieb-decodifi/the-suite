@@ -209,7 +209,7 @@ export function DashboardPageLayoutClient({
         <TabNavigation
           tabs={tabs}
           variant="link"
-          className="mb-4 lg:mb-6 min-w-max"
+          className="mb-4 lg:mb-6"
         />
       </div>
 

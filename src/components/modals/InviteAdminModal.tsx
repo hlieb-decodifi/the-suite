@@ -123,10 +123,15 @@ export default function InviteAdminModal({
                 variant="outline"
                 onClick={onClose}
                 disabled={loading}
+                className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading || !email}>
+              <Button 
+                type="submit" 
+                disabled={loading || !email}
+                className="w-full sm:w-auto"
+              >
                 {loading ? 'Inviting...' : 'Send Invite'}
               </Button>
             </DialogFooter>

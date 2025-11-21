@@ -87,10 +87,16 @@ export function LocationModal({
             variant="outline"
             onClick={handleCancel}
             disabled={isSubmitting}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+          <Button 
+            type="button" 
+            onClick={handleSubmit} 
+            disabled={isSubmitting}
+            className="w-full sm:w-auto"
+          >
             {isSubmitting ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>

@@ -273,7 +273,7 @@ export function LocationSection({
                 )}
               </>
             ) : (
-              <div className="text-center py-8 space-y-3">
+              <div className="flex flex-col items-center text-center py-8 space-y-3">
                 <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
                 <Typography variant="h4" className="text-foreground">
                   No location set
@@ -288,7 +288,7 @@ export function LocationSection({
                   <Button
                     onClick={handleEditClick}
                     variant="outline"
-                    className="text-primary border-primary hover:bg-primary hover:text-white"
+                    className="w-fit text-primary border-primary hover:bg-primary hover:text-white"
                   >
                     Add Location
                   </Button>
