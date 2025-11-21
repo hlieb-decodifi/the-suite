@@ -1173,6 +1173,49 @@ async function handleAccountUpdated(account: Stripe.Account) {
       connectStatus = 'not_connected';
     }
 
+    // Enhanced logging for restricted/pending accounts
+    if (connectStatus !== 'complete') {
+      console.log(
+        `⚠️ Account ${account.id} (User: ${userId}) is in ${connectStatus} state.`,
+      );
+      console.log(
+        `   Charges enabled: ${account.charges_enabled}, Payouts enabled: ${account.payouts_enabled}`,
+      );
+
+      if (account.requirements?.disabled_reason) {
+        console.log(
+          `   ⛔ Disabled Reason: ${account.requirements.disabled_reason}`,
+        );
+      }
+
+      if (
+        account.requirements?.past_due &&
+        account.requirements.past_due.length > 0
+      ) {
+        console.log(
+          `   📅 Past Due Requirements: ${account.requirements.past_due.join(', ')}`,
+        );
+      }
+
+      if (
+        account.requirements?.currently_due &&
+        account.requirements.currently_due.length > 0
+      ) {
+        console.log(
+          `   📋 Currently Due Requirements: ${account.requirements.currently_due.join(', ')}`,
+        );
+      }
+
+      if (
+        account.requirements?.eventually_due &&
+        account.requirements.eventually_due.length > 0
+      ) {
+        console.log(
+          `   ⏳ Eventually Due Requirements: ${account.requirements.eventually_due.join(', ')}`,
+        );
+      }
+    }
+
     // Update our database with the latest account status
     const updateResult = await updateStripeConnectStatus(userId, {
       accountId: account.id,

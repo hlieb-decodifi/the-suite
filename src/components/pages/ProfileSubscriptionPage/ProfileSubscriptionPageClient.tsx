@@ -18,6 +18,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Typography } from '@/components/ui/typography';
 import { toast } from '@/components/ui/use-toast';
 import type { SubscriptionPlan } from '@/server/domains/subscriptions/db';
@@ -34,6 +40,7 @@ import {
   ExternalLink,
   Loader2,
   PauseCircle,
+  Wallet,
 } from 'lucide-react';
 import {
   handleSubscriptionRedirectAction,
@@ -454,6 +461,42 @@ export function ProfileSubscriptionPageClient({
                     </Typography>
                   </div>
                 </div>
+                {/* Connected Account Status */}
+                {connectStatus?.accountId && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/20 border md:col-span-2">
+                    <div className="bg-primary/10 p-1 rounded-full">
+                      {/* Using a wallet-like icon for the account */}
+                      <Wallet className="h-3 w-3 text-primary" />
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <Typography
+                        variant="small"
+                        className="font-medium text-foreground"
+                      >
+                        Connected Account:
+                      </Typography>
+                      
+                      {connectStatus.connectStatus === 'complete' ? (
+                        <div className="text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                          Active
+                        </div>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider bg-yellow-100 text-yellow-700 border-yellow-200 cursor-help">
+                                Pending
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Setup incomplete. Click 'Continue Setup' to finish.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Stripe Connect Alert */}
