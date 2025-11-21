@@ -11,6 +11,7 @@ import {
 } from './db';
 import type { SubscriptionPlan } from './db';
 import { createClient } from '@/lib/supabase/server';
+import { determineConnectStatus } from '@/server/domains/stripe-services/utils';
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -605,9 +606,7 @@ async function getStripeConnectStatusFromAPI(userId: string): Promise<{
     } = {
       isConnected: true,
       accountId: fullAccount.id,
-      connectStatus: fullAccount.charges_enabled
-        ? 'complete'
-        : 'pending',
+      connectStatus: determineConnectStatus(fullAccount),
       requirements: {
         currently_due: fullAccount.requirements?.currently_due || [],
         eventually_due: fullAccount.requirements?.eventually_due || [],

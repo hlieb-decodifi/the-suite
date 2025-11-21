@@ -1149,6 +1149,8 @@ async function updateUserSubscription(
   }
 }
 
+import { determineConnectStatus } from '@/server/domains/stripe-services/utils';
+
 // Handle Stripe Connect account updates
 async function handleAccountUpdated(account: Stripe.Account) {
   console.log(`Account updated: ${account.id}`);
@@ -1163,73 +1165,8 @@ async function handleAccountUpdated(account: Stripe.Account) {
   }
 
   try {
-    // Determine status based on account capabilities and requirements
-    let connectStatus: 'not_connected' | 'pending' | 'in_review' | 'complete' = 'pending';
-    const wasComplete = account.charges_enabled && account.payouts_enabled;
-
-    if (wasComplete) {
-      connectStatus = 'complete';
-    } else if (!account.details_submitted) {
-      connectStatus = 'not_connected';
-    } else if (
-      account.requirements?.pending_verification &&
-      account.requirements.pending_verification.length > 0
-    ) {
-      // Account is under review by Stripe
-      connectStatus = 'in_review';
-    } else if (
-      account.requirements?.currently_due &&
-      account.requirements.currently_due.length === 0 &&
-      account.requirements?.past_due &&
-      account.requirements.past_due.length === 0 &&
-      account.details_submitted
-    ) {
-      // Details are submitted, no requirements due, but not yet enabled - likely under review
-      connectStatus = 'in_review';
-    }
-
-    // Enhanced logging for restricted/pending accounts
-    if (connectStatus !== 'complete') {
-      console.log(
-        `⚠️ Account ${account.id} (User: ${userId}) is in ${connectStatus} state.`,
-      );
-      console.log(
-        `   Charges enabled: ${account.charges_enabled}, Payouts enabled: ${account.payouts_enabled}`,
-      );
-
-      if (account.requirements?.disabled_reason) {
-        console.log(
-          `   ⛔ Disabled Reason: ${account.requirements.disabled_reason}`,
-        );
-      }
-
-      if (
-        account.requirements?.past_due &&
-        account.requirements.past_due.length > 0
-      ) {
-        console.log(
-          `   📅 Past Due Requirements: ${account.requirements.past_due.join(', ')}`,
-        );
-      }
-
-      if (
-        account.requirements?.currently_due &&
-        account.requirements.currently_due.length > 0
-      ) {
-        console.log(
-          `   📋 Currently Due Requirements: ${account.requirements.currently_due.join(', ')}`,
-        );
-      }
-
-      if (
-        account.requirements?.eventually_due &&
-        account.requirements.eventually_due.length > 0
-      ) {
-        console.log(
-          `   ⏳ Eventually Due Requirements: ${account.requirements.eventually_due.join(', ')}`,
-        );
-      }
-    }
+    // Determine status using helper function
+    const connectStatus = determineConnectStatus(account);
 
     // Update our database with the latest account status
     const updateResult = await updateStripeConnectStatus(userId, {
@@ -1308,31 +1245,8 @@ async function handleCapabilityUpdated(capability: Stripe.Capability) {
         `Important capability ${capability.id} updated to status: ${capability.status}`,
       );
 
-
       // Refresh the account status to get the latest capability information
-      let connectStatus: 'not_connected' | 'pending' | 'in_review' | 'complete' = 'pending';
-
-      if (account.charges_enabled && account.payouts_enabled) {
-        connectStatus = 'complete';
-      } else if (!account.details_submitted) {
-        connectStatus = 'not_connected';
-      } else if (
-        account.requirements?.pending_verification &&
-        account.requirements.pending_verification.length > 0
-      ) {
-        // Account is under review by Stripe
-        connectStatus = 'in_review';
-      } else if (
-        account.requirements?.currently_due &&
-        account.requirements.currently_due.length === 0 &&
-        account.requirements?.past_due &&
-        account.requirements.past_due.length === 0 &&
-        account.details_submitted
-      ) {
-        // Details are submitted, no requirements due, but not yet enabled - likely under review
-        connectStatus = 'in_review';
-      }
-
+      const connectStatus = determineConnectStatus(account);
 
       // Update our database
       const updateResult = await updateStripeConnectStatus(userId, {
