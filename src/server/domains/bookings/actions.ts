@@ -553,6 +553,7 @@ export async function cancelBookingAction(
               const refund = await stripe.refunds.create({
                 payment_intent: payment.stripe_payment_intent_id,
                 amount: refundAmount,
+                reverse_transfer: true, // Reverse transfer to connected professional account
                 metadata: {
                   reason: isProfessional
                     ? 'Professional cancelled - full refund including deposit'
@@ -560,7 +561,7 @@ export async function cancelBookingAction(
                 },
               });
               console.log(
-                `[Payment Intent] ✅ Refund processed for succeeded payment:`,
+                `[Payment Intent] ✅ Refund processed for succeeded payment (reversed transfer to professional):`,
                 {
                   refundId: refund.id,
                   status: refund.status,
@@ -620,6 +621,7 @@ export async function cancelBookingAction(
             // Refund the deposit
             const depositRefund = await stripe.refunds.create({
               payment_intent: payment.deposit_payment_intent_id,
+              reverse_transfer: true, // Reverse transfer to connected professional account
               metadata: {
                 booking_id: bookingId,
                 reason: `Deposit refund - ${isProfessional ? 'Professional' : 'Client'} cancelled booking`,
@@ -627,7 +629,7 @@ export async function cancelBookingAction(
             });
 
             console.log(
-              `[Deposit Refund] ✅ Deposit refund created: ${depositRefund.id} - Status: ${depositRefund.status} - Amount: $${depositRefund.amount / 100}`,
+              `[Deposit Refund] ✅ Deposit refund created: ${depositRefund.id} - Status: ${depositRefund.status} - Amount: $${depositRefund.amount / 100} (reversed transfer to professional)`,
             );
 
             if (depositRefund.status === 'failed') {

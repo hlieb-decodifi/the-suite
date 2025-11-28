@@ -242,13 +242,14 @@ async function handlePolicyCancellation(
           const depositRefund = await stripe.refunds.create({
             payment_intent: payment.deposit_payment_intent_id,
             amount: depositRefundAmount,
+            reverse_transfer: true, // Reverse transfer to connected professional account
             metadata: {
               booking_id: bookingId,
               reason: `Partial deposit refund - Policy cancellation: ${cancellationReason}`,
             },
           });
           console.log(
-            `[Policy Deposit] ✅ Partial deposit refund: $${depositRefund.amount / 100} (kept $${depositCancellationFee / 100} as cancellation fee)`,
+            `[Policy Deposit] ✅ Partial deposit refund: $${depositRefund.amount / 100} (kept $${depositCancellationFee / 100} as cancellation fee, reversed transfer to professional)`,
           );
         } else {
           console.log(
@@ -376,13 +377,14 @@ async function handlePolicyCancellation(
           const refund = await stripe.refunds.create({
             payment_intent: payment.stripe_payment_intent_id,
             amount: refundAmount,
+            reverse_transfer: true, // Reverse transfer to connected professional account
             metadata: {
               booking_id: bookingId,
               reason: `Partial refund - Policy cancellation: ${cancellationReason}`,
             },
           });
           console.log(
-            `[Policy Balance] ✅ Partial refund processed: $${refund.amount / 100} (kept $${balanceCancellationFee / 100} as cancellation fee)`,
+            `[Policy Balance] ✅ Partial refund processed: $${refund.amount / 100} (kept $${balanceCancellationFee / 100} as cancellation fee, reversed transfer to professional)`,
           );
         } else {
           console.log(
@@ -433,13 +435,14 @@ async function handleNoPolicyCancellation(
         // Refund the deposit completely
         const depositRefund = await stripe.refunds.create({
           payment_intent: payment.deposit_payment_intent_id,
+          reverse_transfer: true, // Reverse transfer to connected professional account
           metadata: {
             booking_id: bookingId,
             reason: `Full deposit refund - ${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
           },
         });
         console.log(
-          `[No Policy Deposit] ✅ Deposit refunded: $${depositRefund.amount / 100}`,
+          `[No Policy Deposit] ✅ Deposit refunded: $${depositRefund.amount / 100} (reversed transfer to professional)`,
         );
       } else if (depositPaymentIntent.status === 'requires_capture') {
         // Cancel uncaptured deposit
@@ -482,13 +485,14 @@ async function handleNoPolicyCancellation(
           const refund = await stripe.refunds.create({
             payment_intent: payment.stripe_payment_intent_id,
             amount: refundAmount,
+            reverse_transfer: true, // Reverse transfer to connected professional account
             metadata: {
               booking_id: bookingId,
               reason: `Full refund - ${isProfessional ? 'Professional' : 'Client'} cancellation: ${cancellationReason}`,
             },
           });
           console.log(
-            `[No Policy Balance] ✅ Balance refunded: $${refund.amount / 100}`,
+            `[No Policy Balance] ✅ Balance refunded: $${refund.amount / 100} (reversed transfer to professional)`,
           );
         }
       } else {

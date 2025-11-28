@@ -426,10 +426,18 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
           transfers: { requested: true },
         },
         business_type: 'individual',
+        settings: {
+          payouts: {
+            schedule: {
+              interval: 'manual', // Manual payouts to allow negative balances
+            },
+          },
+        },
         metadata: {
           userId,
           professionalProfileId: profileData.id,
           accountIdKey,
+          negative_balances_enabled: 'true', // Track that this account supports negative balances
         },
       });
 
