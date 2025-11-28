@@ -18,6 +18,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Typography } from '@/components/ui/typography';
 import { toast } from '@/components/ui/use-toast';
 import type { SubscriptionPlan } from '@/server/domains/subscriptions/db';
@@ -34,6 +40,7 @@ import {
   ExternalLink,
   Loader2,
   PauseCircle,
+  Wallet,
 } from 'lucide-react';
 import {
   handleSubscriptionRedirectAction,
@@ -46,6 +53,12 @@ type ConnectStatus = {
   isConnected: boolean;
   accountId?: string;
   connectStatus?: string;
+  requirements?: {
+    currently_due: string[];
+    eventually_due: string[];
+    past_due: string[];
+    disabled_reason?: string | null;
+  };
 } | null;
 
 export type ProfileSubscriptionPageClientProps = {
@@ -454,11 +467,93 @@ export function ProfileSubscriptionPageClient({
                     </Typography>
                   </div>
                 </div>
+                {/* Connected Account Status */}
+                {connectStatus?.accountId && (
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/20 border md:col-span-2">
+                    <div className="bg-primary/10 p-1 rounded-full">
+                      {/* Using a wallet-like icon for the account */}
+                      <Wallet className="h-3 w-3 text-primary" />
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <Typography
+                        variant="small"
+                        className="font-medium text-foreground"
+                      >
+                        Connected Account:
+                      </Typography>
+                      
+                      {connectStatus.connectStatus === 'complete' ? (
+                        <div className="text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider bg-green-500/10 text-green border-green-500/20">
+                          Active
+                        </div>
+                      ) : connectStatus.connectStatus === 'in_review' ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider bg-blue-100 text-blue-700 border-blue-200 cursor-help">
+                                Under Review
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Stripe is reviewing your account. Check below for details.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider bg-yellow-100 text-yellow-700 border-yellow-200 cursor-help">
+                                Pending
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Setup incomplete. Click 'Continue Setup' to finish.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Stripe Account In Review Alert */}
+              {connectStatus?.connectStatus === 'in_review' && (
+                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-2 flex-1">
+                      <div className="flex flex-col gap-0.5">
+                        <Typography
+                          variant="small"
+                          className="font-medium text-blue-800"
+                        >
+                          Your Account is Under Review
+                        </Typography>
+                        <Typography variant="small" className="text-blue-700">
+                          Stripe is currently reviewing your account information. This is a standard security process to ensure the safety of all transactions on the platform.
+                        </Typography>
+                        <Typography variant="small" className="text-blue-700 mt-2">
+                          <strong>What happens next:</strong>
+                        </Typography>
+                        <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 ml-2">
+                          <li>Stripe will review your submitted information</li>
+                          <li>You'll receive an email once the review is complete (typically 1-2 business days)</li>
+                          <li>If additional information is needed, you'll be notified via email</li>
+                          <li>Your account will automatically activate once approved</li>
+                        </ul>
+                        <Typography variant="small" className="text-blue-700 mt-2">
+                          No action is required from you at this time. You can check back here for status updates.
+                        </Typography>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Stripe Connect Alert */}
-              {(!connectStatus ||
-                connectStatus.connectStatus !== 'complete') && (
+              {connectStatus?.connectStatus === 'pending' && (
                 <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
                   <div className="flex items-start space-x-3">
                     <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -491,6 +586,85 @@ export function ProfileSubscriptionPageClient({
                           <>
                             <ExternalLink className="h-4 w-4 mr-2" />
                             Continue Setup with Stripe
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Account Requirements Alert */}
+              {connectStatus?.requirements && 
+                (connectStatus.requirements.currently_due.length > 0 || 
+                 connectStatus.requirements.past_due.length > 0) && (
+                <div className="border border-red-200 bg-red-50 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-3 flex-1">
+                      <div className="flex flex-col gap-0.5">
+                        <Typography
+                          variant="small"
+                          className="font-medium text-red-800"
+                        >
+                          Action Required: Complete Your Stripe Account Setup
+                        </Typography>
+                        
+                        {connectStatus.requirements.past_due.length > 0 && (
+                          <div className="mt-2">
+                            <Typography variant="small" className="text-red-700 font-medium">
+                              Overdue Requirements:
+                            </Typography>
+                            <ul className="list-disc list-inside mt-1 text-sm text-red-700">
+                              {connectStatus.requirements.past_due.map((req) => (
+                                <li key={req} className="ml-2">
+                                  {req.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {connectStatus.requirements.currently_due.length > 0 && (
+                          <div className="mt-2">
+                            <Typography variant="small" className="text-red-700 font-medium">
+                              Currently Due:
+                            </Typography>
+                            <ul className="list-disc list-inside mt-1 text-sm text-red-700">
+                              {connectStatus.requirements.currently_due.map((req) => (
+                                <li key={req} className="ml-2">
+                                  {req.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {connectStatus.requirements.disabled_reason && (
+                          <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded">
+                            <Typography variant="small" className="text-red-800 font-medium">
+                              Account Status: 
+                            </Typography>
+                            <Typography variant="small" className="text-red-700">
+                              {connectStatus.requirements.disabled_reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </Typography>
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleStripeConnectRedirect}
+                        disabled={isConnectLoading}
+                        variant="destructive"
+                      >
+                        {isConnectLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Redirecting...
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Complete Required Actions
                           </>
                         )}
                       </Button>

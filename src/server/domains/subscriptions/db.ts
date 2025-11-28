@@ -22,7 +22,7 @@ export type ProfessionalStripeConnect = {
   id: string;
   professional_profile_id: string;
   stripe_account_id?: string;
-  stripe_connect_status: 'not_connected' | 'pending' | 'complete';
+  stripe_connect_status: 'not_connected' | 'pending' | 'in_review' | 'complete';
   stripe_connect_updated_at?: string;
   created_at: string;
   updated_at: string;
@@ -149,7 +149,7 @@ export async function updateStripeConnectStatus(
   userId: string,
   status: {
     accountId?: string;
-    connectStatus: 'not_connected' | 'pending' | 'complete';
+    connectStatus: 'not_connected' | 'pending' | 'in_review' | 'complete';
   },
 ): Promise<{ success: boolean; error?: string }> {
   const supabaseAdmin = createAdminClient();

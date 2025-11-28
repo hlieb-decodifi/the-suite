@@ -1149,6 +1149,8 @@ async function updateUserSubscription(
   }
 }
 
+import { determineConnectStatus } from '@/server/domains/stripe-services/utils';
+
 // Handle Stripe Connect account updates
 async function handleAccountUpdated(account: Stripe.Account) {
   console.log(`Account updated: ${account.id}`);
@@ -1163,15 +1165,8 @@ async function handleAccountUpdated(account: Stripe.Account) {
   }
 
   try {
-    // Determine simple status based on account capabilities
-    let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
-    const wasComplete = account.charges_enabled && account.payouts_enabled;
-
-    if (wasComplete) {
-      connectStatus = 'complete';
-    } else if (!account.details_submitted) {
-      connectStatus = 'not_connected';
-    }
+    // Determine status using helper function
+    const connectStatus = determineConnectStatus(account);
 
     // Update our database with the latest account status
     const updateResult = await updateStripeConnectStatus(userId, {
@@ -1251,13 +1246,7 @@ async function handleCapabilityUpdated(capability: Stripe.Capability) {
       );
 
       // Refresh the account status to get the latest capability information
-      let connectStatus: 'not_connected' | 'pending' | 'complete' = 'pending';
-
-      if (account.charges_enabled && account.payouts_enabled) {
-        connectStatus = 'complete';
-      } else if (!account.details_submitted) {
-        connectStatus = 'not_connected';
-      }
+      const connectStatus = determineConnectStatus(account);
 
       // Update our database
       const updateResult = await updateStripeConnectStatus(userId, {
