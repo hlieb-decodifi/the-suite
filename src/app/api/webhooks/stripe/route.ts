@@ -8,7 +8,6 @@ import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
 import { revalidatePath } from 'next/cache';
 import { trackActivity } from '@/api/activity-log/actions';
-import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
 
 // Configure this API route to use Node.js Runtime for email functionality
 export const runtime = 'nodejs';
@@ -1941,19 +1940,30 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
         const paymentMethodType = setupIntent.metadata?.payment_method_type;
         const isOnlinePayment = paymentMethodType === 'card';
 
-        // Step 1: Immediately charge the deposit (NO application fee for deposits)
+        // Step 1: Immediately charge the deposit with 3% professional fee
         try {
+          // NEW FEE STRUCTURE: Apply 3% professional fee to deposit
+          const { getProfessionalFeePercentage } = await import(
+            '@/server/lib/service-fee'
+          );
+          const professionalFeePercentage =
+            await getProfessionalFeePercentage();
+          const depositAmountCents = parseInt(depositAmount);
+          const professionalFee = Math.round(
+            depositAmountCents * (professionalFeePercentage / 100),
+          );
+
           const depositPaymentIntent = await stripe.paymentIntents.create({
-            amount: parseInt(depositAmount),
+            amount: depositAmountCents,
             currency: 'usd',
             customer: customerId,
             payment_method: paymentMethodId,
             confirmation_method: 'automatic',
             confirm: true,
             off_session: true,
-            // For deposits: Transfer full amount to professional, no application fee
+            // For deposits: Apply 3% professional fee (client service fee already in deposit amount)
+            application_fee_amount: professionalFee,
             transfer_data: {
-              amount: parseInt(depositAmount), // Transfer full deposit amount to professional
               destination: professionalStripeAccountId,
             },
             on_behalf_of: professionalStripeAccountId,
@@ -2002,26 +2012,27 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
             }
           }
 
-          // For cash payments: balance = only suite fee (service amount paid in cash)
-          // For card payments: balance = full remaining amount (service + tips + suite fee)
+          // NEW FEE STRUCTURE: Client service fee is now in deposit
+          // For cash payments: balance = 0 (service fee already charged with deposit, service paid in cash)
+          // For card payments: balance = remaining amount (service + tips, no service fee)
           let uncapturedBalanceAmount: number;
 
           if (isOnlinePayment) {
-            // Card payment: charge full balance amount
+            // Card payment: charge full balance amount (no service fee, that's in deposit)
             uncapturedBalanceAmount = parseInt(balanceAmount);
             console.log(
               `🔍 Card payment - balance amount: $${uncapturedBalanceAmount / 100}`,
             );
           } else {
-            // Cash payment: only charge suite fee, service amount + tips paid in cash
-            uncapturedBalanceAmount = await getServiceFeeFromConfig(); // Suite fee in cents
+            // Cash payment: balance is 0 (service fee already charged with deposit)
+            uncapturedBalanceAmount = 0;
             console.log(
-              `🔍 Cash payment - balance amount (suite fee only): $${uncapturedBalanceAmount / 100}`,
+              `🔍 Cash payment - balance amount: $0 (service fee charged with deposit)`,
             );
           }
 
-          if (shouldPreAuthNow) {
-            // Appointment ≤6 days: Create uncaptured payment intent immediately
+          if (shouldPreAuthNow && uncapturedBalanceAmount > 0) {
+            // Appointment ≤6 days: Create uncaptured payment intent immediately (if balance > 0)
             console.log(
               `⏰ Appointment ≤6 days - creating uncaptured balance payment immediately`,
             );
@@ -2085,8 +2096,35 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
                 `❌ Failed to create uncaptured payment for balance: ${uncapturedResult.error}`,
               );
             }
-          } else {
-            // Appointment >6 days: Schedule balance payment for cron job
+          } else if (shouldPreAuthNow && uncapturedBalanceAmount === 0) {
+            // Cash payment with deposit - no balance payment needed
+            console.log(
+              `⏰ Cash payment - no balance payment needed (service fee charged with deposit)`,
+            );
+
+            const { error: updateError } = await supabase
+              .from('booking_payments')
+              .update({
+                deposit_payment_intent_id: depositPaymentIntent.id,
+                status: 'paid', // Deposit paid, no balance needed
+                stripe_payment_method_id: paymentMethodId,
+                balance_amount: 0,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('booking_id', bookingId);
+
+            if (updateError) {
+              console.error(
+                `❌ Failed to update booking payment:`,
+                updateError,
+              );
+            } else {
+              console.log(
+                `✅ Successfully updated booking payment for cash payment with deposit`,
+              );
+            }
+          } else if (!shouldPreAuthNow && uncapturedBalanceAmount > 0) {
+            // Appointment >6 days: Schedule balance payment for cron job (if balance > 0)
             console.log(
               `⏰ Appointment >6 days - scheduling balance payment for cron job`,
             );
@@ -2163,6 +2201,33 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
                   `❌ Failed to schedule balance payment: ${scheduleResult.error}`,
                 );
               }
+            }
+          } else if (!shouldPreAuthNow && uncapturedBalanceAmount === 0) {
+            // Cash payment with deposit, >6 days - no balance payment needed
+            console.log(
+              `⏰ Cash payment >6 days - no balance payment needed (service fee charged with deposit)`,
+            );
+
+            const { error: updateError } = await supabase
+              .from('booking_payments')
+              .update({
+                deposit_payment_intent_id: depositPaymentIntent.id,
+                stripe_payment_method_id: paymentMethodId,
+                status: 'paid', // Deposit paid, no balance needed
+                balance_amount: 0,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('booking_id', bookingId);
+
+            if (updateError) {
+              console.error(
+                `❌ Failed to update booking payment:`,
+                updateError,
+              );
+            } else {
+              console.log(
+                `✅ Successfully updated booking payment for cash payment with deposit (>6 days)`,
+              );
             }
           }
         } catch (error) {

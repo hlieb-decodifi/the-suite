@@ -34,6 +34,30 @@ export async function getServiceFeeInDollars(): Promise<number> {
 }
 
 /**
+ * Server-side function to get professional fee percentage from admin configuration
+ * Returns fee as a percentage (e.g., 3 for 3%)
+ */
+export async function getProfessionalFeePercentage(): Promise<number> {
+  try {
+    const supabase = await createClient();
+
+    const { data } = await supabase
+      .from('admin_configs')
+      .select('value')
+      .eq('key', 'professional_fee_percentage')
+      .single();
+
+    return parseFloat(data?.value || '3.0');
+  } catch (error) {
+    console.error(
+      'Error getting professional fee percentage from config:',
+      error,
+    );
+    return 3.0; // Default to 3%
+  }
+}
+
+/**
  * Server action to get service fee - can be called from client components
  * Returns fee in dollars (decimal)
  */
