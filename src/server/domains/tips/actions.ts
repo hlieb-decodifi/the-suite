@@ -12,20 +12,22 @@ import { headers } from 'next/headers';
  */
 export async function updateTipAction(
   bookingId: string,
-  tipAmount: number
+  tipAmount: number,
 ): Promise<{
   success: boolean;
   error?: string;
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated',
       };
     }
 
@@ -33,7 +35,7 @@ export async function updateTipAction(
     if (tipAmount < 0) {
       return {
         success: false,
-        error: 'Invalid tip amount'
+        error: 'Invalid tip amount',
       };
     }
 
@@ -47,14 +49,14 @@ export async function updateTipAction(
     if (bookingError || !booking) {
       return {
         success: false,
-        error: 'Booking not found'
+        error: 'Booking not found',
       };
     }
 
     if (booking.client_id !== user.id) {
       return {
         success: false,
-        error: 'Unauthorized'
+        error: 'Unauthorized',
       };
     }
 
@@ -66,7 +68,7 @@ export async function updateTipAction(
     console.error('Error in updateTipAction:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -79,7 +81,7 @@ export async function createPostAppointmentTipAction(
   bookingId: string,
   tipAmount: number,
   professionalId: string,
-  clientId: string
+  clientId: string,
 ): Promise<{
   success: boolean;
   checkoutUrl?: string | null;
@@ -88,13 +90,15 @@ export async function createPostAppointmentTipAction(
   try {
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
-    
+
     // Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated',
       };
     }
 
@@ -102,14 +106,15 @@ export async function createPostAppointmentTipAction(
     if (tipAmount <= 0) {
       return {
         success: false,
-        error: 'Invalid tip amount'
+        error: 'Invalid tip amount',
       };
     }
 
     // Verify the user owns this booking and it's completed
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         professional_profile_id,
@@ -119,21 +124,22 @@ export async function createPostAppointmentTipAction(
           end_time,
           status
         )
-      `)
+      `,
+      )
       .eq('id', bookingId)
       .single();
 
     if (bookingError || !booking) {
       return {
         success: false,
-        error: 'Booking not found'
+        error: 'Booking not found',
       };
     }
 
     if (booking.client_id !== user.id || booking.client_id !== clientId) {
       return {
         success: false,
-        error: 'Unauthorized'
+        error: 'Unauthorized',
       };
     }
 
@@ -142,7 +148,7 @@ export async function createPostAppointmentTipAction(
     if (!appointment || appointment.status === 'cancelled') {
       return {
         success: false,
-        error: 'Appointment not found or cancelled'
+        error: 'Appointment not found or cancelled',
       };
     }
 
@@ -152,7 +158,7 @@ export async function createPostAppointmentTipAction(
     if (now <= appointmentEndTime) {
       return {
         success: false,
-        error: 'Appointment must be completed to add tips'
+        error: 'Appointment must be completed to add tips',
       };
     }
 
@@ -166,7 +172,7 @@ export async function createPostAppointmentTipAction(
     if (stripeError || !stripeConnect?.stripe_account_id) {
       return {
         success: false,
-        error: 'Professional payment setup not configured'
+        error: 'Professional payment setup not configured',
       };
     }
 
@@ -184,7 +190,8 @@ export async function createPostAppointmentTipAction(
     if (customerError || !customer?.stripe_customer_id) {
       return {
         success: false,
-        error: 'Customer payment setup not found. Please complete a booking first to set up payments.'
+        error:
+          'Customer payment setup not found. Please complete a booking first to set up payments.',
       };
     }
 
@@ -196,7 +203,7 @@ export async function createPostAppointmentTipAction(
         client_id: clientId,
         professional_id: professionalId,
         amount: tipAmount,
-        status: 'pending'
+        status: 'pending',
       })
       .select('id')
       .single();
@@ -204,7 +211,7 @@ export async function createPostAppointmentTipAction(
     if (tipError || !tipRecord) {
       return {
         success: false,
-        error: 'Failed to create tip record'
+        error: 'Failed to create tip record',
       };
     }
 
@@ -238,44 +245,39 @@ export async function createPostAppointmentTipAction(
             booking_id: bookingId,
             client_id: clientId,
             professional_id: professionalId,
-            payment_type: 'tip'
-          }
+            payment_type: 'tip',
+          },
         },
         metadata: {
           tip_id: tipRecord.id,
           booking_id: bookingId,
-          payment_type: 'tip'
-        }
+          payment_type: 'tip',
+        },
       });
 
       // Update tip record with Stripe session info
       await adminSupabase
         .from('tips')
         .update({
-          stripe_payment_intent_id: session.payment_intent as string
+          stripe_payment_intent_id: session.payment_intent as string,
         })
         .eq('id', tipRecord.id);
 
       return {
         success: true,
-        checkoutUrl: session.url
+        checkoutUrl: session.url,
       };
-
     } catch (stripeError) {
       // If Stripe fails, clean up the tip record
-      await adminSupabase
-        .from('tips')
-        .delete()
-        .eq('id', tipRecord.id);
+      await adminSupabase.from('tips').delete().eq('id', tipRecord.id);
 
       throw stripeError;
     }
-
   } catch (error) {
     console.error('Error in createPostAppointmentTipAction:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }

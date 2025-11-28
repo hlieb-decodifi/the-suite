@@ -3,4 +3,4 @@ import AdminOverviewPageClient from './AdminOverviewPageClient';
 
 export default function AdminOverviewPage() {
   return <AdminOverviewPageClient />;
-} 
+}

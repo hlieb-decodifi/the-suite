@@ -11,36 +11,51 @@ const getURL = () => {
   let url =
     process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
     process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
-    'http://localhost:3000/'
+    'http://localhost:3000/';
   // Make sure to include `https://` when not localhost.
   console.log('url', url);
-  console.log('process.env.NEXT_PUBLIC_BASE_URL', process.env.NEXT_PUBLIC_BASE_URL);
+  console.log(
+    'process.env.NEXT_PUBLIC_BASE_URL',
+    process.env.NEXT_PUBLIC_BASE_URL,
+  );
   console.log('process.env.VERCEL_URL', process.env.NEXT_PUBLIC_VERCEL_URL);
   console.log('process.env.VERCEL_BRANCH_URL', process.env.VERCEL_BRANCH_URL);
-  console.log('process.env.NEXT_PUBLIC_SITE_URL', process.env.NEXT_PUBLIC_SITE_URL);
-  url = url.startsWith('http') ? url : `https://${url}`
+  console.log(
+    'process.env.NEXT_PUBLIC_SITE_URL',
+    process.env.NEXT_PUBLIC_SITE_URL,
+  );
+  url = url.startsWith('http') ? url : `https://${url}`;
   // Make sure to include a trailing `/`.
-  url = url.endsWith('/') ? url : `${url}/`
-  return url
-}
+  url = url.endsWith('/') ? url : `${url}/`;
+  return url;
+};
 
 // Helper function to check if a user exists by email (case-insensitive)
-async function userExistsByEmail(email: string): Promise<{ exists: boolean; error?: string }> {
+async function userExistsByEmail(
+  email: string,
+): Promise<{ exists: boolean; error?: string }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('userExistsByEmail: Missing Supabase URL or Service Role Key.');
+    console.error(
+      'userExistsByEmail: Missing Supabase URL or Service Role Key.',
+    );
     return { exists: false, error: 'Server configuration error' };
   }
 
   const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
 
   // Use the user_exists RPC function for efficient lookup
-  const { data, error } = await adminSupabase.rpc('user_exists', { p_email: email });
+  const { data, error } = await adminSupabase.rpc('user_exists', {
+    p_email: email,
+  });
 
   if (error) {
-    console.error('userExistsByEmail: RPC error while checking for user:', error);
+    console.error(
+      'userExistsByEmail: RPC error while checking for user:',
+      error,
+    );
     return { exists: false, error: 'Database error while checking for user' };
   }
 
@@ -50,7 +65,11 @@ async function userExistsByEmail(email: string): Promise<{ exists: boolean; erro
 /**
  * Server action to invite a new admin
  */
-export async function inviteAdminAction(email: string, firstName?: string, lastName?: string) {
+export async function inviteAdminAction(
+  email: string,
+  firstName?: string,
+  lastName?: string,
+) {
   // Check if user already exists
   const { exists, error: userCheckError } = await userExistsByEmail(email);
   if (userCheckError) {
@@ -80,15 +99,16 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
   const ADMIN_ROLE_ID = rolesData.id;
 
   // Use Supabase's inviteUserByEmail to invite the admin
-  const { data: invitedUser, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
-    data: {
-      first_name: firstName,
-      last_name: lastName,
-      role: 'admin',
-      role_id: ADMIN_ROLE_ID,
-    },
-    redirectTo: `${getURL()}auth/set-password?type=admin_invite`,
-  });
+  const { data: invitedUser, error: inviteError } =
+    await adminSupabase.auth.admin.inviteUserByEmail(email, {
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        role: 'admin',
+        role_id: ADMIN_ROLE_ID,
+      },
+      redirectTo: `${getURL()}auth/set-password?type=admin_invite`,
+    });
 
   if (inviteError) {
     return { success: false, error: inviteError.message };
@@ -103,7 +123,10 @@ export async function inviteAdminAction(email: string, firstName?: string, lastN
 /**
  * Server action for user signup
  */
-export async function signUpAction(data: SignUpFormValues, redirectTo?: string) {
+export async function signUpAction(
+  data: SignUpFormValues,
+  redirectTo?: string,
+) {
   const supabase = await createClient();
 
   // Duplicate email check
@@ -117,22 +140,24 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
   if (exists) {
     return {
       success: false,
-      error: 'An account with this email already exists. Please sign in or use a different email.',
+      error:
+        'An account with this email already exists. Please sign in or use a different email.',
     };
   }
-  
+
   try {
     // Ensure userType is set
     if (!data.userType) {
       data.userType = 'client';
     }
-    
+
     // Determine the correct redirect destination based on user type
     let finalRedirectTo = redirectTo;
     if (!finalRedirectTo) {
-      finalRedirectTo = data.userType === 'client' ? '/client-profile' : '/profile';
+      finalRedirectTo =
+        data.userType === 'client' ? '/client-profile' : '/profile';
     }
-    
+
     // Create user with authentication
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -166,7 +191,7 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
     console.error('Database error:', error);
     return {
       success: false,
-      error: "Database error saving new user",
+      error: 'Database error saving new user',
     };
   }
 }
@@ -176,12 +201,13 @@ export async function signUpAction(data: SignUpFormValues, redirectTo?: string) 
  */
 export async function signInAction(data: SignInFormValues) {
   const supabase = await createClient();
-  
+
   try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
 
     // Handle error
     if (authError) {
@@ -195,7 +221,9 @@ export async function signInAction(data: SignInFormValues) {
     // Check if user is admin
     let isAdmin = false;
     if (authData.user) {
-      const { data: adminResult } = await supabase.rpc('is_admin', { user_uuid: authData.user.id });
+      const { data: adminResult } = await supabase.rpc('is_admin', {
+        user_uuid: authData.user.id,
+      });
       isAdmin = !!adminResult;
     }
 
@@ -209,7 +237,7 @@ export async function signInAction(data: SignInFormValues) {
     console.error('Authentication error:', error);
     return {
       success: false,
-      error: "Failed to sign in. Please try again.",
+      error: 'Failed to sign in. Please try again.',
     };
   }
 }
@@ -220,14 +248,19 @@ export async function signInAction(data: SignInFormValues) {
  */
 export async function requireAuth(redirectTo = '/') {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   if (!user || error) {
     redirect(redirectTo);
   }
-  
+
   // Get session for the authenticated user
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   return session;
 }
 
@@ -246,7 +279,7 @@ export async function signOutAction() {
  */
 export async function resetPasswordAction(email: string) {
   const supabase = await createClient();
-  
+
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${getURL()}/auth/reset-password?type=password_reset`,
@@ -267,7 +300,7 @@ export async function resetPasswordAction(email: string) {
     console.error('Password reset error:', error);
     return {
       success: false,
-      error: "Failed to send password reset email. Please try again.",
+      error: 'Failed to send password reset email. Please try again.',
     };
   }
 }
@@ -275,7 +308,11 @@ export async function resetPasswordAction(email: string) {
 /**
  * Server action to update password during reset flow
  */
-export async function updatePasswordAction(newPassword: string, accessToken?: string | null, refreshToken?: string | null) {
+export async function updatePasswordAction(
+  newPassword: string,
+  accessToken?: string | null,
+  refreshToken?: string | null,
+) {
   const supabase = await createClient();
   if (accessToken && refreshToken) {
     await supabase.auth.setSession({
@@ -303,7 +340,7 @@ export async function updatePasswordAction(newPassword: string, accessToken?: st
     console.error('Password update error:', error);
     return {
       success: false,
-      error: "Failed to update password. Please try again.",
+      error: 'Failed to update password. Please try again.',
     };
   }
 }
@@ -311,26 +348,33 @@ export async function updatePasswordAction(newPassword: string, accessToken?: st
 /**
  * Server action to change user password
  */
-export async function changePasswordAction(currentPassword: string, newPassword: string) {
+export async function changePasswordAction(
+  currentPassword: string,
+  newPassword: string,
+) {
   const supabase = await createClient();
-  
+
   try {
     // Get current user info
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user?.email) {
       return {
         success: false,
-        error: "No user found",
+        error: 'No user found',
       };
     }
 
     // Check if user is OAuth user (can't change password)
-    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    const isOAuth = user.identities?.some(
+      (identity) => identity.provider === 'google',
+    );
     if (isOAuth) {
       return {
         success: false,
-        error: "Cannot change password for Google OAuth accounts",
+        error: 'Cannot change password for Google OAuth accounts',
       };
     }
 
@@ -366,7 +410,7 @@ export async function changePasswordAction(currentPassword: string, newPassword:
     console.error('Password change error:', error);
     return {
       success: false,
-      error: "Failed to change password. Please try again.",
+      error: 'Failed to change password. Please try again.',
     };
   }
 }
@@ -376,27 +420,31 @@ export async function changePasswordAction(currentPassword: string, newPassword:
  */
 export async function updateEmailAction(newEmail: string, password: string) {
   const supabase = await createClient();
-  
+
   try {
     // First verify the password is correct
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user?.email) {
       return {
         success: false,
-        error: "No user email found",
+        error: 'No user email found',
       };
     }
 
     // Check if user is OAuth user (can't change email)
-    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    const isOAuth = user.identities?.some(
+      (identity) => identity.provider === 'google',
+    );
     if (isOAuth) {
       return {
         success: false,
-        error: "Cannot change email for Google OAuth accounts",
+        error: 'Cannot change email for Google OAuth accounts',
       };
     }
-    
+
     const { error: verifyError } = await supabase.auth.signInWithPassword({
       email: user.email,
       password: password,
@@ -410,11 +458,14 @@ export async function updateEmailAction(newEmail: string, password: string) {
     }
 
     // Update the email with confirmation redirect
-    const { error } = await supabase.auth.updateUser({
-      email: newEmail,
-    }, {
-      emailRedirectTo: `${getURL()}auth/email-confirmed?type=email_change`,
-    });
+    const { error } = await supabase.auth.updateUser(
+      {
+        email: newEmail,
+      },
+      {
+        emailRedirectTo: `${getURL()}auth/email-confirmed?type=email_change`,
+      },
+    );
 
     if (error) {
       return {
@@ -432,7 +483,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
     console.error('Email update error:', error);
     return {
       success: false,
-      error: "Failed to update email. Please try again.",
+      error: 'Failed to update email. Please try again.',
     };
   }
 }
@@ -442,7 +493,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
  */
 export async function signInWithGoogleAction(redirectTo: string = '/profile') {
   const supabase = await createClient();
-  
+
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -458,7 +509,7 @@ export async function signInWithGoogleAction(redirectTo: string = '/profile') {
         error: error.message,
       };
     }
-    
+
     // Redirect to the OAuth provider
     if (data.url) {
       redirect(data.url);
@@ -472,7 +523,7 @@ export async function signInWithGoogleAction(redirectTo: string = '/profile') {
     console.error('Google OAuth action error:', error);
     return {
       success: false,
-      error: "Failed to sign in with Google. Please try again.",
+      error: 'Failed to sign in with Google. Please try again.',
     };
   }
 }
@@ -481,7 +532,7 @@ export async function signInWithGoogleAction(redirectTo: string = '/profile') {
  * Form action wrapper for Google OAuth
  */
 export async function googleOAuthFormAction(formData: FormData) {
-  const redirectTo = formData.get('redirectTo') as string || '/profile';
+  const redirectTo = (formData.get('redirectTo') as string) || '/profile';
   console.log('Redirect to:', redirectTo);
   // await signInWithGoogleAction(redirectTo);
   await signInWithGoogleAction(redirectTo);
@@ -491,35 +542,44 @@ export async function googleOAuthFormAction(formData: FormData) {
  * Server action to convert OAuth user to email/password user
  * This adds an email identity while keeping the OAuth identity
  */
-export async function convertOAuthToEmailAction(newEmail: string, newPassword: string) {
+export async function convertOAuthToEmailAction(
+  newEmail: string,
+  newPassword: string,
+) {
   const supabase = await createClient();
-  
+
   try {
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       return {
         success: false,
-        error: "No user found",
+        error: 'No user found',
       };
     }
 
     // Check if user is OAuth user
-    const isOAuth = user.identities?.some(identity => identity.provider === 'google');
+    const isOAuth = user.identities?.some(
+      (identity) => identity.provider === 'google',
+    );
     if (!isOAuth) {
       return {
         success: false,
-        error: "This feature is only available for OAuth users",
+        error: 'This feature is only available for OAuth users',
       };
     }
 
     // Check if user already has email identity
-    const hasEmailIdentity = user.identities?.some(identity => identity.provider === 'email');
+    const hasEmailIdentity = user.identities?.some(
+      (identity) => identity.provider === 'email',
+    );
     if (hasEmailIdentity) {
       return {
         success: false,
-        error: "User already has email authentication enabled",
+        error: 'User already has email authentication enabled',
       };
     }
 
@@ -541,7 +601,7 @@ export async function convertOAuthToEmailAction(newEmail: string, newPassword: s
     // Use admin client to update user with email and password
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       return {
         success: false,
@@ -552,14 +612,12 @@ export async function convertOAuthToEmailAction(newEmail: string, newPassword: s
     const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
 
     // Update user with new email and password
-    const { error: updateError } = await adminSupabase.auth.admin.updateUserById(
-      user.id,
-      {
+    const { error: updateError } =
+      await adminSupabase.auth.admin.updateUserById(user.id, {
         email: newEmail,
         password: newPassword,
         email_confirm: true, // Auto-confirm the email
-      }
-    );
+      });
 
     if (updateError) {
       console.error('Error converting OAuth user:', updateError);
@@ -571,13 +629,14 @@ export async function convertOAuthToEmailAction(newEmail: string, newPassword: s
 
     return {
       success: true,
-      message: 'Successfully added email authentication. You can now sign in with either Google or email/password.',
+      message:
+        'Successfully added email authentication. You can now sign in with either Google or email/password.',
     };
   } catch (error) {
     console.error('Error converting OAuth user:', error);
     return {
       success: false,
-      error: "Failed to convert account. Please try again.",
+      error: 'Failed to convert account. Please try again.',
     };
   }
 }
@@ -586,12 +645,12 @@ export async function convertOAuthToEmailAction(newEmail: string, newPassword: s
  * Server action to get Google OAuth URL (without redirecting)
  */
 export async function getGoogleOAuthUrlAction(
-  redirectTo: string = '/profile', 
+  redirectTo: string = '/profile',
   mode: 'signin' | 'signup' = 'signin',
-  role?: 'client' | 'professional'
+  role?: 'client' | 'professional',
 ) {
   const supabase = await createClient();
-  
+
   try {
     // Build the callback URL with mode and role parameters
     const callbackParams = new URLSearchParams();
@@ -600,7 +659,7 @@ export async function getGoogleOAuthUrlAction(
     if (mode === 'signup' && role) {
       callbackParams.set('role', role);
     }
-    
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -620,7 +679,7 @@ export async function getGoogleOAuthUrlAction(
         url: null,
       };
     }
-    
+
     if (data.url) {
       return {
         success: true,
@@ -638,7 +697,7 @@ export async function getGoogleOAuthUrlAction(
     console.error('Google OAuth action error:', error);
     return {
       success: false,
-      error: "Failed to get Google OAuth URL",
+      error: 'Failed to get Google OAuth URL',
       url: null,
     };
   }

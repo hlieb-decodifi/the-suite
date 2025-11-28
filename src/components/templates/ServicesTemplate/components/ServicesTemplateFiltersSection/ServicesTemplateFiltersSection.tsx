@@ -70,8 +70,12 @@ function useFilterState(initialFilters: ServicesFilters) {
   function urlHasActiveFilters(): boolean {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    const hasSearch = !!(params.get('search') && params.get('search')!.trim() !== '');
-    const hasLocation = !!(params.get('location') && params.get('location')!.trim() !== '');
+    const hasSearch = !!(
+      params.get('search') && params.get('search')!.trim() !== ''
+    );
+    const hasLocation = !!(
+      params.get('location') && params.get('location')!.trim() !== ''
+    );
     return hasSearch || hasLocation;
   }
 

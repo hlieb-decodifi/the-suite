@@ -93,16 +93,43 @@ const getDatePresets = (): DatePreset[] => [
   },
 ];
 
-// Component for the presets sidebar
+// Component for the presets - responsive layout
 function DateRangePresets({
   onSelectPreset,
+  isMobile = false,
 }: {
   onSelectPreset: (range: DateRange) => void;
+  isMobile?: boolean;
 }) {
   const datePresets = getDatePresets();
 
+  if (isMobile) {
+    // Mobile: Vertical list below calendar with limited height and scroll
+    return (
+      <div className="border-t p-3">
+        <Typography className="px-2 py-1 text-sm font-medium mb-2">
+          Quick Select
+        </Typography>
+        <div className="flex flex-col space-y-3 max-h-36 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+          {datePresets.map((preset) => (
+            <Button
+              key={preset.name}
+              variant="ghost"
+              size="sm"
+              className="justify-start text-left text-sm h-8 px-2"
+              onClick={() => onSelectPreset(preset.range())}
+            >
+              {preset.name}
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop: Vertical sidebar
   return (
-    <div className="border-r p-2 flex flex-col space-y-2 min-w-[150px] bg-muted/20">
+    <div className="flex flex-col border-r p-2 space-y-2 min-w-[150px] bg-muted/20">
       <Typography className="px-2 py-1 text-sm font-medium">Presets</Typography>
       {datePresets.map((preset) => (
         <Button
@@ -130,8 +157,11 @@ function CalendarFooter({
   onApply: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 border-t">
-      <Typography variant="small" className="text-muted-foreground">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border-t gap-2">
+      <Typography
+        variant="small"
+        className="text-muted-foreground text-xs sm:text-sm"
+      >
         {dateRange?.from && dateRange?.to ? (
           <>
             {format(dateRange.from, 'PPP')} - {format(dateRange.to, 'PPP')}
@@ -140,11 +170,16 @@ function CalendarFooter({
           'Please select a date range'
         )}
       </Typography>
-      <div className="flex space-x-2">
-        <Button variant="ghost" size="sm" onClick={onClear}>
+      <div className="flex gap-2 w-full sm:w-auto">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClear}
+          className="flex-1 sm:flex-none"
+        >
           Clear
         </Button>
-        <Button size="sm" onClick={onApply}>
+        <Button size="sm" onClick={onApply} className="flex-1 sm:flex-none">
           Apply
         </Button>
       </div>
@@ -220,18 +255,49 @@ function DatePickerContent({
   handleSelectPreset: (range: DateRange) => void;
 }) {
   return (
-    <PopoverContent className="w-auto p-0 flex" align="end">
-      <DateRangePresets onSelectPreset={handleSelectPreset} />
-      <div>
-        <Calendar
-          initialFocus
-          mode="range"
-          defaultMonth={localDateRange?.from ?? new Date()}
-          selected={localDateRange}
-          onSelect={handleSelect}
-          numberOfMonths={2}
-          disabled={{ before: new Date(2000, 0, 1) }}
+    <PopoverContent className="w-fit p-0 flex flex-col sm:flex-row" align="end">
+      {/* Desktop: Presets sidebar */}
+      <div className="hidden sm:block">
+        <DateRangePresets
+          onSelectPreset={handleSelectPreset}
+          isMobile={false}
         />
+      </div>
+
+      <div className="flex flex-col">
+        {/* Calendar */}
+        <div>
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={localDateRange?.from ?? new Date()}
+            selected={localDateRange}
+            onSelect={handleSelect}
+            numberOfMonths={1}
+            className="sm:hidden"
+            disabled={{ before: new Date(2000, 0, 1) }}
+          />
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={localDateRange?.from ?? new Date()}
+            selected={localDateRange}
+            onSelect={handleSelect}
+            numberOfMonths={2}
+            className="hidden sm:block"
+            disabled={{ before: new Date(2000, 0, 1) }}
+          />
+        </div>
+
+        {/* Mobile: Presets below calendar */}
+        <div className="sm:hidden">
+          <DateRangePresets
+            onSelectPreset={handleSelectPreset}
+            isMobile={true}
+          />
+        </div>
+
+        {/* Footer */}
         <CalendarFooter
           dateRange={localDateRange}
           onClear={handleClear}
@@ -321,4 +387,4 @@ export function DateRangePicker({
       </Popover>
     </div>
   );
-} 
+}

@@ -1,5 +1,5 @@
 // Export template functions
-export { 
+export {
   sendContactInquiryAdmin,
   sendContactInquiryConfirmation,
   sendBalanceNotification,
@@ -10,4 +10,4 @@ export {
 } from '@/providers/brevo';
 
 // Export the email provider (currently Brevo)
-export { initEmailSender as sendEmail } from '@/providers/brevo'; 
+export { initEmailSender as sendEmail } from '@/providers/brevo';

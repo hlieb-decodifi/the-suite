@@ -2,4 +2,4 @@ import { AdminProfessionalsPage } from '@/components/pages/AdminProfessionalsPag
 
 export default function AdminProfessionalsRoutePage() {
   return <AdminProfessionalsPage />;
-} 
+}

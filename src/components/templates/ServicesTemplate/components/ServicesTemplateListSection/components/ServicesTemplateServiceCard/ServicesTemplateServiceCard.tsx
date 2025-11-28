@@ -67,7 +67,7 @@ export function ServicesTemplateServiceCard({
   const handleAuthSuccess = () => {
     setIsSignInModalOpen(false);
     setIsSignUpModalOpen(false);
-    
+
     // After successful authentication, redirect to booking page only if logged in
     if (isAuthenticated) {
       router.push(`/booking/${service.id}`);

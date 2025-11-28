@@ -1,1 +1,1 @@
-export * from './HeaderModal'; 
+export * from './HeaderModal';

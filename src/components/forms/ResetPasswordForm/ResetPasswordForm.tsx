@@ -5,7 +5,11 @@ import { ResetPasswordFormValues } from './schema';
 import { useResetPasswordForm } from './useResetPasswordForm';
 
 export type ResetPasswordFormProps = {
-  onSubmit: (data: ResetPasswordFormValues, accessToken?: string | null, refreshToken?: string | null) => Promise<void>;
+  onSubmit: (
+    data: ResetPasswordFormValues,
+    accessToken?: string | null,
+    refreshToken?: string | null,
+  ) => Promise<void>;
   className?: string;
   isLoading?: boolean;
   userEmail?: string | undefined;

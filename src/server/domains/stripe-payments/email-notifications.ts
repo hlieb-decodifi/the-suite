@@ -1,9 +1,8 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { Database } from '@/../supabase/types';
-import { 
+import {
   sendBookingConfirmationClient,
   sendBookingConfirmationProfessional,
-
 } from '@/providers/brevo/templates';
 import { format, toZonedTime } from 'date-fns-tz';
 
@@ -14,8 +13,9 @@ function createSupabaseAdminClient() {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseServiceKey) {
     throw new Error('Missing Supabase service role key');
@@ -29,34 +29,46 @@ function createSupabaseAdminClient() {
 /**
  * Format a UTC date/time for a specific timezone
  */
-function formatDateTimeInTimezone(utcDateTime: string, timezone: string): string {
+function formatDateTimeInTimezone(
+  utcDateTime: string,
+  timezone: string,
+): string {
   try {
     const utcDate = new Date(utcDateTime);
     const zonedDate = toZonedTime(utcDate, timezone);
-    return format(zonedDate, 'EEEE, MMMM d, yyyy \'at\' h:mm a zzz', { timeZone: timezone });
+    return format(zonedDate, "EEEE, MMMM d, yyyy 'at' h:mm a zzz", {
+      timeZone: timezone,
+    });
   } catch (error) {
-    console.error('Error formatting date in timezone:', error, { utcDateTime, timezone });
+    console.error('Error formatting date in timezone:', error, {
+      utcDateTime,
+      timezone,
+    });
     // Fallback to UTC formatting
-    return new Date(utcDateTime).toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'UTC'
-    }) + ' UTC';
+    return (
+      new Date(utcDateTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC',
+      }) + ' UTC'
+    );
   }
 }
 
 // Helper function to format address like in booking page
-function formatAddress(address: {
-  street_address: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-} | null): string {
+function formatAddress(
+  address: {
+    street_address: string | null;
+    city: string | null;
+    state: string | null;
+    country: string | null;
+  } | null,
+): string {
   if (!address) return '';
   const parts = [
     address.street_address,
@@ -68,23 +80,32 @@ function formatAddress(address: {
 }
 
 // Helper function to generate message URL for email notifications
-async function generateMessageURL(currentUserId: string, targetUserId: string): Promise<string> {
+async function generateMessageURL(
+  currentUserId: string,
+  targetUserId: string,
+): Promise<string> {
   try {
     const adminSupabase = createSupabaseAdminClient();
-    
+
     // Determine who is client and who i`s professional
     const { data: isCurrentUserClient } = await adminSupabase.rpc('is_client', {
       user_uuid: currentUserId,
     });
-    const { data: isCurrentUserProfessional } = await adminSupabase.rpc('is_professional', {
-      user_uuid: currentUserId,
-    });
+    const { data: isCurrentUserProfessional } = await adminSupabase.rpc(
+      'is_professional',
+      {
+        user_uuid: currentUserId,
+      },
+    );
     const { data: isTargetClient } = await adminSupabase.rpc('is_client', {
       user_uuid: targetUserId,
     });
-    const { data: isTargetProfessional } = await adminSupabase.rpc('is_professional', {
-      user_uuid: targetUserId,
-    });
+    const { data: isTargetProfessional } = await adminSupabase.rpc(
+      'is_professional',
+      {
+        user_uuid: targetUserId,
+      },
+    );
 
     let clientId: string;
     let professionalId: string;
@@ -132,7 +153,8 @@ async function generateMessageURL(currentUserId: string, targetUserId: string): 
       .eq('professional_profile_id', professionalProfile.id)
       .limit(1);
 
-    const hasSharedAppointments = sharedAppointments && sharedAppointments.length > 0;
+    const hasSharedAppointments =
+      sharedAppointments && sharedAppointments.length > 0;
 
     if (hasSharedAppointments) {
       // Create the conversation using admin client
@@ -141,7 +163,7 @@ async function generateMessageURL(currentUserId: string, targetUserId: string): 
         .insert({
           client_id: clientId,
           professional_id: professionalId,
-          purpose: 'general'
+          purpose: 'general',
         })
         .select('id')
         .single();
@@ -167,12 +189,12 @@ async function generateMessageURL(currentUserId: string, targetUserId: string): 
  */
 export async function sendBookingConfirmationEmails(
   bookingId: string,
-  appointmentId: string
+  appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log('🚀 sendBookingConfirmationEmails called with:', {
       bookingId,
-      appointmentId
+      appointmentId,
     });
 
     console.log('📊 Creating admin Supabase client...');
@@ -183,7 +205,7 @@ export async function sendBookingConfirmationEmails(
       .from('booking_payments')
       .update({
         confirmation_emails_sent: true,
-        confirmation_emails_sent_at: new Date().toISOString()
+        confirmation_emails_sent_at: new Date().toISOString(),
       })
       .eq('booking_id', bookingId)
       .eq('confirmation_emails_sent', false) // Only update if not already sent
@@ -191,16 +213,24 @@ export async function sendBookingConfirmationEmails(
       .single();
 
     if (updateError || !updateResult) {
-      console.log(`⏭️ Confirmation emails already sent for booking ${bookingId} - skipping duplicate send (atomic check)`);
-      return { success: true, error: 'Emails already sent - prevented duplicate by atomic update' };
+      console.log(
+        `⏭️ Confirmation emails already sent for booking ${bookingId} - skipping duplicate send (atomic check)`,
+      );
+      return {
+        success: true,
+        error: 'Emails already sent - prevented duplicate by atomic update',
+      };
     }
 
-    console.log(`🔒 Successfully claimed email sending rights for booking ${bookingId}`);
+    console.log(
+      `🔒 Successfully claimed email sending rights for booking ${bookingId}`,
+    );
 
     // Get comprehensive booking data with all related information
     const { data: bookingData, error: bookingError } = await adminSupabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         professional_profile_id,
@@ -218,7 +248,8 @@ export async function sendBookingConfirmationEmails(
           tip_amount,
           service_fee
         )
-      `)
+      `,
+      )
       .eq('id', bookingId)
       .single();
 
@@ -242,14 +273,16 @@ export async function sendBookingConfirmationEmails(
     // Get client data with profile for phone number and timezone
     const { data: clientData, error: clientError } = await adminSupabase
       .from('users')
-      .select(`
+      .select(
+        `
         first_name,
         last_name,
         client_profiles (
           phone_number,
           timezone
         )
-      `)
+      `,
+      )
       .eq('id', bookingData.client_id)
       .single();
 
@@ -259,9 +292,11 @@ export async function sendBookingConfirmationEmails(
     }
 
     // Get professional data with profile, address, and timezone
-    const { data: professionalData, error: professionalError } = await adminSupabase
-      .from('professional_profiles')
-      .select(`
+    const { data: professionalData, error: professionalError } =
+      await adminSupabase
+        .from('professional_profiles')
+        .select(
+          `
         user_id,
         phone_number,
         location,
@@ -276,9 +311,10 @@ export async function sendBookingConfirmationEmails(
           first_name,
           last_name
         )
-      `)
-      .eq('id', bookingData.professional_profile_id)
-      .single();
+      `,
+        )
+        .eq('id', bookingData.professional_profile_id)
+        .single();
 
     if (professionalError || !professionalData) {
       console.error('Failed to fetch professional data:', professionalError);
@@ -287,24 +323,32 @@ export async function sendBookingConfirmationEmails(
 
     // Get email addresses using admin client to bypass RLS
     // Get client email
-    const { data: clientAuth, error: clientAuthError } = await adminSupabase.auth.admin.getUserById(bookingData.client_id);
+    const { data: clientAuth, error: clientAuthError } =
+      await adminSupabase.auth.admin.getUserById(bookingData.client_id);
     if (clientAuthError || !clientAuth.user?.email) {
       console.error('Failed to get client email:', clientAuthError);
       return { success: false, error: 'Failed to get client email' };
     }
 
     // Get professional email
-    const { data: professionalAuth, error: professionalAuthError } = await adminSupabase.auth.admin.getUserById(professionalData.user_id);
+    const { data: professionalAuth, error: professionalAuthError } =
+      await adminSupabase.auth.admin.getUserById(professionalData.user_id);
     if (professionalAuthError || !professionalAuth.user?.email) {
       console.error('Failed to get professional email:', professionalAuthError);
       return { success: false, error: 'Failed to get professional email' };
     }
 
     // Extract necessary data
-    const services = Array.isArray(bookingData.booking_services) ? bookingData.booking_services : [];
-    const payment = Array.isArray(bookingData.booking_payments) ? bookingData.booking_payments[0] : bookingData.booking_payments;
+    const services = Array.isArray(bookingData.booking_services)
+      ? bookingData.booking_services
+      : [];
+    const payment = Array.isArray(bookingData.booking_payments)
+      ? bookingData.booking_payments[0]
+      : bookingData.booking_payments;
     const professional = professionalData.users;
-    const clientProfile = Array.isArray(clientData.client_profiles) ? clientData.client_profiles[0] : clientData.client_profiles;
+    const clientProfile = Array.isArray(clientData.client_profiles)
+      ? clientData.client_profiles[0]
+      : clientData.client_profiles;
 
     if (!services.length || !payment || !professional) {
       console.error('Missing required data for booking confirmation emails');
@@ -316,50 +360,78 @@ export async function sendBookingConfirmationEmails(
 
     // Prepare services array for email templates (import formatDuration if needed)
     const { formatDuration } = await import('@/utils/formatDuration');
-    const servicesForEmail = services.map(service => ({
+    const servicesForEmail = services.map((service) => ({
       name: service.services?.name || '',
       description: service.services?.description || '',
       duration: formatDuration(service.duration || 0),
-      price: service.price || 0
+      price: service.price || 0,
     }));
 
     // Generate message URLs
-    const clientMessageUrl = await generateMessageURL(bookingData.client_id, professionalData.user_id);
-    const professionalMessageUrl = await generateMessageURL(professionalData.user_id, bookingData.client_id);
+    const clientMessageUrl = await generateMessageURL(
+      bookingData.client_id,
+      professionalData.user_id,
+    );
+    const professionalMessageUrl = await generateMessageURL(
+      professionalData.user_id,
+      bookingData.client_id,
+    );
 
     // Get timezones (fallback to UTC if not set)
     const clientTimezone = clientProfile?.timezone || 'UTC';
     const professionalTimezone = professionalData.timezone || 'UTC';
 
     // Format appointment date and time for each timezone
-    const clientAppointmentDateTime = formatDateTimeInTimezone(appointment.start_time, clientTimezone);
-    const professionalAppointmentDateTime = formatDateTimeInTimezone(appointment.start_time, professionalTimezone);
+    const clientAppointmentDateTime = formatDateTimeInTimezone(
+      appointment.start_time,
+      clientTimezone,
+    );
+    const professionalAppointmentDateTime = formatDateTimeInTimezone(
+      appointment.start_time,
+      professionalTimezone,
+    );
 
     console.log('Appointment time formatting:', {
       utcTime: appointment.start_time,
       clientTimezone,
       professionalTimezone,
       clientFormatted: clientAppointmentDateTime,
-      professionalFormatted: professionalAppointmentDateTime
+      professionalFormatted: professionalAppointmentDateTime,
     });
 
     // Calculate totals
-    const subtotal = services.reduce((sum: number, bs) => sum + (bs.price || 0), 0);
+    const subtotal = services.reduce(
+      (sum: number, bs) => sum + (bs.price || 0),
+      0,
+    );
     const serviceFee = payment.service_fee || 0;
     const tipAmount = payment.tip_amount || 0;
     const totalPaid = payment.amount || 0;
     const professionalTotal = subtotal + tipAmount; // Professional gets services + tip (no service fee)
 
     console.log('Sending booking confirmation emails...');
-    console.log('Client:', `${clientData.first_name} ${clientData.last_name}`, clientAuth.user.email);
-    console.log('Professional:', `${professional.first_name} ${professional.last_name}`, professionalAuth.user.email);
+    console.log(
+      'Client:',
+      `${clientData.first_name} ${clientData.last_name}`,
+      clientAuth.user.email,
+    );
+    console.log(
+      'Professional:',
+      `${professional.first_name} ${professional.last_name}`,
+      professionalAuth.user.email,
+    );
 
     let emailsSentSuccessfully = 0;
 
     // Send professional email
     try {
       const result = await sendBookingConfirmationProfessional(
-        [{ email: professionalAuth.user.email, name: `${professional.first_name} ${professional.last_name}` }],
+        [
+          {
+            email: professionalAuth.user.email,
+            name: `${professional.first_name} ${professional.last_name}`,
+          },
+        ],
         {
           client_name: `${clientData.first_name} ${clientData.last_name}`,
           client_phone: clientProfile?.phone_number || '',
@@ -373,15 +445,21 @@ export async function sendBookingConfirmationEmails(
           address: professionalAddress,
           home_url: process.env.NEXT_PUBLIC_BASE_URL!,
           message_url: professionalMessageUrl,
-          services: servicesForEmail
-        }
+          services: servicesForEmail,
+        },
       );
 
       if (result.success) {
         emailsSentSuccessfully++;
-        console.log('✅ Professional confirmation email sent:', result.messageId);
+        console.log(
+          '✅ Professional confirmation email sent:',
+          result.messageId,
+        );
       } else {
-        console.error('❌ Failed to send professional confirmation email:', result.error);
+        console.error(
+          '❌ Failed to send professional confirmation email:',
+          result.error,
+        );
       }
     } catch (error) {
       console.error('❌ Error sending professional confirmation email:', error);
@@ -408,7 +486,12 @@ export async function sendBookingConfirmationEmails(
     // Send client email
     try {
       const result = await sendBookingConfirmationClient(
-        [{ email: clientAuth.user.email, name: `${clientData.first_name} ${clientData.last_name}` }],
+        [
+          {
+            email: clientAuth.user.email,
+            name: `${clientData.first_name} ${clientData.last_name}`,
+          },
+        ],
         {
           client_name: `${clientData.first_name} ${clientData.last_name}`,
           professional_name: `${professional.first_name} ${professional.last_name}`,
@@ -423,22 +506,27 @@ export async function sendBookingConfirmationEmails(
           message_url: clientMessageUrl,
           professional_address: professionalAddress,
           professional_phone: professionalData.phone_number || '',
-          services: servicesForEmail
-        }
+          services: servicesForEmail,
+        },
       );
 
       if (result.success) {
         emailsSentSuccessfully++;
         console.log('✅ Client confirmation email sent:', result.messageId);
       } else {
-        console.error('❌ Failed to send client confirmation email:', result.error);
+        console.error(
+          '❌ Failed to send client confirmation email:',
+          result.error,
+        );
       }
     } catch (error) {
       console.error('❌ Error sending client confirmation email:', error);
     }
 
     // Log the result - database was already updated atomically at the beginning
-    console.log(`📧 Email sending summary - Emails sent successfully: ${emailsSentSuccessfully}/2`);
+    console.log(
+      `📧 Email sending summary - Emails sent successfully: ${emailsSentSuccessfully}/2`,
+    );
 
     // If no emails were sent successfully, reset the flag to allow retry
     if (emailsSentSuccessfully === 0) {
@@ -447,23 +535,32 @@ export async function sendBookingConfirmationEmails(
           .from('booking_payments')
           .update({
             confirmation_emails_sent: false,
-            confirmation_emails_sent_at: null
+            confirmation_emails_sent_at: null,
           })
           .eq('booking_id', bookingId);
-        console.log(`🔄 Reset email sent flag for booking ${bookingId} due to send failure`);
+        console.log(
+          `🔄 Reset email sent flag for booking ${bookingId} due to send failure`,
+        );
       } catch (resetError) {
-        console.error(`❌ Failed to reset email sent flag for booking ${bookingId}:`, resetError);
+        console.error(
+          `❌ Failed to reset email sent flag for booking ${bookingId}:`,
+          resetError,
+        );
       }
     } else {
-      console.log(`✅ Email tracking already updated for booking ${bookingId} (atomic operation)`);
+      console.log(
+        `✅ Email tracking already updated for booking ${bookingId} (atomic operation)`,
+      );
     }
 
     return { success: emailsSentSuccessfully > 0 };
-
   } catch (error) {
     console.error('❌ Error in sendBookingConfirmationEmails:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
-// Payment confirmation emails have been removed 
+// Payment confirmation emails have been removed

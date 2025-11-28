@@ -1,1 +1,1 @@
-export { AdminMessagesTemplate } from './AdminMessagesTemplate'; 
+export { AdminMessagesTemplate } from './AdminMessagesTemplate';

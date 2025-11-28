@@ -36,4 +36,3 @@ export function useSetPasswordForm({ userEmail }: UseSetPasswordFormProps) {
 
   return { isPending, emailSent, sendResetEmail };
 }
-

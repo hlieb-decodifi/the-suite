@@ -9,12 +9,12 @@ import { MessageBadge } from '@/components/ui/message-badge';
 export type MobileAuthSectionProps = {
   isAuthenticated?: boolean;
   userInfo:
-    | ({
+    | {
         name: string;
         email: string;
         avatarUrl?: string | null;
         isAdmin?: boolean;
-      })
+      }
     | undefined;
   isProfessional?: boolean;
   unreadMessagesCount?: number;

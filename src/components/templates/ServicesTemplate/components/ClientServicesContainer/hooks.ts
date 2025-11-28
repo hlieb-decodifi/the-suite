@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, RefObject } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { 
-  ServicesFilters, 
-  PaginationInfo, 
-  ServiceListItem, 
-  SortOption
+import {
+  ServicesFilters,
+  PaginationInfo,
+  ServiceListItem,
+  SortOption,
 } from '../../types';
 import {
   filterServices,
@@ -17,29 +17,32 @@ import {
  * Utility function to handle smooth scrolling
  * Moved from ClientServicesContainer for reuse
  */
-function smoothScrollToContainer(containerRef: RefObject<HTMLDivElement | null>, immediate = false) {
+function smoothScrollToContainer(
+  containerRef: RefObject<HTMLDivElement | null>,
+  immediate = false,
+) {
   if (!containerRef.current) return;
-  
+
   // Determine behavior based on immediate flag
   const behavior = immediate ? 'auto' : 'smooth';
-  
+
   // Use scrollIntoView
   containerRef.current.scrollIntoView({
     behavior,
     block: 'start',
   });
-  
+
   // Also use window.scrollTo for maximum compatibility
   if (immediate) {
     window.scrollTo({
       top: 0,
-      behavior: 'auto'
+      behavior: 'auto',
     });
   } else {
     const rect = containerRef.current.getBoundingClientRect();
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const targetPosition = rect.top + scrollTop - 80; // Apply offset
-    
+
     window.scrollTo({
       top: targetPosition,
       behavior: 'smooth',
@@ -56,10 +59,11 @@ export function useServicesState(
   initialSearchTerm: string,
   initialLocation: string = '',
   initialSortBy: SortOption = 'name-asc',
-  userDefaultLocation?: { latitude: number; longitude: number } | null
+  userDefaultLocation?: { latitude: number; longitude: number } | null,
 ) {
   const [services, setServices] = useState<ServiceListItem[]>(initialServices);
-  const [pagination, setPagination] = useState<PaginationInfo>(initialPagination);
+  const [pagination, setPagination] =
+    useState<PaginationInfo>(initialPagination);
   const [isLoading] = useState(false);
   const [filters, setFilters] = useState<ServicesFilters>({
     searchTerm: initialSearchTerm,
@@ -68,32 +72,26 @@ export function useServicesState(
   });
 
   // Get filtered and sorted services
-  const filteredServices = useMemo(
-    () => {
-      const filtered = filterServices(services, filters);
-      // Pass userDefaultLocation only if location filter is empty
-      const locationArg = !filters.location ? userDefaultLocation : undefined;
-      return sortServices(filtered, filters.sortBy, locationArg);
-    },
-    [services, filters, userDefaultLocation],
-  );
+  const filteredServices = useMemo(() => {
+    const filtered = filterServices(services, filters);
+    // Pass userDefaultLocation only if location filter is empty
+    const locationArg = !filters.location ? userDefaultLocation : undefined;
+    return sortServices(filtered, filters.sortBy, locationArg);
+  }, [services, filters, userDefaultLocation]);
 
   // Get services to display
-  const displayedServices = useMemo(
-    () => {
-      const locationArg = !filters.location ? userDefaultLocation : undefined;
-      // Use current services state for display, not initialServices
-      return getServicesForDisplay(
-        services,
-        filteredServices,
-        filters,
-        pagination.currentPage,
-        pagination.pageSize,
-        locationArg
-      );
-    },
-    [services, filteredServices, filters, pagination, userDefaultLocation]
-  );
+  const displayedServices = useMemo(() => {
+    const locationArg = !filters.location ? userDefaultLocation : undefined;
+    // Use current services state for display, not initialServices
+    return getServicesForDisplay(
+      services,
+      filteredServices,
+      filters,
+      pagination.currentPage,
+      pagination.pageSize,
+      locationArg,
+    );
+  }, [services, filteredServices, filters, pagination, userDefaultLocation]);
 
   return {
     services,
@@ -131,12 +129,12 @@ export function useURLSync(
 
     // Update filters if search param, location param, or sort param changes
     if (
-      searchParam !== filters.searchTerm || 
+      searchParam !== filters.searchTerm ||
       locationParam !== filters.location ||
       sortParam !== filters.sortBy
     ) {
-      setFilters({ 
-        ...filters, 
+      setFilters({
+        ...filters,
         searchTerm: searchParam,
         location: locationParam,
         sortBy: sortParam,
@@ -174,7 +172,11 @@ export function useFiltersHandler(
   setPagination: (pagination: PaginationInfo) => void,
   setFilters: (filters: ServicesFilters) => void,
   containerRef: RefObject<HTMLDivElement | null>,
-  serverSearch: (searchTerm: string, page?: number, sortBy?: SortOption) => Promise<void>
+  serverSearch: (
+    searchTerm: string,
+    page?: number,
+    sortBy?: SortOption,
+  ) => Promise<void>,
 ) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -188,14 +190,16 @@ export function useFiltersHandler(
       if (pathname === '/services') {
         // Immediate scroll for better UX
         smoothScrollToContainer(containerRef, true);
-        
+
         // Perform server search
         serverSearch(newFilters.searchTerm.trim(), 1, newFilters.sortBy);
         return;
       }
 
       // Otherwise use the normal URL update approach
-  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
+      const params = new URLSearchParams(
+        searchParams ? searchParams.toString() : '',
+      );
 
       // Handle search term
       if (newFilters.searchTerm.trim()) {
@@ -229,7 +233,7 @@ export function useFiltersHandler(
         const newPagination = createFilteredPagination(
           services,
           newFilters,
-          pagination.pageSize
+          pagination.pageSize,
         );
         setPagination(newPagination);
       }
@@ -260,7 +264,11 @@ export function usePageChangeHandler(
   pagination: PaginationInfo,
   setPagination: (pagination: PaginationInfo) => void,
   containerRef: RefObject<HTMLDivElement | null>,
-  serverSearch: (searchTerm: string, page?: number, sortBy?: SortOption) => Promise<void>
+  serverSearch: (
+    searchTerm: string,
+    page?: number,
+    sortBy?: SortOption,
+  ) => Promise<void>,
 ) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -272,15 +280,15 @@ export function usePageChangeHandler(
       if (pathname === '/services') {
         // First scroll to top immediately for better UX
         smoothScrollToContainer(containerRef, true);
-        
+
         // Then perform the server search
         await serverSearch(filters.searchTerm, page, filters.sortBy);
-        
+
         // Final scroll after data is loaded to ensure we're at the top
         setTimeout(() => {
           smoothScrollToContainer(containerRef, false);
         }, 50);
-        
+
         return;
       }
 
@@ -290,23 +298,25 @@ export function usePageChangeHandler(
           ...pagination,
           currentPage: page,
         });
-        
+
         // Immediate scroll for client-side pagination
         smoothScrollToContainer(containerRef, true);
-        
+
         // Backup scroll for reliability
         setTimeout(() => {
           smoothScrollToContainer(containerRef, false);
         }, 50);
       } else {
-  // Otherwise, update URL with the new page
-  const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
-  params.set('page', page.toString());
-        
-  // Use direct URL navigation to avoid issues with async searchParams
-  window.location.href = `${pathname}?${params.toString()}`;
-        
-  // No need to scroll here as the page will reload
+        // Otherwise, update URL with the new page
+        const params = new URLSearchParams(
+          searchParams ? searchParams.toString() : '',
+        );
+        params.set('page', page.toString());
+
+        // Use direct URL navigation to avoid issues with async searchParams
+        window.location.href = `${pathname}?${params.toString()}`;
+
+        // No need to scroll here as the page will reload
       }
     },
     [
@@ -319,4 +329,4 @@ export function usePageChangeHandler(
       serverSearch,
     ],
   );
-} 
+}

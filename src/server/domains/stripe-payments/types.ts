@@ -14,7 +14,7 @@ export type ProfessionalProfileForPayment = {
   deposit_type: 'percentage' | 'fixed';
   deposit_value: number | null;
   stripe_account_id: string | null;
-  stripe_connect_status: 'not_connected' | 'pending' | 'complete';
+  stripe_connect_status: 'not_connected' | 'pending' | 'in_review' | 'complete';
 };
 
 // Payment calculation result
@@ -64,4 +64,4 @@ export type BookingWithPaymentData = {
   totalPrice: number;
   paymentCalculation: PaymentCalculation;
   professionalProfile: ProfessionalProfileForPayment;
-}; 
+};

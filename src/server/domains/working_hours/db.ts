@@ -1,6 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
-import { DEFAULT_WORKING_HOURS, WorkingHoursEntry, TimezoneAwareWorkingHours } from '@/types/working_hours';
-import { parseWorkingHoursFromDB, prepareWorkingHoursForDB } from '@/utils/timezone';
+import {
+  DEFAULT_WORKING_HOURS,
+  WorkingHoursEntry,
+  TimezoneAwareWorkingHours,
+} from '@/types/working_hours';
+import {
+  parseWorkingHoursFromDB,
+  prepareWorkingHoursForDB,
+} from '@/utils/timezone';
 
 /**
  * Fetch working hours and timezone for a professional profile
@@ -10,7 +17,7 @@ export async function getWorkingHoursFromDb(userId: string): Promise<{
   timezone: string;
 }> {
   const supabase = await createClient();
-  
+
   const { data, error } = await supabase
     .from('professional_profiles')
     .select('working_hours, timezone')
@@ -32,10 +39,16 @@ export async function getWorkingHoursFromDb(userId: string): Promise<{
   }
 
   // Parse working hours with timezone awareness
-  const parsedWorkingHours = parseWorkingHoursFromDB(data.working_hours, data.timezone || 'UTC');
-  
+  const parsedWorkingHours = parseWorkingHoursFromDB(
+    data.working_hours,
+    data.timezone || 'UTC',
+  );
+
   return {
-    hours: parsedWorkingHours.hours.length > 0 ? parsedWorkingHours.hours : DEFAULT_WORKING_HOURS,
+    hours:
+      parsedWorkingHours.hours.length > 0
+        ? parsedWorkingHours.hours
+        : DEFAULT_WORKING_HOURS,
     // If no timezone is set in DB, return null so frontend can detect and use browser timezone
     timezone: data.timezone || '', // Empty string indicates no timezone set in DB
   };
@@ -47,15 +60,22 @@ export async function getWorkingHoursFromDb(userId: string): Promise<{
 export async function updateWorkingHoursInDb(
   userId: string,
   hoursData: WorkingHoursEntry[],
-  timezone?: string
+  timezone?: string,
 ): Promise<void> {
   const supabase = await createClient();
-  
+
   // Prepare timezone-aware working hours for storage
   const timezoneToUse = timezone || 'UTC';
-  const workingHoursForStorage = prepareWorkingHoursForDB(hoursData, timezoneToUse);
-  
-  const updateData: { working_hours: TimezoneAwareWorkingHours; timezone?: string; updated_at: string } = {
+  const workingHoursForStorage = prepareWorkingHoursForDB(
+    hoursData,
+    timezoneToUse,
+  );
+
+  const updateData: {
+    working_hours: TimezoneAwareWorkingHours;
+    timezone?: string;
+    updated_at: string;
+  } = {
     working_hours: workingHoursForStorage,
     updated_at: new Date().toISOString(),
   };
@@ -64,7 +84,7 @@ export async function updateWorkingHoursInDb(
   if (timezone) {
     updateData.timezone = timezone;
   }
-  
+
   const { error } = await supabase
     .from('professional_profiles')
     .update(updateData)
@@ -81,7 +101,7 @@ export async function updateWorkingHoursInDb(
  */
 export async function getProfessionalTimezone(userId: string): Promise<string> {
   const supabase = await createClient();
-  
+
   const { data, error } = await supabase
     .from('professional_profiles')
     .select('timezone')
@@ -94,4 +114,4 @@ export async function getProfessionalTimezone(userId: string): Promise<string> {
   }
 
   return data?.timezone || 'UTC';
-} 
+}

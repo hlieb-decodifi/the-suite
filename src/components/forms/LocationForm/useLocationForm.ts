@@ -13,10 +13,10 @@ export type UseLocationFormProps = {
   initialData?: LocationFormValues | undefined;
 };
 
-export function useLocationForm({ 
+export function useLocationForm({
   onSubmit,
   user,
-  initialData
+  initialData,
 }: UseLocationFormProps) {
   const [isPending, setIsPending] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -37,26 +37,30 @@ export function useLocationForm({
     defaultValues,
   });
 
-  const handleSubmit = useCallback(async (data: LocationFormValues) => {
-    try {
-      setIsPending(true);
-      setSaveSuccess(false);
-      
-      // Call the parent's onSubmit function
-      await onSubmit(data);
-      
-      setSaveSuccess(true);
-    } catch (error) {
-      console.error('Error updating location:', error);
-      toast({
-        variant: "destructive",
-        title: "Update failed",
-        description: "Failed to update your location information. Please try again."
-      });
-    } finally {
-      setIsPending(false);
-    }
-  }, [onSubmit]);
+  const handleSubmit = useCallback(
+    async (data: LocationFormValues) => {
+      try {
+        setIsPending(true);
+        setSaveSuccess(false);
+
+        // Call the parent's onSubmit function
+        await onSubmit(data);
+
+        setSaveSuccess(true);
+      } catch (error) {
+        console.error('Error updating location:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Update failed',
+          description:
+            'Failed to update your location information. Please try again.',
+        });
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [onSubmit],
+  );
 
   return {
     form,
@@ -64,4 +68,4 @@ export function useLocationForm({
     saveSuccess,
     onSubmit: handleSubmit,
   };
-} 
+}

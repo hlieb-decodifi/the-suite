@@ -7,16 +7,16 @@ export * from './payment-service';
 // Re-export commonly used functions
 export {
   createBookingWithPayment,
-  processBookingPayment
+  processBookingPayment,
 } from './payment-service';
 
 export {
   getProfessionalProfileForPayment,
   calculatePaymentAmounts,
-  createBookingPaymentRecord
+  createBookingPaymentRecord,
 } from './db';
 
 export {
   createStripeCheckoutSession,
-  getCheckoutSession
-} from './stripe-operations'; 
+  getCheckoutSession,
+} from './stripe-operations';

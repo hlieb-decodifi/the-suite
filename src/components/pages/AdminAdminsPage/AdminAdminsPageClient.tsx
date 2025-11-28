@@ -1,5 +1,4 @@
-
-"use client";
+'use client';
 
 import React, { useState } from 'react';
 import { Typography } from '@/components/ui/typography';
@@ -8,10 +7,11 @@ import { useRouter } from 'next/navigation';
 import InviteAdminModal from '@/components/modals/InviteAdminModal';
 import { Button } from '@/components/ui/button';
 
-
-
-
-export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: string; name: string; email: string; createdAt: string }> }) {
+export default function AdminAdminsPageClient({
+  admins,
+}: {
+  admins: Array<{ id: string; name: string; email: string; createdAt: string }>;
+}) {
   const [filterName, setFilterName] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -44,7 +44,11 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
 
   return (
     <div className="space-y-6">
-        <InviteAdminModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={handleInvited} />
+      <InviteAdminModal
+        isOpen={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onInvited={handleInvited}
+      />
       <div className="rounded-lg bg-card border shadow-sm overflow-hidden">
         <div className="p-6 border-b bg-muted/30">
           <Typography variant="h3" className="text-xl font-semibold">
@@ -62,7 +66,7 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                 type="text"
                 placeholder="Filter by name"
                 value={filterName}
-                onChange={e => setFilterName(e.target.value)}
+                onChange={(e) => setFilterName(e.target.value)}
                 className="border rounded px-2 py-1"
               />
             </label>
@@ -71,15 +75,15 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
               <select
                 className="border rounded px-2 py-1"
                 value={sortDirection}
-                onChange={e => setSortDirection(e.target.value as 'asc' | 'desc')}
+                onChange={(e) =>
+                  setSortDirection(e.target.value as 'asc' | 'desc')
+                }
               >
                 <option value="asc">Ascending</option>
                 <option value="desc">Descending</option>
               </select>
             </label>
-              <Button onClick={() => setInviteOpen(true)}>
-                Invite Admin
-              </Button>
+            <Button onClick={() => setInviteOpen(true)}>Invite Admin</Button>
           </div>
           {/* Desktop table view */}
           <div className="hidden md:block overflow-x-auto">
@@ -98,7 +102,10 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                       <div className="flex flex-col items-center justify-center space-y-2 py-8">
                         <CalendarDays className="h-12 w-12 text-muted-foreground" />
                         <Typography>No admins found</Typography>
-                        <Typography variant="small" className="text-muted-foreground">
+                        <Typography
+                          variant="small"
+                          className="text-muted-foreground"
+                        >
                           Admins will appear here once added.
                         </Typography>
                       </div>
@@ -106,10 +113,15 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                   </tr>
                 ) : (
                   admins.map((admin) => (
-                    <tr key={admin.id} className="hover:bg-muted/50 cursor-pointer">
+                    <tr
+                      key={admin.id}
+                      className="hover:bg-muted/50 cursor-pointer"
+                    >
                       <td className="border px-2 py-1">{admin.name}</td>
                       <td className="border px-2 py-1">{admin.email}</td>
-                      <td className="border px-2 py-1">{new Date(admin.createdAt).toLocaleDateString()}</td>
+                      <td className="border px-2 py-1">
+                        {new Date(admin.createdAt).toLocaleDateString()}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -128,10 +140,15 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
               </div>
             ) : (
               admins.map((admin) => (
-                <div key={admin.id} className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer">
+                <div
+                  key={admin.id}
+                  className="p-4 border rounded-lg mb-2 bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                >
                   <div className="flex justify-between items-start">
                     <div>
-                      <Typography className="font-medium">{admin.name}</Typography>
+                      <Typography className="font-medium">
+                        {admin.name}
+                      </Typography>
                       <div className="text-muted-foreground text-sm mt-1">
                         {admin.email}
                       </div>
@@ -139,10 +156,15 @@ export default function AdminAdminsPageClient({ admins }: { admins: Array<{ id: 
                   </div>
                   <div className="mt-3 pt-3 border-t flex justify-between items-center">
                     <div>
-                      <Typography variant="small" className="text-muted-foreground">
+                      <Typography
+                        variant="small"
+                        className="text-muted-foreground"
+                      >
                         Created
                       </Typography>
-                      <Typography className="font-medium">{new Date(admin.createdAt).toLocaleDateString()}</Typography>
+                      <Typography className="font-medium">
+                        {new Date(admin.createdAt).toLocaleDateString()}
+                      </Typography>
                     </div>
                   </div>
                 </div>

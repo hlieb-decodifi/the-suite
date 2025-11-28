@@ -33,9 +33,11 @@ export function SignUpModal({
   const email = searchParams?.get('email') || '';
   const showModal = googleError === 'account_exists' && email;
 
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  const currentParams = searchParams ? new URLSearchParams(searchParams.toString()) : new URLSearchParams();
-
+  const pathname =
+    typeof window !== 'undefined' ? window.location.pathname : '';
+  const currentParams = searchParams
+    ? new URLSearchParams(searchParams.toString())
+    : new URLSearchParams();
 
   const handleGoogleSecondary = () => {
     currentParams.set('email', email);
@@ -49,7 +51,9 @@ export function SignUpModal({
     setModalOpen(false);
     currentParams.delete('googleError');
     currentParams.delete('email');
-    router.replace(`${pathname}${currentParams.toString() ? '?' + currentParams.toString() : ''}`);
+    router.replace(
+      `${pathname}${currentParams.toString() ? '?' + currentParams.toString() : ''}`,
+    );
   };
 
   const handleSubmit = () => {
@@ -92,4 +96,3 @@ export function SignUpModal({
     </>
   );
 }
-

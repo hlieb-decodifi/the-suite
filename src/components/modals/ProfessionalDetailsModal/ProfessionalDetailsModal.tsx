@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Modal } from '../Modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -26,19 +25,30 @@ type ProfessionalDetailsModalProps = {
   loading?: boolean;
 };
 
-export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, loading }: ProfessionalDetailsModalProps) {
+export function ProfessionalDetailsModal({
+  isOpen,
+  onOpenChange,
+  professional,
+  loading,
+}: ProfessionalDetailsModalProps) {
   // Local state for max services input
   const [maxServices, setMaxServices] = useState<number | ''>(
-    professional && typeof professional.maxServices === 'number' && !isNaN(professional.maxServices)
+    professional &&
+      typeof professional.maxServices === 'number' &&
+      !isNaN(professional.maxServices)
       ? professional.maxServices
-      : ''
+      : '',
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Update local state if professional changes
   React.useEffect(() => {
-    if (professional && typeof professional.maxServices === 'number' && !isNaN(professional.maxServices)) {
+    if (
+      professional &&
+      typeof professional.maxServices === 'number' &&
+      !isNaN(professional.maxServices)
+    ) {
       setMaxServices(professional.maxServices);
     } else {
       setMaxServices('');
@@ -47,18 +57,29 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
 
   // Handler to update max_services in DB
   async function handleMaxServicesBlur() {
-    if (!professional || maxServices === '' || typeof maxServices !== 'number') return;
+    if (!professional || maxServices === '' || typeof maxServices !== 'number')
+      return;
     setSaving(true);
     setError(null);
     try {
       // Dynamically import the server action
-      const { updateProfessionalMaxServicesAction } = await import('@/server/domains/professionals/actions');
-      const result = await updateProfessionalMaxServicesAction(professional.id, maxServices);
+      const { updateProfessionalMaxServicesAction } = await import(
+        '@/server/domains/professionals/actions'
+      );
+      const result = await updateProfessionalMaxServicesAction(
+        professional.id,
+        maxServices,
+      );
       if (!result.success) {
         setError(result.error || 'Failed to update');
       }
     } catch (e: unknown) {
-      if (typeof e === 'object' && e !== null && 'message' in e && typeof (e as { message?: unknown }).message === 'string') {
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        'message' in e &&
+        typeof (e as { message?: unknown }).message === 'string'
+      ) {
         setError((e as { message: string }).message);
       } else {
         setError('Failed to update');
@@ -72,7 +93,11 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
     <Modal
       isOpen={isOpen}
       onOpenChange={onOpenChange}
-      title={professional ? `Professional: ${professional.name}` : 'Professional Details'}
+      title={
+        professional
+          ? `Professional: ${professional.name}`
+          : 'Professional Details'
+      }
       hideCloseButton={true}
     >
       {loading ? (
@@ -87,23 +112,33 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
         <Tabs defaultValue="profile" className="w-full">
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="services">Services ({professional.services.length})</TabsTrigger>
-            <TabsTrigger value="appointments">Appointments ({professional.appointments.length})</TabsTrigger>
+            <TabsTrigger value="services">
+              Services ({professional.services.length})
+            </TabsTrigger>
+            <TabsTrigger value="appointments">
+              Appointments ({professional.appointments.length})
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
             <div className="space-y-2">
               <Typography variant="h5">Basic Info</Typography>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Typography variant="small" className="text-muted-foreground">Name</Typography>
+                  <Typography variant="small" className="text-muted-foreground">
+                    Name
+                  </Typography>
                   <Typography>{professional.name}</Typography>
                 </div>
                 <div>
-                  <Typography variant="small" className="text-muted-foreground">Email</Typography>
+                  <Typography variant="small" className="text-muted-foreground">
+                    Email
+                  </Typography>
                   <Typography>{professional.email}</Typography>
                 </div>
                 <div>
-                  <Typography variant="small" className="text-muted-foreground">Created</Typography>
+                  <Typography variant="small" className="text-muted-foreground">
+                    Created
+                  </Typography>
                   <Typography>
                     {professional.createdAt
                       ? new Date(professional.createdAt).toLocaleString()
@@ -111,22 +146,41 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
                   </Typography>
                 </div>
                 <div>
-                  <Typography variant="small" className="text-muted-foreground">Published</Typography>
-                  <Typography>{professional.isPublished ? 'Yes' : 'No'}</Typography>
+                  <Typography variant="small" className="text-muted-foreground">
+                    Published
+                  </Typography>
+                  <Typography>
+                    {professional.isPublished ? 'Yes' : 'No'}
+                  </Typography>
                 </div>
                 <div className="col-span-2">
-                  <Typography variant="small" className="text-muted-foreground mb-1 block">Max Services</Typography>
+                  <Typography
+                    variant="small"
+                    className="text-muted-foreground mb-1 block"
+                  >
+                    Max Services
+                  </Typography>
                   <input
                     type="number"
                     min={1}
                     className="border rounded px-2 py-1 w-32 mb-1"
                     value={maxServices}
-                    onChange={e => setMaxServices(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) =>
+                      setMaxServices(
+                        e.target.value === '' ? '' : Number(e.target.value),
+                      )
+                    }
                     onBlur={handleMaxServicesBlur}
                     disabled={saving}
                   />
-                  {saving && <span className="ml-2 text-xs text-muted-foreground">Saving...</span>}
-                  {error && <div className="text-red-500 text-xs mt-1">{error}</div>}
+                  {saving && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      Saving...
+                    </span>
+                  )}
+                  {error && (
+                    <div className="text-red-500 text-xs mt-1">{error}</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -147,12 +201,14 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
                     </tr>
                   </thead>
                   <tbody>
-                    {professional.services.map(service => (
+                    {professional.services.map((service) => (
                       <tr key={service.id}>
                         <td className="border px-2 py-1">{service.name}</td>
                         <td className="border px-2 py-1">{service.price}</td>
                         <td className="border px-2 py-1">{service.duration}</td>
-                        <td className="border px-2 py-1">{service.description}</td>
+                        <td className="border px-2 py-1">
+                          {service.description}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -174,11 +230,17 @@ export function ProfessionalDetailsModal({ isOpen, onOpenChange, professional, l
                     </tr>
                   </thead>
                   <tbody>
-                    {professional.appointments.map(appointment => (
+                    {professional.appointments.map((appointment) => (
                       <tr key={appointment.id}>
-                        <td className="border px-2 py-1">{new Date(appointment.startTime).toLocaleString()}</td>
-                        <td className="border px-2 py-1">{new Date(appointment.endTime).toLocaleString()}</td>
-                        <td className="border px-2 py-1">{appointment.status}</td>
+                        <td className="border px-2 py-1">
+                          {new Date(appointment.startTime).toLocaleString()}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {new Date(appointment.endTime).toLocaleString()}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {appointment.status}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

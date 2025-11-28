@@ -1,1 +1,1 @@
-export * from './AuthConfirmedTemplate'; 
+export * from './AuthConfirmedTemplate';

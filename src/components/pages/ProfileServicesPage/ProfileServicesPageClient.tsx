@@ -735,7 +735,7 @@ export function ProfileServicesPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className={cn("flex justify-between items-center", isMobile && 'flex-col items-start space-y-2')}>
         <div>
           <Typography variant="h2" className="font-bold text-foreground">
             Services
@@ -753,7 +753,7 @@ export function ProfileServicesPageClient({
             onClick={handleAddServiceClick}
             className="flex items-center gap-1"
             disabled={isAtLimit || isSubmittingService}
-          >
+            >
             <Plus className="h-4 w-4" />
             Add Service
           </Button>

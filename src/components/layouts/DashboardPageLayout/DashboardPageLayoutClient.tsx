@@ -98,7 +98,7 @@ export function DashboardPageLayoutClient({
       // Update URL without triggering a full page reload
       const newUrl = params.toString()
         ? `${pathname ?? ''}?${params.toString()}`
-        : pathname ?? '';
+        : (pathname ?? '');
       router.push(newUrl, { scroll: false });
     },
     [pathname, router, searchParams],
@@ -106,9 +106,9 @@ export function DashboardPageLayoutClient({
 
   // Helper function to create tab URLs with preserved query parameters
   const createTabUrl = (basePath: string): string => {
-  if (!searchParams) return basePath;
-  const params = searchParams.toString();
-  return params ? `${basePath}?${params}` : basePath;
+    if (!searchParams) return basePath;
+    const params = searchParams.toString();
+    return params ? `${basePath}?${params}` : basePath;
   };
 
   // Create tabs array for TabNavigation component
@@ -146,7 +146,8 @@ export function DashboardPageLayoutClient({
       href: createTabUrl('/dashboard/support-requests'),
       isActive: activeTab === 'support-requests',
       badge:
-        userData.unreadSupportMessagesCount && userData.unreadSupportMessagesCount > 0 ? (
+        userData.unreadSupportMessagesCount &&
+        userData.unreadSupportMessagesCount > 0 ? (
           <MessageBadge
             count={userData.unreadSupportMessagesCount}
             size="sm"
@@ -208,7 +209,7 @@ export function DashboardPageLayoutClient({
         <TabNavigation
           tabs={tabs}
           variant="link"
-          className="mb-4 lg:mb-6 min-w-max"
+          className="mb-4 lg:mb-6"
         />
       </div>
 

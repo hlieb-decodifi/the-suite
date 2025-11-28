@@ -15,8 +15,8 @@ export type UseSignUpFormProps = {
   redirectTo?: string;
 };
 
-export function useSignUpForm({ 
-  onSubmit, 
+export function useSignUpForm({
+  onSubmit,
   defaultValues,
   redirectToDashboard = false,
   redirectTo = '/profile',
@@ -35,52 +35,57 @@ export function useSignUpForm({
     },
   });
 
-  const handleSubmit = useCallback(async (data: SignUpFormValues) => {
-    try {
-      setIsPending(true);
-      
-      console.log('redirectTo', redirectTo);
-      // Call the server action for signup with redirectTo
-      const result = await signUpAction(data, redirectTo);
-      
-      if (!result.success) {
+  const handleSubmit = useCallback(
+    async (data: SignUpFormValues) => {
+      try {
+        setIsPending(true);
+
+        console.log('redirectTo', redirectTo);
+        // Call the server action for signup with redirectTo
+        const result = await signUpAction(data, redirectTo);
+
+        if (!result.success) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign up failed',
+            description: result.error,
+          });
+          return;
+        }
+
+        // Call the onSubmit callback passed from parent
+        onSubmit(data);
+
         toast({
-          variant: "destructive",
-          title: "Sign up failed",
-          description: result.error
+          title: 'Account created',
+          description: 'Please check your email to confirm your account.',
         });
-        return;
+
+        // Redirect based on the redirectToDashboard flag
+        if (redirectToDashboard) {
+          router.push('/profile');
+        } else {
+          router.push(
+            `/auth/email-verification?email=${encodeURIComponent(data.email)}`,
+          );
+        }
+      } catch (error) {
+        console.error('Error submitting form:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Sign up failed',
+          description: 'Failed to create account. Please try again.',
+        });
+      } finally {
+        setIsPending(false);
       }
-      
-      // Call the onSubmit callback passed from parent
-      onSubmit(data);
-      
-      toast({
-        title: "Account created",
-        description: "Please check your email to confirm your account."
-      });
-      
-      // Redirect based on the redirectToDashboard flag
-      if (redirectToDashboard) {
-        router.push('/profile');
-      } else {
-      router.push(`/auth/email-verification?email=${encodeURIComponent(data.email)}`);
-      }
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      toast({
-        variant: "destructive",
-        title: "Sign up failed",
-        description: "Failed to create account. Please try again."
-      });
-    } finally {
-      setIsPending(false);
-    }
-  }, [onSubmit, router, redirectToDashboard, redirectTo]);
+    },
+    [onSubmit, router, redirectToDashboard, redirectTo],
+  );
 
   return {
     form,
     isPending,
     onSubmit: handleSubmit,
   };
-} 
+}

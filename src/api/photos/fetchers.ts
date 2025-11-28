@@ -40,9 +40,8 @@ export async function fetchProfilePhotoUrl(
       .getPublicUrl(filePath);
 
     return publicUrlData?.publicUrl || null;
-
   } catch (error) {
     console.error('Unexpected error fetching profile photo URL:', error);
     return null;
   }
-} 
+}

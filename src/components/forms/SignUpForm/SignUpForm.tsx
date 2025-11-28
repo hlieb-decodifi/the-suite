@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { SignUpFormContent } from './components/SignUpFormContent';
@@ -30,7 +29,7 @@ export function SignUpForm({
   } = useSignUpForm({
     onSubmit,
     redirectToDashboard,
-    redirectTo
+    redirectTo,
   });
 
   const searchParams = useSearchParams();
@@ -41,7 +40,6 @@ export function SignUpForm({
   const email = searchParams?.get('email') || '';
 
   const showModal = googleError === 'account_exists' && email;
-
 
   const handleSecondary = () => {
     // Switch to login form, pre-fill email

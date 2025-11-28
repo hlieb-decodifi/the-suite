@@ -1,7 +1,11 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { ConversationWithUser, ChatMessage, Conversation } from '@/types/messages';
+import {
+  ConversationWithUser,
+  ChatMessage,
+  Conversation,
+} from '@/types/messages';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -14,9 +18,12 @@ export async function getConversations(conversationId?: string): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -31,9 +38,10 @@ export async function getConversations(conversationId?: string): Promise<{
       .from('conversations')
       .select('*')
       .eq('purpose', 'general') // Only show general conversations
-      .or(isProfessional 
-        ? `professional_id.eq.${user.id}`
-        : `client_id.eq.${user.id}`
+      .or(
+        isProfessional
+          ? `professional_id.eq.${user.id}`
+          : `client_id.eq.${user.id}`,
       )
       .order('updated_at', { ascending: false });
 
@@ -46,15 +54,19 @@ export async function getConversations(conversationId?: string): Promise<{
     const conversationsWithUsers = await Promise.all(
       (conversations || []).map(async (conversation) => {
         // Get the other user's details
-        const otherUserId = isProfessional ? conversation.client_id : conversation.professional_id;
+        const otherUserId = isProfessional
+          ? conversation.client_id
+          : conversation.professional_id;
         const { data: otherUser, error: userError } = await supabase
           .from('users')
-          .select(`
+          .select(
+            `
             id,
             first_name,
             last_name,
             profile_photos (url)
-          `)
+          `,
+          )
           .eq('id', otherUserId)
           .single();
 
@@ -66,39 +78,47 @@ export async function getConversations(conversationId?: string): Promise<{
         // Get last message
         const { data: lastMessageData } = await supabase
           .from('messages')
-          .select(`
+          .select(
+            `
             *,
             attachments:message_attachments(*)
-          `)
+          `,
+          )
           .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
 
         // Transform lastMessage to match ChatMessage type
-        const lastMessage = lastMessageData ? {
-          id: lastMessageData.id,
-          conversation_id: lastMessageData.conversation_id,
-          sender_id: lastMessageData.sender_id,
-          content: lastMessageData.content,
-          created_at: lastMessageData.created_at,
-          updated_at: lastMessageData.updated_at,
-          attachments: lastMessageData.attachments?.map(att => ({
-            id: att.id,
-            message_id: att.message_id,
-            url: att.url,
-            type: 'image' as const,
-            file_name: att.file_name,
-            file_size: att.file_size,
-            created_at: att.created_at
-          })) || []
-        } : undefined;
+        const lastMessage = lastMessageData
+          ? {
+              id: lastMessageData.id,
+              conversation_id: lastMessageData.conversation_id,
+              sender_id: lastMessageData.sender_id,
+              content: lastMessageData.content,
+              created_at: lastMessageData.created_at,
+              updated_at: lastMessageData.updated_at,
+              attachments:
+                lastMessageData.attachments?.map((att) => ({
+                  id: att.id,
+                  message_id: att.message_id,
+                  url: att.url,
+                  type: 'image' as const,
+                  file_name: att.file_name,
+                  file_size: att.file_size,
+                  created_at: att.created_at,
+                })) || [],
+            }
+          : undefined;
 
         // Count unread messages for the current user using the new function
-        const { data: unreadCount } = await supabase.rpc('get_unread_message_count', {
-          p_conversation_id: conversation.id,
-          p_user_id: user.id
-        });
+        const { data: unreadCount } = await supabase.rpc(
+          'get_unread_message_count',
+          {
+            p_conversation_id: conversation.id,
+            p_user_id: user.id,
+          },
+        );
 
         return {
           ...conversation,
@@ -106,19 +126,21 @@ export async function getConversations(conversationId?: string): Promise<{
             id: otherUser?.id || '',
             first_name: otherUser?.first_name || '',
             last_name: otherUser?.last_name || '',
-            profile_photo_url: Array.isArray(otherUser?.profile_photos) 
-              ? otherUser.profile_photos[0]?.url 
+            profile_photo_url: Array.isArray(otherUser?.profile_photos)
+              ? otherUser.profile_photos[0]?.url
               : otherUser?.profile_photos?.url || undefined,
           },
           last_message: lastMessage,
           unread_count: unreadCount || 0,
         };
-      })
+      }),
     );
 
     // Filter out null values, and keep conversations that have messages OR match the provided conversationId.
-    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
-      conv !== null && (conv.last_message !== undefined || conv.id === conversationId)
+    const validConversations = conversationsWithUsers.filter(
+      (conv): conv is NonNullable<typeof conv> =>
+        conv !== null &&
+        (conv.last_message !== undefined || conv.id === conversationId),
     );
 
     return { success: true, conversations: validConversations };
@@ -138,9 +160,12 @@ export async function getMessages(conversationId: string): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -154,16 +179,21 @@ export async function getMessages(conversationId: string): Promise<{
       .single();
 
     if (conversationError || !conversation) {
-      return { success: false, error: 'Conversation not found or access denied' };
+      return {
+        success: false,
+        error: 'Conversation not found or access denied',
+      };
     }
 
     // Get messages
     const { data: messagesData, error: messagesError } = await supabase
       .from('messages')
-      .select(`
+      .select(
+        `
         *,
         attachments:message_attachments(*)
-      `)
+      `,
+      )
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
@@ -173,22 +203,23 @@ export async function getMessages(conversationId: string): Promise<{
     }
 
     // Transform the data to match our ChatMessage type
-    const messages = (messagesData || []).map(msg => ({
+    const messages = (messagesData || []).map((msg) => ({
       id: msg.id,
       conversation_id: msg.conversation_id,
       sender_id: msg.sender_id,
       content: msg.content,
       created_at: msg.created_at,
       updated_at: msg.updated_at,
-      attachments: msg.attachments?.map(att => ({
-        id: att.id,
-        message_id: att.message_id,
-        url: att.url,
-        type: 'image' as const,
-        file_name: att.file_name,
-        file_size: att.file_size,
-        created_at: att.created_at
-      })) || []
+      attachments:
+        msg.attachments?.map((att) => ({
+          id: att.id,
+          message_id: att.message_id,
+          url: att.url,
+          type: 'image' as const,
+          file_name: att.file_name,
+          file_size: att.file_size,
+          created_at: att.created_at,
+        })) || [],
     })) as ChatMessage[];
 
     return { success: true, messages: messages };
@@ -209,7 +240,7 @@ export async function sendMessage(
     type: 'image';
     file_name: string;
     file_size: number;
-  }>
+  }>,
 ): Promise<{
   success: boolean;
   message?: ChatMessage;
@@ -217,9 +248,12 @@ export async function sendMessage(
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -233,7 +267,10 @@ export async function sendMessage(
       .single();
 
     if (conversationError || !conversation) {
-      return { success: false, error: 'Conversation not found or access denied' };
+      return {
+        success: false,
+        error: 'Conversation not found or access denied',
+      };
     }
 
     // Start a transaction
@@ -257,13 +294,13 @@ export async function sendMessage(
       const { error: attachmentsError } = await supabase
         .from('message_attachments')
         .insert(
-          attachments.map(attachment => ({
+          attachments.map((attachment) => ({
             message_id: message.id,
             url: attachment.url,
             type: attachment.type,
             file_name: attachment.file_name,
             file_size: attachment.file_size,
-          }))
+          })),
         );
 
       if (attachmentsError) {
@@ -275,10 +312,12 @@ export async function sendMessage(
     // Get the complete message with attachments
     const { data: completeMessage, error: fetchError } = await supabase
       .from('messages')
-      .select(`
+      .select(
+        `
         *,
         attachments:message_attachments(*)
-      `)
+      `,
+      )
       .eq('id', message.id)
       .single();
 
@@ -295,15 +334,16 @@ export async function sendMessage(
       content: completeMessage.content,
       created_at: completeMessage.created_at,
       updated_at: completeMessage.updated_at,
-      attachments: completeMessage.attachments?.map(att => ({
-        id: att.id,
-        message_id: att.message_id,
-        url: att.url,
-        type: 'image' as const,
-        file_name: att.file_name,
-        file_size: att.file_size,
-        created_at: att.created_at
-      })) || []
+      attachments:
+        completeMessage.attachments?.map((att) => ({
+          id: att.id,
+          message_id: att.message_id,
+          url: att.url,
+          type: 'image' as const,
+          file_name: att.file_name,
+          file_size: att.file_size,
+          created_at: att.created_at,
+        })) || [],
     };
 
     revalidatePath('/dashboard/messages');
@@ -323,9 +363,12 @@ export async function markMessagesAsRead(conversationId: string): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -337,18 +380,18 @@ export async function markMessagesAsRead(conversationId: string): Promise<{
       .select('id')
       .eq('conversation_id', conversationId)
       .neq('sender_id', user.id);
-    
+
     if (unreadMessages && unreadMessages.length > 0) {
       // Mark each message as read using the new table
-      const readStatusInserts = unreadMessages.map(msg => ({
+      const readStatusInserts = unreadMessages.map((msg) => ({
         message_id: msg.id,
-        user_id: user.id
+        user_id: user.id,
       }));
-      
+
       const { error: updateError } = await supabase
         .from('message_read_status')
         .upsert(readStatusInserts, { onConflict: 'message_id,user_id' });
-        
+
       if (updateError) {
         console.error('Error marking messages as read:', updateError);
         return { success: false, error: 'Failed to mark messages as read' };
@@ -370,7 +413,7 @@ export async function markMessagesAsRead(conversationId: string): Promise<{
  * 2. Users without shared appointments (only client can start if professional allows messages)
  */
 export async function createOrGetConversationEnhanced(
-  targetUserId: string
+  targetUserId: string,
 ): Promise<{
   success: boolean;
   conversation?: Conversation;
@@ -378,9 +421,12 @@ export async function createOrGetConversationEnhanced(
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -389,15 +435,21 @@ export async function createOrGetConversationEnhanced(
     const { data: isCurrentUserClient } = await supabase.rpc('is_client', {
       user_uuid: user.id,
     });
-    const { data: isCurrentUserProfessional } = await supabase.rpc('is_professional', {
-      user_uuid: user.id,
-    });
+    const { data: isCurrentUserProfessional } = await supabase.rpc(
+      'is_professional',
+      {
+        user_uuid: user.id,
+      },
+    );
     const { data: isTargetClient } = await supabase.rpc('is_client', {
       user_uuid: targetUserId,
     });
-    const { data: isTargetProfessional } = await supabase.rpc('is_professional', {
-      user_uuid: targetUserId,
-    });
+    const { data: isTargetProfessional } = await supabase.rpc(
+      'is_professional',
+      {
+        user_uuid: targetUserId,
+      },
+    );
 
     // Determine conversation participant roles
     let clientId: string;
@@ -410,7 +462,11 @@ export async function createOrGetConversationEnhanced(
       clientId = targetUserId;
       professionalId = user.id;
     } else {
-      return { success: false, error: 'Conversations can only be created between clients and professionals' };
+      return {
+        success: false,
+        error:
+          'Conversations can only be created between clients and professionals',
+      };
     }
 
     // Check if general conversation already exists
@@ -445,7 +501,8 @@ export async function createOrGetConversationEnhanced(
       .eq('professional_profile_id', professionalProfile.id)
       .limit(1);
 
-    const hasSharedAppointments = sharedAppointments && sharedAppointments.length > 0;
+    const hasSharedAppointments =
+      sharedAppointments && sharedAppointments.length > 0;
 
     // If they have shared appointments, either user can create conversation
     if (hasSharedAppointments) {
@@ -455,7 +512,7 @@ export async function createOrGetConversationEnhanced(
         .insert({
           client_id: clientId,
           professional_id: professionalId,
-          purpose: 'general'
+          purpose: 'general',
         })
         .select()
         .single();
@@ -470,7 +527,11 @@ export async function createOrGetConversationEnhanced(
 
     // If no shared appointments, check if current user is client and professional allows messages
     if (!isCurrentUserClient) {
-      return { success: false, error: 'Only clients can start conversations with professionals they haven\'t worked with' };
+      return {
+        success: false,
+        error:
+          "Only clients can start conversations with professionals they haven't worked with",
+      };
     }
 
     // Check if professional allows messages
@@ -485,7 +546,10 @@ export async function createOrGetConversationEnhanced(
     }
 
     if (!professional.allow_messages) {
-      return { success: false, error: 'This professional does not accept messages from new clients' };
+      return {
+        success: false,
+        error: 'This professional does not accept messages from new clients',
+      };
     }
 
     // Try to create the conversation
@@ -494,7 +558,7 @@ export async function createOrGetConversationEnhanced(
       .insert({
         client_id: clientId,
         professional_id: professionalId,
-        purpose: 'general'
+        purpose: 'general',
       })
       .select()
       .single();
@@ -528,9 +592,12 @@ export async function getAvailableProfessionals(): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -541,13 +608,17 @@ export async function getAvailableProfessionals(): Promise<{
     });
 
     if (!isClient) {
-      return { success: false, error: 'Only clients can view available professionals' };
+      return {
+        success: false,
+        error: 'Only clients can view available professionals',
+      };
     }
 
     // Get professionals who allow messages
     const { data: professionals, error: professionalsError } = await supabase
       .from('professional_profiles')
-      .select(`
+      .select(
+        `
         user_id,
         profession,
         users:user_id (
@@ -556,7 +627,8 @@ export async function getAvailableProfessionals(): Promise<{
           last_name,
           profile_photos (url)
         )
-      `)
+      `,
+      )
       .eq('allow_messages', true)
       .eq('is_published', true);
 
@@ -570,8 +642,8 @@ export async function getAvailableProfessionals(): Promise<{
       first_name: prof.users.first_name,
       last_name: prof.users.last_name,
       profession: prof.profession || undefined,
-      profile_photo_url: Array.isArray(prof.users.profile_photos) 
-        ? prof.users.profile_photos[0]?.url 
+      profile_photo_url: Array.isArray(prof.users.profile_photos)
+        ? prof.users.profile_photos[0]?.url
         : prof.users.profile_photos?.url || undefined,
     }));
 
@@ -592,9 +664,12 @@ export async function getRecentConversations(): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -609,9 +684,10 @@ export async function getRecentConversations(): Promise<{
       .from('conversations')
       .select('*')
       .eq('purpose', 'general') // Only show general conversations
-      .or(isProfessional 
-        ? `professional_id.eq.${user.id}`
-        : `client_id.eq.${user.id}`
+      .or(
+        isProfessional
+          ? `professional_id.eq.${user.id}`
+          : `client_id.eq.${user.id}`,
       )
       .order('updated_at', { ascending: false })
       .limit(2);
@@ -629,15 +705,19 @@ export async function getRecentConversations(): Promise<{
     const conversationsWithUsers = await Promise.all(
       conversations.map(async (conversation) => {
         // Get the other user's details
-        const otherUserId = isProfessional ? conversation.client_id : conversation.professional_id;
+        const otherUserId = isProfessional
+          ? conversation.client_id
+          : conversation.professional_id;
         const { data: otherUser, error: userError } = await supabase
           .from('users')
-          .select(`
+          .select(
+            `
             id,
             first_name,
             last_name,
             profile_photos (url)
-          `)
+          `,
+          )
           .eq('id', otherUserId)
           .single();
 
@@ -649,39 +729,47 @@ export async function getRecentConversations(): Promise<{
         // Get last message
         const { data: lastMessageData } = await supabase
           .from('messages')
-          .select(`
+          .select(
+            `
             *,
             attachments:message_attachments(*)
-          `)
+          `,
+          )
           .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
 
         // Transform lastMessage to match ChatMessage type
-        const lastMessage = lastMessageData ? {
-          id: lastMessageData.id,
-          conversation_id: lastMessageData.conversation_id,
-          sender_id: lastMessageData.sender_id,
-          content: lastMessageData.content,
-          created_at: lastMessageData.created_at,
-          updated_at: lastMessageData.updated_at,
-          attachments: lastMessageData.attachments?.map(att => ({
-            id: att.id,
-            message_id: att.message_id,
-            url: att.url,
-            type: 'image' as const,
-            file_name: att.file_name,
-            file_size: att.file_size,
-            created_at: att.created_at
-          })) || []
-        } : undefined;
+        const lastMessage = lastMessageData
+          ? {
+              id: lastMessageData.id,
+              conversation_id: lastMessageData.conversation_id,
+              sender_id: lastMessageData.sender_id,
+              content: lastMessageData.content,
+              created_at: lastMessageData.created_at,
+              updated_at: lastMessageData.updated_at,
+              attachments:
+                lastMessageData.attachments?.map((att) => ({
+                  id: att.id,
+                  message_id: att.message_id,
+                  url: att.url,
+                  type: 'image' as const,
+                  file_name: att.file_name,
+                  file_size: att.file_size,
+                  created_at: att.created_at,
+                })) || [],
+            }
+          : undefined;
 
         // Count unread messages for the current user using the new function
-        const { data: unreadCount } = await supabase.rpc('get_unread_message_count', {
-          p_conversation_id: conversation.id,
-          p_user_id: user.id
-        });
+        const { data: unreadCount } = await supabase.rpc(
+          'get_unread_message_count',
+          {
+            p_conversation_id: conversation.id,
+            p_user_id: user.id,
+          },
+        );
 
         return {
           ...conversation,
@@ -689,24 +777,25 @@ export async function getRecentConversations(): Promise<{
             id: otherUser?.id || '',
             first_name: otherUser?.first_name || '',
             last_name: otherUser?.last_name || '',
-            profile_photo_url: Array.isArray(otherUser?.profile_photos) 
-              ? otherUser.profile_photos[0]?.url 
+            profile_photo_url: Array.isArray(otherUser?.profile_photos)
+              ? otherUser.profile_photos[0]?.url
               : otherUser?.profile_photos?.url || undefined,
           },
           last_message: lastMessage,
           unread_count: unreadCount || 0,
         };
-      })
+      }),
     );
 
     // Filter out null values and conversations without messages
-    const validConversations = conversationsWithUsers.filter((conv): conv is NonNullable<typeof conv> => 
-      conv !== null && conv.last_message !== undefined
+    const validConversations = conversationsWithUsers.filter(
+      (conv): conv is NonNullable<typeof conv> =>
+        conv !== null && conv.last_message !== undefined,
     );
-    
+
     return { success: true, conversations: validConversations };
   } catch (error) {
     console.error('Error in getRecentConversations:', error);
     return { success: false, error: 'An unexpected error occurred' };
   }
-} 
+}

@@ -1,1 +1,1 @@
-export * from './SubscriptionTooltip'; 
+export * from './SubscriptionTooltip';

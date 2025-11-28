@@ -1,13 +1,16 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
-
 /**
  * Update the max_services value for a professional profile by userId (admin only)
  */
-export async function updateProfessionalMaxServices(userId: string, maxServices: number): Promise<{ success: boolean; error?: string }> {
+export async function updateProfessionalMaxServices(
+  userId: string,
+  maxServices: number,
+): Promise<{ success: boolean; error?: string }> {
   // Role check: ensure current user is admin
   const supabase = await createClient();
-  const { data: sessionData, error: sessionError } = await supabase.auth.getUser();
+  const { data: sessionData, error: sessionError } =
+    await supabase.auth.getUser();
   const sessionUser = sessionData?.user;
   if (sessionError || !sessionUser) {
     return { success: false, error: 'Not authenticated' };
@@ -45,12 +48,15 @@ export async function updateProfessionalMaxServices(userId: string, maxServices:
   // Upsert into service_limits table
   const { error: upsertError } = await adminSupabase
     .from('service_limits')
-    .upsert([
-      {
-        professional_profile_id: profile.id,
-        max_services: maxServices,
-      },
-    ], { onConflict: 'professional_profile_id' });
+    .upsert(
+      [
+        {
+          professional_profile_id: profile.id,
+          max_services: maxServices,
+        },
+      ],
+      { onConflict: 'professional_profile_id' },
+    );
   if (upsertError) {
     return { success: false, error: upsertError.message };
   }

@@ -25,7 +25,8 @@ export async function createSupportRequest({
     }
 
     // Validate UUID format to prevent database errors
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(appointment_id)) {
       return {
         success: false,
@@ -74,9 +75,9 @@ export async function createSupportRequest({
         error: 'Booking not found for this appointment',
       };
     }
-    
+
     const clientId = booking.client_id;
-    
+
     // Access the professional's user_id
     const professionalProfile = booking.professional_profiles?.[0];
     const professionalId = professionalProfile?.user_id;
@@ -98,7 +99,7 @@ export async function createSupportRequest({
 
     // Create a conversation for this support request
     const conversationPurpose = `support_request_${appointment_id}`;
-    
+
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
       .insert({
@@ -126,7 +127,7 @@ export async function createSupportRequest({
       if (Array.isArray(services)) {
         serviceName = services[0]?.name || '';
       } else if (services && typeof services === 'object') {
-        serviceName = (services as {name?: string}).name || '';
+        serviceName = (services as { name?: string }).name || '';
       }
     } catch {
       serviceName = '';
@@ -211,7 +212,8 @@ export async function initiateRefund({
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -306,7 +308,8 @@ export async function resolveSupportRequest({
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -470,7 +473,7 @@ export async function getSupportRequests(): Promise<{
             {
               p_conversation_id: request.conversation_id,
               p_user_id: user.id,
-            }
+            },
           );
 
           return {

@@ -111,7 +111,9 @@ export async function processCashPaymentTip(
     // For now, we'll just record the tip and send notification emails
 
     // Tip notification emails have been removed (were using payment confirmation templates)
-    console.log(`ℹ️ Tip confirmation emails are no longer sent for booking: ${bookingId}`);
+    console.log(
+      `ℹ️ Tip confirmation emails are no longer sent for booking: ${bookingId}`,
+    );
 
     return {
       success: true,
@@ -128,7 +130,7 @@ export async function processCashPaymentTip(
 
 export async function processBalancePayment(
   bookingId: string,
-  tipAmount: number
+  tipAmount: number,
 ): Promise<{
   success: boolean;
   capturedAmount?: number;
@@ -136,13 +138,15 @@ export async function processBalancePayment(
 }> {
   try {
     const supabase = await createClient();
-    
+
     // Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return {
         success: false,
-        error: 'Not authenticated'
+        error: 'Not authenticated',
       };
     }
 
@@ -150,14 +154,15 @@ export async function processBalancePayment(
     if (tipAmount < 0) {
       return {
         success: false,
-        error: 'Invalid tip amount'
+        error: 'Invalid tip amount',
       };
     }
 
     // Get booking details to verify ownership and get payment info
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         booking_payments (
@@ -167,14 +172,15 @@ export async function processBalancePayment(
           tip_amount,
           status
         )
-      `)
+      `,
+      )
       .eq('id', bookingId)
       .single();
 
     if (bookingError || !booking) {
       return {
         success: false,
-        error: 'Booking not found'
+        error: 'Booking not found',
       };
     }
 
@@ -182,7 +188,7 @@ export async function processBalancePayment(
     if (booking.client_id !== user.id) {
       return {
         success: false,
-        error: 'Unauthorized'
+        error: 'Unauthorized',
       };
     }
 
@@ -190,7 +196,7 @@ export async function processBalancePayment(
     if (!booking.booking_payments) {
       return {
         success: false,
-        error: 'No payment record found'
+        error: 'No payment record found',
       };
     }
 
@@ -200,7 +206,7 @@ export async function processBalancePayment(
     if (payment.status === 'completed') {
       return {
         success: false,
-        error: 'Payment already processed'
+        error: 'Payment already processed',
       };
     }
 
@@ -231,7 +237,7 @@ export async function processBalancePayment(
     console.error('Error in processBalancePayment:', error);
     return {
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     };
   }
-} 
+}

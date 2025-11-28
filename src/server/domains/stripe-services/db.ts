@@ -4,7 +4,7 @@ import type {
   ServiceWithStripe,
   ProfessionalProfileForStripe,
   StripeProductStatus,
-  StripeSyncStatus
+  StripeSyncStatus,
 } from './types';
 
 // Create admin client for operations that need elevated permissions
@@ -14,8 +14,9 @@ function createSupabaseAdminClient() {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseServiceKey) {
     throw new Error('Missing Supabase service role key');
@@ -27,13 +28,16 @@ function createSupabaseAdminClient() {
 /**
  * Get professional profile data needed for Stripe evaluation
  */
-export async function getProfessionalProfileForStripe(userId: string): Promise<ProfessionalProfileForStripe | null> {
+export async function getProfessionalProfileForStripe(
+  userId: string,
+): Promise<ProfessionalProfileForStripe | null> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('professional_profiles')
-      .select(`
+      .select(
+        `
         id,
         user_id,
         is_published,
@@ -41,7 +45,8 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
           stripe_account_id,
           stripe_connect_status
         )
-      `)
+      `,
+      )
       .eq('user_id', userId)
       .single();
 
@@ -55,8 +60,13 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
       id: data.id,
       user_id: data.user_id,
       is_published: data.is_published ?? false,
-      stripe_account_id: data.professional_stripe_connect?.stripe_account_id || null,
-      stripe_connect_status: (data.professional_stripe_connect?.stripe_connect_status || 'not_connected') as 'not_connected' | 'pending' | 'complete'
+      stripe_account_id:
+        data.professional_stripe_connect?.stripe_account_id || null,
+      stripe_connect_status: (data.professional_stripe_connect
+        ?.stripe_connect_status || 'not_connected') as
+        | 'not_connected'
+        | 'pending'
+        | 'complete',
     };
   } catch (error) {
     console.error('Error in getProfessionalProfileForStripe:', error);
@@ -67,15 +77,19 @@ export async function getProfessionalProfileForStripe(userId: string): Promise<P
 /**
  * Check if professional has Credit Card payment method enabled
  */
-export async function professionalHasCreditCardPayment(professionalProfileId: string): Promise<boolean> {
+export async function professionalHasCreditCardPayment(
+  professionalProfileId: string,
+): Promise<boolean> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('professional_payment_methods')
-      .select(`
+      .select(
+        `
         payment_methods!inner(name)
-      `)
+      `,
+      )
       .eq('professional_profile_id', professionalProfileId);
 
     if (error) {
@@ -84,10 +98,11 @@ export async function professionalHasCreditCardPayment(professionalProfileId: st
     }
 
     // Check if any payment method is a credit card variant
-    const hasCreditCard = data?.some(item => {
-      const name = item.payment_methods?.name?.toLowerCase();
-      return name === 'credit card' || name === 'card' || name === 'credit';
-    }) || false;
+    const hasCreditCard =
+      data?.some((item) => {
+        const name = item.payment_methods?.name?.toLowerCase();
+        return name === 'credit card' || name === 'card' || name === 'credit';
+      }) || false;
 
     return hasCreditCard;
   } catch (error) {
@@ -99,9 +114,11 @@ export async function professionalHasCreditCardPayment(professionalProfileId: st
 /**
  * Get services that need Stripe synchronization
  */
-export async function getServicesPendingSync(limit: number = 50): Promise<ServiceWithStripe[]> {
+export async function getServicesPendingSync(
+  limit: number = 50,
+): Promise<ServiceWithStripe[]> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('services')
@@ -125,9 +142,11 @@ export async function getServicesPendingSync(limit: number = 50): Promise<Servic
 /**
  * Get all services for a professional profile
  */
-export async function getServicesForProfessional(professionalProfileId: string): Promise<ServiceWithStripe[]> {
+export async function getServicesForProfessional(
+  professionalProfileId: string,
+): Promise<ServiceWithStripe[]> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('services')
@@ -159,14 +178,14 @@ export async function updateServiceStripeData(
     stripe_sync_status?: StripeSyncStatus;
     stripe_sync_error?: string | null;
     stripe_synced_at?: string | null;
-  }
+  },
 ): Promise<boolean> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const updateData = {
       ...updates,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase
@@ -193,7 +212,7 @@ export async function markServiceSyncSuccess(
   serviceId: string,
   productId: string,
   priceId: string,
-  status: StripeProductStatus
+  status: StripeProductStatus,
 ): Promise<boolean> {
   return updateServiceStripeData(serviceId, {
     stripe_product_id: productId,
@@ -201,7 +220,7 @@ export async function markServiceSyncSuccess(
     stripe_status: status,
     stripe_sync_status: 'synced',
     stripe_sync_error: null,
-    stripe_synced_at: new Date().toISOString()
+    stripe_synced_at: new Date().toISOString(),
   });
 }
 
@@ -210,26 +229,28 @@ export async function markServiceSyncSuccess(
  */
 export async function markServiceSyncError(
   serviceId: string,
-  error: string
+  error: string,
 ): Promise<boolean> {
   return updateServiceStripeData(serviceId, {
     stripe_sync_status: 'error',
-    stripe_sync_error: error
+    stripe_sync_error: error,
   });
 }
 
 /**
  * Mark all services for a professional as pending sync
  */
-export async function markProfessionalServicesForSync(professionalProfileId: string): Promise<boolean> {
+export async function markProfessionalServicesForSync(
+  professionalProfileId: string,
+): Promise<boolean> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { error } = await supabase
       .from('services')
       .update({
         stripe_sync_status: 'pending',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('professional_profile_id', professionalProfileId);
 
@@ -248,9 +269,11 @@ export async function markProfessionalServicesForSync(professionalProfileId: str
 /**
  * Get service by ID with Stripe data
  */
-export async function getServiceWithStripeData(serviceId: string): Promise<ServiceWithStripe | null> {
+export async function getServiceWithStripeData(
+  serviceId: string,
+): Promise<ServiceWithStripe | null> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('services')
@@ -273,9 +296,11 @@ export async function getServiceWithStripeData(serviceId: string): Promise<Servi
 /**
  * Get services with sync errors for monitoring
  */
-export async function getServicesWithSyncErrors(limit: number = 100): Promise<ServiceWithStripe[]> {
+export async function getServicesWithSyncErrors(
+  limit: number = 100,
+): Promise<ServiceWithStripe[]> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('services')
@@ -299,10 +324,12 @@ export async function getServicesWithSyncErrors(limit: number = 100): Promise<Se
 /**
  * Reset service sync status to pending (for retry)
  */
-export async function resetServiceSyncStatus(serviceId: string): Promise<boolean> {
+export async function resetServiceSyncStatus(
+  serviceId: string,
+): Promise<boolean> {
   return updateServiceStripeData(serviceId, {
     stripe_sync_status: 'pending',
-    stripe_sync_error: null
+    stripe_sync_error: null,
   });
 }
 
@@ -316,7 +343,7 @@ export async function getStripeSyncStats(): Promise<{
   total: number;
 }> {
   const supabase = createSupabaseAdminClient();
-  
+
   try {
     const { data, error } = await supabase
       .from('services')
@@ -327,15 +354,18 @@ export async function getStripeSyncStats(): Promise<{
       return { pending: 0, synced: 0, error: 0, total: 0 };
     }
 
-    const stats = data?.reduce((acc, service) => {
-      acc.total++;
-      acc[service.stripe_sync_status as StripeSyncStatus]++;
-      return acc;
-    }, { pending: 0, synced: 0, error: 0, total: 0 }) || { pending: 0, synced: 0, error: 0, total: 0 };
+    const stats = data?.reduce(
+      (acc, service) => {
+        acc.total++;
+        acc[service.stripe_sync_status as StripeSyncStatus]++;
+        return acc;
+      },
+      { pending: 0, synced: 0, error: 0, total: 0 },
+    ) || { pending: 0, synced: 0, error: 0, total: 0 };
 
     return stats;
   } catch (error) {
     console.error('Error in getStripeSyncStats:', error);
     return { pending: 0, synced: 0, error: 0, total: 0 };
   }
-} 
+}

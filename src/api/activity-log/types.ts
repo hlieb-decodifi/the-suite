@@ -14,7 +14,8 @@ export const ActivityTypeEnum = {
   SEARCH_PERFORMED: 'search_performed',
 } as const;
 
-export type ActivityType = typeof ActivityTypeEnum[keyof typeof ActivityTypeEnum];
+export type ActivityType =
+  (typeof ActivityTypeEnum)[keyof typeof ActivityTypeEnum];
 
 // Entity types enum
 export const EntityTypeEnum = {
@@ -23,4 +24,4 @@ export const EntityTypeEnum = {
   BOOKING: 'booking',
 } as const;
 
-export type EntityType = typeof EntityTypeEnum[keyof typeof EntityTypeEnum];
+export type EntityType = (typeof EntityTypeEnum)[keyof typeof EntityTypeEnum];

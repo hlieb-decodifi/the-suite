@@ -59,10 +59,7 @@ export function ChangePasswordModal({
           </Button>
         </div>
       ) : (
-        <ChangePasswordForm
-          onSubmit={handleSubmit}
-          className="w-full"
-        />
+        <ChangePasswordForm onSubmit={handleSubmit} className="w-full" />
       )}
     </Modal>
   );

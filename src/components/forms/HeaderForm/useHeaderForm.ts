@@ -9,10 +9,7 @@ export type UseHeaderFormProps = {
   defaultValues?: Partial<HeaderFormValues> | undefined;
 };
 
-export function useHeaderForm({
-  onSubmit,
-  defaultValues,
-}: UseHeaderFormProps) {
+export function useHeaderForm({ onSubmit, defaultValues }: UseHeaderFormProps) {
   const [isPending, setIsPending] = useState(false);
 
   const form = useForm<HeaderFormValues>({
@@ -26,7 +23,7 @@ export function useHeaderForm({
       instagramUrl: undefined,
       facebookUrl: undefined,
       tiktokUrl: undefined,
-      ...defaultValues
+      ...defaultValues,
     },
     mode: 'onBlur',
   });
@@ -61,4 +58,4 @@ export function useHeaderForm({
     isPending,
     onSubmit: handleSubmit,
   };
-} 
+}

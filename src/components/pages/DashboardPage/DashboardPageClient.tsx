@@ -66,7 +66,7 @@ export function DashboardPageClient({
   // State for conversations to enable real-time updates
   const [conversations, setConversations] =
     useState<ConversationWithUser[]>(recentConversations);
-  
+
   // Get user's timezone
   const [userTimezone, setUserTimezone] = useState('UTC');
 
@@ -230,11 +230,12 @@ export function DashboardPageClient({
                 const serviceName = appointment.services?.name || 'Service';
 
                 // Get price including service fee for both professionals and clients
+                // Note: Service fee should be loaded from admin config, but using fallback for display
                 const price =
                   appointment.services?.totalWithServiceFee ||
                   (appointment.services?.totalPrice ||
                     appointment.services?.price ||
-                    0) + 1.0;
+                    0) + 1.0; // Fallback service fee - should use getServiceFeeAction for accuracy
 
                 // Check if there are additional services
                 const hasAdditionalServices =
@@ -270,16 +271,18 @@ export function DashboardPageClient({
                           ? formatDateTimeInTimezone(
                               new Date(appointment.start_time),
                               userTimezone,
-                              'MMM d, yyyy'
+                              'MMM d, yyyy',
                             ).date
                           : 'No date'}
                         <ClockIcon className="ml-2 mr-1 h-3 w-3" />
-                        {formatDateTimeInTimezone(
-                          new Date(appointment.start_time || new Date()),
-                          userTimezone,
-                          'MMM d, yyyy',
-                          'h:mm a'
-                        ).time}
+                        {
+                          formatDateTimeInTimezone(
+                            new Date(appointment.start_time || new Date()),
+                            userTimezone,
+                            'MMM d, yyyy',
+                            'h:mm a',
+                          ).time
+                        }
                       </div>
                     </Link>
                   </div>
@@ -375,10 +378,10 @@ export function DashboardPageClient({
                   <div className="p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex justify-between items-center mb-1">
                       <Typography className="font-medium">
-                        {supportRequest.category === 'refund_request' && supportRequest.requestedAmount ? 
-                          `$${supportRequest.requestedAmount.toFixed(2)}` : 
-                          supportRequest.title
-                        }
+                        {supportRequest.category === 'refund_request' &&
+                        supportRequest.requestedAmount
+                          ? `$${supportRequest.requestedAmount.toFixed(2)}`
+                          : supportRequest.title}
                       </Typography>
                       <div
                         className={cn(
@@ -404,7 +407,10 @@ export function DashboardPageClient({
                         : supportRequest.professionalName}
                     </Typography>
                     <Typography className="text-xs text-muted-foreground">
-                      {format(new Date(supportRequest.createdAt), 'MMM d, yyyy')}
+                      {format(
+                        new Date(supportRequest.createdAt),
+                        'MMM d, yyyy',
+                      )}
                     </Typography>
                   </div>
                 </Link>

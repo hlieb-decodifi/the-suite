@@ -63,7 +63,7 @@ export async function GET() {
     .select('user_id, updated_at')
     .eq('is_published', true);
 
-  const professionalPages = (professionals || []).flatMap(professional => [
+  const professionalPages = (professionals || []).flatMap((professional) => [
     {
       url: `${baseUrl}/professionals/${professional.user_id}`,
       lastModified: professional.updated_at,
@@ -89,12 +89,12 @@ export async function GET() {
         xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
 ${allPages
   .map(
-    page => `  <url>
+    (page) => `  <url>
     <loc>${page.url}</loc>
     <lastmod>${page.lastModified}</lastmod>
     <changefreq>${page.changeFrequency}</changefreq>
     <priority>${page.priority}</priority>
-  </url>`
+  </url>`,
   )
   .join('\n')}
 </urlset>`;

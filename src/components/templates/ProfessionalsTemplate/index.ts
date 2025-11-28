@@ -1,1 +1,1 @@
-export { ProfessionalsTemplate } from './ProfessionalsTemplate'; 
+export { ProfessionalsTemplate } from './ProfessionalsTemplate';

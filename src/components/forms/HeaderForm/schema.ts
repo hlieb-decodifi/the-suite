@@ -13,7 +13,11 @@ const isPhoneValid = (phone: string) => {
 
 // Zod preprocessor to add https:// if missing
 const urlPreprocessor = (arg: unknown) => {
-  if (typeof arg === 'string' && arg.trim() !== '' && !/^(https?:)?\/\//.test(arg)) {
+  if (
+    typeof arg === 'string' &&
+    arg.trim() !== '' &&
+    !/^(https?:)?\/\//.test(arg)
+  ) {
     return `https://${arg}`;
   }
   return arg;
@@ -22,10 +26,12 @@ const urlPreprocessor = (arg: unknown) => {
 // Schema for optional URL with preprocessing - ensure it returns string | undefined
 const optionalUrlSchema = z.preprocess(
   urlPreprocessor,
-  z.union([
-    z.string().url({ message: 'Please enter a valid URL.' }),
-    z.literal('').transform(() => undefined)
-  ]).optional()
+  z
+    .union([
+      z.string().url({ message: 'Please enter a valid URL.' }),
+      z.literal('').transform(() => undefined),
+    ])
+    .optional(),
 );
 
 export const headerSchema = z.object({
@@ -36,21 +42,24 @@ export const headerSchema = z.object({
   phoneNumber: z
     .string()
     .optional()
-    .refine((phone) => {
-      // Allow empty/undefined phone numbers
-      if (!phone || phone.trim() === '') {
-        return true;
-      }
-      // If phone is just a country code (e.g., '+1', '+44'), treat as empty
-      const onlyCountryCode = /^\+\d{1,4}$/.test(phone.trim());
-      if (onlyCountryCode) {
-        return true;
-      }
-      // Validate using google-libphonenumber
-      return isPhoneValid(phone);
-    }, {
-      message: 'Please enter a valid phone number for the selected country'
-    }),
+    .refine(
+      (phone) => {
+        // Allow empty/undefined phone numbers
+        if (!phone || phone.trim() === '') {
+          return true;
+        }
+        // If phone is just a country code (e.g., '+1', '+44'), treat as empty
+        const onlyCountryCode = /^\+\d{1,4}$/.test(phone.trim());
+        if (onlyCountryCode) {
+          return true;
+        }
+        // Validate using google-libphonenumber
+        return isPhoneValid(phone);
+      },
+      {
+        message: 'Please enter a valid phone number for the selected country',
+      },
+    ),
   // Replace socialMedia array with specific optional fields
   instagramUrl: optionalUrlSchema,
   facebookUrl: optionalUrlSchema,
@@ -59,4 +68,4 @@ export const headerSchema = z.object({
 
 export type HeaderFormValues = z.infer<typeof headerSchema>;
 // Remove SocialMediaPlatform type if no longer needed elsewhere
-// export type SocialMediaPlatform = z.infer<typeof socialMediaPlatformSchema>; 
+// export type SocialMediaPlatform = z.infer<typeof socialMediaPlatformSchema>;

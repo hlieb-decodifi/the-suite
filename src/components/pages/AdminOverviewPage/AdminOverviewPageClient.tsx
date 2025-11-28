@@ -1,5 +1,5 @@
 // Client component for admin dashboard overview tab
-"use client";
+'use client';
 import { useDateRange } from '@/components/layouts/AdminDashboardPageLayout/DateRangeContextProvider';
 import { subDays, format as formatDateFns } from 'date-fns';
 import { useEffect, useState, useRef } from 'react';
@@ -12,7 +12,6 @@ import {
   MessagesWidget,
   SupportRequestsWidget,
 } from '@/components/templates/AdminOverviewTemplate/components';
-
 
 type DashboardData = {
   totalBookings: number;
@@ -30,13 +29,15 @@ type DashboardData = {
 
 export default function AdminOverviewPageClient() {
   const { start, end, setDateRange } = useDateRange();
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Store the initial date range
   const initialRange = useRef<{ start?: string; end?: string }>(
-    Object.assign({}, start ? { start } : {}, end ? { end } : {})
+    Object.assign({}, start ? { start } : {}, end ? { end } : {}),
   );
   const isInitialMount = useRef(true);
   const didSetDefault = useRef(false);
@@ -90,12 +91,17 @@ export default function AdminOverviewPageClient() {
     setLoading(true);
     setError(null);
     getAdminDashboardData({ startDate: start, endDate: end })
-      .then(data => setDashboardData(data))
-      .catch(err => setError(err.message || 'Failed to fetch data'))
+      .then((data) => setDashboardData(data))
+      .catch((err) => setError(err.message || 'Failed to fetch data'))
       .finally(() => setLoading(false));
   }, [start, end, setDateRange]);
 
-  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading overview...</div>;
+  if (loading)
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        Loading overview...
+      </div>
+    );
 
   if (error) {
     return (
@@ -108,8 +114,8 @@ export default function AdminOverviewPageClient() {
             setLoading(true);
             setError(null);
             getAdminDashboardData({ startDate: start, endDate: end })
-              .then(data => setDashboardData(data))
-              .catch(err => setError(err.message || 'Failed to fetch data'))
+              .then((data) => setDashboardData(data))
+              .catch((err) => setError(err.message || 'Failed to fetch data'))
               .finally(() => setLoading(false));
           }}
         >
@@ -122,15 +128,16 @@ export default function AdminOverviewPageClient() {
   if (!dashboardData) {
     return (
       <div className="py-8 text-center text-muted-foreground">
-        No overview data available.<br />
+        No overview data available.
+        <br />
         <button
           className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary/80"
           onClick={() => {
             setLoading(true);
             setError(null);
             getAdminDashboardData({ startDate: start, endDate: end })
-              .then(data => setDashboardData(data))
-              .catch(err => setError(err.message || 'Failed to fetch data'))
+              .then((data) => setDashboardData(data))
+              .catch((err) => setError(err.message || 'Failed to fetch data'))
               .finally(() => setLoading(false));
           }}
         >

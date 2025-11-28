@@ -16,7 +16,7 @@ export type BookingCompletedProps = {
  */
 export function createCompletedViewProps(
   service: ServiceListItem,
-  bookingDetails: BookingDetailsState
+  bookingDetails: BookingDetailsState,
 ): BookingCompletedProps {
   return {
     bookingDetails: {
@@ -27,4 +27,4 @@ export function createCompletedViewProps(
       totalPrice: bookingDetails.totalPrice,
     },
   };
-} 
+}

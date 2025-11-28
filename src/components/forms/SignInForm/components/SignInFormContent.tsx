@@ -1,6 +1,10 @@
 'use client';
 
-import { FormInput, PasswordInput, GoogleOAuthButton } from '@/components/forms/components';
+import {
+  FormInput,
+  PasswordInput,
+  GoogleOAuthButton,
+} from '@/components/forms/components';
 import { Button } from '@/components/ui/button';
 import { UseFormReturn } from 'react-hook-form';
 import { SignInFormValues } from '../schema';
@@ -32,10 +36,7 @@ export function SignInFormContent({
       <form onSubmit={form.handleSubmit(onSubmit)}>
         {/* Google OAuth Button */}
         <div className="mb-4">
-          <GoogleOAuthButton
-            mode="signin"
-            redirectTo={redirectTo}
-          />
+          <GoogleOAuthButton mode="signin" redirectTo={redirectTo} />
         </div>
 
         {/* Divider */}

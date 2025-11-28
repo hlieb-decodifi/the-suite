@@ -21,7 +21,9 @@ export async function getAdminSupportRequest(id: string): Promise<{
       };
     }
     // Check admin role
-    const { data: isAdmin } = await supabase.rpc('is_admin', { user_uuid: user.id });
+    const { data: isAdmin } = await supabase.rpc('is_admin', {
+      user_uuid: user.id,
+    });
     if (!isAdmin) {
       return {
         success: false,
@@ -29,7 +31,8 @@ export async function getAdminSupportRequest(id: string): Promise<{
       };
     }
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return {
         success: false,
@@ -40,7 +43,8 @@ export async function getAdminSupportRequest(id: string): Promise<{
     const adminSupabase = createAdminClient();
     const { data: supportRequest, error } = await adminSupabase
       .from('support_requests')
-      .select(`
+      .select(
+        `
         *,
         appointments(
           id,
@@ -91,7 +95,8 @@ export async function getAdminSupportRequest(id: string): Promise<{
         conversations(
           id
         )
-      `)
+      `,
+      )
       .eq('id', id)
       .single();
     if (error) {
@@ -140,7 +145,8 @@ export async function createSupportRequest({
     }
 
     // Validate UUID format to prevent database errors
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(appointment_id)) {
       return {
         success: false,
@@ -202,7 +208,7 @@ export async function createSupportRequest({
 
     // Create a conversation for this support request
     const conversationPurpose = `support_request_${appointment_id}`;
-    
+
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
       .insert({
@@ -230,7 +236,7 @@ export async function createSupportRequest({
       if (Array.isArray(services)) {
         serviceName = services[0]?.name || '';
       } else if (services && typeof services === 'object') {
-        serviceName = (services as {name?: string}).name || '';
+        serviceName = (services as { name?: string }).name || '';
       }
     } catch {
       serviceName = '';
@@ -317,7 +323,8 @@ export async function initiateRefund({
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -344,7 +351,7 @@ export async function initiateRefund({
     // Process the refund through Stripe
     const { success, error: refundError } = await processStripeRefund(
       support_request_id,
-      refund_amount
+      refund_amount,
     );
 
     if (!success) {
@@ -359,7 +366,7 @@ export async function initiateRefund({
       const { error: updateError } = await supabase
         .from('support_requests')
         .update({
-          professional_notes: professional_notes
+          professional_notes: professional_notes,
         })
         .eq('id', support_request_id);
 
@@ -490,7 +497,7 @@ export async function getSupportRequests(): Promise<{
             {
               p_conversation_id: request.conversation_id,
               p_user_id: user.id,
-            }
+            },
           );
 
           return {
@@ -543,7 +550,8 @@ export async function getSupportRequest(id: string): Promise<{
     }
 
     // Validate UUID format to prevent database errors
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return {
         success: false,
@@ -554,7 +562,8 @@ export async function getSupportRequest(id: string): Promise<{
     // Get support request with all related data
     const { data: supportRequest, error } = await supabase
       .from('support_requests')
-      .select(`
+      .select(
+        `
         *,
         appointments(
           id,
@@ -605,7 +614,8 @@ export async function getSupportRequest(id: string): Promise<{
         conversations(
           id
         )
-      `)
+      `,
+      )
       .eq('id', id)
       .or(`client_id.eq.${user.id},professional_id.eq.${user.id}`)
       .single();
@@ -656,7 +666,8 @@ export async function resolveSupportRequest({
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -750,7 +761,8 @@ export async function closeSupportRequest({
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -817,4 +829,3 @@ export async function closeSupportRequest({
     };
   }
 }
-

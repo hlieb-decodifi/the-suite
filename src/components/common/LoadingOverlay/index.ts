@@ -1,2 +1,2 @@
 export * from './LoadingOverlay';
-export * from './types'; 
+export * from './types';

@@ -4,7 +4,7 @@
 export function formatCurrency(
   amount: number,
   options: Intl.NumberFormatOptions = {},
-  locale = 'en-US'
+  locale = 'en-US',
 ): string {
   const formatter = new Intl.NumberFormat(locale, {
     style: 'currency',
@@ -15,4 +15,4 @@ export function formatCurrency(
   });
 
   return formatter.format(amount);
-} 
+}

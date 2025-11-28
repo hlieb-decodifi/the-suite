@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +17,11 @@ type InviteAdminModalProps = {
   onInvited?: () => void;
 };
 
-export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteAdminModalProps) {
+export default function InviteAdminModal({
+  isOpen,
+  onClose,
+  onInvited,
+}: InviteAdminModalProps) {
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -70,18 +72,22 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
               <span className="text-green-600 text-2xl">✓</span>
             </div>
             <h3 className="text-lg font-medium">Invitation sent!</h3>
-            <p className="text-sm text-muted-foreground mt-2">The admin has been invited successfully.</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              The admin has been invited successfully.
+            </p>
           </div>
         ) : (
           <form onSubmit={handleInvite} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="invite-admin-email">Admin Email <span className="text-destructive">*</span></Label>
+              <Label htmlFor="invite-admin-email">
+                Admin Email <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="invite-admin-email"
                 type="email"
                 placeholder="admin@email.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
               />
@@ -93,7 +99,7 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
                 type="text"
                 placeholder="First Name"
                 value={firstName}
-                onChange={e => setFirstName(e.target.value)}
+                onChange={(e) => setFirstName(e.target.value)}
                 disabled={loading}
               />
             </div>
@@ -104,16 +110,28 @@ export default function InviteAdminModal({ isOpen, onClose, onInvited }: InviteA
                 type="text"
                 placeholder="Last Name"
                 value={lastName}
-                onChange={e => setLastName(e.target.value)}
+                onChange={(e) => setLastName(e.target.value)}
                 disabled={loading}
               />
             </div>
-            {error && <div className="text-destructive text-sm mt-2">{error}</div>}
+            {error && (
+              <div className="text-destructive text-sm mt-2">{error}</div>
+            )}
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={loading}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading || !email}>
+              <Button 
+                type="submit" 
+                disabled={loading || !email}
+                className="w-full sm:w-auto"
+              >
                 {loading ? 'Inviting...' : 'Send Invite'}
               </Button>
             </DialogFooter>

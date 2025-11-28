@@ -1,15 +1,13 @@
 import { stripe } from '@/lib/stripe/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type { Stripe } from 'stripe';
-import type {
-  StripeCheckoutParams,
-  StripeCheckoutResult
-} from './types';
+import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
+import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
 
 function createSupabaseAdminClient() {
   return createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 }
 
@@ -17,7 +15,7 @@ function createSupabaseAdminClient() {
  * Create a Stripe checkout session for booking payment
  */
 export async function createStripeCheckoutSession(
-  params: StripeCheckoutParams & { customerEmail?: string }
+  params: StripeCheckoutParams & { customerEmail?: string },
 ): Promise<StripeCheckoutResult> {
   try {
     const {
@@ -30,7 +28,7 @@ export async function createStripeCheckoutSession(
       paymentType,
       requiresBalancePayment,
       metadata,
-      customerEmail
+      customerEmail,
     } = params;
 
     if (!process.env.NEXT_PUBLIC_BASE_URL) {
@@ -38,16 +36,22 @@ export async function createStripeCheckoutSession(
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    
+
     // Get or create Stripe customer
     const { getOrCreateStripeCustomer } = await import('./db');
-    const customerResult = await getOrCreateStripeCustomer(clientId, customerEmail);
-    
+    const customerResult = await getOrCreateStripeCustomer(
+      clientId,
+      customerEmail,
+    );
+
     if (!customerResult.success || !customerResult.customerId) {
-      console.error('Failed to get/create Stripe customer:', customerResult.error);
+      console.error(
+        'Failed to get/create Stripe customer:',
+        customerResult.error,
+      );
       // Fallback to creating customer in session if our function fails
     }
-    
+
     // Determine the checkout session configuration based on payment type
     let sessionConfig: Stripe.Checkout.SessionCreateParams = {
       client_reference_id: clientId,
@@ -57,8 +61,8 @@ export async function createStripeCheckoutSession(
         ...metadata,
         booking_id: bookingId,
         payment_type: paymentType,
-        requires_balance_payment: requiresBalancePayment.toString()
-      }
+        requires_balance_payment: requiresBalancePayment.toString(),
+      },
     };
 
     // Use existing customer if available, otherwise create new one
@@ -80,17 +84,37 @@ export async function createStripeCheckoutSession(
         payment_method_types: ['card'],
         setup_intent_data: {
           metadata: sessionConfig.metadata || {},
-          on_behalf_of: professionalStripeAccountId
-        }
+          on_behalf_of: professionalStripeAccountId,
+        },
       };
     } else {
       // Payment mode for charging deposit or full amount
-      const chargeAmount = paymentType === 'deposit' ? (depositAmount ?? 0) : amount;
-      
+      const chargeAmount =
+        paymentType === 'deposit' ? (depositAmount ?? 0) : amount;
+
       if (chargeAmount <= 0) {
         throw new Error('Invalid charge amount');
       }
-      
+
+      // NEW FEE STRUCTURE: Calculate professional fee (3%) and client service fee
+      const { getProfessionalFeePercentage } = await import(
+        '@/server/lib/service-fee'
+      );
+      const professionalFeePercentage = await getProfessionalFeePercentage();
+      const professionalFee = Math.round(
+        chargeAmount * (professionalFeePercentage / 100),
+      );
+
+      let applicationFee: number;
+      if (paymentType === 'deposit') {
+        // For deposits: only professional fee (client service fee already included in deposit amount)
+        applicationFee = professionalFee;
+      } else {
+        // For full payments: professional fee + client service fee
+        const clientServiceFee = await getServiceFeeFromConfig();
+        applicationFee = professionalFee + clientServiceFee;
+      }
+
       sessionConfig = {
         ...sessionConfig,
         mode: 'payment',
@@ -100,28 +124,29 @@ export async function createStripeCheckoutSession(
             price_data: {
               currency: 'usd',
               product_data: {
-                name: paymentType === 'deposit' ? 'Service Deposit' : 'Service Payment',
-                description: paymentType === 'deposit' 
-                  ? `Appointment deposit${balanceAmount ? ` (Balance: $${(balanceAmount / 100).toFixed(2)} to be paid later)` : ''}`
-                  : `Full payment for your booking`
+                name:
+                  paymentType === 'deposit'
+                    ? 'Service Deposit'
+                    : 'Service Payment',
+                description:
+                  paymentType === 'deposit'
+                    ? `Appointment deposit${balanceAmount ? ` (Balance: $${(balanceAmount / 100).toFixed(2)} to be paid later)` : ''}`
+                    : `Full payment for your booking`,
               },
-              unit_amount: chargeAmount
+              unit_amount: chargeAmount,
             },
-            quantity: 1
-          }
+            quantity: 1,
+          },
         ],
         payment_intent_data: {
-          // For deposits: transfer full amount, for full payments: subtract service fee
+          // Use application_fee_amount for both deposits and full payments
+          application_fee_amount: applicationFee,
           transfer_data: {
-            amount: paymentType === 'deposit' 
-              ? chargeAmount // Transfer full deposit amount to professional
-              : chargeAmount - await getServiceFeeFromConfig(), // For full payments, subtract service fee
-            destination: professionalStripeAccountId
+            destination: professionalStripeAccountId,
           },
-          // For deposits: no platform fee, for full payments: platform keeps service fee
           on_behalf_of: professionalStripeAccountId, // Professional pays the processing fees
-          metadata: sessionConfig.metadata || {}
-        }
+          metadata: sessionConfig.metadata || {},
+        },
       };
 
       // Add setup for future payments if balance payment is required
@@ -139,14 +164,16 @@ export async function createStripeCheckoutSession(
     return {
       success: true,
       checkoutUrl: session.url,
-      sessionId: session.id
+      sessionId: session.id,
     };
-
   } catch (error) {
     console.error('Error creating Stripe checkout session:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating checkout session'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating checkout session',
     };
   }
 }
@@ -161,22 +188,34 @@ export async function createBalancePaymentIntent(
   userId: string,
   paymentMethodId: string,
   professionalStripeAccountId: string,
-  metadata: Record<string, string> = {}
+  metadata: Record<string, string> = {},
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
     // Get the customer ID for this user
     const { getStripeCustomerId } = await import('./db');
     const customerId = await getStripeCustomerId(userId);
-    
+
     if (!customerId) {
       return {
         success: false,
-        error: 'Customer not found. Please complete a checkout session first.'
+        error: 'Customer not found. Please complete a checkout session first.',
       };
     }
 
-    const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amount - serviceFee; // Professional gets this amount
+    // NEW FEE STRUCTURE: Calculate professional fee (3%) on balance amount
+    // Balance payment no longer includes client service fee (that's in deposit)
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+
+    // For balance payments, no client service fee (already charged with deposit)
+    // Only apply professional fee
+    const applicationFee = professionalFee;
+    const serviceAmount = amount - applicationFee;
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
@@ -187,7 +226,7 @@ export async function createBalancePaymentIntent(
       confirm: true,
       off_session: true, // Indicates this is for a saved payment method
       // Use application_fee_amount + transfer_data structure for better partial capture support
-      application_fee_amount: serviceFee, // Platform fee
+      application_fee_amount: applicationFee, // Professional fee only (3%)
       transfer_data: {
         destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       },
@@ -196,22 +235,26 @@ export async function createBalancePaymentIntent(
       metadata: {
         ...metadata,
         booking_id: bookingId,
-        payment_type: 'balance'
-      }
+        payment_type: 'balance',
+      },
     });
 
-    console.log(`[createBalancePaymentIntent] Created balance payment intent ${paymentIntent.id} - Total: $${amount/100}, App fee: $${serviceFee/100}, To professional: $${serviceAmount/100}`);
+    console.log(
+      `[createBalancePaymentIntent] Created balance payment intent ${paymentIntent.id} - Total: $${amount / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${serviceAmount / 100}`,
+    );
 
     return {
       success: true,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     };
-
   } catch (error) {
     console.error('Error creating balance payment intent:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating payment intent'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating payment intent',
     };
   }
 }
@@ -226,19 +269,21 @@ export async function getCheckoutSession(sessionId: string): Promise<{
 }> {
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['payment_intent', 'setup_intent', 'customer']
+      expand: ['payment_intent', 'setup_intent', 'customer'],
     });
 
     return {
       success: true,
-      session
+      session,
     };
-
   } catch (error) {
     console.error('Error retrieving checkout session:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error retrieving session'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error retrieving session',
     };
   }
 }
@@ -252,15 +297,19 @@ export async function createUncapturedPaymentIntent(
   customerId: string,
   professionalStripeAccountId: string,
   metadata: Record<string, string> = {},
-  paymentMethodId?: string
+  paymentMethodId?: string,
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
-    const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amount - serviceFee; // Professional gets this amount
-    
-    // Check if this is a cash payment where we're only charging the suite fee
-    const isCashPaymentSuiteFeeOnly = metadata.payment_method_type === 'cash' && amount === serviceFee;
-    
+    // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
+    // Client service fee was already charged with deposit
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
       currency: 'usd',
@@ -270,20 +319,18 @@ export async function createUncapturedPaymentIntent(
       metadata: {
         ...metadata,
         booking_id: metadata.booking_id || 'unknown',
-        payment_type: 'deposit_scheduled'
-      }
+        payment_type: 'deposit_scheduled',
+      },
     };
 
-    // Use application_fee_amount + transfer_data structure for better partial capture support
-    if (!isCashPaymentSuiteFeeOnly && serviceAmount > 0) {
-      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+    // Apply professional fee (3%) to balance amount
+    if (amount > 0) {
+      paymentIntentData.application_fee_amount = professionalFee;
       paymentIntentData.transfer_data = {
         destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       };
-      // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
       paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
     }
-    // For cash payments suite fee only: no transfer_data, entire amount stays with platform
 
     // If payment method is provided, set it and confirm
     if (paymentMethodId) {
@@ -294,18 +341,22 @@ export async function createUncapturedPaymentIntent(
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
-    console.log(`[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amount/100}, App fee: $${serviceFee/100}, To professional: $${serviceAmount/100}`);
+    console.log(
+      `[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amount / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${(amount - professionalFee) / 100}`,
+    );
 
     return {
       success: true,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     };
-
   } catch (error) {
     console.error('Error creating uncaptured payment intent:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating payment intent'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating payment intent',
     };
   }
 }
@@ -316,24 +367,26 @@ export async function createUncapturedPaymentIntent(
 export async function schedulePaymentAuthorization(
   bookingId: string,
   appointmentStartTime: Date,
-  appointmentEndTime: Date
-): Promise<{ 
-  success: boolean; 
-  preAuthDate?: Date; 
-  captureDate?: Date; 
+  appointmentEndTime: Date,
+): Promise<{
+  success: boolean;
+  preAuthDate?: Date;
+  captureDate?: Date;
   shouldPreAuthNow?: boolean;
-  error?: string; 
+  error?: string;
 }> {
   try {
     const { createClient } = await import('@/lib/supabase/server');
     const supabase = await createClient();
-    
-    console.log(`[Payment Schedule] Booking ${bookingId}: Calculating schedule for appointment ${appointmentStartTime.toISOString()} - ${appointmentEndTime.toISOString()}`);
-    
+
+    console.log(
+      `[Payment Schedule] Booking ${bookingId}: Calculating schedule for appointment ${appointmentStartTime.toISOString()} - ${appointmentEndTime.toISOString()}`,
+    );
+
     const { data, error } = await supabase
       .rpc('calculate_payment_schedule', {
         appointment_start_time: appointmentStartTime.toISOString(),
-        appointment_end_time: appointmentEndTime.toISOString()
+        appointment_end_time: appointmentEndTime.toISOString(),
       })
       .single();
 
@@ -342,20 +395,21 @@ export async function schedulePaymentAuthorization(
       return { success: false, error: error.message };
     }
 
-    console.log(`[Payment Schedule] Booking ${bookingId}: Pre-auth at ${data.pre_auth_date}, Capture at ${data.capture_date}`);
+    console.log(
+      `[Payment Schedule] Booking ${bookingId}: Pre-auth at ${data.pre_auth_date}, Capture at ${data.capture_date}`,
+    );
 
     return {
       success: true,
       preAuthDate: new Date(data.pre_auth_date),
       captureDate: new Date(data.capture_date),
-      shouldPreAuthNow: data.should_pre_auth_now
+      shouldPreAuthNow: data.should_pre_auth_now,
     };
-
   } catch (error) {
     console.error('Error in schedulePaymentAuthorization:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -365,27 +419,32 @@ export async function schedulePaymentAuthorization(
  */
 export async function capturePaymentIntent(
   paymentIntentId: string,
-  amountToCapture?: number
+  amountToCapture?: number,
 ): Promise<{ success: boolean; capturedAmount?: number; error?: string }> {
   try {
     const captureParams: Stripe.PaymentIntentCaptureParams = {};
-    
+
     if (amountToCapture) {
       captureParams.amount_to_capture = amountToCapture;
     }
 
-    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId, captureParams);
+    const paymentIntent = await stripe.paymentIntents.capture(
+      paymentIntentId,
+      captureParams,
+    );
 
     return {
       success: true,
-      capturedAmount: paymentIntent.amount_received
+      capturedAmount: paymentIntent.amount_received,
     };
-
   } catch (error) {
     console.error('Error capturing payment intent:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error capturing payment'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error capturing payment',
     };
   }
 }
@@ -402,24 +461,25 @@ export async function handleCancellationPartialCapture(
     hasCancellationPolicy: boolean;
     cancellationFeeAmount: number; // in cents
     originalAmount: number; // in cents
-  }
-): Promise<{ 
-  success: boolean; 
-  capturedAmount?: number; 
+  },
+): Promise<{
+  success: boolean;
+  capturedAmount?: number;
   cancelledAmount?: number;
   serviceFeeAmount?: number;
   cancellationFeeAmount?: number;
-  error?: string 
+  error?: string;
 }> {
   try {
-    const { hasCancellationPolicy, cancellationFeeAmount, originalAmount } = options;
-    
+    const { hasCancellationPolicy, cancellationFeeAmount, originalAmount } =
+      options;
+
     // Get service fee from config
     const serviceFee = await getServiceFeeFromConfig();
-    
+
     // Calculate what we want to capture (charge)
     let amountToCapture: number;
-    
+
     if (hasCancellationPolicy && cancellationFeeAmount > 0) {
       // Capture cancellation fee + service fee
       amountToCapture = cancellationFeeAmount + serviceFee;
@@ -427,23 +487,25 @@ export async function handleCancellationPartialCapture(
       // Only capture service fee
       amountToCapture = serviceFee;
     }
-    
+
     // Ensure we don't capture more than the original amount
     amountToCapture = Math.min(amountToCapture, originalAmount);
-    
-    console.log(`[Cancellation] Partial capture - Original: $${originalAmount/100}, Capturing: $${amountToCapture/100}, Service fee: $${serviceFee/100}, Cancellation fee: $${(hasCancellationPolicy ? cancellationFeeAmount : 0)/100}`);
+
+    console.log(
+      `[Cancellation] Partial capture - Original: $${originalAmount / 100}, Capturing: $${amountToCapture / 100}, Service fee: $${serviceFee / 100}, Cancellation fee: $${(hasCancellationPolicy ? cancellationFeeAmount : 0) / 100}`,
+    );
     console.log(`[Cancellation] Payment Intent ID: ${paymentIntentId}`);
-    
+
     // First, retrieve the payment intent to verify it's in the correct state
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    
+
     if (paymentIntent.status !== 'requires_capture') {
       return {
         success: false,
-        error: `Payment intent is in ${paymentIntent.status} status, cannot partially capture`
+        error: `Payment intent is in ${paymentIntent.status} status, cannot partially capture`,
       };
     }
-    
+
     if (amountToCapture <= 0) {
       // No fees to charge, just cancel the entire payment intent
       await stripe.paymentIntents.cancel(paymentIntentId);
@@ -452,57 +514,69 @@ export async function handleCancellationPartialCapture(
         capturedAmount: 0,
         cancelledAmount: originalAmount,
         serviceFeeAmount: 0,
-        cancellationFeeAmount: 0
+        cancellationFeeAmount: 0,
       };
     }
 
     // With application_fee_amount structure, partial captures should work better
-    console.log(`[Cancellation] About to capture $${amountToCapture/100} from original $${originalAmount/100}`);
-    console.log(`[Cancellation] Using application_fee_amount structure for better partial capture support`);
-    
+    console.log(
+      `[Cancellation] About to capture $${amountToCapture / 100} from original $${originalAmount / 100}`,
+    );
+    console.log(
+      `[Cancellation] Using application_fee_amount structure for better partial capture support`,
+    );
+
     // Log payment intent structure for debugging
     console.log(`[Cancellation] Payment intent structure:`, {
       amount: paymentIntent.amount,
       application_fee_amount: paymentIntent.application_fee_amount,
-      transfer_data: paymentIntent.transfer_data ? {
-        destination: paymentIntent.transfer_data.destination,
-        amount: paymentIntent.transfer_data.amount
-      } : null
+      transfer_data: paymentIntent.transfer_data
+        ? {
+            destination: paymentIntent.transfer_data.destination,
+            amount: paymentIntent.transfer_data.amount,
+          }
+        : null,
     });
-    
+
     // Now perform the partial capture
     const captureResult = await stripe.paymentIntents.capture(paymentIntentId, {
-      amount_to_capture: amountToCapture
+      amount_to_capture: amountToCapture,
     });
-    
+
     const cancelledAmount = originalAmount - amountToCapture;
-    
-    console.log(`[Cancellation] Partial capture completed - Captured: $${captureResult.amount_received/100}, Cancelled: $${cancelledAmount/100}`);
-    
+
+    console.log(
+      `[Cancellation] Partial capture completed - Captured: $${captureResult.amount_received / 100}, Cancelled: $${cancelledAmount / 100}`,
+    );
+
     return {
       success: true,
       capturedAmount: captureResult.amount_received,
       cancelledAmount: cancelledAmount,
       serviceFeeAmount: serviceFee,
-      cancellationFeeAmount: hasCancellationPolicy ? cancellationFeeAmount : 0
+      cancellationFeeAmount: hasCancellationPolicy ? cancellationFeeAmount : 0,
     };
-
   } catch (error) {
     console.error('Error handling cancellation partial capture:', error);
-    
-    // If partial capture fails with application_fee_amount structure, 
+
+    // If partial capture fails with application_fee_amount structure,
     // fall back to the dual payment approach
     if (error instanceof Error && error.message.includes('transfer_data')) {
-      console.log('[Cancellation] Partial capture failed, falling back to dual payment approach');
+      console.log(
+        '[Cancellation] Partial capture failed, falling back to dual payment approach',
+      );
       return {
         success: false,
-        error: `Partial capture failed with application fee structure: ${error.message}. Consider using handleCancellationDualPayment instead.`
+        error: `Partial capture failed with application fee structure: ${error.message}. Consider using handleCancellationDualPayment instead.`,
       };
     }
-    
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error during partial capture'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error during partial capture',
     };
   }
 }
@@ -512,11 +586,16 @@ export async function handleCancellationPartialCapture(
  */
 export async function createServiceFeePaymentIntent(
   customerId: string,
-  metadata: Record<string, string> = {}
-): Promise<{ success: boolean; paymentIntentId?: string; checkoutUrl?: string; error?: string }> {
+  metadata: Record<string, string> = {},
+): Promise<{
+  success: boolean;
+  paymentIntentId?: string;
+  checkoutUrl?: string;
+  error?: string;
+}> {
   try {
     const serviceFee = await getServiceFeeFromConfig();
-    
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: serviceFee,
       currency: 'usd',
@@ -524,43 +603,23 @@ export async function createServiceFeePaymentIntent(
       confirmation_method: 'automatic',
       metadata: {
         ...metadata,
-        payment_type: 'service_fee_only'
-      }
+        payment_type: 'service_fee_only',
+      },
     });
 
     return {
       success: true,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     };
-
   } catch (error) {
     console.error('Error creating service fee payment intent:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating service fee payment'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating service fee payment',
     };
-  }
-}
-
-/**
- * Get service fee from admin configuration
- */
-export async function getServiceFeeFromConfig(): Promise<number> {
-  try {
-    const { createClient } = await import('@/lib/supabase/server');
-    const supabase = await createClient();
-    
-    const { data } = await supabase
-      .from('admin_configs')
-      .select('value')
-      .eq('key', 'service_fee_dollars')
-      .single();
-    
-    const serviceFeeInDollars = parseFloat(data?.value || '1.0');
-    return Math.round(serviceFeeInDollars * 100); // Convert to cents
-  } catch (error) {
-    console.error('Error getting service fee from config:', error);
-    return 100; // Default to $1.00 in cents
   }
 }
 
@@ -568,10 +627,10 @@ export async function getServiceFeeFromConfig(): Promise<number> {
  * Create a checkout session with enhanced payment options
  */
 export async function createEnhancedCheckoutSession(
-  params: StripeCheckoutParams & { 
+  params: StripeCheckoutParams & {
     customerEmail?: string;
     useUncapturedPayment?: boolean;
-  }
+  },
 ): Promise<StripeCheckoutResult> {
   try {
     const {
@@ -585,7 +644,7 @@ export async function createEnhancedCheckoutSession(
       requiresBalancePayment,
       metadata,
       customerEmail,
-      useUncapturedPayment = false
+      useUncapturedPayment = false,
     } = params;
 
     if (!process.env.NEXT_PUBLIC_BASE_URL) {
@@ -593,13 +652,19 @@ export async function createEnhancedCheckoutSession(
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    
+
     // Get or create Stripe customer
     const { getOrCreateStripeCustomer } = await import('./db');
-    const customerResult = await getOrCreateStripeCustomer(clientId, customerEmail);
-    
+    const customerResult = await getOrCreateStripeCustomer(
+      clientId,
+      customerEmail,
+    );
+
     if (!customerResult.success || !customerResult.customerId) {
-      console.error('Failed to get/create Stripe customer:', customerResult.error);
+      console.error(
+        'Failed to get/create Stripe customer:',
+        customerResult.error,
+      );
       throw new Error('Failed to create customer account');
     }
 
@@ -614,8 +679,8 @@ export async function createEnhancedCheckoutSession(
         booking_id: bookingId,
         payment_type: paymentType,
         requires_balance_payment: requiresBalancePayment.toString(),
-        use_uncaptured: useUncapturedPayment.toString()
-      }
+        use_uncaptured: useUncapturedPayment.toString(),
+      },
     };
 
     if (paymentType === 'setup_only') {
@@ -623,25 +688,31 @@ export async function createEnhancedCheckoutSession(
       sessionConfig.payment_method_types = ['card'];
       sessionConfig.setup_intent_data = {
         metadata: sessionConfig.metadata || {},
-        on_behalf_of: professionalStripeAccountId
+        on_behalf_of: professionalStripeAccountId,
       };
-      
+
       // Get payment method type from metadata to customize message
-      const isServiceFeeAndDepositOnly = metadata.is_service_fee_and_deposit_only === 'true';
-      const isDepositFlow = metadata.payment_flow === 'setup_for_deposit_and_balance';
+      const isServiceFeeAndDepositOnly =
+        metadata.is_service_fee_and_deposit_only === 'true';
+      const isDepositFlow =
+        metadata.payment_flow === 'setup_for_deposit_and_balance';
       const depositAmount = metadata.deposit_amount;
       const balanceAmount = metadata.balance_amount;
-      
+
       let customMessage: string;
-      
+
       if (isDepositFlow && depositAmount && balanceAmount) {
         // Deposit flow - different messages based on timing and payment method
-        const depositAmountInDollars = (parseInt(depositAmount) / 100).toFixed(2);
-        const balanceAmountInDollars = (parseInt(balanceAmount) / 100).toFixed(2);
+        const depositAmountInDollars = (parseInt(depositAmount) / 100).toFixed(
+          2,
+        );
+        const balanceAmountInDollars = (parseInt(balanceAmount) / 100).toFixed(
+          2,
+        );
         const appointmentTiming = metadata.appointment_timing;
         const paymentMethodType = metadata.payment_method_type;
         const isOnlinePayment = paymentMethodType === 'card';
-        
+
         if (isOnlinePayment) {
           // Card payment with deposit
           if (appointmentTiming === 'more_than_6_days') {
@@ -653,16 +724,23 @@ export async function createEnhancedCheckoutSession(
           }
         } else {
           // Cash payment with deposit
-          const serviceFeeInDollars = "1.00"; // $1 service fee
-          // Calculate service amount (balance - service fee)
-          const serviceAmountInDollars = (parseInt(balanceAmount) / 100 - 1).toFixed(2);
-          
+          // NEW FEE STRUCTURE: Service fee is now included in the deposit
+          // Balance for cash payments is 0 (service fee in deposit, remaining paid in cash)
+          const serviceFeeInCents = await getServiceFeeFromConfig();
+          const serviceFeeInDollars = (serviceFeeInCents / 100).toFixed(2);
+
+          // For cash with deposit: balance amount shown is 0 because service fee is in deposit
+          // The actual service amount to be paid in cash at appointment
+          const cashServiceAmountInDollars = (
+            parseInt(balanceAmount) / 100
+          ).toFixed(2);
+
           if (appointmentTiming === 'more_than_6_days') {
             // Appointment > 6 days away with deposit (cash)
-            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. Service fee of $${serviceFeeInDollars} will be authorized 6 days before your appointment. The remaining balance of $${serviceAmountInDollars} will be paid in cash at the appointment.`;
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} (includes $${serviceFeeInDollars} service fee) will be charged immediately to secure your booking. The remaining balance of $${cashServiceAmountInDollars} will be paid in cash at the appointment.`;
           } else {
             // Appointment ≤ 6 days away with deposit (cash)
-            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. Service fee of $${serviceFeeInDollars} will be authorized now. The remaining balance of $${serviceAmountInDollars} will be paid in cash at the appointment.`;
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} (includes $${serviceFeeInDollars} service fee) will be charged immediately to secure your booking. The remaining balance of $${cashServiceAmountInDollars} will be paid in cash at the appointment.`;
           }
         }
       } else if (isServiceFeeAndDepositOnly) {
@@ -672,75 +750,95 @@ export async function createEnhancedCheckoutSession(
         // Regular setup intent - full amount will be charged
         customMessage = `Save your payment method for your upcoming appointment. Total service cost: $${(amount / 100).toFixed(2)}. Payment will be authorized 6 days before your appointment and charged after service completion. No payment will be taken today.`;
       }
-      
+
       // Add custom text to explain the setup intent process and show the amount
       sessionConfig.custom_text = {
         submit: {
-          message: customMessage
-        }
+          message: customMessage,
+        },
       };
     } else {
-      const chargeAmount = paymentType === 'deposit' ? (depositAmount ?? 0) : amount;
-      
+      const chargeAmount =
+        paymentType === 'deposit' ? (depositAmount ?? 0) : amount;
+
       if (chargeAmount <= 0) {
         throw new Error('Invalid charge amount');
       }
 
       const serviceFee = await getServiceFeeFromConfig();
-      
-      // For deposit payments, don't include service fee
-      const serviceAmount = paymentType === 'deposit' 
-        ? chargeAmount // Deposit amount is already calculated correctly
-        : chargeAmount - serviceFee; // For full payments, subtract fee
-      
+
+      // Check if this is a service fee only payment (cash payment without deposit)
+      const isServiceFeeOnly =
+        metadata?.payment_flow === 'immediate_service_fee_only';
+      const isCashPayment = metadata?.payment_method_type === 'cash';
+
       sessionConfig.mode = 'payment';
       sessionConfig.payment_method_types = ['card'];
-      
-      // Check if this is a service fee only payment (cash payment without deposit)
-      const isServiceFeeOnly = metadata?.payment_flow === 'immediate_service_fee_only';
-      const isCashPayment = metadata?.payment_method_type === 'cash';
-      
+
       // Determine product description based on payment type and conditions
       let productDescription: string;
       if (paymentType === 'deposit') {
         productDescription = `Appointment deposit${balanceAmount ? ` (Balance: $${(balanceAmount / 100).toFixed(2)} to be paid later)` : ''}`;
       } else {
         if (isServiceFeeOnly || (isCashPayment && !metadata?.deposit_amount)) {
-          productDescription = 'Service fee for your booking (remaining balance to be paid in cash)';
+          productDescription =
+            'Service fee for your booking (remaining balance to be paid in cash)';
         } else {
           productDescription = 'Full payment for your booking';
         }
       }
-      
+
       sessionConfig.line_items = [
         {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: paymentType === 'deposit' ? 'Service Deposit' : (isServiceFeeOnly || (isCashPayment && !metadata?.deposit_amount) ? 'Service Fee' : 'Service Payment'),
-              description: productDescription
+              name:
+                paymentType === 'deposit'
+                  ? 'Service Deposit'
+                  : isServiceFeeOnly ||
+                      (isCashPayment && !metadata?.deposit_amount)
+                    ? 'Service Fee'
+                    : 'Service Payment',
+              description: productDescription,
             },
-            unit_amount: chargeAmount
+            unit_amount: chargeAmount,
           },
-          quantity: 1
-        }
+          quantity: 1,
+        },
       ];
 
-      // Only include transfer data if this is not a service fee only payment
-      
-      // Use direct charge to professional's account with correct fee structure
+      // NEW FEE STRUCTURE: Calculate fees properly
       sessionConfig.payment_intent_data = {
         metadata: sessionConfig.metadata || {},
       };
 
       // Add transfer data only if this is not a service fee only payment
-      if (!isServiceFeeOnly && serviceAmount > 0) {
+      if (!isServiceFeeOnly && chargeAmount > 0) {
+        const { getProfessionalFeePercentage } = await import(
+          '@/server/lib/service-fee'
+        );
+        const professionalFeePercentage = await getProfessionalFeePercentage();
+        const professionalFee = Math.round(
+          chargeAmount * (professionalFeePercentage / 100),
+        );
+
+        let applicationFee: number;
+        if (paymentType === 'deposit') {
+          // For deposits: only professional fee (client service fee already included in deposit amount)
+          applicationFee = professionalFee;
+        } else {
+          // For full payments: professional fee + client service fee
+          applicationFee = professionalFee + serviceFee;
+        }
+
+        sessionConfig.payment_intent_data.application_fee_amount =
+          applicationFee;
         sessionConfig.payment_intent_data.transfer_data = {
-          amount: serviceAmount, // For deposits, transfer the full deposit. For full payments, subtract fee
-          destination: professionalStripeAccountId
+          destination: professionalStripeAccountId,
         };
-        // The remaining amount (suite fee) stays in the platform account
-        sessionConfig.payment_intent_data.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
+        sessionConfig.payment_intent_data.on_behalf_of =
+          professionalStripeAccountId; // Professional pays the processing fees
       }
 
       // Add uncaptured payment configuration
@@ -763,14 +861,16 @@ export async function createEnhancedCheckoutSession(
     return {
       success: true,
       checkoutUrl: session.url,
-      sessionId: session.id
+      sessionId: session.id,
     };
-
   } catch (error) {
     console.error('Error creating enhanced checkout session:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating checkout session'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating checkout session',
     };
   }
 }
@@ -787,8 +887,20 @@ export async function createPaymentIntent(options: {
   const amountInCents = Math.round(amount * 100);
 
   try {
-    const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amountInCents - serviceFee;
+    // NEW FEE STRUCTURE: Apply professional fee (3%) only
+    // This function is generic, so we check context to determine if client service fee applies
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amountInCents * (professionalFeePercentage / 100),
+    );
+
+    // For generic payment intents, only apply professional fee
+    // Client service fee handling should be done at a higher level
+    const applicationFee = professionalFee;
+    const serviceAmount = amountInCents - applicationFee;
 
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount: amountInCents,
@@ -802,7 +914,7 @@ export async function createPaymentIntent(options: {
 
     // Use application_fee_amount + transfer_data structure for better partial capture support
     if (serviceAmount > 0) {
-      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+      paymentIntentData.application_fee_amount = applicationFee; // Professional fee (3%)
       paymentIntentData.transfer_data = {
         destination: stripeAccountId, // Professional gets (amount - application_fee)
       };
@@ -812,7 +924,9 @@ export async function createPaymentIntent(options: {
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
-    console.log(`[createPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amountInCents/100}, App fee: $${serviceFee/100}, To professional: $${serviceAmount/100}, Capture: ${capture}`);
+    console.log(
+      `[createPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amountInCents / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${serviceAmount / 100}, Capture: ${capture}`,
+    );
 
     return paymentIntent;
   } catch (error) {
@@ -836,52 +950,64 @@ export async function handleCancellationDualPayment(
     hasCancellationPolicy: boolean;
     cancellationFeeAmount: number; // in cents
     originalAmount: number; // in cents
-  }
-): Promise<{ 
-  success: boolean; 
+  },
+): Promise<{
+  success: boolean;
   serviceFeeCharge?: string;
   cancellationFeeCharge?: string;
   cancelledAmount?: number;
   serviceFeeAmount?: number;
   cancellationFeeAmount?: number;
-  error?: string 
+  error?: string;
 }> {
   try {
-    const { hasCancellationPolicy, cancellationFeeAmount, originalAmount } = options;
-    
+    const { hasCancellationPolicy, cancellationFeeAmount, originalAmount } =
+      options;
+
     // Get service fee from config
     const serviceFee = await getServiceFeeFromConfig();
-    
+
     console.log(`[Cancellation Dual] Starting dual payment cancellation`);
-    console.log(`[Cancellation Dual] Original: $${originalAmount/100}, Service fee: $${serviceFee/100}, Cancellation fee: $${(hasCancellationPolicy ? cancellationFeeAmount : 0)/100}`);
-    
+    console.log(
+      `[Cancellation Dual] Original: $${originalAmount / 100}, Service fee: $${serviceFee / 100}, Cancellation fee: $${(hasCancellationPolicy ? cancellationFeeAmount : 0) / 100}`,
+    );
+
     // If no payment method ID provided, try to get it from the payment intent
     let actualPaymentMethodId = paymentMethodId;
     if (!actualPaymentMethodId) {
       try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const paymentIntent =
+          await stripe.paymentIntents.retrieve(paymentIntentId);
         if (paymentIntent.payment_method) {
-          actualPaymentMethodId = typeof paymentIntent.payment_method === 'string' 
-            ? paymentIntent.payment_method 
-            : paymentIntent.payment_method.id;
-          console.log(`[Cancellation Dual] Retrieved payment method from payment intent: ${actualPaymentMethodId}`);
+          actualPaymentMethodId =
+            typeof paymentIntent.payment_method === 'string'
+              ? paymentIntent.payment_method
+              : paymentIntent.payment_method.id;
+          console.log(
+            `[Cancellation Dual] Retrieved payment method from payment intent: ${actualPaymentMethodId}`,
+          );
         }
       } catch (error) {
-        console.error('[Cancellation Dual] Failed to retrieve payment method from payment intent:', error);
+        console.error(
+          '[Cancellation Dual] Failed to retrieve payment method from payment intent:',
+          error,
+        );
       }
     }
-    
+
     if (!actualPaymentMethodId) {
       return {
         success: false,
-        error: 'No payment method available for charging fees'
+        error: 'No payment method available for charging fees',
       };
     }
-    
+
     // Step 1: Cancel the original payment intent
     await stripe.paymentIntents.cancel(paymentIntentId);
-    console.log(`[Cancellation Dual] Cancelled original payment intent: ${paymentIntentId}`);
-    
+    console.log(
+      `[Cancellation Dual] Cancelled original payment intent: ${paymentIntentId}`,
+    );
+
     // Step 2: Create service fee charge (to platform)
     let serviceFeeChargeId: string | undefined;
     if (serviceFee > 0) {
@@ -895,18 +1021,23 @@ export async function handleCancellationDualPayment(
           metadata: {
             payment_intent_id: paymentIntentId,
             charge_type: 'service_fee',
-            original_amount: originalAmount.toString()
-          }
+            original_amount: originalAmount.toString(),
+          },
         });
-        
+
         serviceFeeChargeId = serviceFeeCharge.id;
-        console.log(`[Cancellation Dual] Service fee charged: $${serviceFee/100} (${serviceFeeChargeId})`);
+        console.log(
+          `[Cancellation Dual] Service fee charged: $${serviceFee / 100} (${serviceFeeChargeId})`,
+        );
       } catch (serviceFeeError) {
-        console.error('[Cancellation Dual] Failed to charge service fee:', serviceFeeError);
+        console.error(
+          '[Cancellation Dual] Failed to charge service fee:',
+          serviceFeeError,
+        );
         // Continue anyway - this is non-critical
       }
     }
-    
+
     // Step 3: Create cancellation fee charge (to professional) if applicable
     let cancellationFeeChargeId: string | undefined;
     if (hasCancellationPolicy && cancellationFeeAmount > 0) {
@@ -919,63 +1050,77 @@ export async function handleCancellationDualPayment(
           description: `Cancellation fee (${Math.round((cancellationFeeAmount / (originalAmount - serviceFee)) * 100)}% of service amount)`,
           destination: {
             account: professionalStripeAccountId,
-            amount: cancellationFeeAmount // Professional gets full cancellation fee
+            amount: cancellationFeeAmount, // Professional gets full cancellation fee
           },
           metadata: {
             payment_intent_id: paymentIntentId,
             charge_type: 'cancellation_fee',
             original_amount: originalAmount.toString(),
-            cancellation_percentage: Math.round((cancellationFeeAmount / (originalAmount - serviceFee)) * 100).toString()
-          }
+            cancellation_percentage: Math.round(
+              (cancellationFeeAmount / (originalAmount - serviceFee)) * 100,
+            ).toString(),
+          },
         });
-        
+
         cancellationFeeChargeId = cancellationFeeCharge.id;
-        console.log(`[Cancellation Dual] Cancellation fee charged: $${cancellationFeeAmount/100} to professional (${cancellationFeeChargeId})`);
+        console.log(
+          `[Cancellation Dual] Cancellation fee charged: $${cancellationFeeAmount / 100} to professional (${cancellationFeeChargeId})`,
+        );
       } catch (cancellationFeeError) {
-        console.error('[Cancellation Dual] Failed to charge cancellation fee:', cancellationFeeError);
+        console.error(
+          '[Cancellation Dual] Failed to charge cancellation fee:',
+          cancellationFeeError,
+        );
         // This is critical - if we can't charge the professional, we should fail
         return {
           success: false,
           error: `Failed to charge cancellation fee: ${cancellationFeeError instanceof Error ? cancellationFeeError.message : 'Unknown error'}`,
-          ...(serviceFeeChargeId && { serviceFeeCharge: serviceFeeChargeId })
+          ...(serviceFeeChargeId && { serviceFeeCharge: serviceFeeChargeId }),
         };
       }
     }
-    
+
     // Calculate what was cancelled (refunded to customer)
-    const totalCharged = serviceFee + (hasCancellationPolicy ? cancellationFeeAmount : 0);
+    const totalCharged =
+      serviceFee + (hasCancellationPolicy ? cancellationFeeAmount : 0);
     const cancelledAmount = originalAmount - totalCharged;
-    
-    console.log(`[Cancellation Dual] Summary - Charged: $${totalCharged/100}, Refunded: $${cancelledAmount/100}`);
-    
+
+    console.log(
+      `[Cancellation Dual] Summary - Charged: $${totalCharged / 100}, Refunded: $${cancelledAmount / 100}`,
+    );
+
     return {
       success: true,
       ...(serviceFeeChargeId && { serviceFeeCharge: serviceFeeChargeId }),
-      ...(cancellationFeeChargeId && { cancellationFeeCharge: cancellationFeeChargeId }),
+      ...(cancellationFeeChargeId && {
+        cancellationFeeCharge: cancellationFeeChargeId,
+      }),
       cancelledAmount: cancelledAmount,
       serviceFeeAmount: serviceFee,
-      cancellationFeeAmount: hasCancellationPolicy ? cancellationFeeAmount : 0
+      cancellationFeeAmount: hasCancellationPolicy ? cancellationFeeAmount : 0,
     };
-
   } catch (error) {
     console.error('Error handling dual payment cancellation:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error during dual payment cancellation'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error during dual payment cancellation',
     };
   }
 }
 
 /**
  * Create split payment checkout session for ≤6 days appointments
- * 1. User pays full amount (service fee + service amount) in one session  
+ * 1. User pays full amount (service fee + service amount) in one session
  * 2. Webhook handles splitting: immediate service fee capture + uncaptured service amount
  */
 export async function createSplitPaymentCheckoutSession(
-  params: StripeCheckoutParams & { 
+  params: StripeCheckoutParams & {
     customerEmail?: string;
     serviceAmount: number; // Service amount in cents (without service fee)
-  }
+  },
 ): Promise<StripeCheckoutResult> {
   try {
     const {
@@ -985,7 +1130,7 @@ export async function createSplitPaymentCheckoutSession(
       amount,
       metadata,
       customerEmail,
-      serviceAmount
+      serviceAmount,
     } = params;
 
     if (!process.env.NEXT_PUBLIC_BASE_URL) {
@@ -993,18 +1138,23 @@ export async function createSplitPaymentCheckoutSession(
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    
+
     // Get or create Stripe customer
     const { getOrCreateStripeCustomer } = await import('./db');
-    const customerResult = await getOrCreateStripeCustomer(clientId, customerEmail);
-    
+    const customerResult = await getOrCreateStripeCustomer(
+      clientId,
+      customerEmail,
+    );
+
     if (!customerResult.success || !customerResult.customerId) {
       throw new Error('Failed to create customer account');
     }
 
     const serviceFee = await getServiceFeeFromConfig();
-    
-    console.log(`[Split Payment] Creating split payment session - Total: $${amount/100}, Service fee: $${serviceFee/100}, Service amount: $${serviceAmount/100}`);
+
+    console.log(
+      `[Split Payment] Creating split payment session - Total: $${amount / 100}, Service fee: $${serviceFee / 100}, Service amount: $${serviceAmount / 100}`,
+    );
 
     // Single checkout session for full amount with special metadata for webhook processing
     const session = await stripe.checkout.sessions.create({
@@ -1018,12 +1168,12 @@ export async function createSplitPaymentCheckoutSession(
             currency: 'usd',
             product_data: {
               name: 'Service Payment',
-              description: 'Payment for appointment services'
+              description: 'Payment for appointment services',
             },
-            unit_amount: amount
+            unit_amount: amount,
           },
-          quantity: 1
-        }
+          quantity: 1,
+        },
       ],
       payment_intent_data: {
         capture_method: 'manual', // Create as uncaptured from the start
@@ -1041,8 +1191,8 @@ export async function createSplitPaymentCheckoutSession(
           payment_flow: 'split_service_fee_and_amount',
           service_amount: serviceAmount.toString(),
           service_fee: serviceFee.toString(),
-          professional_stripe_account_id: professionalStripeAccountId
-        }
+          professional_stripe_account_id: professionalStripeAccountId,
+        },
       },
       success_url: `${baseUrl}/booking/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${bookingId}`,
       cancel_url: `${baseUrl}/booking/cancel?booking_id=${bookingId}`,
@@ -1053,27 +1203,31 @@ export async function createSplitPaymentCheckoutSession(
         payment_flow: 'split_service_fee_and_amount',
         service_amount: serviceAmount.toString(),
         service_fee: serviceFee.toString(),
-        professional_stripe_account_id: professionalStripeAccountId
-      }
+        professional_stripe_account_id: professionalStripeAccountId,
+      },
     });
 
     if (!session.url) {
       throw new Error('Failed to create split payment checkout session URL');
     }
 
-    console.log(`[Split Payment] Created session: ${session.id} for split processing`);
+    console.log(
+      `[Split Payment] Created session: ${session.id} for split processing`,
+    );
 
     return {
       success: true,
       checkoutUrl: session.url,
-      sessionId: session.id
+      sessionId: session.id,
     };
-
   } catch (error) {
     console.error('Error creating split payment checkout session:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating split payment session'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating split payment session',
     };
   }
 }
@@ -1084,51 +1238,68 @@ export async function createUncapturedPayment(
   paymentMethodId: string,
   customerId: string,
   appointmentStartTime: string,
-  appointmentEndTime: string
+  appointmentEndTime: string,
 ): Promise<Stripe.PaymentIntent> {
   const adminSupabase = createSupabaseAdminClient();
 
   console.log('Creating IMMEDIATE uncaptured payment for booking:', bookingId);
-  console.log('Appointment times:', { start: appointmentStartTime, end: appointmentEndTime });
-  console.log('NOTE: This is for appointments <6 days - NO pre-auth scheduling, immediate authorization');
+  console.log('Appointment times:', {
+    start: appointmentStartTime,
+    end: appointmentEndTime,
+  });
+  console.log(
+    'NOTE: This is for appointments <6 days - NO pre-auth scheduling, immediate authorization',
+  );
 
-  // Get service fee and professional account
-  const serviceFee = await getServiceFeeFromConfig();
-  const serviceAmount = Math.round(amount * 100) - serviceFee;
-  
+  // NEW FEE STRUCTURE: Apply professional fee (3%) to uncaptured balance payments
+  const { getProfessionalFeePercentage } = await import(
+    '@/server/lib/service-fee'
+  );
+  const professionalFeePercentage = await getProfessionalFeePercentage();
+  const amountInCents = Math.round(amount * 100);
+  const professionalFee = Math.round(
+    amountInCents * (professionalFeePercentage / 100),
+  );
+
   // For immediate uncaptured payments, capture should happen at appointment end time
   const captureTime = new Date(appointmentEndTime);
 
   // Get professional account from booking
   const { data: bookingData } = await adminSupabase
     .from('bookings')
-    .select(`
+    .select(
+      `
       professional_profiles(
         professional_stripe_connect(
           stripe_account_id
         )
       )
-    `)
+    `,
+    )
     .eq('id', bookingId)
     .single();
 
-  const professionalStripeAccountId = (bookingData?.professional_profiles as { professional_stripe_connect?: { stripe_account_id?: string } })?.professional_stripe_connect?.stripe_account_id;
+  const professionalStripeAccountId = (
+    bookingData?.professional_profiles as {
+      professional_stripe_connect?: { stripe_account_id?: string };
+    }
+  )?.professional_stripe_connect?.stripe_account_id;
 
   // Create payment intent with manual capture using application_fee_amount structure
   const paymentIntentData: Stripe.PaymentIntentCreateParams = {
-    amount: Math.round(amount * 100),
+    amount: amountInCents,
     currency: 'usd',
     customer: customerId,
     payment_method: paymentMethodId,
     capture_method: 'manual',
     metadata: {
-      booking_id: bookingId
-    }
+      booking_id: bookingId,
+    },
   };
 
   // Add application fee structure if professional account exists
-  if (professionalStripeAccountId && serviceAmount > 0) {
-    paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+  if (professionalStripeAccountId && amountInCents > 0) {
+    paymentIntentData.application_fee_amount = professionalFee; // Professional fee (3%)
     paymentIntentData.transfer_data = {
       destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
     };
@@ -1137,7 +1308,11 @@ export async function createUncapturedPayment(
 
   const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
-  console.log('Created Stripe payment intent:', paymentIntent.id, 'with application fee structure');
+  console.log(
+    'Created Stripe payment intent:',
+    paymentIntent.id,
+    'with application fee structure',
+  );
 
   // Update booking_payments for immediate uncaptured payment (NO pre-auth scheduling)
   const { error: updateError } = await adminSupabase
@@ -1149,20 +1324,25 @@ export async function createUncapturedPayment(
       pre_auth_placed_at: new Date().toISOString(), // Set now since auth is placed immediately
       authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
       stripe_payment_intent_id: paymentIntent.id,
-      status: 'authorized'
+      status: 'authorized',
     })
     .eq('booking_id', bookingId);
 
   if (updateError) {
-    console.error('Error updating booking payment for immediate uncaptured payment:', updateError);
-    throw new Error('Failed to update booking payment for immediate uncaptured payment');
+    console.error(
+      'Error updating booking payment for immediate uncaptured payment:',
+      updateError,
+    );
+    throw new Error(
+      'Failed to update booking payment for immediate uncaptured payment',
+    );
   }
 
   console.log('Updated booking payment for immediate uncaptured payment:', {
     bookingId,
     captureScheduledFor: captureTime.toISOString(),
     preAuthScheduledFor: null, // Important: NULL for immediate payments
-    paymentIntentId: paymentIntent.id
+    paymentIntentId: paymentIntent.id,
   });
 
   return paymentIntent;
@@ -1176,7 +1356,7 @@ export async function updatePaymentIntent(
   updates: {
     amount?: number;
     metadata?: Record<string, string>;
-  }
+  },
 ): Promise<Stripe.PaymentIntent> {
   try {
     console.log('[updatePaymentIntent] Updating payment intent:', {
@@ -1185,18 +1365,18 @@ export async function updatePaymentIntent(
     });
 
     const updateParams: Stripe.PaymentIntentUpdateParams = {};
-    
+
     if (updates.amount !== undefined) {
       updateParams.amount = updates.amount;
     }
-    
+
     if (updates.metadata) {
       updateParams.metadata = updates.metadata;
     }
 
     const updatedPaymentIntent = await stripe.paymentIntents.update(
       paymentIntentId,
-      updateParams
+      updateParams,
     );
 
     console.log('[updatePaymentIntent] Successfully updated payment intent:', {
@@ -1207,7 +1387,10 @@ export async function updatePaymentIntent(
 
     return updatedPaymentIntent;
   } catch (error) {
-    console.error('[updatePaymentIntent] Error updating payment intent:', error);
+    console.error(
+      '[updatePaymentIntent] Error updating payment intent:',
+      error,
+    );
     throw error;
   }
 }
@@ -1221,7 +1404,7 @@ export async function createNoShowCharge(
   customerId: string,
   paymentMethodId: string,
   professionalStripeAccountId: string,
-  metadata: Record<string, string> = {}
+  metadata: Record<string, string> = {},
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
     console.log('[createNoShowCharge] Creating no-show charge:', {
@@ -1232,8 +1415,15 @@ export async function createNoShowCharge(
       metadata,
     });
 
-    const serviceFee = await getServiceFeeFromConfig();
-    const professionalAmount = amount - serviceFee; // Professional gets this amount
+    // NEW FEE STRUCTURE: Apply professional fee (3%) to no-show charges
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+    const professionalAmount = amount - professionalFee; // Professional gets this amount
 
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
@@ -1245,13 +1435,13 @@ export async function createNoShowCharge(
       metadata: {
         ...metadata,
         payment_type: 'no_show_charge',
-        charge_reason: 'no_show'
-      }
+        charge_reason: 'no_show',
+      },
     };
 
     // Use application_fee_amount + transfer_data structure for consistency
     if (professionalAmount > 0) {
-      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+      paymentIntentData.application_fee_amount = professionalFee; // Professional fee (3%)
       paymentIntentData.transfer_data = {
         destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       };
@@ -1266,19 +1456,22 @@ export async function createNoShowCharge(
       amount: paymentIntent.amount,
       status: paymentIntent.status,
       application_fee: paymentIntent.application_fee_amount,
-      professional_amount: professionalAmount
+      professional_fee_percentage: professionalFeePercentage,
+      professional_amount: professionalAmount,
     });
 
     return {
       success: true,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     };
-
   } catch (error) {
     console.error('[createNoShowCharge] Error creating no-show charge:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error creating no-show charge'
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unknown error creating no-show charge',
     };
   }
 }
@@ -1290,19 +1483,24 @@ export async function createPaymentForBooking(
   paymentMethodId: string,
   customerId: string,
   appointmentStartTime: string,
-  appointmentEndTime: string
+  appointmentEndTime: string,
 ): Promise<Stripe.PaymentIntent> {
   const adminSupabase = createSupabaseAdminClient();
 
   console.log('Creating payment for booking:', bookingId);
-  console.log('Appointment times:', { start: appointmentStartTime, end: appointmentEndTime });
+  console.log('Appointment times:', {
+    start: appointmentStartTime,
+    end: appointmentEndTime,
+  });
 
   // Calculate if we need to use uncaptured payment
-  const { data: scheduleData, error: scheduleError } = await adminSupabase
-    .rpc('calculate_payment_schedule', {
+  const { data: scheduleData, error: scheduleError } = await adminSupabase.rpc(
+    'calculate_payment_schedule',
+    {
       appointment_start_time: appointmentStartTime,
-      appointment_end_time: appointmentEndTime
-    });
+      appointment_end_time: appointmentEndTime,
+    },
+  );
 
   if (scheduleError) {
     console.error('Error calculating payment schedule:', scheduleError);
@@ -1325,44 +1523,56 @@ export async function createPaymentForBooking(
       paymentMethodId,
       customerId,
       appointmentStartTime,
-      appointmentEndTime
+      appointmentEndTime,
     );
   }
 
   console.log('Creating normal payment intent');
-  
+
   // Get professional account from booking (for normal payment intents too)
   const { data: normalBookingData } = await adminSupabase
     .from('bookings')
-    .select(`
+    .select(
+      `
       professional_profiles(
         professional_stripe_connect(
           stripe_account_id
         )
       )
-    `)
+    `,
+    )
     .eq('id', bookingId)
     .single();
 
-  const normalProfessionalStripeAccountId = (normalBookingData?.professional_profiles as { professional_stripe_connect?: { stripe_account_id?: string } })?.professional_stripe_connect?.stripe_account_id;
-  
-  // Otherwise, create normal payment intent
-  const serviceFee = await getServiceFeeFromConfig();
-  const serviceAmount = Math.round(amount * 100) - serviceFee;
+  const normalProfessionalStripeAccountId = (
+    normalBookingData?.professional_profiles as {
+      professional_stripe_connect?: { stripe_account_id?: string };
+    }
+  )?.professional_stripe_connect?.stripe_account_id;
+
+  // NEW FEE STRUCTURE: Apply professional fee (3%) to normal payment intents
+  const { getProfessionalFeePercentage } = await import(
+    '@/server/lib/service-fee'
+  );
+  const professionalFeePercentage = await getProfessionalFeePercentage();
+  const amountInCents = Math.round(amount * 100);
+  const professionalFee = Math.round(
+    amountInCents * (professionalFeePercentage / 100),
+  );
 
   const paymentIntentData: Stripe.PaymentIntentCreateParams = {
-    amount: Math.round(amount * 100),
+    amount: amountInCents,
     currency: 'usd',
     customer: customerId,
     payment_method: paymentMethodId,
     metadata: {
-      booking_id: bookingId
-    }
+      booking_id: bookingId,
+    },
   };
 
   // Use application_fee_amount + transfer_data structure for consistency
-  if (normalProfessionalStripeAccountId && serviceAmount > 0) {
-    paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+  if (normalProfessionalStripeAccountId && amountInCents > 0) {
+    paymentIntentData.application_fee_amount = professionalFee; // Professional fee (3%)
     paymentIntentData.transfer_data = {
       destination: normalProfessionalStripeAccountId, // Professional gets (amount - application_fee)
     };
@@ -1371,13 +1581,16 @@ export async function createPaymentForBooking(
 
   const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
-  console.log('Created normal payment intent with application fee structure:', paymentIntent.id);
+  console.log(
+    'Created normal payment intent with professional fee (3%):',
+    paymentIntent.id,
+  );
 
   // Update booking_payments with payment intent ID
   const { error: updateError } = await adminSupabase
     .from('booking_payments')
     .update({
-      stripe_payment_intent_id: paymentIntent.id
+      stripe_payment_intent_id: paymentIntent.id,
     })
     .eq('booking_id', bookingId);
 
@@ -1387,4 +1600,4 @@ export async function createPaymentForBooking(
   }
 
   return paymentIntent;
-} 
+}

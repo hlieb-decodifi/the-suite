@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -16,7 +16,7 @@ export type Database = {
           entity_id: string | null
           entity_type: string | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           metadata: Json | null
           referrer: string | null
           session_id: string | null
@@ -29,7 +29,7 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           metadata?: Json | null
           referrer?: string | null
           session_id?: string | null
@@ -42,7 +42,7 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           metadata?: Json | null
           referrer?: string | null
           session_id?: string | null
@@ -1574,15 +1574,12 @@ export type Database = {
       }
     }
     Functions: {
-      archive_service: {
-        Args: { service_id: string }
-        Returns: boolean
-      }
+      archive_service: { Args: { service_id: string }; Returns: boolean }
       calculate_payment_schedule: {
-        Args: { appointment_start_time: string; appointment_end_time: string }
+        Args: { appointment_end_time: string; appointment_start_time: string }
         Returns: {
-          pre_auth_date: string
           capture_date: string
+          pre_auth_date: string
           should_pre_auth_now: boolean
         }[]
       }
@@ -1607,55 +1604,55 @@ export type Database = {
         Returns: string
       }
       get_admin_dashboard_data: {
-        Args: { start_date?: string; end_date?: string }
+        Args: { end_date?: string; start_date?: string }
         Returns: Json
       }
       get_appointment_computed_status: {
-        Args: { p_start_time: string; p_end_time: string; p_status: string }
+        Args: { p_end_time: string; p_start_time: string; p_status: string }
         Returns: string
       }
       get_appointment_status: {
         Args: {
           p_date: string
-          p_start_time: string
           p_end_time: string
+          p_start_time: string
           p_status: string
         }
         Returns: string
       }
       get_engagement_analytics: {
         Args: {
-          start_date?: string
           end_date?: string
-          entity_filter_type?: string
           entity_filter_id?: string
+          entity_filter_type?: string
+          start_date?: string
         }
         Returns: {
-          total_service_views: number
-          total_professional_views: number
-          total_bookings_started: number
-          total_bookings_completed: number
+          bounce_rate: number
           conversion_rate: number
           engagement_rate: number
-          bounce_rate: number
+          total_bookings_completed: number
+          total_bookings_started: number
+          total_professional_views: number
+          total_service_views: number
         }[]
       }
       get_non_converting_users: {
         Args: {
-          start_date?: string
           end_date?: string
-          entity_filter_type?: string
           entity_filter_id?: string
+          entity_filter_type?: string
+          start_date?: string
         }
         Returns: {
-          user_id: string
-          session_id: string
-          user_name: string
-          service_views: number
-          professional_views: number
-          bookings_started: number
           bookings_completed: number
+          bookings_started: number
           last_activity: string
+          professional_views: number
+          service_views: number
+          session_id: string
+          user_id: string
+          user_name: string
           viewed_entities: Json
         }[]
       }
@@ -1663,51 +1660,39 @@ export type Database = {
         Args: { p_professional_id: string }
         Returns: {
           average_rating: number
-          total_reviews: number
           five_star: number
           four_star: number
-          three_star: number
-          two_star: number
           one_star: number
+          three_star: number
+          total_reviews: number
+          two_star: number
         }[]
       }
-      get_service_limit: {
-        Args: { prof_profile_id: string }
-        Returns: number
-      }
+      get_service_limit: { Args: { prof_profile_id: string }; Returns: number }
       get_unread_message_count: {
         Args: { p_conversation_id: string; p_user_id: string }
         Returns: number
       }
       insert_address_and_return_id: {
         Args: {
-          p_country?: string
-          p_state?: string
-          p_city?: string
-          p_street_address?: string
           p_apartment?: string
+          p_city?: string
+          p_country?: string
+          p_google_place_id?: string
           p_latitude?: number
           p_longitude?: number
-          p_google_place_id?: string
+          p_state?: string
+          p_street_address?: string
         }
         Returns: string
       }
-      is_admin: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
-      is_client: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
+      is_admin: { Args: { user_uuid: string }; Returns: boolean }
+      is_client: { Args: { user_uuid: string }; Returns: boolean }
       is_message_read: {
         Args: { p_message_id: string; p_user_id: string }
         Returns: boolean
       }
-      is_professional: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
+      is_professional: { Args: { user_uuid: string }; Returns: boolean }
       is_professional_subscribed: {
         Args: { prof_profile_id: string }
         Returns: boolean
@@ -1724,27 +1709,21 @@ export type Database = {
         Args: { config_key: string; config_value: string }
         Returns: boolean
       }
-      unarchive_service: {
-        Args: { service_id: string }
-        Returns: boolean
-      }
+      unarchive_service: { Args: { service_id: string }; Returns: boolean }
       update_service_limit: {
-        Args: { prof_profile_id: string; new_limit: number }
+        Args: { new_limit: number; prof_profile_id: string }
         Returns: boolean
       }
       update_support_request_status: {
         Args: {
-          p_request_id: string
           p_new_status: Database["public"]["Enums"]["support_request_status"]
-          p_resolved_by?: string
+          p_request_id: string
           p_resolution_notes?: string
+          p_resolved_by?: string
         }
         Returns: boolean
       }
-      user_exists: {
-        Args: { p_email: string }
-        Returns: boolean
-      }
+      user_exists: { Args: { p_email: string }; Returns: boolean }
     }
     Enums: {
       support_request_category:
@@ -1766,21 +1745,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1798,14 +1781,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1821,14 +1806,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1844,14 +1831,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1859,14 +1848,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never

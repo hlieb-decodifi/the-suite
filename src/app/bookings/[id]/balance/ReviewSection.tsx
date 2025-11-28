@@ -43,10 +43,14 @@ export function ReviewSection({
   professionalName,
   reviewStatus: initialReviewStatus = null,
 }: ReviewSectionProps) {
-  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(initialReviewStatus);
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(
+    initialReviewStatus,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rating, setRating] = useState(initialReviewStatus?.review?.score || 0);
-  const [message, setMessage] = useState(initialReviewStatus?.review?.message || '');
+  const [message, setMessage] = useState(
+    initialReviewStatus?.review?.message || '',
+  );
   const [hoveredStar, setHoveredStar] = useState(0);
   const { toast } = useToast();
   const router = useRouter();
@@ -210,6 +214,6 @@ export function ReviewSection({
       </div>
     );
   }
-  
+
   return null;
 }

@@ -26,26 +26,29 @@ export function ResetPasswordFormContent({
     <div className="space-y-8">
       {/* Header */}
       {showHeadingAndDescription && (
-      <div className="text-center space-y-2">
-        <Typography variant="h2" className="text-2xl font-bold">
-          Reset Your Password
-        </Typography>
-        <Typography className="text-muted-foreground">
-          {userEmail ? (
-            <>
-              Enter a new password for{' '}
-              <span className="font-medium">{userEmail}</span>
-            </>
-          ) : (
-            'Enter your new password below'
-          )}
-        </Typography>
-      </div>
+        <div className="text-center space-y-2">
+          <Typography variant="h2" className="text-2xl font-bold">
+            Reset Your Password
+          </Typography>
+          <Typography className="text-muted-foreground">
+            {userEmail ? (
+              <>
+                Enter a new password for{' '}
+                <span className="font-medium">{userEmail}</span>
+              </>
+            ) : (
+              'Enter your new password below'
+            )}
+          </Typography>
+        </div>
       )}
 
       {/* Form */}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-6"
+        >
           <div className="flex flex-col gap-2">
             <FormFieldWrapper
               control={form.control}

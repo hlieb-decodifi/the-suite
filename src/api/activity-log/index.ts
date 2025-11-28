@@ -1,5 +1,9 @@
 // Server actions
-export { trackActivity, getEngagementAnalytics, getNonConvertingUsers } from './actions';
+export {
+  trackActivity,
+  getEngagementAnalytics,
+  getNonConvertingUsers,
+} from './actions';
 
 // Client hooks
 export { useActivityTracker } from './hooks';

@@ -22,13 +22,13 @@ export type RefundUpdate = Partial<RefundInsert>;
 export type RefundRequest = {
   appointment_id: string;
   reason: string;
-}
+};
 
 export type RefundApproval = {
   refund_id: string;
   requested_amount: number;
   professional_notes?: string;
-}
+};
 
 export type RefundDecision = {
   refund_id: string;
@@ -36,4 +36,4 @@ export type RefundDecision = {
   requested_amount?: number;
   professional_notes?: string | undefined;
   declined_reason?: string | undefined;
-} 
+};

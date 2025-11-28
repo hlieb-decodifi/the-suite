@@ -46,7 +46,9 @@ export default function ResetPasswordPage() {
         }
 
         // Get session for authenticated user
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         setUserEmail(user.email || null);
         setAccessToken(session?.access_token || null);
         setRefreshToken(session?.refresh_token || null);
@@ -64,7 +66,7 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (
     data: ResetPasswordFormValues,
     at?: string | null,
-    rt?: string | null
+    rt?: string | null,
   ) => {
     setIsLoading(true);
 
@@ -72,7 +74,7 @@ export default function ResetPasswordPage() {
       const result = await updatePasswordAction(
         data.password,
         at ?? accessToken,
-        rt ?? refreshToken
+        rt ?? refreshToken,
       );
 
       if (result.success) {
@@ -84,11 +86,15 @@ export default function ResetPasswordPage() {
         // Check if user is admin and redirect accordingly
         try {
           const supabase = createClient();
-          const { data: { user } } = await supabase.auth.getUser();
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
           const userId = user?.id;
           let isAdmin = false;
           if (userId) {
-            const { data: adminResult } = await supabase.rpc('is_admin', { user_uuid: userId });
+            const { data: adminResult } = await supabase.rpc('is_admin', {
+              user_uuid: userId,
+            });
             isAdmin = !!adminResult;
           }
           if (isAdmin) {
@@ -169,7 +175,8 @@ export default function ResetPasswordPage() {
                 Welcome! 🎉
               </Typography>
               <Typography className="text-muted-foreground mt-2">
-                You have been invited as an admin. Please create your password to activate your account.
+                You have been invited as an admin. Please create your password
+                to activate your account.
               </Typography>
             </div>
           )}

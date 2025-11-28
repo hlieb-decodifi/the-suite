@@ -25,19 +25,21 @@ const generateTimeOptions = (intervalMinutes: number = 30) => {
     }
   }
   // Add the special Midnight (End of Day) option
-  options.push({ value: '24:00', label: '12:00 AM (Midnight)' }); 
+  options.push({ value: '24:00', label: '12:00 AM (Midnight)' });
   return options;
 };
 
 export const TIME_OPTIONS = generateTimeOptions(30); // Generate options every 30 mins
 
 // Time conversion helper
-export const timeToMinutes = (time: string | null | undefined): number | null => {
+export const timeToMinutes = (
+  time: string | null | undefined,
+): number | null => {
   if (!time) return null;
   const parts = time.split(':');
   // Ensure parts has 2 elements AND that they are defined strings
   if (parts.length !== 2 || parts[0] === undefined || parts[1] === undefined) {
-      return null;
+    return null;
   }
   // Now parts[0] and parts[1] are guaranteed to be strings
   const hours = parseInt(parts[0], 10);
@@ -47,7 +49,9 @@ export const timeToMinutes = (time: string | null | undefined): number | null =>
 };
 
 // Helper to parse display hours string like "9:00 AM - 5:00 PM"
-export const parseDisplayHours = (hoursString: string | undefined | null): { startTime?: string; endTime?: string } => {
+export const parseDisplayHours = (
+  hoursString: string | undefined | null,
+): { startTime?: string; endTime?: string } => {
   if (!hoursString || hoursString.toLowerCase() === 'closed') {
     return {}; // Return empty for exactOptionalPropertyTypes compatibility
   }
@@ -93,4 +97,4 @@ export const parseDisplayHours = (hoursString: string | undefined | null): { sta
   if (endTime !== undefined) result.endTime = endTime;
 
   return result;
-}; 
+};

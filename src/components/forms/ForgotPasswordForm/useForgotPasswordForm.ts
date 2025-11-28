@@ -10,10 +10,10 @@ export type UseForgotPasswordFormProps = {
   isLoading?: boolean;
 };
 
-export function useForgotPasswordForm({ 
-  onSubmit, 
+export function useForgotPasswordForm({
+  onSubmit,
   defaultValues,
-  isLoading = false
+  isLoading = false,
 }: UseForgotPasswordFormProps) {
   const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
@@ -24,7 +24,7 @@ export function useForgotPasswordForm({
   });
 
   const handleSubmit = async (data: ForgotPasswordFormValues) => {
-      onSubmit(data);
+    onSubmit(data);
   };
 
   return {
@@ -32,4 +32,4 @@ export function useForgotPasswordForm({
     isPending: isLoading,
     onSubmit: handleSubmit,
   };
-} 
+}

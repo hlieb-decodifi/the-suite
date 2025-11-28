@@ -7,4 +7,4 @@ export type CookieConsentProps = {
    * Optional callback when consent is given.
    */
   onConsentGiven?: () => void;
-}; 
+};

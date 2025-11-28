@@ -4,58 +4,58 @@
 export type LatLng = {
   latitude: number;
   longitude: number;
-}
+};
 
 export type Viewport = {
   low: LatLng;
   high: LatLng;
-}
+};
 
 export type Circle = {
   center: LatLng;
   radius: number;
-}
+};
 
 export type AddressComponent = {
   longText: string;
   shortText: string;
   types: string[];
   languageCode: string;
-}
+};
 
 export type LocalizedText = {
   text: string;
   languageCode: string;
-}
+};
 
 export type Photo = {
   name: string;
   widthPx: number;
   heightPx: number;
   authorAttributions: AuthorAttribution[];
-}
+};
 
 export type AuthorAttribution = {
   displayName: string;
   uri: string;
   photoUri: string;
-}
+};
 
 export type PlusCode = {
   globalCode: string;
   compoundCode: string;
-}
+};
 
 export type OpeningHours = {
   openNow: boolean;
   periods: Period[];
   weekdayDescriptions: string[];
-}
+};
 
 export type Period = {
   open: TimeOfDay;
   close: TimeOfDay;
-}
+};
 
 export type TimeOfDay = {
   hour: number;
@@ -65,7 +65,7 @@ export type TimeOfDay = {
     month: number;
     day: number;
   };
-}
+};
 
 export type Review = {
   name: string;
@@ -75,14 +75,14 @@ export type Review = {
   originalText: LocalizedText;
   authorAttribution: AuthorAttribution;
   publishTime: string;
-}
+};
 
 export type PaymentOptions = {
   acceptsCreditCards: boolean;
   acceptsDebitCards: boolean;
   acceptsCashOnly: boolean;
   acceptsNfc: boolean;
-}
+};
 
 export type ParkingOptions = {
   paidParkingLot: boolean;
@@ -92,14 +92,14 @@ export type ParkingOptions = {
   valetParking: boolean;
   paidGarageParking: boolean;
   freeGarageParking: boolean;
-}
+};
 
 export type AccessibilityOptions = {
   wheelchairAccessibleParking: boolean;
   wheelchairAccessibleEntrance: boolean;
   wheelchairAccessibleRestroom: boolean;
   wheelchairAccessibleSeating: boolean;
-}
+};
 
 export type Place = {
   name: string;
@@ -163,7 +163,7 @@ export type Place = {
   placeSummary?: LocalizedText;
   reviewSummary?: LocalizedText;
   areaSummary?: LocalizedText;
-}
+};
 
 // Autocomplete API types
 export type AutocompletePrediction = {
@@ -172,17 +172,17 @@ export type AutocompletePrediction = {
   text: LocalizedText;
   structuredFormat: StructuredFormat;
   types: string[];
-}
+};
 
 export type StructuredFormat = {
   mainText: LocalizedText;
   secondaryText: LocalizedText;
-}
+};
 
 export type QueryPrediction = {
   text: LocalizedText;
   structuredFormat: StructuredFormat;
-}
+};
 
 // Request/Response types
 export type AutocompleteRequest = {
@@ -197,30 +197,30 @@ export type AutocompleteRequest = {
   origin?: LatLng;
   inputOffset?: number;
   includeQueryPredictions?: boolean;
-}
+};
 
 export type AutocompleteResponse = {
   suggestions: Suggestion[];
-}
+};
 
 export type Suggestion = {
   placePrediction?: AutocompletePrediction;
   queryPrediction?: QueryPrediction;
-}
+};
 
 export type LocationBias = {
   rectangle?: Rectangle;
   circle?: Circle;
-}
+};
 
 export type LocationRestriction = {
   rectangle?: Rectangle;
-}
+};
 
 export type Rectangle = {
   low: LatLng;
   high: LatLng;
-}
+};
 
 // Place Details API types
 export type PlaceDetailsRequest = {
@@ -228,11 +228,11 @@ export type PlaceDetailsRequest = {
   languageCode?: string;
   regionCode?: string;
   sessionToken?: string;
-}
+};
 
 export type PlaceDetailsResponse = {
   place: Place;
-}
+};
 
 // Search API types
 export type TextSearchRequest = {
@@ -246,17 +246,22 @@ export type TextSearchRequest = {
   openNow?: boolean;
   minRating?: number;
   maxResultCount?: number;
-  priceLevels?: ('PRICE_LEVEL_INEXPENSIVE' | 'PRICE_LEVEL_MODERATE' | 'PRICE_LEVEL_EXPENSIVE' | 'PRICE_LEVEL_VERY_EXPENSIVE')[];
+  priceLevels?: (
+    | 'PRICE_LEVEL_INEXPENSIVE'
+    | 'PRICE_LEVEL_MODERATE'
+    | 'PRICE_LEVEL_EXPENSIVE'
+    | 'PRICE_LEVEL_VERY_EXPENSIVE'
+  )[];
   strictTypeFiltering?: boolean;
   locationBias?: LocationBias;
   locationRestriction?: LocationRestriction;
   evOptions?: Record<string, unknown>;
-}
+};
 
 export type TextSearchResponse = {
   places: Place[];
   nextPageToken?: string;
-}
+};
 
 export type NearbySearchRequest = {
   includedTypes?: string[];
@@ -268,11 +273,11 @@ export type NearbySearchRequest = {
   rankPreference?: 'POPULARITY' | 'DISTANCE';
   languageCode?: string;
   regionCode?: string;
-}
+};
 
 export type NearbySearchResponse = {
   places: Place[];
-}
+};
 
 // Place Photo API types
 export type PlacePhotoRequest = {
@@ -280,7 +285,7 @@ export type PlacePhotoRequest = {
   maxHeightPx?: number;
   maxWidthPx?: number;
   skipHttpRedirect?: boolean;
-}
+};
 
 // Error types
 export type PlacesApiError = {
@@ -290,13 +295,13 @@ export type PlacesApiError = {
     status: string;
     details?: Record<string, unknown>[];
   };
-}
+};
 
 // Session token for billing optimization
 export type SessionToken = {
   token: string;
   createdAt: Date;
-}
+};
 
 // Custom types for our application
 export type AddressData = {
@@ -320,10 +325,10 @@ export type AddressData = {
   city: string;
   state: string;
   street_address: string;
-}
+};
 
 // Field masks for controlling response data
-export type PlaceField = 
+export type PlaceField =
   | 'places.id'
   | 'places.name'
   | 'places.displayName'
@@ -366,11 +371,11 @@ export type PlaceField =
   | 'places.areaSummary';
 
 // Autocomplete field masks use a different structure (suggestions.placePrediction.*)
-export type AutocompleteField = 
+export type AutocompleteField =
   | 'suggestions.placePrediction.place'
   | 'suggestions.placePrediction.placeId'
   | 'suggestions.placePrediction.text'
   | 'suggestions.placePrediction.structuredFormat'
   | 'suggestions.placePrediction.types'
   | 'suggestions.queryPrediction.text'
-  | 'suggestions.queryPrediction.structuredFormat'; 
+  | 'suggestions.queryPrediction.structuredFormat';

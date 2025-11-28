@@ -2,7 +2,8 @@ import { Database } from '@/../supabase/types';
 
 // Reference the database types
 type UserRow = Database['public']['Tables']['users']['Row'];
-type ProfessionalProfileRow = Database['public']['Tables']['professional_profiles']['Row'];
+type ProfessionalProfileRow =
+  Database['public']['Tables']['professional_profiles']['Row'];
 type ProfilePhotoRow = Database['public']['Tables']['profile_photos']['Row'];
 
 // Transform snake_case DB types to camelCase client types
@@ -33,8 +34,9 @@ export type HeaderFormValues = {
   tiktokUrl?: string | null | undefined;
 };
 
-export type Address = Database["public"]["Tables"]["addresses"]["Row"];
-export type ClientProfile = Database["public"]["Tables"]["client_profiles"]["Row"];
+export type Address = Database['public']['Tables']['addresses']['Row'];
+export type ClientProfile =
+  Database['public']['Tables']['client_profiles']['Row'];
 
 export type AddressFormData = {
   country: string;
@@ -68,4 +70,4 @@ export type LocationFormData = {
   state: string;
   city: string;
   streetAddress: string;
-}; 
+};

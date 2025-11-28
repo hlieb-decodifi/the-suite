@@ -40,19 +40,19 @@ export function DashboardTemplate() {
   // Render appropriate view based on user type
   return (
     <div className="w-full">
-        {isProfessional ? (
-          <DashboardTemplateProfessionalView
-            user={user}
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-          />
-        ) : (
-          <DashboardTemplateClientView
-            user={user}
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-          />
-        )}
+      {isProfessional ? (
+        <DashboardTemplateProfessionalView
+          user={user}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+        />
+      ) : (
+        <DashboardTemplateClientView
+          user={user}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+        />
+      )}
     </div>
   );
 }

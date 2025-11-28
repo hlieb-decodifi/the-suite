@@ -3,9 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
-import type {
-  AddressData,
-} from './types';
+import type { AddressData } from './types';
 import {
   autocompleteAddresses,
   getPlaceDetails,
@@ -17,14 +15,17 @@ import {
 // Query keys
 export const placesKeys = {
   all: ['places'] as const,
-  autocomplete: (input: string, options?: object) => 
+  autocomplete: (input: string, options?: object) =>
     [...placesKeys.all, 'autocomplete', input, options] as const,
-  details: (placeId: string, options?: object) => 
+  details: (placeId: string, options?: object) =>
     [...placesKeys.all, 'details', placeId, options] as const,
-  textSearch: (query: string, options?: object) => 
+  textSearch: (query: string, options?: object) =>
     [...placesKeys.all, 'textSearch', query, options] as const,
-  nearbySearch: (center: { latitude: number; longitude: number }, radius: number, options?: object) => 
-    [...placesKeys.all, 'nearbySearch', center, radius, options] as const,
+  nearbySearch: (
+    center: { latitude: number; longitude: number },
+    radius: number,
+    options?: object,
+  ) => [...placesKeys.all, 'nearbySearch', center, radius, options] as const,
 } as const;
 
 type UseAddressAutocompleteOptions = {
@@ -42,7 +43,7 @@ type UseAddressAutocompleteOptions = {
   language?: string;
   region?: string;
   onSelect?: (placeId: string) => void;
-}
+};
 
 /**
  * Hook for address autocomplete with session token management
@@ -50,7 +51,7 @@ type UseAddressAutocompleteOptions = {
  */
 export function useAddressAutocomplete(
   input: string,
-  options: UseAddressAutocompleteOptions = {}
+  options: UseAddressAutocompleteOptions = {},
 ) {
   const {
     enabled = true,
@@ -74,8 +75,12 @@ export function useAddressAutocomplete(
 
   // Query for autocomplete results
   const query = useQuery({
-    queryKey: placesKeys.autocomplete(debouncedInput, { ...apiOptions, sessionToken }),
-    queryFn: () => autocompleteAddresses(debouncedInput, { ...apiOptions, sessionToken }),
+    queryKey: placesKeys.autocomplete(debouncedInput, {
+      ...apiOptions,
+      sessionToken,
+    }),
+    queryFn: () =>
+      autocompleteAddresses(debouncedInput, { ...apiOptions, sessionToken }),
     enabled: enabled && debouncedInput.length > 2, // Only search if input is meaningful
     staleTime: 30 * 1000, // 30 seconds
     refetchOnWindowFocus: false,
@@ -98,7 +103,7 @@ type UseAddressDetailsOptions = {
   sessionToken?: string;
   language?: string;
   region?: string;
-}
+};
 
 /**
  * Hook for getting full address details when user selects an autocomplete result
@@ -114,7 +119,7 @@ export function useAddressDetails(options: UseAddressDetailsOptions = {}) {
       // Cache the result for potential future use
       queryClient.setQueryData(
         placesKeys.details(data.google_place_id, options),
-        data
+        data,
       );
     },
   });
@@ -133,17 +138,20 @@ type UseAddressSearchOptions = {
   region?: string;
   openNow?: boolean;
   priceLevel?: 'INEXPENSIVE' | 'MODERATE' | 'EXPENSIVE' | 'VERY_EXPENSIVE';
-}
+};
 
 /**
  * Hook for text-based place search
  */
 export function useAddressSearch(
   query: string,
-  options: UseAddressSearchOptions & { enabled?: boolean; debounceMs?: number } = {}
+  options: UseAddressSearchOptions & {
+    enabled?: boolean;
+    debounceMs?: number;
+  } = {},
 ) {
   const { enabled = true, debounceMs = 500, ...apiOptions } = options;
-  
+
   const debouncedQuery = useDebounce(query, debounceMs);
 
   return useQuery({
@@ -163,7 +171,7 @@ type UseNearbyPlacesOptions = {
   region?: string;
   rankBy?: 'POPULARITY' | 'DISTANCE';
   enabled?: boolean;
-}
+};
 
 /**
  * Hook for finding places near a location
@@ -171,7 +179,7 @@ type UseNearbyPlacesOptions = {
 export function useNearbyPlaces(
   center: { latitude: number; longitude: number },
   radius: number,
-  options: UseNearbyPlacesOptions = {}
+  options: UseNearbyPlacesOptions = {},
 ) {
   const { enabled = true, ...apiOptions } = options;
 
@@ -188,10 +196,14 @@ export function useNearbyPlaces(
  * Hook that combines autocomplete and place details selection
  * This provides a complete address selection flow
  */
-export function useAddressSelector(options: UseAddressAutocompleteOptions = {}) {
+export function useAddressSelector(
+  options: UseAddressAutocompleteOptions = {},
+) {
   const [input, setInput] = useState('');
-  const [selectedAddress, setSelectedAddress] = useState<AddressData | null>(null);
-  
+  const [selectedAddress, setSelectedAddress] = useState<AddressData | null>(
+    null,
+  );
+
   // Autocomplete hook
   const autocomplete = useAddressAutocomplete(input, {
     ...options,
@@ -206,23 +218,26 @@ export function useAddressSelector(options: UseAddressAutocompleteOptions = {}) 
   });
 
   // Handle address selection
-  const selectAddress = useCallback(async (placeId: string) => {
-    try {
-      const addressData = await placeDetails.mutateAsync(placeId);
-      setSelectedAddress(addressData);
-      autocomplete.resetSession();
-      
-      // Call custom onSelect callback if provided
-      if (options.onSelect) {
-        options.onSelect(placeId);
+  const selectAddress = useCallback(
+    async (placeId: string) => {
+      try {
+        const addressData = await placeDetails.mutateAsync(placeId);
+        setSelectedAddress(addressData);
+        autocomplete.resetSession();
+
+        // Call custom onSelect callback if provided
+        if (options.onSelect) {
+          options.onSelect(placeId);
+        }
+
+        return addressData;
+      } catch (error) {
+        console.error('Error selecting address:', error);
+        throw error;
       }
-      
-      return addressData;
-    } catch (error) {
-      console.error('Error selecting address:', error);
-      throw error;
-    }
-  }, [placeDetails, autocomplete, options.onSelect]);
+    },
+    [placeDetails, autocomplete, options.onSelect],
+  );
 
   // Clear selection
   const clearSelection = useCallback(() => {
@@ -249,31 +264,34 @@ export function useAddressSelector(options: UseAddressAutocompleteOptions = {}) 
 export function useCurrentLocation() {
   return useQuery({
     queryKey: ['geolocation', 'current'],
-    queryFn: () => new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported by this browser'));
-        return;
-      }
+    queryFn: () =>
+      new Promise<{ latitude: number; longitude: number }>(
+        (resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error('Geolocation is not supported by this browser'));
+            return;
+          }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              });
+            },
+            (error) => {
+              reject(new Error(`Geolocation error: ${error.message}`));
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 300000, // 5 minutes
+            },
+          );
         },
-        (error) => {
-          reject(new Error(`Geolocation error: ${error.message}`));
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000, // 5 minutes
-        }
-      );
-    }),
+      ),
     retry: false,
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
-} 
+}

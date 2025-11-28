@@ -1,1 +1,1 @@
-export * from './NotFoundTemplate'; 
+export * from './NotFoundTemplate';

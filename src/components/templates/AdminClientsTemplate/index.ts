@@ -1,1 +1,1 @@
-export { AdminClientsTemplate } from './AdminClientsTemplate'; 
+export { AdminClientsTemplate } from './AdminClientsTemplate';

@@ -27,6 +27,7 @@ import {
   deletePortfolioPhotoAction,
 } from './ProfilePortfolioPage';
 import { getMaxPortfolioPhotosAction } from '@/server/domains/portfolio-photos/actions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export type ProfilePortfolioPageClientProps = {
   user: User;
@@ -377,6 +378,9 @@ export function ProfilePortfolioPageClient({
   const [photoToDelete, setPhotoToDelete] = useState<string | null>(null);
   const [maxPhotos, setMaxPhotos] = useState<number>(20); // Default to 20
 
+  const isMobile = useMediaQuery('(max-width: 1023px)');
+  
+
   // Hooks
   const { toast } = useToast();
 
@@ -480,7 +484,7 @@ export function ProfilePortfolioPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className={cn("w-full flex justify-between items-center", isMobile && 'flex-col items-start')}>
         <div>
           <Typography variant="h2" className="font-bold text-foreground">
             Portfolio

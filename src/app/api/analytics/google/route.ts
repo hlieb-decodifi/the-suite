@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BetaAnalyticsDataClient } from '@google-analytics/data';
-import type { GoogleAnalyticsDashboardData, GAApiResponse } from '@/types/google-analytics';
+import type {
+  GoogleAnalyticsDashboardData,
+  GAApiResponse,
+} from '@/types/google-analytics';
 
 // Initialize the Analytics Data API client
 let analyticsDataClient: BetaAnalyticsDataClient | null = null;
@@ -32,9 +35,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate') || '30daysAgo';
     const endDate = searchParams.get('endDate') || 'today';
-    
+
     const propertyId = process.env.GA_PROPERTY_ID;
-    
+
     if (!propertyId) {
       return NextResponse.json<GAApiResponse>({
         success: false,
@@ -134,45 +137,66 @@ export async function GET(request: NextRequest) {
 
     // Process site traffic data
     const siteTrafficMetrics = siteTrafficResponse.rows?.[0];
-    const totalSessions = parseInt(siteTrafficMetrics?.metricValues?.[0]?.value || '0');
-    
+    const totalSessions = parseInt(
+      siteTrafficMetrics?.metricValues?.[0]?.value || '0',
+    );
+
     // Process device type data
-    const deviceTypes = deviceTypeResponse.rows?.map((row) => {
-      const sessions = parseInt(row.metricValues?.[0]?.value || '0');
-      return {
-        device: row.dimensionValues?.[0]?.value || 'Unknown',
-        sessions,
-        percentage: totalSessions > 0 ? Math.round((sessions / totalSessions) * 100) : 0,
-      };
-    }) || [];
+    const deviceTypes =
+      deviceTypeResponse.rows?.map((row) => {
+        const sessions = parseInt(row.metricValues?.[0]?.value || '0');
+        return {
+          device: row.dimensionValues?.[0]?.value || 'Unknown',
+          sessions,
+          percentage:
+            totalSessions > 0
+              ? Math.round((sessions / totalSessions) * 100)
+              : 0,
+        };
+      }) || [];
 
     // Process traffic source data
-    const trafficSources = trafficSourceResponse.rows?.map((row) => {
-      const sessions = parseInt(row.metricValues?.[0]?.value || '0');
-      return {
-        source: row.dimensionValues?.[0]?.value || 'Unknown',
-        medium: row.dimensionValues?.[1]?.value || 'Unknown',
-        sessions,
-        percentage: totalSessions > 0 ? Math.round((sessions / totalSessions) * 100) : 0,
-      };
-    }) || [];
+    const trafficSources =
+      trafficSourceResponse.rows?.map((row) => {
+        const sessions = parseInt(row.metricValues?.[0]?.value || '0');
+        return {
+          source: row.dimensionValues?.[0]?.value || 'Unknown',
+          medium: row.dimensionValues?.[1]?.value || 'Unknown',
+          sessions,
+          percentage:
+            totalSessions > 0
+              ? Math.round((sessions / totalSessions) * 100)
+              : 0,
+        };
+      }) || [];
 
     // Process top pages data
-    const topPages = topPagesResponse.rows?.map((row) => ({
-      page: row.dimensionValues?.[0]?.value || '/',
-      pageViews: parseInt(row.metricValues?.[0]?.value || '0'),
-      uniquePageViews: parseInt(row.metricValues?.[1]?.value || '0'),
-      averageTimeOnPage: parseFloat(row.metricValues?.[2]?.value || '0'),
-    })) || [];
+    const topPages =
+      topPagesResponse.rows?.map((row) => ({
+        page: row.dimensionValues?.[0]?.value || '/',
+        pageViews: parseInt(row.metricValues?.[0]?.value || '0'),
+        uniquePageViews: parseInt(row.metricValues?.[1]?.value || '0'),
+        averageTimeOnPage: parseFloat(row.metricValues?.[2]?.value || '0'),
+      })) || [];
 
     const dashboardData: GoogleAnalyticsDashboardData = {
       siteTraffic: {
         totalVisits: totalSessions,
-        uniqueVisitors: parseInt(siteTrafficMetrics?.metricValues?.[1]?.value || '0'),
-        pageViews: parseInt(siteTrafficMetrics?.metricValues?.[2]?.value || '0'),
-        bounceRate: parseFloat(siteTrafficMetrics?.metricValues?.[3]?.value || '0'),
-        averageSessionDuration: parseFloat(siteTrafficMetrics?.metricValues?.[4]?.value || '0'),
-        sessionsPerUser: parseFloat(siteTrafficMetrics?.metricValues?.[5]?.value || '0'),
+        uniqueVisitors: parseInt(
+          siteTrafficMetrics?.metricValues?.[1]?.value || '0',
+        ),
+        pageViews: parseInt(
+          siteTrafficMetrics?.metricValues?.[2]?.value || '0',
+        ),
+        bounceRate: parseFloat(
+          siteTrafficMetrics?.metricValues?.[3]?.value || '0',
+        ),
+        averageSessionDuration: parseFloat(
+          siteTrafficMetrics?.metricValues?.[4]?.value || '0',
+        ),
+        sessionsPerUser: parseFloat(
+          siteTrafficMetrics?.metricValues?.[5]?.value || '0',
+        ),
       },
       deviceTypes,
       trafficSources,
@@ -187,13 +211,13 @@ export async function GET(request: NextRequest) {
       success: true,
       data: dashboardData,
     });
-
   } catch (error) {
     console.error('Google Analytics API error:', error);
-    
+
     return NextResponse.json<GAApiResponse>({
       success: false,
-      error: 'Failed to fetch Google Analytics data. Please check your configuration.',
+      error:
+        'Failed to fetch Google Analytics data. Please check your configuration.',
     });
   }
 }

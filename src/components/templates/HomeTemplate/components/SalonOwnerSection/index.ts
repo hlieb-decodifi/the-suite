@@ -1,1 +1,1 @@
-export * from './SalonOwnerSection'; 
+export * from './SalonOwnerSection';

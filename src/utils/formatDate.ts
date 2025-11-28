@@ -17,10 +17,10 @@ export function formatTime(time: string): string {
   const parts = time.split(':').map(Number);
   const hour = parts[0] || 0;
   const minute = parts[1] || 0;
-  
+
   const ampm = hour >= 12 ? 'PM' : 'AM';
   const formattedHour = hour % 12 || 12;
-  
+
   return `${formattedHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
 }
 
@@ -29,10 +29,12 @@ export function formatTime(time: string): string {
  * @param timeString The time string in "HH:MM" format in local timezone
  * @returns The time string in "HH:MM" format in UTC timezone
  */
-export function convertToUTC(timeString: string | null | undefined): string | null {
+export function convertToUTC(
+  timeString: string | null | undefined,
+): string | null {
   // QUICK WORKAROUND: Just return the input time string without conversion
   return timeString || null;
-  
+
   /* 
   if (!timeString) return null;
   
@@ -75,10 +77,12 @@ export function convertToUTC(timeString: string | null | undefined): string | nu
  * @param timeString The time string in "HH:MM" format in UTC timezone
  * @returns The time string in "HH:MM" format in local timezone
  */
-export function convertToLocal(timeString: string | null | undefined): string | null {
+export function convertToLocal(
+  timeString: string | null | undefined,
+): string | null {
   // QUICK WORKAROUND: Just return the input time string without conversion
   return timeString || null;
-  
+
   /*
   if (!timeString) return null;
   

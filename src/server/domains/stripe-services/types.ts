@@ -76,7 +76,7 @@ export type ProfessionalProfileForStripe = {
   user_id: string;
   is_published: boolean;
   stripe_account_id: string | null;
-  stripe_connect_status: 'not_connected' | 'pending' | 'complete';
+  stripe_connect_status: 'not_connected' | 'pending' | 'in_review' | 'complete';
 };
 
 // Payment method data
@@ -84,4 +84,4 @@ export type PaymentMethodData = {
   id: string;
   name: string;
   is_online: boolean;
-}; 
+};

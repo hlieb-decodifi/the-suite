@@ -3,10 +3,10 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { processStripeRefund } from '../refunds/stripe-refund';
 import { redirect } from 'next/navigation';
-import { 
+import {
   sendSupportRequestCreation,
   sendSupportRequestResolvedClient,
-  sendSupportRequestResolvedProfessional
+  sendSupportRequestResolvedProfessional,
 } from '@/providers/brevo/templates';
 
 /**
@@ -34,7 +34,8 @@ export async function createSupportRequestAction({
     }
 
     // Validate UUID format to prevent database errors
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(appointment_id)) {
       return {
         success: false,
@@ -45,10 +46,12 @@ export async function createSupportRequestAction({
     // Get appointment details with booking information
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
-      .select(`
+      .select(
+        `
         id,
         booking_id
-      `)
+      `,
+      )
       .eq('id', appointment_id)
       .single();
 
@@ -63,7 +66,8 @@ export async function createSupportRequestAction({
     // Get booking details with service information
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select(`
+      .select(
+        `
         id,
         client_id,
         professional_profile_id,
@@ -76,7 +80,8 @@ export async function createSupportRequestAction({
             name
           )
         )
-      `)
+      `,
+      )
       .eq('id', appointment.booking_id)
       .single();
 
@@ -87,9 +92,9 @@ export async function createSupportRequestAction({
         error: 'Booking not found for this appointment',
       };
     }
-    
+
     const clientId = booking.client_id;
-    
+
     // Access the professional's user_id
     const professionalId = booking.professional_profiles?.user_id;
 
@@ -110,7 +115,7 @@ export async function createSupportRequestAction({
 
     // Create a conversation for this support request
     const conversationPurpose = `support_request_${appointment_id}`;
-    
+
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
       .insert({
@@ -138,7 +143,7 @@ export async function createSupportRequestAction({
       if (Array.isArray(services)) {
         serviceName = services[0]?.name || '';
       } else if (services && typeof services === 'object') {
-        serviceName = (services as {name?: string}).name || '';
+        serviceName = (services as { name?: string }).name || '';
       }
     } catch {
       serviceName = '';
@@ -229,7 +234,9 @@ export async function initiateRefundServerAction(formData: FormData) {
   try {
     const support_request_id = formData.get('support_request_id') as string;
     const refund_amount = parseFloat(formData.get('refund_amount') as string);
-    const professional_notes = formData.get('professional_notes') as string | undefined;
+    const professional_notes = formData.get('professional_notes') as
+      | string
+      | undefined;
 
     if (!support_request_id || isNaN(refund_amount)) {
       return {
@@ -252,7 +259,8 @@ export async function initiateRefundServerAction(formData: FormData) {
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -280,7 +288,7 @@ export async function initiateRefundServerAction(formData: FormData) {
     // Process the refund through Stripe
     const { success, error: refundError } = await processStripeRefund(
       support_request_id,
-      refund_amount
+      refund_amount,
     );
 
     if (!success) {
@@ -291,8 +299,10 @@ export async function initiateRefundServerAction(formData: FormData) {
       };
     }
 
-    console.log('[SERVER-ACTION] Refund processed successfully, sending message and updating status');
-    
+    console.log(
+      '[SERVER-ACTION] Refund processed successfully, sending message and updating status',
+    );
+
     // Add a message to the conversation BEFORE resolving the support request
     if (supportRequest.conversation_id) {
       const { error: messageError } = await supabase.from('messages').insert({
@@ -304,7 +314,10 @@ export async function initiateRefundServerAction(formData: FormData) {
       });
 
       if (messageError) {
-        console.error('[SERVER-ACTION] Error creating refund message:', messageError);
+        console.error(
+          '[SERVER-ACTION] Error creating refund message:',
+          messageError,
+        );
         // Don't return error as the refund was processed successfully
       }
     }
@@ -320,7 +333,7 @@ export async function initiateRefundServerAction(formData: FormData) {
       status: 'resolved',
       resolved_at: new Date().toISOString(),
       resolved_by: user.id,
-      resolution_notes: 'Resolved via successful Stripe refund'
+      resolution_notes: 'Resolved via successful Stripe refund',
     };
 
     if (professional_notes) {
@@ -333,7 +346,10 @@ export async function initiateRefundServerAction(formData: FormData) {
       .eq('id', support_request_id);
 
     if (updateError) {
-      console.error('[SERVER-ACTION] Error updating support request status:', updateError);
+      console.error(
+        '[SERVER-ACTION] Error updating support request status:',
+        updateError,
+      );
       // Don't fail the entire operation for status update failure
     }
 
@@ -342,7 +358,10 @@ export async function initiateRefundServerAction(formData: FormData) {
       success: true,
     };
   } catch (error) {
-    console.error('[SERVER-ACTION] Error in initiateRefundServerAction:', error);
+    console.error(
+      '[SERVER-ACTION] Error in initiateRefundServerAction:',
+      error,
+    );
     return {
       success: false,
       error: 'An unexpected error occurred',
@@ -375,7 +394,8 @@ export async function resolveSupportRequestAction({
     }
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(support_request_id)) {
       return {
         success: false,
@@ -452,35 +472,48 @@ export async function resolveSupportRequestAction({
 /**
  * Send support request creation email to professional
  */
-async function sendSupportRequestCreationEmail(supportRequestId: string, professionalUserId: string) {
+async function sendSupportRequestCreationEmail(
+  supportRequestId: string,
+  professionalUserId: string,
+) {
   try {
     // Use admin client for auth operations
     const adminSupabase = await createAdminClient();
 
     // Get professional data using admin client
-    const { data: professionalAuth, error: professionalAuthError } = await adminSupabase.auth.admin.getUserById(professionalUserId);
+    const { data: professionalAuth, error: professionalAuthError } =
+      await adminSupabase.auth.admin.getUserById(professionalUserId);
     if (professionalAuthError || !professionalAuth.user?.email) {
       console.error('Failed to get professional email:', professionalAuthError);
       return;
     }
 
-    const { data: professionalUser, error: professionalUserError } = await adminSupabase
-      .from('users')
-      .select('first_name, last_name')
-      .eq('id', professionalUserId)
-      .single();
+    const { data: professionalUser, error: professionalUserError } =
+      await adminSupabase
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', professionalUserId)
+        .single();
 
     if (professionalUserError || !professionalUser) {
-      console.error('Failed to get professional user data:', professionalUserError);
+      console.error(
+        'Failed to get professional user data:',
+        professionalUserError,
+      );
       return;
     }
 
     await sendSupportRequestCreation(
-      [{ email: professionalAuth.user.email, name: `${professionalUser.first_name} ${professionalUser.last_name}` }],
+      [
+        {
+          email: professionalAuth.user.email,
+          name: `${professionalUser.first_name} ${professionalUser.last_name}`,
+        },
+      ],
       {
         professional_name: `${professionalUser.first_name} ${professionalUser.last_name}`,
-        support_request_url: `${process.env.NEXT_PUBLIC_BASE_URL}/support-request/${supportRequestId}`
-      }
+        support_request_url: `${process.env.NEXT_PUBLIC_BASE_URL}/support-request/${supportRequestId}`,
+      },
     );
 
     console.log('✅ Support request creation email sent to professional');
@@ -498,9 +531,11 @@ async function sendSupportRequestResolvedEmails(supportRequestId: string) {
     const adminSupabase = await createAdminClient();
 
     // Get support request data with booking and user info
-    const { data: supportRequest, error: supportRequestError } = await adminSupabase
-      .from('support_requests')
-      .select(`
+    const { data: supportRequest, error: supportRequestError } =
+      await adminSupabase
+        .from('support_requests')
+        .select(
+          `
         id,
         booking_id,
         client_id,
@@ -518,9 +553,10 @@ async function sendSupportRequestResolvedEmails(supportRequestId: string) {
             )
           )
         )
-      `)
-      .eq('id', supportRequestId)
-      .single();
+      `,
+        )
+        .eq('id', supportRequestId)
+        .single();
 
     if (supportRequestError || !supportRequest) {
       console.error('Failed to get support request data:', supportRequestError);
@@ -547,10 +583,19 @@ async function sendSupportRequestResolvedEmails(supportRequestId: string) {
     }
 
     // Get email addresses using admin client
-    const { data: clientAuth, error: clientAuthError } = await adminSupabase.auth.admin.getUserById(supportRequest.client_id);
-    const { data: professionalAuth, error: professionalAuthError } = await adminSupabase.auth.admin.getUserById(supportRequest.professional_id);
+    const { data: clientAuth, error: clientAuthError } =
+      await adminSupabase.auth.admin.getUserById(supportRequest.client_id);
+    const { data: professionalAuth, error: professionalAuthError } =
+      await adminSupabase.auth.admin.getUserById(
+        supportRequest.professional_id,
+      );
 
-    if (clientAuthError || !clientAuth.user?.email || professionalAuthError || !professionalAuth.user?.email) {
+    if (
+      clientAuthError ||
+      !clientAuth.user?.email ||
+      professionalAuthError ||
+      !professionalAuth.user?.email
+    ) {
       console.error('Failed to get email addresses');
       return;
     }
@@ -565,17 +610,17 @@ async function sendSupportRequestResolvedEmails(supportRequestId: string) {
         {
           booking_id: supportRequest.booking_id || '',
           client_name: clientName,
-          professional_name: professionalName
-        }
+          professional_name: professionalName,
+        },
       ),
       sendSupportRequestResolvedProfessional(
         [{ email: professionalAuth.user.email, name: professionalName }],
         {
           booking_id: supportRequest.booking_id || '',
           client_name: clientName,
-          professional_name: professionalName
-        }
-      )
+          professional_name: professionalName,
+        },
+      ),
     ]);
 
     console.log('✅ Support request resolved emails sent');
@@ -583,4 +628,3 @@ async function sendSupportRequestResolvedEmails(supportRequestId: string) {
     console.error('❌ Error sending support request resolved emails:', error);
   }
 }
-

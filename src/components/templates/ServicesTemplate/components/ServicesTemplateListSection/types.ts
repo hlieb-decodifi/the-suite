@@ -1,4 +1,9 @@
-import { ServiceListItem, PaginationInfo, AuthStatus, SortOption } from '../../types';
+import {
+  ServiceListItem,
+  PaginationInfo,
+  AuthStatus,
+  SortOption,
+} from '../../types';
 
 export type ServicesTemplateListSectionProps = {
   services: ServiceListItem[];
@@ -8,4 +13,4 @@ export type ServicesTemplateListSectionProps = {
   isLoading?: boolean;
   sortBy: SortOption;
   onSortChange: (sortBy: SortOption) => void;
-}; 
+};

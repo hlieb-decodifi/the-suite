@@ -3,9 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Typography } from '@/components/ui/typography';
-import {
-  ArrowLeftIcon,
-} from 'lucide-react';
+import { ArrowLeftIcon } from 'lucide-react';
 
 export default function BookingDetailLoading() {
   return (
@@ -30,7 +28,10 @@ export default function BookingDetailLoading() {
             </div>
             <div className="flex items-center mt-2 sm:mt-0">
               <div className="scale-110">
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                <Badge
+                  variant="outline"
+                  className="bg-primary/10 text-primary border-primary/20"
+                >
                   <Skeleton className="h-4 w-16" />
                 </Badge>
               </div>
@@ -178,7 +179,7 @@ export default function BookingDetailLoading() {
               <Separator />
               <div className="space-y-2">
                 <Skeleton className="h-5 w-32 mb-1" />
-                
+
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-20" />
                   <Skeleton className="h-4 w-full" />

@@ -8,4 +8,4 @@ export function getLocalConsent(): boolean {
 export function setLocalConsent(value: boolean) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(COOKIE_CONSENT_KEY, value ? 'true' : 'false');
-} 
+}

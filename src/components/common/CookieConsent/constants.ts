@@ -7,4 +7,4 @@ export const COOKIE_CONSENT_TEXT = {
   accept: 'Accept',
   learnMore: 'Learn more',
   learnMoreUrl: '/privacy-policy',
-}; 
+};
