@@ -124,8 +124,8 @@ export function ContactHoursModal({
             </div>
           </div>
 
-          {/* Header Row - Adjust column spans */}
-          <div className="grid grid-cols-7 gap-x-4 px-1 pb-2 pt-4 border-b border-border">
+          {/* Header Row - Hidden on mobile, shown on md+ screens */}
+          <div className="hidden md:grid grid-cols-7 gap-x-4 px-1 pb-2 pt-4 border-b border-border">
             <Typography
               variant="small"
               className="col-span-1 font-medium text-muted-foreground"
@@ -168,10 +168,16 @@ export function ContactHoursModal({
             variant="outline"
             onClick={handleCancel}
             disabled={isSubmitting}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+          <Button 
+            type="button" 
+            onClick={handleSubmit} 
+            disabled={isSubmitting}
+            className="w-full sm:w-auto"
+          >
             {isSubmitting ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>

@@ -30,7 +30,7 @@ export function TabNavigation({
   activeTab,
 }: TabNavigationProps) {
   const baseTabClasses =
-    'min-w-24 flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all capitalize';
+    'min-w-20 sm:min-w-24 flex items-center justify-center gap-1.5 rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all capitalize flex-shrink-0';
 
   const getTabClasses = (tab: TabItem) => {
     const isActive = variant === 'link' ? tab.isActive : activeTab === tab.key;
@@ -56,7 +56,7 @@ export function TabNavigation({
   return (
     <div
       className={cn(
-        'gap-1 bg-muted/50 p-1 rounded-full inline-flex',
+        'gap-1 bg-muted/50 p-1 rounded-full flex flex-wrap sm:inline-flex w-full sm:w-auto',
         className,
       )}
     >

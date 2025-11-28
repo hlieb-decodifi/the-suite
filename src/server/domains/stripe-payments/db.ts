@@ -81,16 +81,17 @@ export async function getProfessionalProfileForPayment(
 /**
  * Enhanced payment calculation with deposit validation
  */
-export function calculatePaymentAmounts(
+export async function calculatePaymentAmounts(
   totalAmount: number, // in cents
   professionalProfile: ProfessionalProfileForPayment,
   serviceAmount?: number, // service amount only (without tips or fees) - in cents
   tipAmount?: number, // tip amount in cents
-): PaymentCalculation {
+): Promise<PaymentCalculation> {
   const { requires_deposit, deposit_type, deposit_value } = professionalProfile;
 
   // Get service fee from config
-  const serviceFee = 100; // $1 in cents, TODO: get from config
+  const { getServiceFeeFromConfig } = await import('@/server/lib/service-fee');
+  const serviceFee = await getServiceFeeFromConfig();
 
   // Calculate service amount if not provided (backward compatibility)
   const actualServiceAmount =
@@ -125,8 +126,31 @@ export function calculatePaymentAmounts(
     depositAmount = Math.max(depositAmount, 100);
   }
 
-  // Service fee and tips are always charged with the remaining balance
+  // NEW FEE STRUCTURE: When deposit exists, client service fee is added to deposit
+  // This ensures the service fee is charged upfront with the deposit
+  console.log(
+    '[calculatePaymentAmounts] Before adding service fee to deposit:',
+    {
+      depositAmount,
+      serviceFee,
+      totalAmount,
+      actualServiceAmount,
+      tipAmount: tipAmount || 0,
+    },
+  );
+
+  depositAmount += serviceFee;
+
+  // Balance amount: remaining service + tips (service fee already in deposit)
+  // totalAmount includes service fee, so we subtract (depositAmount which includes service fee)
   const balanceAmount = totalAmount - depositAmount;
+
+  console.log('[calculatePaymentAmounts] Final calculation:', {
+    depositAmount,
+    balanceAmount,
+    totalAmount,
+    verification: depositAmount + balanceAmount === totalAmount,
+  });
 
   return {
     totalAmount,

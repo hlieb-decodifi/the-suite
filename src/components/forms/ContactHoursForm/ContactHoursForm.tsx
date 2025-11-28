@@ -56,80 +56,90 @@ export const ContactHoursForm = forwardRef<
             const isEnabled = form.watch(`hours.${index}.enabled`);
 
             return (
-              // Grid row for each day - items-center should handle vertical alignment
+              // Responsive row layout
               <div
                 key={item.id}
-                className="grid grid-cols-7 gap-x-4 items-center min-h-[50px] relative"
+                className="flex flex-col sm:grid sm:grid-cols-7 gap-3 sm:gap-x-4 py-4 sm:py-0 border-b sm:border-none last:border-none border-border relative"
               >
-                {/* Day Name (Adjust col-span) */}
-                <Typography variant="small" className="col-span-1 font-medium">
-                  {dayName}
-                </Typography>
+                {/* Header Group: Day & Status (Flex on mobile, Contents on desktop) */}
+                <div className="flex items-center justify-start gap-3 w-full sm:contents">
+                  <Typography 
+                    variant="small" 
+                    className="font-medium sm:col-span-1 text-base sm:text-sm"
+                  >
+                    {dayName}
+                  </Typography>
 
-                {/* Status Checkbox (Adjust col-span) */}
-                <div className="col-span-1 flex justify-center">
-                  <Controller
-                    control={form.control}
-                    name={`hours.${index}.enabled`}
-                    render={({ field }) => (
-                      <Checkbox
-                        id={`${formId}-enabled-${index}`}
-                        checked={field.value ?? false}
-                        onCheckedChange={field.onChange}
-                        aria-label={`${dayName} status`}
-                      />
-                    )}
-                  />
+                  <div className="sm:col-span-1 flex sm:justify-center">
+                    <Controller
+                      control={form.control}
+                      name={`hours.${index}.enabled`}
+                      render={({ field }) => (
+                        <div className="flex items-center gap-2">
+                          <span className="sm:hidden text-sm text-muted-foreground">
+                            {field.value ? 'Open' : 'Closed'}
+                          </span>
+                          <Checkbox
+                            id={`${formId}-enabled-${index}`}
+                            checked={field.value ?? false}
+                            onCheckedChange={field.onChange}
+                            aria-label={`${dayName} status`}
+                          />
+                        </div>
+                      )}
+                    />
+                  </div>
                 </div>
 
-                <div className="col-span-1" />
+                <div className="hidden sm:block col-span-1" />
 
-                {/* Start Time Select (Adjust col-span) */}
-                <div className="col-span-2 relative">
-                  {/* ... Controller and FormSelect ... */}
-                  <Controller
-                    control={form.control}
-                    name={`hours.${index}.startTime`}
-                    render={({ field }) => (
-                      <FormSelect
-                        options={TIME_OPTIONS}
-                        placeholder="-"
-                        disabled={!isEnabled}
-                        value={isEnabled ? (field.value ?? '') : ''}
-                        onChange={(value) => field.onChange(value || null)}
-                        aria-label={`${dayName} start time`}
-                      />
+                {/* Time Inputs Group (Grid on mobile, Contents on desktop) */}
+                <div className="grid grid-cols-2 gap-3 w-full sm:contents">
+                  {/* Start Time Select */}
+                  <div className="sm:col-span-2 relative">
+                    <Controller
+                      control={form.control}
+                      name={`hours.${index}.startTime`}
+                      render={({ field }) => (
+                        <FormSelect
+                          options={TIME_OPTIONS}
+                          placeholder="Start"
+                          disabled={!isEnabled}
+                          value={isEnabled ? (field.value ?? '') : ''}
+                          onChange={(value) => field.onChange(value || null)}
+                          aria-label={`${dayName} start time`}
+                        />
+                      )}
+                    />
+                    {dayErrors?.startTime?.message && (
+                      <FormMessage className="absolute text-xs mt-1">
+                        {dayErrors.startTime.message}
+                      </FormMessage>
                     )}
-                  />
-                  {dayErrors?.startTime?.message && (
-                    <FormMessage className="absolute text-xs mt-1">
-                      {dayErrors.startTime.message}
-                    </FormMessage>
-                  )}
-                </div>
+                  </div>
 
-                {/* End Time Select (Adjust col-span) */}
-                <div className="col-span-2 relative">
-                  {/* ... Controller and FormSelect ... */}
-                  <Controller
-                    control={form.control}
-                    name={`hours.${index}.endTime`}
-                    render={({ field }) => (
-                      <FormSelect
-                        options={TIME_OPTIONS}
-                        placeholder="-"
-                        disabled={!isEnabled}
-                        value={isEnabled ? (field.value ?? '') : ''}
-                        onChange={(value) => field.onChange(value || null)}
-                        aria-label={`${dayName} end time`}
-                      />
+                  {/* End Time Select */}
+                  <div className="sm:col-span-2 relative">
+                    <Controller
+                      control={form.control}
+                      name={`hours.${index}.endTime`}
+                      render={({ field }) => (
+                        <FormSelect
+                          options={TIME_OPTIONS}
+                          placeholder="End"
+                          disabled={!isEnabled}
+                          value={isEnabled ? (field.value ?? '') : ''}
+                          onChange={(value) => field.onChange(value || null)}
+                          aria-label={`${dayName} end time`}
+                        />
+                      )}
+                    />
+                    {dayErrors?.endTime?.message && (
+                      <FormMessage className="absolute text-xs mt-1">
+                        {dayErrors.endTime.message}
+                      </FormMessage>
                     )}
-                  />
-                  {dayErrors?.endTime?.message && (
-                    <FormMessage className="absolute text-xs mt-1">
-                      {dayErrors.endTime.message}
-                    </FormMessage>
-                  )}
+                  </div>
                 </div>
               </div>
             );

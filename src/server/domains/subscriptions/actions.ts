@@ -11,6 +11,7 @@ import {
 } from './db';
 import type { SubscriptionPlan } from './db';
 import { createClient } from '@/lib/supabase/server';
+import { determineConnectStatus } from '@/server/domains/stripe-services/utils';
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -425,10 +426,18 @@ export async function createStripeConnectLink(userId: string): Promise<string> {
           transfers: { requested: true },
         },
         business_type: 'individual',
+        settings: {
+          payouts: {
+            schedule: {
+              interval: 'manual', // Manual payouts to allow negative balances
+            },
+          },
+        },
         metadata: {
           userId,
           professionalProfileId: profileData.id,
           accountIdKey,
+          negative_balances_enabled: 'true', // Track that this account supports negative balances
         },
       });
 
@@ -473,6 +482,12 @@ export async function getStripeConnectStatus(userId: string): Promise<{
   isConnected: boolean;
   accountId?: string;
   connectStatus?: string;
+  requirements?: {
+    currently_due: string[];
+    eventually_due: string[];
+    past_due: string[];
+    disabled_reason?: string | null;
+  };
 }> {
   try {
     // First, try to get status from database (fast)
@@ -518,6 +533,12 @@ async function getStripeConnectStatusFromAPI(userId: string): Promise<{
   isConnected: boolean;
   accountId?: string;
   connectStatus?: string;
+  requirements?: {
+    currently_due: string[];
+    eventually_due: string[];
+    past_due: string[];
+    disabled_reason?: string | null;
+  };
 }> {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error('Missing Stripe secret key');
@@ -548,10 +569,17 @@ async function getStripeConnectStatusFromAPI(userId: string): Promise<{
       );
     }
 
-    // Get the professional profile
+    // Get the professional profile and their stored Stripe account ID
     const { data: profileData, error: profileError } = await supabase
       .from('professional_profiles')
-      .select('id')
+      .select(
+        `
+        id,
+        professional_stripe_connect(
+          stripe_account_id
+        )
+      `,
+      )
       .eq('user_id', userId)
       .single();
 
@@ -559,46 +587,51 @@ async function getStripeConnectStatusFromAPI(userId: string): Promise<{
       throw new Error('Professional profile not found');
     }
 
-    // List accounts that match our user's metadata
-    const accounts = await stripe.accounts.list({
-      limit: 5, // Limit to recent accounts
-    });
+    // Get the stored Stripe account ID from the database
+    const storedAccountId =
+      profileData.professional_stripe_connect?.stripe_account_id;
 
-    // Find account with matching metadata
-    const matchingAccount = accounts.data.find(
-      (account) =>
-        account.metadata?.userId === userId ||
-        account.metadata?.professionalProfileId === profileData.id,
-    );
+    if (!storedAccountId) {
+      return {
+        isConnected: false,
+        connectStatus: 'not_connected',
+      };
+    }
+
+    // Retrieve full account details directly using the stored account ID
+    const fullAccount = await stripe.accounts.retrieve(storedAccountId);
 
     const result: {
       isConnected: boolean;
       accountId?: string;
       connectStatus?: string;
+      requirements?: {
+        currently_due: string[];
+        eventually_due: string[];
+        past_due: string[];
+        disabled_reason?: string | null;
+      };
     } = {
-      isConnected: !!matchingAccount,
-      connectStatus: matchingAccount?.charges_enabled
-        ? 'complete'
-        : matchingAccount
-          ? 'pending'
-          : 'not_connected',
+      isConnected: true,
+      accountId: fullAccount.id,
+      connectStatus: determineConnectStatus(fullAccount),
+      requirements: {
+        currently_due: fullAccount.requirements?.currently_due || [],
+        eventually_due: fullAccount.requirements?.eventually_due || [],
+        past_due: fullAccount.requirements?.past_due || [],
+        disabled_reason: fullAccount.requirements?.disabled_reason || null,
+      },
     };
 
-    // Only add accountId if it exists
-    if (matchingAccount?.id) {
-      result.accountId = matchingAccount.id;
-    }
-
     // Update database with fresh data
-    if (matchingAccount) {
-      await updateStripeConnectStatus(userId, {
-        accountId: matchingAccount.id,
-        connectStatus: result.connectStatus as
-          | 'not_connected'
-          | 'pending'
-          | 'complete',
-      });
-    }
+    await updateStripeConnectStatus(userId, {
+      accountId: fullAccount.id,
+      connectStatus: result.connectStatus as
+        | 'not_connected'
+        | 'pending'
+        | 'in_review'
+        | 'complete',
+    });
 
     return result;
   } catch (error) {

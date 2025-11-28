@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LeafletMap } from '@/components/common/LeafletMap';
 import { useActivityTracker } from '@/api/activity-log';
+import { getServiceFeeAction } from '@/server/lib/service-fee';
 
 export type BookingPageClientProps = {
   service: ServiceListItem;
@@ -31,15 +32,42 @@ export function BookingPageClient({
   preselectedDate?: string;
 }) {
   const router = useRouter();
+  const [serviceFee, setServiceFee] = useState(1.0); // Default fallback
   const [formData, setFormData] = useState<{
     timeSlot?: string;
     totalPrice: number;
     extraServices: ServiceListItem[];
     tipAmount?: number;
   }>({
-    totalPrice: service.price + 1.0, // Base price + service fee
+    totalPrice: service.price + serviceFee, // Base price + service fee
     extraServices: [],
   });
+
+  // Load service fee from database on component mount
+  useEffect(() => {
+    async function loadServiceFee() {
+      try {
+        const result = await getServiceFeeAction();
+        if (result.success && result.fee) {
+          setServiceFee(result.fee);
+          // Update total price when service fee changes
+          setFormData((prev) => ({
+            ...prev,
+            totalPrice:
+              service.price +
+              (result.fee || 1.0) +
+              (prev.tipAmount || 0) +
+              prev.extraServices.reduce((sum, extra) => sum + extra.price, 0),
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load service fee:', error);
+        // Keep default value of 1.00
+      }
+    }
+
+    loadServiceFee();
+  }, [service.price]);
 
   // Activity tracking
   const { trackServiceView, trackProfessionalView } = useActivityTracker();
@@ -329,7 +357,7 @@ export function BookingPageClient({
                       Service Fee
                     </Typography>
                     <Typography variant="small" className="font-medium">
-                      {formatCurrency(1.0)}
+                      {formatCurrency(serviceFee)}
                     </Typography>
                   </div>
 

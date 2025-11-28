@@ -357,6 +357,7 @@ export async function processStripeRefund(
           const balanceRefund = await stripe.refunds.create({
             payment_intent: balancePaymentIntentId,
             amount: balanceRefundAmount,
+            reverse_transfer: true, // Reverse transfer to connected professional account
             metadata: {
               support_request_id: supportRequestId,
               refund_type: 'balance',
@@ -366,7 +367,7 @@ export async function processStripeRefund(
           refundIds.push(balanceRefund.id);
           totalRefundedCents += balanceRefundAmount;
           console.log(
-            `[REFUND] Balance refund created: ${balanceRefund.id}, amount: $${balanceRefundAmount / 100}`,
+            `[REFUND] Balance refund created: ${balanceRefund.id}, amount: $${balanceRefundAmount / 100} (reversed transfer to professional)`,
           );
         } catch (refundError) {
           console.error('[REFUND] Error creating balance refund:', refundError);
@@ -423,6 +424,7 @@ export async function processStripeRefund(
             const depositRefund = await stripe.refunds.create({
               payment_intent: depositPaymentIntentId,
               amount: actualChargedAmount, // Refund the full deposit
+              reverse_transfer: true, // Reverse transfer to connected professional account
               metadata: {
                 support_request_id: supportRequestId,
                 refund_type: 'deposit_only',
@@ -432,7 +434,7 @@ export async function processStripeRefund(
             refundIds.push(depositRefund.id);
             totalRefundedCents += actualChargedAmount;
             console.log(
-              `[REFUND] Successfully created deposit refund: ${depositRefund.id} for $${actualChargedAmount / 100}`,
+              `[REFUND] Successfully created deposit refund: ${depositRefund.id} for $${actualChargedAmount / 100} (reversed transfer to professional)`,
             );
 
             // Step 2: Try to refund service fee from balance payment intent (if it exists and contains service fee)
@@ -460,9 +462,12 @@ export async function processStripeRefund(
                   balancePaymentIntent.amount >= remainingToRefund
                 ) {
                   // Payment is captured - create refund
+                  // Note: Service fee refunds may not need reverse_transfer if the balance payment
+                  // only had the service fee (no transfer_data), but we include it for consistency
                   const serviceFeeRefund = await stripe.refunds.create({
                     payment_intent: bookingPayment.stripe_payment_intent_id,
                     amount: remainingToRefund,
+                    reverse_transfer: true, // Reverse transfer if applicable
                     metadata: {
                       support_request_id: supportRequestId,
                       refund_type: 'service_fee_only',
@@ -567,6 +572,7 @@ export async function processStripeRefund(
         const depositRefund = await stripe.refunds.create({
           payment_intent: depositPaymentIntentId,
           amount: depositRefundAmount,
+          reverse_transfer: true, // Reverse transfer to connected professional account
           metadata: {
             support_request_id: supportRequestId,
             refund_type: 'deposit',
@@ -576,7 +582,7 @@ export async function processStripeRefund(
         refundIds.push(depositRefund.id);
         totalRefundedCents += depositRefundAmount;
         console.log(
-          `[REFUND] Deposit refund created: ${depositRefund.id}, amount: $${depositRefundAmount / 100}`,
+          `[REFUND] Deposit refund created: ${depositRefund.id}, amount: $${depositRefundAmount / 100} (reversed transfer to professional)`,
         );
       } catch (refundError) {
         console.error('[REFUND] Error creating deposit refund:', refundError);
@@ -629,6 +635,7 @@ export async function processStripeRefund(
             const tipRefund = await stripe.refunds.create({
               payment_intent: tip.stripe_payment_intent_id,
               amount: tipRefundAmount,
+              reverse_transfer: true, // Reverse transfer to connected professional account
               metadata: {
                 support_request_id: supportRequestId,
                 refund_type: 'tip',
@@ -659,7 +666,7 @@ export async function processStripeRefund(
             }
 
             console.log(
-              `[REFUND] Tip refund created: ${tipRefund.id}, amount: $${tipRefundAmount / 100}`,
+              `[REFUND] Tip refund created: ${tipRefund.id}, amount: $${tipRefundAmount / 100} (reversed transfer to professional)`,
             );
           } catch (refundError) {
             console.error('[REFUND] Error creating tip refund:', refundError);

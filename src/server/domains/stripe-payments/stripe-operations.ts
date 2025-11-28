@@ -1,6 +1,7 @@
 import { stripe } from '@/lib/stripe/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type { Stripe } from 'stripe';
+import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
 import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
 
 function createSupabaseAdminClient() {
@@ -95,6 +96,25 @@ export async function createStripeCheckoutSession(
         throw new Error('Invalid charge amount');
       }
 
+      // NEW FEE STRUCTURE: Calculate professional fee (3%) and client service fee
+      const { getProfessionalFeePercentage } = await import(
+        '@/server/lib/service-fee'
+      );
+      const professionalFeePercentage = await getProfessionalFeePercentage();
+      const professionalFee = Math.round(
+        chargeAmount * (professionalFeePercentage / 100),
+      );
+
+      let applicationFee: number;
+      if (paymentType === 'deposit') {
+        // For deposits: only professional fee (client service fee already included in deposit amount)
+        applicationFee = professionalFee;
+      } else {
+        // For full payments: professional fee + client service fee
+        const clientServiceFee = await getServiceFeeFromConfig();
+        applicationFee = professionalFee + clientServiceFee;
+      }
+
       sessionConfig = {
         ...sessionConfig,
         mode: 'payment',
@@ -119,15 +139,11 @@ export async function createStripeCheckoutSession(
           },
         ],
         payment_intent_data: {
-          // For deposits: transfer full amount, for full payments: subtract service fee
+          // Use application_fee_amount for both deposits and full payments
+          application_fee_amount: applicationFee,
           transfer_data: {
-            amount:
-              paymentType === 'deposit'
-                ? chargeAmount // Transfer full deposit amount to professional
-                : chargeAmount - (await getServiceFeeFromConfig()), // For full payments, subtract service fee
             destination: professionalStripeAccountId,
           },
-          // For deposits: no platform fee, for full payments: platform keeps service fee
           on_behalf_of: professionalStripeAccountId, // Professional pays the processing fees
           metadata: sessionConfig.metadata || {},
         },
@@ -186,8 +202,20 @@ export async function createBalancePaymentIntent(
       };
     }
 
-    const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amount - serviceFee; // Professional gets this amount
+    // NEW FEE STRUCTURE: Calculate professional fee (3%) on balance amount
+    // Balance payment no longer includes client service fee (that's in deposit)
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+
+    // For balance payments, no client service fee (already charged with deposit)
+    // Only apply professional fee
+    const applicationFee = professionalFee;
+    const serviceAmount = amount - applicationFee;
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
@@ -198,7 +226,7 @@ export async function createBalancePaymentIntent(
       confirm: true,
       off_session: true, // Indicates this is for a saved payment method
       // Use application_fee_amount + transfer_data structure for better partial capture support
-      application_fee_amount: serviceFee, // Platform fee
+      application_fee_amount: applicationFee, // Professional fee only (3%)
       transfer_data: {
         destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       },
@@ -212,7 +240,7 @@ export async function createBalancePaymentIntent(
     });
 
     console.log(
-      `[createBalancePaymentIntent] Created balance payment intent ${paymentIntent.id} - Total: $${amount / 100}, App fee: $${serviceFee / 100}, To professional: $${serviceAmount / 100}`,
+      `[createBalancePaymentIntent] Created balance payment intent ${paymentIntent.id} - Total: $${amount / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${serviceAmount / 100}`,
     );
 
     return {
@@ -272,12 +300,15 @@ export async function createUncapturedPaymentIntent(
   paymentMethodId?: string,
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
-    const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amount - serviceFee; // Professional gets this amount
-
-    // Check if this is a cash payment where we're only charging the suite fee
-    const isCashPaymentSuiteFeeOnly =
-      metadata.payment_method_type === 'cash' && amount === serviceFee;
+    // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
+    // Client service fee was already charged with deposit
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
 
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
@@ -292,16 +323,14 @@ export async function createUncapturedPaymentIntent(
       },
     };
 
-    // Use application_fee_amount + transfer_data structure for better partial capture support
-    if (!isCashPaymentSuiteFeeOnly && serviceAmount > 0) {
-      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+    // Apply professional fee (3%) to balance amount
+    if (amount > 0) {
+      paymentIntentData.application_fee_amount = professionalFee;
       paymentIntentData.transfer_data = {
         destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       };
-      // Note: transfer_data.amount is automatically calculated as (total_amount - application_fee_amount)
       paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
     }
-    // For cash payments suite fee only: no transfer_data, entire amount stays with platform
 
     // If payment method is provided, set it and confirm
     if (paymentMethodId) {
@@ -313,7 +342,7 @@ export async function createUncapturedPaymentIntent(
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
     console.log(
-      `[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amount / 100}, App fee: $${serviceFee / 100}, To professional: $${serviceAmount / 100}`,
+      `[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amount / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${(amount - professionalFee) / 100}`,
     );
 
     return {
@@ -595,28 +624,6 @@ export async function createServiceFeePaymentIntent(
 }
 
 /**
- * Get service fee from admin configuration
- */
-export async function getServiceFeeFromConfig(): Promise<number> {
-  try {
-    const { createClient } = await import('@/lib/supabase/server');
-    const supabase = await createClient();
-
-    const { data } = await supabase
-      .from('admin_configs')
-      .select('value')
-      .eq('key', 'service_fee_dollars')
-      .single();
-
-    const serviceFeeInDollars = parseFloat(data?.value || '1.0');
-    return Math.round(serviceFeeInDollars * 100); // Convert to cents
-  } catch (error) {
-    console.error('Error getting service fee from config:', error);
-    return 100; // Default to $1.00 in cents
-  }
-}
-
-/**
  * Create a checkout session with enhanced payment options
  */
 export async function createEnhancedCheckoutSession(
@@ -717,19 +724,23 @@ export async function createEnhancedCheckoutSession(
           }
         } else {
           // Cash payment with deposit
-          const serviceFeeInDollars = '1.00'; // $1 service fee
-          // Calculate service amount (balance - service fee)
-          const serviceAmountInDollars = (
-            parseInt(balanceAmount) / 100 -
-            1
+          // NEW FEE STRUCTURE: Service fee is now included in the deposit
+          // Balance for cash payments is 0 (service fee in deposit, remaining paid in cash)
+          const serviceFeeInCents = await getServiceFeeFromConfig();
+          const serviceFeeInDollars = (serviceFeeInCents / 100).toFixed(2);
+
+          // For cash with deposit: balance amount shown is 0 because service fee is in deposit
+          // The actual service amount to be paid in cash at appointment
+          const cashServiceAmountInDollars = (
+            parseInt(balanceAmount) / 100
           ).toFixed(2);
 
           if (appointmentTiming === 'more_than_6_days') {
             // Appointment > 6 days away with deposit (cash)
-            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. Service fee of $${serviceFeeInDollars} will be authorized 6 days before your appointment. The remaining balance of $${serviceAmountInDollars} will be paid in cash at the appointment.`;
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} (includes $${serviceFeeInDollars} service fee) will be charged immediately to secure your booking. The remaining balance of $${cashServiceAmountInDollars} will be paid in cash at the appointment.`;
           } else {
             // Appointment ≤ 6 days away with deposit (cash)
-            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} will be charged immediately to secure your booking. Service fee of $${serviceFeeInDollars} will be authorized now. The remaining balance of $${serviceAmountInDollars} will be paid in cash at the appointment.`;
+            customMessage = `Save your payment method for your upcoming appointment. Deposit of $${depositAmountInDollars} (includes $${serviceFeeInDollars} service fee) will be charged immediately to secure your booking. The remaining balance of $${cashServiceAmountInDollars} will be paid in cash at the appointment.`;
           }
         }
       } else if (isServiceFeeAndDepositOnly) {
@@ -756,19 +767,13 @@ export async function createEnhancedCheckoutSession(
 
       const serviceFee = await getServiceFeeFromConfig();
 
-      // For deposit payments, don't include service fee
-      const serviceAmount =
-        paymentType === 'deposit'
-          ? chargeAmount // Deposit amount is already calculated correctly
-          : chargeAmount - serviceFee; // For full payments, subtract fee
-
-      sessionConfig.mode = 'payment';
-      sessionConfig.payment_method_types = ['card'];
-
       // Check if this is a service fee only payment (cash payment without deposit)
       const isServiceFeeOnly =
         metadata?.payment_flow === 'immediate_service_fee_only';
       const isCashPayment = metadata?.payment_method_type === 'cash';
+
+      sessionConfig.mode = 'payment';
+      sessionConfig.payment_method_types = ['card'];
 
       // Determine product description based on payment type and conditions
       let productDescription: string;
@@ -803,20 +808,35 @@ export async function createEnhancedCheckoutSession(
         },
       ];
 
-      // Only include transfer data if this is not a service fee only payment
-
-      // Use direct charge to professional's account with correct fee structure
+      // NEW FEE STRUCTURE: Calculate fees properly
       sessionConfig.payment_intent_data = {
         metadata: sessionConfig.metadata || {},
       };
 
       // Add transfer data only if this is not a service fee only payment
-      if (!isServiceFeeOnly && serviceAmount > 0) {
+      if (!isServiceFeeOnly && chargeAmount > 0) {
+        const { getProfessionalFeePercentage } = await import(
+          '@/server/lib/service-fee'
+        );
+        const professionalFeePercentage = await getProfessionalFeePercentage();
+        const professionalFee = Math.round(
+          chargeAmount * (professionalFeePercentage / 100),
+        );
+
+        let applicationFee: number;
+        if (paymentType === 'deposit') {
+          // For deposits: only professional fee (client service fee already included in deposit amount)
+          applicationFee = professionalFee;
+        } else {
+          // For full payments: professional fee + client service fee
+          applicationFee = professionalFee + serviceFee;
+        }
+
+        sessionConfig.payment_intent_data.application_fee_amount =
+          applicationFee;
         sessionConfig.payment_intent_data.transfer_data = {
-          amount: serviceAmount, // For deposits, transfer the full deposit. For full payments, subtract fee
           destination: professionalStripeAccountId,
         };
-        // The remaining amount (suite fee) stays in the platform account
         sessionConfig.payment_intent_data.on_behalf_of =
           professionalStripeAccountId; // Professional pays the processing fees
       }
@@ -867,8 +887,20 @@ export async function createPaymentIntent(options: {
   const amountInCents = Math.round(amount * 100);
 
   try {
-    const serviceFee = await getServiceFeeFromConfig();
-    const serviceAmount = amountInCents - serviceFee;
+    // NEW FEE STRUCTURE: Apply professional fee (3%) only
+    // This function is generic, so we check context to determine if client service fee applies
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amountInCents * (professionalFeePercentage / 100),
+    );
+
+    // For generic payment intents, only apply professional fee
+    // Client service fee handling should be done at a higher level
+    const applicationFee = professionalFee;
+    const serviceAmount = amountInCents - applicationFee;
 
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount: amountInCents,
@@ -882,7 +914,7 @@ export async function createPaymentIntent(options: {
 
     // Use application_fee_amount + transfer_data structure for better partial capture support
     if (serviceAmount > 0) {
-      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+      paymentIntentData.application_fee_amount = applicationFee; // Professional fee (3%)
       paymentIntentData.transfer_data = {
         destination: stripeAccountId, // Professional gets (amount - application_fee)
       };
@@ -893,7 +925,7 @@ export async function createPaymentIntent(options: {
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
     console.log(
-      `[createPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amountInCents / 100}, App fee: $${serviceFee / 100}, To professional: $${serviceAmount / 100}, Capture: ${capture}`,
+      `[createPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amountInCents / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${serviceAmount / 100}, Capture: ${capture}`,
     );
 
     return paymentIntent;
@@ -1219,9 +1251,15 @@ export async function createUncapturedPayment(
     'NOTE: This is for appointments <6 days - NO pre-auth scheduling, immediate authorization',
   );
 
-  // Get service fee and professional account
-  const serviceFee = await getServiceFeeFromConfig();
-  const serviceAmount = Math.round(amount * 100) - serviceFee;
+  // NEW FEE STRUCTURE: Apply professional fee (3%) to uncaptured balance payments
+  const { getProfessionalFeePercentage } = await import(
+    '@/server/lib/service-fee'
+  );
+  const professionalFeePercentage = await getProfessionalFeePercentage();
+  const amountInCents = Math.round(amount * 100);
+  const professionalFee = Math.round(
+    amountInCents * (professionalFeePercentage / 100),
+  );
 
   // For immediate uncaptured payments, capture should happen at appointment end time
   const captureTime = new Date(appointmentEndTime);
@@ -1249,7 +1287,7 @@ export async function createUncapturedPayment(
 
   // Create payment intent with manual capture using application_fee_amount structure
   const paymentIntentData: Stripe.PaymentIntentCreateParams = {
-    amount: Math.round(amount * 100),
+    amount: amountInCents,
     currency: 'usd',
     customer: customerId,
     payment_method: paymentMethodId,
@@ -1260,8 +1298,8 @@ export async function createUncapturedPayment(
   };
 
   // Add application fee structure if professional account exists
-  if (professionalStripeAccountId && serviceAmount > 0) {
-    paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+  if (professionalStripeAccountId && amountInCents > 0) {
+    paymentIntentData.application_fee_amount = professionalFee; // Professional fee (3%)
     paymentIntentData.transfer_data = {
       destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
     };
@@ -1377,8 +1415,15 @@ export async function createNoShowCharge(
       metadata,
     });
 
-    const serviceFee = await getServiceFeeFromConfig();
-    const professionalAmount = amount - serviceFee; // Professional gets this amount
+    // NEW FEE STRUCTURE: Apply professional fee (3%) to no-show charges
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/lib/service-fee'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+    const professionalAmount = amount - professionalFee; // Professional gets this amount
 
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
@@ -1396,7 +1441,7 @@ export async function createNoShowCharge(
 
     // Use application_fee_amount + transfer_data structure for consistency
     if (professionalAmount > 0) {
-      paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+      paymentIntentData.application_fee_amount = professionalFee; // Professional fee (3%)
       paymentIntentData.transfer_data = {
         destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
       };
@@ -1411,6 +1456,7 @@ export async function createNoShowCharge(
       amount: paymentIntent.amount,
       status: paymentIntent.status,
       application_fee: paymentIntent.application_fee_amount,
+      professional_fee_percentage: professionalFeePercentage,
       professional_amount: professionalAmount,
     });
 
@@ -1504,12 +1550,18 @@ export async function createPaymentForBooking(
     }
   )?.professional_stripe_connect?.stripe_account_id;
 
-  // Otherwise, create normal payment intent
-  const serviceFee = await getServiceFeeFromConfig();
-  const serviceAmount = Math.round(amount * 100) - serviceFee;
+  // NEW FEE STRUCTURE: Apply professional fee (3%) to normal payment intents
+  const { getProfessionalFeePercentage } = await import(
+    '@/server/lib/service-fee'
+  );
+  const professionalFeePercentage = await getProfessionalFeePercentage();
+  const amountInCents = Math.round(amount * 100);
+  const professionalFee = Math.round(
+    amountInCents * (professionalFeePercentage / 100),
+  );
 
   const paymentIntentData: Stripe.PaymentIntentCreateParams = {
-    amount: Math.round(amount * 100),
+    amount: amountInCents,
     currency: 'usd',
     customer: customerId,
     payment_method: paymentMethodId,
@@ -1519,8 +1571,8 @@ export async function createPaymentForBooking(
   };
 
   // Use application_fee_amount + transfer_data structure for consistency
-  if (normalProfessionalStripeAccountId && serviceAmount > 0) {
-    paymentIntentData.application_fee_amount = serviceFee; // Platform fee
+  if (normalProfessionalStripeAccountId && amountInCents > 0) {
+    paymentIntentData.application_fee_amount = professionalFee; // Professional fee (3%)
     paymentIntentData.transfer_data = {
       destination: normalProfessionalStripeAccountId, // Professional gets (amount - application_fee)
     };
@@ -1530,7 +1582,7 @@ export async function createPaymentForBooking(
   const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
   console.log(
-    'Created normal payment intent with application fee structure:',
+    'Created normal payment intent with professional fee (3%):',
     paymentIntent.id,
   );
 

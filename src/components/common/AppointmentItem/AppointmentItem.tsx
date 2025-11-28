@@ -147,7 +147,7 @@ export function AppointmentItem({
                 appointment.services.totalWithServiceFee ||
                   (appointment.services.totalPrice ||
                     appointment.services.price ||
-                    0) + 1.0,
+                    0) + 1.0, // Fallback service fee - should use getServiceFeeAction for accuracy
               )}
             </Typography>
           </div>

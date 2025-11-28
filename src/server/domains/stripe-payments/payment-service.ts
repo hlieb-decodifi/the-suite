@@ -174,7 +174,7 @@ export async function createBookingWithPayment(
     const bookingWithPaymentData: BookingWithPaymentData = {
       bookingId,
       totalPrice,
-      paymentCalculation: calculatePaymentAmounts(
+      paymentCalculation: await calculatePaymentAmounts(
         Math.round(totalPrice * 100),
         professionalProfile,
       ),

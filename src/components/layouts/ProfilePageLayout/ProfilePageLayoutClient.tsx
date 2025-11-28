@@ -226,9 +226,11 @@ export function ProfilePageLayoutClient({
           unreadMessagesCount={unreadMessagesCount}
         />
 
-        <div className="w-full">
+        <div className="w-full max-w-full overflow-hidden">
           {/* Tab Navigation */}
-          <TabNavigation tabs={tabs} variant="link" className="mb-8" />
+          <div className="w-full overflow-x-auto">
+            <TabNavigation tabs={tabs} variant="link" className="mb-8" />
+          </div>
 
           {/* Tab Content */}
           <div>{children}</div>
