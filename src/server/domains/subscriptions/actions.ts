@@ -621,6 +621,7 @@ async function getStripeConnectStatusFromAPI(userId: string): Promise<{
       connectStatus: result.connectStatus as
         | 'not_connected'
         | 'pending'
+        | 'in_review'
         | 'complete',
     });
 
