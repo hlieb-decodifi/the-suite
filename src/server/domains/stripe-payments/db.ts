@@ -126,8 +126,31 @@ export async function calculatePaymentAmounts(
     depositAmount = Math.max(depositAmount, 100);
   }
 
-  // Service fee and tips are always charged with the remaining balance
+  // NEW FEE STRUCTURE: When deposit exists, client service fee is added to deposit
+  // This ensures the service fee is charged upfront with the deposit
+  console.log(
+    '[calculatePaymentAmounts] Before adding service fee to deposit:',
+    {
+      depositAmount,
+      serviceFee,
+      totalAmount,
+      actualServiceAmount,
+      tipAmount: tipAmount || 0,
+    },
+  );
+
+  depositAmount += serviceFee;
+
+  // Balance amount: remaining service + tips (service fee already in deposit)
+  // totalAmount includes service fee, so we subtract (depositAmount which includes service fee)
   const balanceAmount = totalAmount - depositAmount;
+
+  console.log('[calculatePaymentAmounts] Final calculation:', {
+    depositAmount,
+    balanceAmount,
+    totalAmount,
+    verification: depositAmount + balanceAmount === totalAmount,
+  });
 
   return {
     totalAmount,

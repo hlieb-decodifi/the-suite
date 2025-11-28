@@ -544,7 +544,10 @@ async function createSeparateCancellationCharge(
     }
 
     // Calculate transfer amount for professional (cancellation fee minus platform service fee)
-    const serviceFee = 100; // $1 in cents - Suite's fee
+    const { getServiceFeeFromConfig } = await import(
+      '@/server/lib/service-fee'
+    );
+    const serviceFee = await getServiceFeeFromConfig(); // Get from config in cents
     const cancellationFee = chargeAmountInCents - serviceFee;
 
     const chargeParams: {
