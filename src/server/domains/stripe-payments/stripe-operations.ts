@@ -101,17 +101,27 @@ export async function createStripeCheckoutSession(
         '@/server/lib/service-fee'
       );
       const professionalFeePercentage = await getProfessionalFeePercentage();
-      const professionalFee = Math.round(
-        chargeAmount * (professionalFeePercentage / 100),
-      );
+      const clientServiceFee = await getServiceFeeFromConfig();
 
       let applicationFee: number;
       if (paymentType === 'deposit') {
-        // For deposits: only professional fee (client service fee already included in deposit amount)
-        applicationFee = professionalFee;
+        // For deposits: Calculate professional fee from deposit amount EXCLUDING client service fee
+        // chargeAmount = depositAmount + clientServiceFee
+        // We need: professionalFee (3% of deposit only) + clientServiceFee ($1)
+        const depositAmountOnly = chargeAmount - clientServiceFee;
+        const professionalFee = Math.round(
+          depositAmountOnly * (professionalFeePercentage / 100),
+        );
+        // Application fee = professional fee (3% of deposit) + client service fee ($1)
+        applicationFee = professionalFee + clientServiceFee;
       } else {
-        // For full payments: professional fee + client service fee
-        const clientServiceFee = await getServiceFeeFromConfig();
+        // For full payments: Calculate professional fee ONLY from service amount (excluding client service fee)
+        // chargeAmount = serviceAmount + tips + clientServiceFee
+        const serviceAmountWithTips = chargeAmount - clientServiceFee;
+        const professionalFee = Math.round(
+          serviceAmountWithTips * (professionalFeePercentage / 100),
+        );
+        // Application fee = professional fee (3% of service+tips) + client service fee ($1)
         applicationFee = professionalFee + clientServiceFee;
       }
 
@@ -819,16 +829,26 @@ export async function createEnhancedCheckoutSession(
           '@/server/lib/service-fee'
         );
         const professionalFeePercentage = await getProfessionalFeePercentage();
-        const professionalFee = Math.round(
-          chargeAmount * (professionalFeePercentage / 100),
-        );
 
         let applicationFee: number;
         if (paymentType === 'deposit') {
-          // For deposits: only professional fee (client service fee already included in deposit amount)
-          applicationFee = professionalFee;
+          // For deposits: Calculate professional fee from deposit amount EXCLUDING client service fee
+          // chargeAmount = depositAmount + clientServiceFee
+          // We need: professionalFee (3% of deposit only) + clientServiceFee ($1)
+          const depositAmountOnly = chargeAmount - serviceFee;
+          const professionalFee = Math.round(
+            depositAmountOnly * (professionalFeePercentage / 100),
+          );
+          // Application fee = professional fee (3% of deposit) + client service fee ($1)
+          applicationFee = professionalFee + serviceFee;
         } else {
-          // For full payments: professional fee + client service fee
+          // For full payments: Calculate professional fee ONLY from service amount (excluding client service fee)
+          // chargeAmount = serviceAmount + tips + clientServiceFee
+          const serviceAmountWithTips = chargeAmount - serviceFee;
+          const professionalFee = Math.round(
+            serviceAmountWithTips * (professionalFeePercentage / 100),
+          );
+          // Application fee = professional fee (3% of service+tips) + client service fee ($1)
           applicationFee = professionalFee + serviceFee;
         }
 

@@ -1942,16 +1942,25 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
 
         // Step 1: Immediately charge the deposit with 3% professional fee
         try {
-          // NEW FEE STRUCTURE: Apply 3% professional fee to deposit
+          // NEW FEE STRUCTURE: Calculate professional fee (3% of deposit only) + client service fee
           const { getProfessionalFeePercentage } = await import(
+            '@/server/lib/service-fee'
+          );
+          const { getServiceFeeFromConfig } = await import(
             '@/server/lib/service-fee'
           );
           const professionalFeePercentage =
             await getProfessionalFeePercentage();
+          const clientServiceFeeCents = await getServiceFeeFromConfig();
+
           const depositAmountCents = parseInt(depositAmount);
+          // depositAmountCents includes client service fee, so exclude it for professional fee calculation
+          const depositOnly = depositAmountCents - clientServiceFeeCents;
           const professionalFee = Math.round(
-            depositAmountCents * (professionalFeePercentage / 100),
+            depositOnly * (professionalFeePercentage / 100),
           );
+          // Application fee = professional fee (3% of deposit) + client service fee ($1)
+          const applicationFee = professionalFee + clientServiceFeeCents;
 
           const depositPaymentIntent = await stripe.paymentIntents.create({
             amount: depositAmountCents,
@@ -1961,8 +1970,8 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
             confirmation_method: 'automatic',
             confirm: true,
             off_session: true,
-            // For deposits: Apply 3% professional fee (client service fee already in deposit amount)
-            application_fee_amount: professionalFee,
+            // For deposits: Apply professional fee (3% of deposit only) + client service fee
+            application_fee_amount: applicationFee,
             transfer_data: {
               destination: professionalStripeAccountId,
             },
