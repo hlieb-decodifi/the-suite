@@ -327,7 +327,7 @@ function InlineServiceForm({
   return (
     <Card
       className={cn(
-        'border bg-background h-full',
+        'border bg-background',
         isEditMode || isDuplicateMode
           ? 'border-primary ring-1 ring-primary/20 shadow-sm'
           : 'border-muted',
@@ -735,7 +735,12 @@ export function ProfileServicesPageClient({
 
   return (
     <div className="space-y-6">
-      <div className={cn("flex justify-between items-center", isMobile && 'flex-col items-start space-y-2')}>
+      <div
+        className={cn(
+          'flex justify-between flex-grow h-full items-center',
+          isMobile && 'flex-col items-start space-y-2',
+        )}
+      >
         <div>
           <Typography variant="h2" className="font-bold text-foreground">
             Services
@@ -753,7 +758,7 @@ export function ProfileServicesPageClient({
             onClick={handleAddServiceClick}
             className="flex items-center gap-1"
             disabled={isAtLimit || isSubmittingService}
-            >
+          >
             <Plus className="h-4 w-4" />
             Add Service
           </Button>
@@ -885,7 +890,7 @@ export function ProfileServicesPageClient({
 
           {/* Service Form (Right Side) - Only in edit mode */}
           {isEditable && (
-            <div className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-150px)] lg:border-l lg:pl-6">
+            <div className="lg:sticky lg:top-24 lg:self-start lg:border-l lg:pl-6">
               <InlineServiceForm
                 onSubmitSuccess={handleServiceFormSubmitSuccess}
                 editingService={editingService}
