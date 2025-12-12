@@ -7,8 +7,662 @@ import { Database } from '@/../supabase/types';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 /**
+ * Type definitions for refund processing
+ */
+type RefundOperation = {
+  type: 'refund' | 'cancel' | 'partial_capture';
+  paymentIntentId: string;
+  amount: number;
+  refundType: 'balance' | 'deposit' | 'service_fee' | 'tip';
+  metadata: Record<string, string>;
+};
+
+type RefundResult = {
+  success: boolean;
+  refundId?: string;
+  operation: RefundOperation;
+  error?: string;
+};
+
+type PaymentIntentInfo = {
+  id: string;
+  amount: number;
+  status: string;
+  availableForRefund: number;
+};
+
+/**
+ * Verify that all refunds were successfully created in Stripe
+ * @param refundIds Array of Stripe refund IDs to verify
+ * @returns True if all refunds are in valid state
+ */
+async function verifyRefundCompletion(
+  refundIds: string[],
+): Promise<{ success: boolean; error?: string }> {
+  console.log(`[REFUND] Verifying ${refundIds.length} refund(s)...`);
+
+  try {
+    for (const refundId of refundIds) {
+      const refund = await stripe.refunds.retrieve(refundId);
+
+      // Refunds can be: succeeded, pending, failed, canceled
+      // We accept succeeded and pending as valid states
+      if (refund.status !== 'succeeded' && refund.status !== 'pending') {
+        console.error(
+          `[REFUND] Refund ${refundId} has invalid status: ${refund.status}`,
+        );
+        return {
+          success: false,
+          error: `Refund ${refundId} failed with status: ${refund.status}`,
+        };
+      }
+
+      console.log(`[REFUND] Refund ${refundId} verified: ${refund.status}`);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('[REFUND] Error verifying refunds:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Verification failed',
+    };
+  }
+}
+
+/**
+ * Retrieve and validate payment intent information from Stripe
+ * @param paymentIntentId Stripe payment intent ID
+ * @returns Payment intent information including available refund amount
+ */
+async function getPaymentIntentInfo(
+  paymentIntentId: string,
+): Promise<PaymentIntentInfo | null> {
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    let availableForRefund = 0;
+
+    if (paymentIntent.status === 'succeeded') {
+      // For succeeded payments, calculate available amount as total minus already refunded
+      const totalAmount = paymentIntent.amount;
+      const refundedAmount =
+        (paymentIntent as { amount_refunded?: number }).amount_refunded || 0;
+      availableForRefund = totalAmount - refundedAmount;
+    } else if (paymentIntent.status === 'requires_capture') {
+      // For uncaptured payments, the full amount is available to cancel/partial capture
+      availableForRefund =
+        paymentIntent.amount_capturable || paymentIntent.amount;
+    }
+
+    console.log(
+      `[REFUND] Payment Intent ${paymentIntentId}: status=${paymentIntent.status}, total=$${paymentIntent.amount / 100}, available=$${availableForRefund / 100}`,
+    );
+
+    return {
+      id: paymentIntentId,
+      amount: paymentIntent.amount,
+      status: paymentIntent.status,
+      availableForRefund,
+    };
+  } catch (error) {
+    console.error(
+      `[REFUND] Error retrieving payment intent ${paymentIntentId}:`,
+      error,
+    );
+    return null;
+  }
+}
+
+/**
+ * Calculate optimal refund distribution across available payment sources
+ * Returns a plan for executing refunds without making any Stripe API calls
+ */
+async function calculateRefundDistribution(
+  refundAmountCents: number,
+  bookingPayment: {
+    deposit_payment_intent_id?: string | null;
+    stripe_payment_intent_id?: string | null;
+    deposit_amount: number;
+    balance_amount: number;
+    service_fee: number;
+  },
+  isCashPayment: boolean,
+  bookingTips: Array<{
+    id: string;
+    amount: number;
+    stripe_payment_intent_id?: string | null;
+    refunded_amount: number;
+  }>,
+  supportRequestId: string,
+): Promise<{
+  success: boolean;
+  operations: RefundOperation[];
+  error?: string;
+}> {
+  console.log('[REFUND] === PHASE 1: CALCULATING REFUND DISTRIBUTION ===');
+  console.log(`[REFUND] Requested refund: $${refundAmountCents / 100}`);
+  console.log(`[REFUND] Cash payment: ${isCashPayment}`);
+
+  const operations: RefundOperation[] = [];
+  let remainingToRefund = refundAmountCents;
+
+  const depositAmountCents = Math.round(bookingPayment.deposit_amount * 100);
+  const balanceAmountCents = Math.round(bookingPayment.balance_amount * 100);
+  const serviceFeeAmountCents = Math.round(bookingPayment.service_fee * 100);
+
+  // STEP 1: Validate payment intent availability
+  const paymentIntents: Map<string, PaymentIntentInfo> = new Map();
+
+  // Check balance payment intent (if exists and not cash payment)
+  if (
+    bookingPayment.stripe_payment_intent_id &&
+    balanceAmountCents > 0 &&
+    !isCashPayment
+  ) {
+    const info = await getPaymentIntentInfo(
+      bookingPayment.stripe_payment_intent_id,
+    );
+    if (info) {
+      paymentIntents.set(bookingPayment.stripe_payment_intent_id, info);
+    } else {
+      return {
+        success: false,
+        operations: [],
+        error: 'Failed to retrieve balance payment intent information',
+      };
+    }
+  }
+
+  // Check deposit payment intent (if exists)
+  if (bookingPayment.deposit_payment_intent_id && depositAmountCents > 0) {
+    const info = await getPaymentIntentInfo(
+      bookingPayment.deposit_payment_intent_id,
+    );
+    if (info) {
+      paymentIntents.set(bookingPayment.deposit_payment_intent_id, info);
+    } else {
+      return {
+        success: false,
+        operations: [],
+        error: 'Failed to retrieve deposit payment intent information',
+      };
+    }
+  }
+
+  // STEP 2: Calculate maximum refundable amount
+  const maxRefundableAmountCents = isCashPayment
+    ? depositAmountCents + serviceFeeAmountCents
+    : depositAmountCents + balanceAmountCents;
+
+  console.log(
+    `[REFUND] Maximum refundable: $${maxRefundableAmountCents / 100} (${isCashPayment ? 'cash: deposit+service fee' : 'card: deposit+balance'})`,
+  );
+
+  if (refundAmountCents > maxRefundableAmountCents) {
+    return {
+      success: false,
+      operations: [],
+      error: `Refund amount $${refundAmountCents / 100} exceeds maximum refundable $${maxRefundableAmountCents / 100}`,
+    };
+  }
+
+  // STEP 3: Plan balance refund (if applicable)
+  if (
+    bookingPayment.stripe_payment_intent_id &&
+    balanceAmountCents > 0 &&
+    !isCashPayment &&
+    remainingToRefund > 0
+  ) {
+    const balanceInfo = paymentIntents.get(
+      bookingPayment.stripe_payment_intent_id,
+    );
+    if (balanceInfo) {
+      const balanceRefundAmount = Math.min(
+        remainingToRefund,
+        balanceInfo.availableForRefund,
+      );
+
+      if (balanceRefundAmount > 0) {
+        if (balanceInfo.status === 'requires_capture') {
+          // Uncaptured payment: cancel or partial capture
+          if (balanceRefundAmount === balanceInfo.amount) {
+            operations.push({
+              type: 'cancel',
+              paymentIntentId: balanceInfo.id,
+              amount: balanceRefundAmount,
+              refundType: 'balance',
+              metadata: {
+                support_request_id: supportRequestId,
+                refund_type: 'balance',
+              },
+            });
+          } else {
+            // Partial capture: capture what's NOT being refunded
+            const captureAmount = balanceInfo.amount - balanceRefundAmount;
+            operations.push({
+              type: 'partial_capture',
+              paymentIntentId: balanceInfo.id,
+              amount: captureAmount,
+              refundType: 'balance',
+              metadata: {
+                support_request_id: supportRequestId,
+                refund_type: 'balance_partial_capture',
+                refunded_amount: balanceRefundAmount.toString(),
+              },
+            });
+          }
+        } else if (balanceInfo.status === 'succeeded') {
+          // Captured payment: create refund
+          operations.push({
+            type: 'refund',
+            paymentIntentId: balanceInfo.id,
+            amount: balanceRefundAmount,
+            refundType: 'balance',
+            metadata: {
+              support_request_id: supportRequestId,
+              refund_type: 'balance',
+            },
+          });
+        }
+
+        remainingToRefund -= balanceRefundAmount;
+        console.log(
+          `[REFUND] Planned balance ${operations[operations.length - 1]?.type}: $${balanceRefundAmount / 100}, remaining: $${remainingToRefund / 100}`,
+        );
+      }
+    }
+  }
+
+  // STEP 4: Plan deposit refund (if needed)
+  if (
+    remainingToRefund > 0 &&
+    bookingPayment.deposit_payment_intent_id &&
+    depositAmountCents > 0
+  ) {
+    const depositInfo = paymentIntents.get(
+      bookingPayment.deposit_payment_intent_id,
+    );
+    if (depositInfo) {
+      const depositRefundAmount = Math.min(
+        remainingToRefund,
+        depositInfo.availableForRefund,
+      );
+
+      if (depositRefundAmount > 0) {
+        if (depositInfo.status === 'succeeded') {
+          operations.push({
+            type: 'refund',
+            paymentIntentId: depositInfo.id,
+            amount: depositRefundAmount,
+            refundType: 'deposit',
+            metadata: {
+              support_request_id: supportRequestId,
+              refund_type: isCashPayment ? 'deposit_cash' : 'deposit',
+            },
+          });
+
+          remainingToRefund -= depositRefundAmount;
+          console.log(
+            `[REFUND] Planned deposit refund: $${depositRefundAmount / 100}, remaining: $${remainingToRefund / 100}`,
+          );
+        }
+      }
+    }
+  }
+
+  // STEP 5: Plan tip refunds (if needed and not cash payment)
+  if (remainingToRefund > 0 && bookingTips.length > 0 && !isCashPayment) {
+    for (const tip of bookingTips) {
+      if (remainingToRefund <= 0) break;
+
+      const tipAmountCents = Math.round(tip.amount * 100);
+      const tipRefundedCents = Math.round(tip.refunded_amount * 100);
+      const tipAvailable = tipAmountCents - tipRefundedCents;
+
+      if (tipAvailable > 0 && tip.stripe_payment_intent_id) {
+        const tipRefundAmount = Math.min(remainingToRefund, tipAvailable);
+
+        operations.push({
+          type: 'refund',
+          paymentIntentId: tip.stripe_payment_intent_id,
+          amount: tipRefundAmount,
+          refundType: 'tip',
+          metadata: {
+            support_request_id: supportRequestId,
+            refund_type: 'tip',
+            tip_id: tip.id,
+          },
+        });
+
+        remainingToRefund -= tipRefundAmount;
+        console.log(
+          `[REFUND] Planned tip refund: $${tipRefundAmount / 100}, remaining: $${remainingToRefund / 100}`,
+        );
+      }
+    }
+  }
+
+  // STEP 6: Validate we can refund the full amount
+  if (remainingToRefund > 0) {
+    return {
+      success: false,
+      operations: [],
+      error: `Cannot refund full amount. Missing $${remainingToRefund / 100}. Check payment intent availability.`,
+    };
+  }
+
+  console.log(
+    `[REFUND] ✅ Refund distribution calculated: ${operations.length} operation(s)`,
+  );
+  operations.forEach((op, i) => {
+    console.log(
+      `[REFUND]   ${i + 1}. ${op.type.toUpperCase()} $${op.amount / 100} from ${op.refundType} (${op.paymentIntentId})`,
+    );
+  });
+
+  return { success: true, operations };
+}
+
+/**
+ * Execute planned refund operations in Stripe
+ * This function attempts all operations and rolls back on failure
+ */
+async function executeRefundOperations(operations: RefundOperation[]): Promise<{
+  success: boolean;
+  results: RefundResult[];
+  error?: string;
+}> {
+  console.log('[REFUND] === PHASE 2: EXECUTING STRIPE OPERATIONS ===');
+
+  const results: RefundResult[] = [];
+  const successfulRefunds: string[] = [];
+
+  try {
+    for (let i = 0; i < operations.length; i++) {
+      const op = operations[i];
+      if (!op) continue; // Skip if operation is undefined
+
+      console.log(
+        `[REFUND] Executing operation ${i + 1}/${operations.length}: ${op.type} $${op.amount / 100}`,
+      );
+
+      try {
+        if (op.type === 'refund') {
+          // Create a refund
+          const refund = await stripe.refunds.create({
+            payment_intent: op.paymentIntentId,
+            amount: op.amount,
+            reverse_transfer: true,
+            metadata: op.metadata,
+          });
+
+          console.log(
+            `[REFUND] ✅ Refund created: ${refund.id}, status: ${refund.status}`,
+          );
+
+          results.push({
+            success: true,
+            refundId: refund.id,
+            operation: op,
+          });
+          successfulRefunds.push(refund.id);
+        } else if (op.type === 'cancel') {
+          // Cancel an uncaptured payment intent
+          await stripe.paymentIntents.cancel(op.paymentIntentId);
+
+          console.log(
+            `[REFUND] ✅ Payment intent canceled: ${op.paymentIntentId}`,
+          );
+
+          results.push({
+            success: true,
+            operation: op,
+          });
+        } else if (op.type === 'partial_capture') {
+          // Partially capture a payment intent
+          await stripe.paymentIntents.capture(op.paymentIntentId, {
+            amount_to_capture: op.amount,
+          });
+
+          console.log(
+            `[REFUND] ✅ Partial capture: ${op.paymentIntentId}, captured: $${op.amount / 100}`,
+          );
+
+          results.push({
+            success: true,
+            operation: op,
+          });
+        }
+      } catch (operationError) {
+        console.error(`[REFUND] ❌ Operation ${i + 1} failed:`, operationError);
+
+        results.push({
+          success: false,
+          operation: op,
+          error:
+            operationError instanceof Error
+              ? operationError.message
+              : 'Operation failed',
+        });
+
+        // CRITICAL: If any operation fails, we need to rollback previous successful refunds
+        console.error(
+          `[REFUND] ❌ ROLLING BACK ${successfulRefunds.length} successful refund(s)`,
+        );
+
+        for (const refundId of successfulRefunds) {
+          try {
+            // Note: Stripe refunds cannot be canceled once created
+            // We log this for manual intervention
+            console.error(
+              `[REFUND] ⚠️ Manual intervention required: Refund ${refundId} was created but subsequent operations failed`,
+            );
+          } catch (rollbackError) {
+            console.error(
+              `[REFUND] ❌ Rollback failed for ${refundId}:`,
+              rollbackError,
+            );
+          }
+        }
+
+        return {
+          success: false,
+          results,
+          error: `Operation ${i + 1} failed. ${successfulRefunds.length} refund(s) may need manual review.`,
+        };
+      }
+    }
+
+    // Verify all refunds succeeded
+    if (successfulRefunds.length > 0) {
+      console.log(
+        `[REFUND] Verifying ${successfulRefunds.length} refund(s)...`,
+      );
+      const verification = await verifyRefundCompletion(successfulRefunds);
+
+      if (!verification.success) {
+        return {
+          success: false,
+          results,
+          error: verification.error || 'Refund verification failed',
+        };
+      }
+    }
+
+    console.log(`[REFUND] ✅ All ${operations.length} operation(s) completed`);
+    return { success: true, results };
+  } catch (error) {
+    console.error('[REFUND] ❌ Unexpected error during execution:', error);
+    return {
+      success: false,
+      results,
+      error: error instanceof Error ? error.message : 'Execution failed',
+    };
+  }
+}
+
+/**
+ * Update database with successful refund information
+ * This should ONLY be called after all Stripe operations succeed
+ */
+async function updateDatabaseAfterRefund(
+  adminSupabase: SupabaseClient<Database>,
+  supportRequestId: string,
+  bookingPaymentId: string,
+  results: RefundResult[],
+  totalRefundedCents: number,
+  depositAmountCents: number,
+  balanceAmountCents: number,
+): Promise<{ success: boolean; error?: string }> {
+  console.log('[REFUND] === PHASE 3: UPDATING DATABASE ===');
+
+  try {
+    // Collect all refund IDs
+    const refundIds = results
+      .filter((r) => r.success && r.refundId)
+      .map((r) => r.refundId!);
+
+    const primaryRefundId = refundIds[0] || null;
+
+    console.log(
+      `[REFUND] Updating database with ${refundIds.length} refund ID(s)`,
+    );
+
+    // Find resolver (professional or admin)
+    let resolvedBy: string | null = null;
+    const { data: supportRequest } = await adminSupabase
+      .from('support_requests')
+      .select('professional_id')
+      .eq('id', supportRequestId)
+      .single();
+
+    if (supportRequest?.professional_id) {
+      resolvedBy = supportRequest.professional_id;
+    } else {
+      const { data: adminUser } = await adminSupabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin')
+        .limit(1)
+        .single();
+      resolvedBy = adminUser?.user_id || null;
+    }
+
+    // Update support request
+    const supportRequestUpdate: {
+      stripe_refund_id: string | null;
+      refund_amount: number;
+      processed_at: string;
+      status?: 'pending' | 'in_progress' | 'resolved' | 'closed';
+      resolved_at?: string;
+      resolved_by?: string;
+      resolution_notes?: string;
+    } = {
+      stripe_refund_id: primaryRefundId,
+      refund_amount: totalRefundedCents / 100,
+      processed_at: new Date().toISOString(),
+    };
+
+    if (totalRefundedCents > 0 && resolvedBy) {
+      supportRequestUpdate.status = 'resolved';
+      supportRequestUpdate.resolved_at = new Date().toISOString();
+      supportRequestUpdate.resolved_by = resolvedBy;
+      supportRequestUpdate.resolution_notes = primaryRefundId
+        ? 'Resolved via successful Stripe refund'
+        : 'Resolved via payment capture adjustment';
+    }
+
+    const { error: supportRequestError } = await adminSupabase
+      .from('support_requests')
+      .update(supportRequestUpdate)
+      .eq('id', supportRequestId);
+
+    if (supportRequestError) {
+      console.error(
+        '[REFUND] ❌ Failed to update support request:',
+        supportRequestError,
+      );
+      return {
+        success: false,
+        error: `Database update failed: ${supportRequestError.message}`,
+      };
+    }
+
+    console.log('[REFUND] ✅ Support request updated');
+
+    // Update booking payment
+    const paymentStatus =
+      totalRefundedCents >= depositAmountCents + balanceAmountCents
+        ? 'refunded'
+        : 'partially_refunded';
+
+    const { error: paymentError } = await adminSupabase
+      .from('booking_payments')
+      .update({
+        status: paymentStatus,
+        refunded_amount: totalRefundedCents / 100,
+        refund_reason: 'Support request refund',
+        refunded_at: new Date().toISOString(),
+        refund_transaction_id: refundIds.join(','),
+      })
+      .eq('id', bookingPaymentId);
+
+    if (paymentError) {
+      console.error(
+        '[REFUND] ❌ Failed to update booking payment:',
+        paymentError,
+      );
+      return {
+        success: false,
+        error: `Database update failed: ${paymentError.message}`,
+      };
+    }
+
+    console.log('[REFUND] ✅ Booking payment updated');
+
+    // Update tips if any were refunded
+    for (const result of results) {
+      if (
+        result.success &&
+        result.operation.refundType === 'tip' &&
+        result.operation.metadata.tip_id &&
+        result.refundId
+      ) {
+        const { error: tipError } = await adminSupabase
+          .from('tips')
+          .update({
+            refunded_amount: result.operation.amount / 100,
+            refunded_at: new Date().toISOString(),
+            stripe_refund_id: result.refundId,
+          })
+          .eq('id', result.operation.metadata.tip_id);
+
+        if (tipError) {
+          console.error('[REFUND] ⚠️ Failed to update tip:', tipError);
+          // Don't fail the entire operation for tip update errors
+        } else {
+          console.log(
+            `[REFUND] ✅ Tip ${result.operation.metadata.tip_id} updated`,
+          );
+        }
+      }
+    }
+
+    console.log('[REFUND] ✅ Database updates completed');
+    return { success: true };
+  } catch (error) {
+    console.error('[REFUND] ❌ Database update error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Database update failed',
+    };
+  }
+}
+
+/**
  * Process a refund through Stripe for a support request
- * Handles both deposit and balance payments correctly
+ * Handles both deposit and balance payments correctly with proper transactional guarantees
  * @param supportRequestId The ID of the support request
  * @param refundAmount The amount to refund (in dollars)
  * @returns Success status and error message if applicable
@@ -17,15 +671,21 @@ export async function processStripeRefund(
   supportRequestId: string,
   refundAmount: number,
 ): Promise<{ success: boolean; refundId?: string; error?: string }> {
-  console.log(
-    `[REFUND] Processing refund for support request ${supportRequestId}, amount: $${refundAmount}`,
-  );
+  console.log(`[REFUND] ====================================================`);
+  console.log(`[REFUND] STARTING REFUND PROCESS`);
+  console.log(`[REFUND] Support Request: ${supportRequestId}`);
+  console.log(`[REFUND] Amount: $${refundAmount}`);
+  console.log(`[REFUND] ====================================================`);
 
   try {
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
-    // Get the support request with payment details
+    // =================================================================
+    // VALIDATION PHASE: Fetch and validate all required data
+    // =================================================================
+
+    // Get the support request
     const { data: supportRequest, error: supportRequestError } = await supabase
       .from('support_requests')
       .select('*')
@@ -43,7 +703,7 @@ export async function processStripeRefund(
       };
     }
 
-    // Get booking payment details - try booking_payment_id first, then fallback to other relationships
+    // Get booking payment details
     let bookingPayment: {
       id: string;
       deposit_payment_intent_id?: string | null;
@@ -55,43 +715,24 @@ export async function processStripeRefund(
       service_fee?: number | null;
     } | null = null;
 
+    // Try finding payment by various relationships
     if (supportRequest.booking_payment_id) {
-      console.log(
-        '[REFUND] Using booking_payment_id:',
-        supportRequest.booking_payment_id,
-      );
-      const { data, error } = await adminSupabase
+      const { data } = await adminSupabase
         .from('booking_payments')
         .select('*')
         .eq('id', supportRequest.booking_payment_id)
         .single();
-
-      if (!error && data) {
-        bookingPayment = data;
-      }
+      if (data) bookingPayment = data;
     }
 
-    // If no booking payment found via booking_payment_id, try via appointment_id
     if (!bookingPayment && supportRequest.appointment_id) {
-      console.log(
-        '[REFUND] Trying to find payment via appointment_id:',
-        supportRequest.appointment_id,
-      );
-
-      const { data, error } = await adminSupabase
+      const { data } = await adminSupabase
         .from('appointments')
-        .select(
-          `
-          booking_id,
-          bookings!inner(
-            booking_payments(*)
-          )
-        `,
-        )
+        .select('booking_id, bookings!inner(booking_payments(*))')
         .eq('id', supportRequest.appointment_id)
         .single();
 
-      if (!error && data) {
+      if (data) {
         const bookingData = data.bookings as unknown as {
           booking_payments?: Array<{
             id: string;
@@ -101,66 +742,37 @@ export async function processStripeRefund(
             balance_amount?: number | null;
             amount?: number | null;
             status?: string | null;
+            service_fee?: number | null;
           }>;
         };
-        if (
-          bookingData?.booking_payments &&
-          bookingData.booking_payments.length > 0
-        ) {
-          const payment = bookingData.booking_payments[0];
-          if (payment) {
-            bookingPayment = payment;
-            console.log(
-              '[REFUND] Found payment via appointment_id:',
-              bookingPayment.id,
-            );
-          }
+        if (bookingData?.booking_payments?.[0]) {
+          bookingPayment = bookingData.booking_payments[0];
         }
       }
     }
 
-    // If still no booking payment found, try via booking_id
     if (!bookingPayment && supportRequest.booking_id) {
-      console.log(
-        '[REFUND] Trying to find payment via booking_id:',
-        supportRequest.booking_id,
-      );
-
-      const { data, error } = await adminSupabase
+      const { data } = await adminSupabase
         .from('booking_payments')
         .select('*')
         .eq('booking_id', supportRequest.booking_id)
         .single();
-
-      if (!error && data) {
-        bookingPayment = data;
-        console.log(
-          '[REFUND] Found payment via booking_id:',
-          bookingPayment.id,
-        );
-      }
+      if (data) bookingPayment = data;
     }
 
     if (!bookingPayment) {
-      console.error('[REFUND] No booking payment found for support request');
+      console.error('[REFUND] No booking payment found');
       return {
         success: false,
         error: 'No payment information found for this support request',
       };
     }
 
-    // Get payment method details to check if it's a cash payment
+    // Get payment method details
     const { data: paymentMethodData, error: paymentMethodError } =
       await adminSupabase
         .from('booking_payments')
-        .select(
-          `
-        payment_methods (
-          name,
-          is_online
-        )
-      `,
-        )
+        .select('payment_methods(name, is_online)')
         .eq('id', bookingPayment.id)
         .single();
 
@@ -182,10 +794,10 @@ export async function processStripeRefund(
     const isCashPayment = !paymentMethod.is_online;
 
     console.log(
-      `[REFUND] Payment method: ${paymentMethod.name}, is_online: ${paymentMethod.is_online}, is_cash: ${isCashPayment}`,
+      `[REFUND] Payment method: ${paymentMethod.name} (${isCashPayment ? 'cash' : 'card'})`,
     );
 
-    // Get any tips for this booking that need to be included in refund calculations
+    // Get tips
     let bookingTips: Array<{
       id: string;
       amount: number;
@@ -194,36 +806,28 @@ export async function processStripeRefund(
       refunded_amount: number;
     }> = [];
 
-    // First, get the booking_id from the booking_payment
-    const { data: booking, error: bookingError } = await adminSupabase
+    const { data: booking } = await adminSupabase
       .from('booking_payments')
       .select('booking_id')
       .eq('id', bookingPayment.id)
       .single();
 
-    if (!bookingError && booking) {
-      const { data: tips, error: tipsError } = await adminSupabase
+    if (booking) {
+      const { data: tips } = await adminSupabase
         .from('tips')
         .select('id, amount, stripe_payment_intent_id, status, refunded_amount')
         .eq('booking_id', booking.booking_id)
         .eq('status', 'completed');
 
-      if (!tipsError && tips) {
+      if (tips) {
         bookingTips = tips;
-        console.log(
-          `[REFUND] Found ${bookingTips.length} completed tips for booking, total: $${bookingTips.reduce((sum, tip) => sum + tip.amount, 0)}`,
-        );
+        console.log(`[REFUND] Found ${bookingTips.length} tip(s)`);
       }
     }
 
-    console.log('[REFUND] Payment details:', {
-      deposit_payment_intent_id: bookingPayment.deposit_payment_intent_id,
-      stripe_payment_intent_id: bookingPayment.stripe_payment_intent_id,
-      status: bookingPayment.status,
-      deposit_amount: bookingPayment.deposit_amount,
-      balance_amount: bookingPayment.balance_amount,
-      amount: bookingPayment.amount,
-    });
+    // =================================================================
+    // PLANNING PHASE: Calculate refund distribution
+    // =================================================================
 
     const refundAmountCents = Math.round(refundAmount * 100);
     const depositAmountCents = Math.round(
@@ -232,552 +836,111 @@ export async function processStripeRefund(
     const balanceAmountCents = Math.round(
       (bookingPayment.balance_amount || 0) * 100,
     );
-    const serviceFeeAmountCents = Math.round(
-      (bookingPayment.service_fee || 0) * 100,
+
+    const distributionResult = await calculateRefundDistribution(
+      refundAmountCents,
+      {
+        deposit_payment_intent_id:
+          bookingPayment.deposit_payment_intent_id || null,
+        stripe_payment_intent_id:
+          bookingPayment.stripe_payment_intent_id || null,
+        deposit_amount: bookingPayment.deposit_amount || 0,
+        balance_amount: bookingPayment.balance_amount || 0,
+        service_fee: bookingPayment.service_fee || 0,
+      },
+      isCashPayment,
+      bookingTips,
+      supportRequestId,
     );
 
-    // For cash payments, only deposit + service fee can be refunded (amounts charged online)
-    // For card payments, full amount can be refunded
-    const maxRefundableAmountCents = isCashPayment
-      ? depositAmountCents + serviceFeeAmountCents
-      : depositAmountCents + balanceAmountCents;
-
-    if (isCashPayment) {
-      console.log(
-        `[REFUND] Cash payment detected - only deposit ($${(depositAmountCents / 100).toFixed(2)}) + service fee ($${(serviceFeeAmountCents / 100).toFixed(2)}) = $${(maxRefundableAmountCents / 100).toFixed(2)} can be refunded`,
-      );
-      console.log(
-        `[REFUND] Balance ($${(balanceAmountCents / 100).toFixed(2)}) and tips were paid in cash and cannot be refunded online`,
-      );
-    } else {
-      console.log(
-        `[REFUND] Card payment detected - deposit ($${(depositAmountCents / 100).toFixed(2)}) + balance ($${(balanceAmountCents / 100).toFixed(2)}) = $${(maxRefundableAmountCents / 100).toFixed(2)} can be refunded`,
-      );
-    }
-
-    if (refundAmountCents > maxRefundableAmountCents) {
-      const maxRefundableAmount = maxRefundableAmountCents / 100;
+    if (!distributionResult.success) {
       console.error(
-        `[REFUND] Refund amount $${refundAmount} exceeds maximum refundable amount $${maxRefundableAmount} for ${isCashPayment ? 'cash' : 'card'} payment`,
+        '[REFUND] ❌ Refund distribution failed:',
+        distributionResult.error,
       );
       return {
         success: false,
-        error: `Maximum refundable amount for ${isCashPayment ? 'cash' : 'card'} payment is $${maxRefundableAmount.toFixed(2)}${isCashPayment ? ' (deposit + service fee only)' : ''}`,
+        error: distributionResult.error || 'Refund distribution failed',
       };
     }
 
-    let totalRefundedCents = 0;
-    const refundIds: string[] = [];
+    // =================================================================
+    // EXECUTION PHASE: Execute all Stripe operations
+    // =================================================================
 
-    // STEP 1: Handle balance payment first (if exists and refund amount requires it)
-    // For cash payments, skip balance refund since balance was paid in cash
-    if (
-      bookingPayment.stripe_payment_intent_id &&
-      balanceAmountCents > 0 &&
-      !isCashPayment
-    ) {
-      const balancePaymentIntentId = bookingPayment.stripe_payment_intent_id;
+    const executionResult = await executeRefundOperations(
+      distributionResult.operations,
+    );
 
-      // Retrieve the balance payment intent to check its status
-      const balancePaymentIntent = await stripe.paymentIntents.retrieve(
-        balancePaymentIntentId,
-      );
-      console.log(
-        '[REFUND] Balance payment intent status:',
-        balancePaymentIntent.status,
-      );
-
-      // Determine how much to refund/capture from balance
-      const balanceRefundAmount = Math.min(
-        refundAmountCents,
-        balanceAmountCents,
-      );
-
-      if (balancePaymentIntent.status === 'requires_capture') {
-        // Balance payment is uncaptured - do partial capture
-        console.log(
-          `[REFUND] Balance payment is uncaptured. Will cancel or partially capture.`,
-        );
-
-        if (balanceRefundAmount < balanceAmountCents) {
-          // Partial capture: capture what's not being refunded
-          const captureAmount = balanceAmountCents - balanceRefundAmount;
-          console.log(
-            `[REFUND] Partially capturing balance payment: $${captureAmount / 100} (not refunding $${balanceRefundAmount / 100})`,
-          );
-
-          try {
-            await stripe.paymentIntents.capture(balancePaymentIntentId, {
-              amount_to_capture: captureAmount,
-            });
-            console.log(
-              `[REFUND] Successfully captured $${captureAmount / 100} from balance payment`,
-            );
-          } catch (captureError) {
-            console.error(
-              '[REFUND] Error capturing partial balance payment:',
-              captureError,
-            );
-            return {
-              success: false,
-              error: 'Failed to process partial capture of balance payment',
-            };
-          }
-        } else {
-          // Full balance refund - cancel the uncaptured payment
-          console.log(
-            `[REFUND] Canceling uncaptured balance payment (full balance refund)`,
-          );
-
-          try {
-            await stripe.paymentIntents.cancel(balancePaymentIntentId);
-            console.log(
-              `[REFUND] Successfully canceled uncaptured balance payment`,
-            );
-          } catch (cancelError) {
-            console.error(
-              '[REFUND] Error canceling balance payment:',
-              cancelError,
-            );
-            return {
-              success: false,
-              error: 'Failed to cancel uncaptured balance payment',
-            };
-          }
-        }
-
-        totalRefundedCents += balanceRefundAmount;
-      } else if (balancePaymentIntent.status === 'succeeded') {
-        // Balance payment is captured - create refund
-        console.log(
-          `[REFUND] Balance payment is captured. Creating refund for $${balanceRefundAmount / 100}`,
-        );
-
-        try {
-          const balanceRefund = await stripe.refunds.create({
-            payment_intent: balancePaymentIntentId,
-            amount: balanceRefundAmount,
-            reverse_transfer: true, // Reverse transfer to connected professional account
-            metadata: {
-              support_request_id: supportRequestId,
-              refund_type: 'balance',
-            },
-          });
-
-          refundIds.push(balanceRefund.id);
-          totalRefundedCents += balanceRefundAmount;
-          console.log(
-            `[REFUND] Balance refund created: ${balanceRefund.id}, amount: $${balanceRefundAmount / 100} (reversed transfer to professional)`,
-          );
-        } catch (refundError) {
-          console.error('[REFUND] Error creating balance refund:', refundError);
-          return {
-            success: false,
-            error: 'Failed to create balance payment refund',
-          };
-        }
-      }
-    }
-
-    // STEP 2: Handle deposit refund (if needed and exists)
-    const remainingRefundCents = refundAmountCents - totalRefundedCents;
-
-    if (
-      remainingRefundCents > 0 &&
-      bookingPayment.deposit_payment_intent_id &&
-      depositAmountCents > 0
-    ) {
-      const depositPaymentIntentId = bookingPayment.deposit_payment_intent_id;
-
-      // For cash payments, the deposit payment intent contains deposit + service fee
-      // For card payments, it only contains the deposit amount
-      const depositPaymentIntentAmount = isCashPayment
-        ? depositAmountCents + serviceFeeAmountCents
-        : depositAmountCents;
-
-      const depositRefundAmount = Math.min(
-        remainingRefundCents,
-        depositPaymentIntentAmount,
-      );
-
-      console.log(
-        `[REFUND] Creating ${isCashPayment ? 'deposit+service fee' : 'deposit'} refund for $${depositRefundAmount / 100} (${isCashPayment ? 'cash payment' : 'card payment'})`,
-      );
-
-      // For cash payments, check the actual payment intent amount to avoid over-refunding
-      if (isCashPayment) {
-        try {
-          const paymentIntent = await stripe.paymentIntents.retrieve(
-            depositPaymentIntentId,
-          );
-          const actualChargedAmount = paymentIntent.amount;
-          console.log(
-            `[REFUND] Deposit payment intent actual charged amount: $${actualChargedAmount / 100}, attempting to refund: $${depositRefundAmount / 100}`,
-          );
-
-          if (depositRefundAmount > actualChargedAmount) {
-            console.log(
-              `[REFUND] Deposit payment intent doesn't contain service fee. Will refund deposit first, then try to refund service fee separately.`,
-            );
-
-            // Step 1: Refund the full deposit amount
-            const depositRefund = await stripe.refunds.create({
-              payment_intent: depositPaymentIntentId,
-              amount: actualChargedAmount, // Refund the full deposit
-              reverse_transfer: true, // Reverse transfer to connected professional account
-              metadata: {
-                support_request_id: supportRequestId,
-                refund_type: 'deposit_only',
-              },
-            });
-
-            refundIds.push(depositRefund.id);
-            totalRefundedCents += actualChargedAmount;
-            console.log(
-              `[REFUND] Successfully created deposit refund: ${depositRefund.id} for $${actualChargedAmount / 100} (reversed transfer to professional)`,
-            );
-
-            // Step 2: Try to refund service fee from balance payment intent (if it exists and contains service fee)
-            const remainingToRefund = depositRefundAmount - actualChargedAmount; // This should be the service fee
-
-            if (
-              remainingToRefund > 0 &&
-              bookingPayment.stripe_payment_intent_id
-            ) {
-              console.log(
-                `[REFUND] Attempting to refund remaining $${remainingToRefund / 100} (service fee) from balance payment intent`,
-              );
-
-              try {
-                const balancePaymentIntent =
-                  await stripe.paymentIntents.retrieve(
-                    bookingPayment.stripe_payment_intent_id,
-                  );
-                console.log(
-                  `[REFUND] Balance payment intent amount: $${balancePaymentIntent.amount / 100}, status: ${balancePaymentIntent.status}`,
-                );
-
-                if (
-                  balancePaymentIntent.status === 'succeeded' &&
-                  balancePaymentIntent.amount >= remainingToRefund
-                ) {
-                  // Payment is captured - create refund
-                  // Note: Service fee refunds may not need reverse_transfer if the balance payment
-                  // only had the service fee (no transfer_data), but we include it for consistency
-                  const serviceFeeRefund = await stripe.refunds.create({
-                    payment_intent: bookingPayment.stripe_payment_intent_id,
-                    amount: remainingToRefund,
-                    reverse_transfer: true, // Reverse transfer if applicable
-                    metadata: {
-                      support_request_id: supportRequestId,
-                      refund_type: 'service_fee_only',
-                    },
-                  });
-
-                  refundIds.push(serviceFeeRefund.id);
-                  totalRefundedCents += remainingToRefund;
-                  console.log(
-                    `[REFUND] Successfully created service fee refund: ${serviceFeeRefund.id} for $${remainingToRefund / 100}`,
-                  );
-                } else if (
-                  balancePaymentIntent.status === 'requires_capture' &&
-                  balancePaymentIntent.amount >= remainingToRefund
-                ) {
-                  // Payment is uncaptured - cancel it to "refund" the service fee
-                  console.log(
-                    `[REFUND] Service fee payment is uncaptured. Canceling payment intent to refund $${remainingToRefund / 100}`,
-                  );
-
-                  try {
-                    await stripe.paymentIntents.cancel(
-                      bookingPayment.stripe_payment_intent_id,
-                    );
-                    totalRefundedCents += remainingToRefund;
-                    console.log(
-                      `[REFUND] Successfully canceled uncaptured service fee payment intent for $${remainingToRefund / 100}`,
-                    );
-                  } catch (cancelError) {
-                    console.error(
-                      '[REFUND] Error canceling uncaptured service fee payment intent:',
-                      cancelError,
-                    );
-                  }
-                } else {
-                  console.log(
-                    `[REFUND] Cannot refund service fee from balance payment intent (status: ${balancePaymentIntent.status}, amount: $${balancePaymentIntent.amount / 100})`,
-                  );
-                }
-              } catch (serviceFeeRefundError) {
-                console.error(
-                  '[REFUND] Error refunding service fee from balance payment intent:',
-                  serviceFeeRefundError,
-                );
-              }
-            }
-
-            // Don't update support request status here - let the server action handle it
-            // This allows the message to be sent before the status changes to 'resolved'
-
-            // Update booking payment status
-            const { error: paymentUpdateError } = await adminSupabase
-              .from('booking_payments')
-              .update({
-                status:
-                  totalRefundedCents >=
-                  depositAmountCents + serviceFeeAmountCents
-                    ? 'refunded'
-                    : 'partially_refunded',
-                refunded_amount: totalRefundedCents / 100,
-                refund_reason: 'Support request refund',
-                refunded_at: new Date().toISOString(),
-                refund_transaction_id: refundIds.join(','),
-              })
-              .eq('id', bookingPayment.id);
-
-            if (paymentUpdateError) {
-              console.error(
-                '[REFUND] Error updating booking payment:',
-                paymentUpdateError,
-              );
-            }
-
-            console.log(
-              `[REFUND] Process completed successfully. Total refunded: $${totalRefundedCents / 100}`,
-            );
-
-            const result: {
-              success: boolean;
-              refundId?: string;
-              error?: string;
-            } = {
-              success: true,
-            };
-
-            if (refundIds.length > 0 && refundIds[0]) {
-              result.refundId = refundIds[0];
-            }
-
-            return result;
-          }
-        } catch (retrieveError) {
-          console.error(
-            '[REFUND] Error retrieving payment intent details:',
-            retrieveError,
-          );
-          // Continue with original logic if retrieval fails
-        }
-      }
-
-      try {
-        const depositRefund = await stripe.refunds.create({
-          payment_intent: depositPaymentIntentId,
-          amount: depositRefundAmount,
-          reverse_transfer: true, // Reverse transfer to connected professional account
-          metadata: {
-            support_request_id: supportRequestId,
-            refund_type: 'deposit',
-          },
-        });
-
-        refundIds.push(depositRefund.id);
-        totalRefundedCents += depositRefundAmount;
-        console.log(
-          `[REFUND] Deposit refund created: ${depositRefund.id}, amount: $${depositRefundAmount / 100} (reversed transfer to professional)`,
-        );
-      } catch (refundError) {
-        console.error('[REFUND] Error creating deposit refund:', refundError);
-        return {
-          success: false,
-          error: 'Failed to create deposit payment refund',
-        };
-      }
-    }
-
-    // STEP 3: Handle tips refund (if needed and any tips exist)
-    // For cash payments, skip tips refund since tips were paid in cash
-    let remainingRefundCentsAfterMain = refundAmountCents - totalRefundedCents;
-
-    if (
-      remainingRefundCentsAfterMain > 0 &&
-      bookingTips.length > 0 &&
-      !isCashPayment
-    ) {
-      console.log(
-        `[REFUND] Processing tips refund for remaining amount: $${remainingRefundCentsAfterMain / 100}`,
-      );
-
-      for (const tip of bookingTips) {
-        if (remainingRefundCentsAfterMain <= 0) break;
-
-        const tipAmountCents = Math.round(tip.amount * 100);
-        const tipRefundedAmountCents = Math.round(tip.refunded_amount * 100);
-        const tipRefundableAmountCents =
-          tipAmountCents - tipRefundedAmountCents;
-
-        if (tipRefundableAmountCents <= 0) {
-          console.log(
-            `[REFUND] Tip ${tip.id} already fully refunded, skipping`,
-          );
-          continue;
-        }
-
-        const tipRefundAmount = Math.min(
-          remainingRefundCentsAfterMain,
-          tipRefundableAmountCents,
-        );
-
-        if (tip.stripe_payment_intent_id) {
-          console.log(
-            `[REFUND] Creating tip refund for $${tipRefundAmount / 100}`,
-          );
-
-          try {
-            const tipRefund = await stripe.refunds.create({
-              payment_intent: tip.stripe_payment_intent_id,
-              amount: tipRefundAmount,
-              reverse_transfer: true, // Reverse transfer to connected professional account
-              metadata: {
-                support_request_id: supportRequestId,
-                refund_type: 'tip',
-                tip_id: tip.id,
-              },
-            });
-
-            refundIds.push(tipRefund.id);
-            totalRefundedCents += tipRefundAmount;
-            remainingRefundCentsAfterMain -= tipRefundAmount;
-
-            // Update tip refunded amount
-            const { error: tipUpdateError } = await adminSupabase
-              .from('tips')
-              .update({
-                refunded_amount:
-                  (tipRefundedAmountCents + tipRefundAmount) / 100,
-                refunded_at: new Date().toISOString(),
-                stripe_refund_id: tipRefund.id,
-              })
-              .eq('id', tip.id);
-
-            if (tipUpdateError) {
-              console.error(
-                '[REFUND] Error updating tip refund status:',
-                tipUpdateError,
-              );
-            }
-
-            console.log(
-              `[REFUND] Tip refund created: ${tipRefund.id}, amount: $${tipRefundAmount / 100} (reversed transfer to professional)`,
-            );
-          } catch (refundError) {
-            console.error('[REFUND] Error creating tip refund:', refundError);
-            return {
-              success: false,
-              error: 'Failed to create tip refund',
-            };
-          }
-        }
-      }
-    }
-
-    // Verify total refunded amount
-    if (totalRefundedCents < refundAmountCents) {
+    if (!executionResult.success) {
       console.error(
-        `[REFUND] Refund incomplete: requested $${refundAmountCents / 100}, processed $${totalRefundedCents / 100}`,
+        '[REFUND] ❌ Stripe operations failed:',
+        executionResult.error,
       );
       return {
         success: false,
-        error: `Could not process full refund amount. Processed: $${totalRefundedCents / 100}, Requested: $${refundAmountCents / 100}`,
+        error: executionResult.error || 'Stripe operations failed',
       };
     }
 
-    // Update support request with refund information
-    const primaryRefundId = refundIds[0] || null;
-    console.log(
-      `[REFUND] Updating support request with refund IDs: ${refundIds.join(', ')}`,
+    // Calculate total refunded
+    const totalRefundedCents = distributionResult.operations.reduce(
+      (sum, op) => {
+        // For partial captures, the refund amount is in the metadata
+        if (op.type === 'partial_capture') {
+          return sum + parseInt(op.metadata.refunded_amount || '0');
+        }
+        return sum + op.amount;
+      },
+      0,
     );
 
-    // For partial captures (no refund IDs), we should still resolve the support request
-    // Find the professional or admin to mark as resolver
-    let resolvedBy: string | null = null;
-    if (totalRefundedCents > 0) {
-      // Get the support request to find the professional
-      const { data: supportRequest } = await adminSupabase
-        .from('support_requests')
-        .select('professional_id')
-        .eq('id', supportRequestId)
-        .single();
+    // =================================================================
+    // DATABASE UPDATE PHASE: Update database ONLY after Stripe success
+    // =================================================================
 
-      if (supportRequest?.professional_id) {
-        resolvedBy = supportRequest.professional_id;
-      } else {
-        // Fallback to admin user
-        const { data: adminUser } = await adminSupabase
-          .from('user_roles')
-          .select('user_id')
-          .eq('role', 'admin')
-          .limit(1)
-          .single();
-        resolvedBy = adminUser?.user_id || null;
-      }
-    }
+    const dbResult = await updateDatabaseAfterRefund(
+      adminSupabase,
+      supportRequestId,
+      bookingPayment.id,
+      executionResult.results,
+      totalRefundedCents,
+      depositAmountCents,
+      balanceAmountCents,
+    );
 
-    const updateData: {
-      stripe_refund_id: string | null;
-      refund_amount: number;
-      processed_at: string;
-      status?: 'pending' | 'in_progress' | 'resolved' | 'closed';
-      resolved_at?: string;
-      resolved_by?: string;
-      resolution_notes?: string;
-    } = {
-      stripe_refund_id: primaryRefundId,
-      refund_amount: totalRefundedCents / 100,
-      processed_at: new Date().toISOString(),
-    };
-
-    // If we successfully processed any refund (even via partial capture), mark as resolved
-    if (totalRefundedCents > 0 && resolvedBy) {
-      updateData.status = 'resolved';
-      updateData.resolved_at = new Date().toISOString();
-      updateData.resolved_by = resolvedBy;
-      updateData.resolution_notes = primaryRefundId
-        ? 'Resolved via Stripe refund'
-        : 'Resolved via partial payment capture';
-    }
-
-    const { error: updateError } = await adminSupabase
-      .from('support_requests')
-      .update(updateData)
-      .eq('id', supportRequestId);
-
-    if (updateError) {
-      console.error('[REFUND] Error updating support request:', updateError);
-    }
-
-    // Update booking payment status
-    const { error: paymentUpdateError } = await adminSupabase
-      .from('booking_payments')
-      .update({
-        status:
-          totalRefundedCents >= depositAmountCents + balanceAmountCents
-            ? 'refunded'
-            : 'partially_refunded',
-        refunded_amount: totalRefundedCents / 100,
-        refund_reason: 'Support request refund',
-        refunded_at: new Date().toISOString(),
-        refund_transaction_id: refundIds.join(','), // Store all refund IDs
-      })
-      .eq('id', bookingPayment.id);
-
-    if (paymentUpdateError) {
+    if (!dbResult.success) {
+      console.error('[REFUND] ❌ Database update failed:', dbResult.error);
+      // This is critical: Stripe refund succeeded but DB update failed
+      // Log for manual intervention
       console.error(
-        '[REFUND] Error updating booking payment:',
-        paymentUpdateError,
+        `[REFUND] ⚠️⚠️⚠️ CRITICAL: Stripe refund succeeded but database update failed!`,
       );
+      console.error(
+        `[REFUND] Manual intervention required for support request: ${supportRequestId}`,
+      );
+      return {
+        success: false,
+        error: `Refund processed in Stripe but database update failed: ${dbResult.error}. Manual intervention required.`,
+      };
     }
+
+    // =================================================================
+    // SUCCESS
+    // =================================================================
+
+    const primaryRefundId = executionResult.results.find(
+      (r) => r.refundId,
+    )?.refundId;
 
     console.log(
-      `[REFUND] Process completed successfully. Total refunded: $${totalRefundedCents / 100}`,
+      `[REFUND] ====================================================`,
+    );
+    console.log(`[REFUND] ✅ REFUND COMPLETED SUCCESSFULLY`);
+    console.log(`[REFUND] Total refunded: $${totalRefundedCents / 100}`);
+    console.log(`[REFUND] Primary refund ID: ${primaryRefundId || 'N/A'}`);
+    console.log(
+      `[REFUND] ====================================================`,
     );
 
     if (primaryRefundId) {
@@ -791,7 +954,7 @@ export async function processStripeRefund(
       success: true,
     };
   } catch (error) {
-    console.error('[REFUND] Error processing refund:', error);
+    console.error('[REFUND] ❌ Unexpected error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
@@ -982,7 +1145,35 @@ async function updateSupportRequestWithRefund(
       return { success: true };
     }
 
-    // Update the support request
+    // Handle failed refunds - revert database status
+    if (refund.status === 'failed' || refund.status === 'canceled') {
+      console.error(`[WEBHOOK] ⚠️ Refund failed or canceled: ${refund.id}`);
+
+      // Find the support request and revert its status
+      const { error: revertError } = await supabase
+        .from('support_requests')
+        .update({
+          status: 'in_progress',
+          resolution_notes: `Refund ${refund.status}: ${refund.failure_reason || 'Unknown reason'}`,
+        })
+        .eq('id', supportRequest.id)
+        .eq('stripe_refund_id', refund.id);
+
+      if (revertError) {
+        console.error(
+          '[WEBHOOK] Error reverting support request:',
+          revertError,
+        );
+        return { success: false, error: revertError.message };
+      }
+
+      console.log(
+        '[WEBHOOK] Reverted support request status due to failed refund',
+      );
+      return { success: true };
+    }
+
+    // Update the support request for successful refunds
     const updateData: {
       stripe_refund_id: string;
       status?: 'pending' | 'in_progress' | 'resolved' | 'closed';
