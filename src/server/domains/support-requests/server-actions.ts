@@ -286,12 +286,100 @@ export async function initiateRefundServerAction(formData: FormData) {
       };
     }
 
-    console.log('[SERVER-ACTION] Processing refund through Stripe');
-    // Process the refund through Stripe
-    const { success, error: refundError } = await processStripeRefund(
-      support_request_id,
-      refund_amount,
+    // =================================================================
+    // PRE-REFUND VALIDATION: Check database consistency
+    // =================================================================
+    console.log('[SERVER-ACTION] Validating support request state...');
+
+    // 1. Check if support request is in correct state for refund
+    if (
+      supportRequest.status === 'resolved' ||
+      supportRequest.status === 'closed'
+    ) {
+      console.error(
+        `[SERVER-ACTION] Support request already ${supportRequest.status}`,
+      );
+      return {
+        success: false,
+        error: `This support request has already been ${supportRequest.status}`,
+      };
+    }
+
+    // 2. Check if already processed (has refund amount or refund ID)
+    if (supportRequest.refund_amount && supportRequest.refund_amount > 0) {
+      console.error(
+        `[SERVER-ACTION] Refund already processed: $${supportRequest.refund_amount}`,
+      );
+      return {
+        success: false,
+        error: `A refund of $${supportRequest.refund_amount.toFixed(2)} has already been processed for this request`,
+      };
+    }
+
+    if (supportRequest.stripe_refund_id) {
+      console.error(
+        `[SERVER-ACTION] Stripe refund already exists: ${supportRequest.stripe_refund_id}`,
+      );
+      return {
+        success: false,
+        error: 'A refund has already been processed in Stripe for this request',
+      };
+    }
+
+    // 3. Get and validate booking payment status
+    const adminSupabase = createAdminClient();
+
+    // Try to find booking payment from support request relationships
+    if (supportRequest.booking_id) {
+      const { data: bookingPayment } = await adminSupabase
+        .from('booking_payments')
+        .select('id, status, refunded_amount, refund_transaction_id')
+        .eq('booking_id', supportRequest.booking_id)
+        .single();
+
+      if (bookingPayment) {
+        // Check if booking payment already refunded
+        if (
+          bookingPayment.status === 'refunded' ||
+          bookingPayment.status === 'partially_refunded'
+        ) {
+          console.error(
+            `[SERVER-ACTION] Booking payment already ${bookingPayment.status}`,
+          );
+          return {
+            success: false,
+            error: `Payment has already been ${bookingPayment.status}. Refund amount: $${bookingPayment.refunded_amount || 0}`,
+          };
+        }
+
+        // Check for orphaned refund transaction ID (empty string or exists)
+        if (
+          bookingPayment.refund_transaction_id &&
+          bookingPayment.refund_transaction_id.trim() !== ''
+        ) {
+          console.error(
+            `[SERVER-ACTION] Refund transaction already exists: ${bookingPayment.refund_transaction_id}`,
+          );
+          return {
+            success: false,
+            error:
+              'A refund transaction already exists for this booking payment',
+          };
+        }
+      }
+    }
+
+    console.log('[SERVER-ACTION] ✅ Pre-refund validation passed');
+    console.log(
+      `[SERVER-ACTION] Processing refund through Stripe for $${refund_amount}`,
     );
+
+    // Process the refund through Stripe
+    const {
+      success,
+      refundId,
+      error: refundError,
+    } = await processStripeRefund(support_request_id, refund_amount);
 
     if (!success) {
       console.error('[SERVER-ACTION] Refund processing failed:', refundError);
@@ -300,6 +388,50 @@ export async function initiateRefundServerAction(formData: FormData) {
         error: refundError || 'Failed to process refund',
       };
     }
+
+    // =================================================================
+    // POST-REFUND VALIDATION: Verify refund was actually created
+    // =================================================================
+    console.log('[SERVER-ACTION] Validating refund result...');
+
+    // Verify we received a refund ID (if success=true but no refundId, that's suspicious)
+    if (!refundId) {
+      console.log(
+        '[SERVER-ACTION] ⚠️ WARNING: Refund succeeded but no refundId returned',
+      );
+      console.log(
+        '[SERVER-ACTION] This may indicate payment was canceled rather than refunded',
+      );
+      // Don't fail here - cancellations are valid for uncaptured payments
+    } else {
+      console.log(
+        `[SERVER-ACTION] ✅ Refund created successfully: ${refundId}`,
+      );
+    }
+
+    // Double-check the database was actually updated
+    const { data: updatedSupport } = await supabase
+      .from('support_requests')
+      .select('stripe_refund_id, refund_amount')
+      .eq('id', support_request_id)
+      .single();
+
+    if (!updatedSupport?.stripe_refund_id && !updatedSupport?.refund_amount) {
+      console.error(
+        '[SERVER-ACTION] ⚠️⚠️⚠️ CRITICAL: processStripeRefund returned success but database not updated!',
+      );
+      console.error(
+        `[SERVER-ACTION] Manual intervention required for support request: ${support_request_id}`,
+      );
+      return {
+        success: false,
+        error:
+          'Refund may have been processed but database update failed. Please contact support.',
+      };
+    }
+
+    console.log('[SERVER-ACTION] ✅ Database successfully updated');
+    console.log('[SERVER-ACTION] ✅ Post-refund validation passed');
 
     console.log(
       '[SERVER-ACTION] Refund processed successfully, sending message and updating status',
