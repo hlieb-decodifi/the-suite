@@ -7,6 +7,8 @@ import {
   sendSupportRequestCreation,
   sendSupportRequestResolvedClient,
   sendSupportRequestResolvedProfessional,
+  sendSupportRequestRefundedClient,
+  sendSupportRequestRefundedProfessional,
 } from '@/providers/brevo/templates';
 
 /**
@@ -353,6 +355,9 @@ export async function initiateRefundServerAction(formData: FormData) {
       // Don't fail the entire operation for status update failure
     }
 
+    // Send refund emails to both client and professional
+    await sendSupportRequestRefundedEmails(support_request_id, refund_amount);
+
     console.log('[SERVER-ACTION] Refund initiation completed successfully');
     return {
       success: true,
@@ -626,5 +631,170 @@ async function sendSupportRequestResolvedEmails(supportRequestId: string) {
     console.log('✅ Support request resolved emails sent');
   } catch (error) {
     console.error('❌ Error sending support request resolved emails:', error);
+  }
+}
+
+/**
+ * Send support request refunded emails to both client and professional
+ */
+async function sendSupportRequestRefundedEmails(
+  supportRequestId: string,
+  refundAmount: number,
+) {
+  try {
+    // Use admin client for auth operations
+    const adminSupabase = await createAdminClient();
+
+    // Get support request data with booking, appointment, and user info
+    const { data: supportRequest, error: supportRequestError } =
+      await adminSupabase
+        .from('support_requests')
+        .select(
+          `
+        id,
+        booking_id,
+        appointment_id,
+        client_id,
+        professional_id,
+        bookings (
+          id,
+          clients:users!client_id (
+            first_name,
+            last_name
+          ),
+          professional_profiles (
+            users (
+              first_name,
+              last_name
+            )
+          ),
+          booking_services (
+            services (
+              name
+            )
+          )
+        ),
+        appointments (
+          start_time
+        )
+      `,
+        )
+        .eq('id', supportRequestId)
+        .single();
+
+    if (supportRequestError || !supportRequest) {
+      console.error('Failed to get support request data:', supportRequestError);
+      return;
+    }
+
+    const booking = supportRequest.bookings;
+    const appointment = supportRequest.appointments;
+
+    if (!booking || !appointment) {
+      console.error('Missing booking or appointment data');
+      return;
+    }
+
+    const client = booking.clients;
+    const professional = booking.professional_profiles?.users;
+
+    if (!client || !professional) {
+      console.error('Missing client or professional data');
+      return;
+    }
+
+    if (!supportRequest.client_id || !supportRequest.professional_id) {
+      console.error('Missing client or professional ID');
+      return;
+    }
+
+    // Get email addresses using admin client
+    const { data: clientAuth, error: clientAuthError } =
+      await adminSupabase.auth.admin.getUserById(supportRequest.client_id);
+    const { data: professionalAuth, error: professionalAuthError } =
+      await adminSupabase.auth.admin.getUserById(
+        supportRequest.professional_id,
+      );
+
+    if (
+      clientAuthError ||
+      !clientAuth.user?.email ||
+      professionalAuthError ||
+      !professionalAuth.user?.email
+    ) {
+      console.error('Failed to get email addresses');
+      return;
+    }
+
+    const clientName = `${client.first_name} ${client.last_name}`;
+    const professionalName = `${professional.first_name} ${professional.last_name}`;
+
+    // Extract services from booking
+    const services =
+      booking.booking_services?.map((bs) => ({
+        name:
+          typeof bs.services === 'object' && bs.services !== null
+            ? (bs.services as { name?: string }).name || 'Service'
+            : 'Service',
+      })) || [];
+
+    // Format date and time for email
+    const appointmentDate = new Date(appointment.start_time);
+    const formattedDateTime = appointmentDate.toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    // Get payment method for client email
+    const { data: payment } = await adminSupabase
+      .from('booking_payments')
+      .select(
+        `
+        payment_methods (
+          name
+        )
+      `,
+      )
+      .eq('booking_id', supportRequest.booking_id || '')
+      .single();
+
+    const refundMethod =
+      payment?.payment_methods?.name || 'original payment method';
+
+    // Send emails
+    await Promise.all([
+      sendSupportRequestRefundedClient(
+        [{ email: clientAuth.user.email, name: clientName }],
+        {
+          services,
+          booking_id: supportRequest.booking_id || '',
+          client_name: clientName,
+          date_and_time: formattedDateTime,
+          professional_name: professionalName,
+          refund_amount: refundAmount,
+          refund_method: refundMethod,
+        },
+      ),
+      sendSupportRequestRefundedProfessional(
+        [{ email: professionalAuth.user.email, name: professionalName }],
+        {
+          services,
+          booking_id: supportRequest.booking_id || '',
+          client_name: clientName,
+          date_and_time: formattedDateTime,
+          professional_name: professionalName,
+          refund_amount: refundAmount,
+        },
+      ),
+    ]);
+
+    console.log('✅ Support request refunded emails sent');
+  } catch (error) {
+    console.error('❌ Error sending support request refunded emails:', error);
   }
 }

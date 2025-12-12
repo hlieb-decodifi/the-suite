@@ -226,7 +226,9 @@ export type SupportRequestCreationParams = {
 };
 
 export type SupportRequestRefundedClientParams = {
-  address: string;
+  services: {
+    name: string;
+  }[];
   booking_id: string;
   client_name: string;
   date_and_time: string;
@@ -236,7 +238,9 @@ export type SupportRequestRefundedClientParams = {
 };
 
 export type SupportRequestRefundedProfessionalParams = {
-  address: string;
+  services: {
+    name: string;
+  }[];
   booking_id: string;
   client_name: string;
   date_and_time: string;
