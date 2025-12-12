@@ -1481,7 +1481,17 @@ async function handlePaymentIntentSucceeded(
   try {
     const supabase = createAdminClient();
 
-    // Update payment status to completed
+    // FIX: Skip manual capture payments - they'll be handled by charge.captured webhook
+    // payment_intent.succeeded fires for BOTH captured AND authorized payments
+    // For manual capture, "succeeded" means authorized but NOT captured yet
+    if (paymentIntent.capture_method === 'manual') {
+      console.log(
+        `⏭️ Payment ${paymentIntent.id} uses manual capture (authorized but not captured yet) - will be marked completed when actually captured via charge.captured webhook`,
+      );
+      return;
+    }
+
+    // Only update for automatic capture payments (e.g., deposit payments)
     await supabase
       .from('booking_payments')
       .update({
@@ -1493,7 +1503,9 @@ async function handlePaymentIntentSucceeded(
       .eq('booking_id', bookingId)
       .eq('stripe_payment_intent_id', paymentIntent.id);
 
-    console.log(`Updated payment status for booking ${bookingId} - completed`);
+    console.log(
+      `✅ Payment ${paymentIntent.id} captured automatically - marked as completed for booking ${bookingId}`,
+    );
   } catch (error) {
     console.error(`Error updating payment for success: ${bookingId}`, error);
   }
@@ -1503,6 +1515,15 @@ async function handlePaymentIntentSucceeded(
 async function handleChargeSucceeded(charge: Stripe.Charge) {
   console.log(`Charge ${charge.id} succeeded`);
 
+  // FIX: charge.succeeded fires for BOTH captured AND uncaptured (authorized) charges
+  // Only process if the charge is actually captured
+  if (!charge.captured) {
+    console.log(
+      `⏭️ Charge ${charge.id} succeeded but not captured yet (authorized only) - waiting for charge.captured webhook`,
+    );
+    return;
+  }
+
   // If charge is associated with a payment intent, use the payment intent ID
   if (charge.payment_intent) {
     const paymentIntentId =
@@ -1511,7 +1532,7 @@ async function handleChargeSucceeded(charge: Stripe.Charge) {
         : charge.payment_intent.id;
 
     console.log(
-      `Charge ${charge.id} is associated with payment intent ${paymentIntentId}`,
+      `Charge ${charge.id} captured - associated with payment intent ${paymentIntentId}`,
     );
     return await handlePaymentCaptureByPaymentIntentId(paymentIntentId);
   }
