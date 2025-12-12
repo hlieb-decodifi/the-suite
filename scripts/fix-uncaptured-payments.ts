@@ -1,4 +1,5 @@
 #!/usr/bin/env npx tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
  * Script to fix uncaptured payments that were incorrectly marked as captured in the database
@@ -32,82 +33,18 @@ const stripe = new Stripe(stripeSecretKey, {
 
 // Payment intent IDs to check and fix
 // Replace this array with the results from your SQL query
-const PAYMENT_INTENT_IDS = [
-  {
-    stripe_payment_intent_id: 'pi_3Sc6QaLMOPuguC730eD75HyX',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb5UiLMOPuguC730brfpVU9',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb5ThLMOPuguC731czsFU0l',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb5S5LMOPuguC731DnJq4Se',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb5PkLMOPuguC7311ormtix',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb4zZLMOPuguC731g2QqqLE',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb4ydLMOPuguC731KD7hAdn',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3Sb4xQLMOPuguC730VtGih3k',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZyQ5LMOPuguC7318hPQmeI',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZyPELMOPuguC730A84i00Q',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZyNWLMOPuguC731FK6bcLv',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZbx1LMOPuguC731fZ5pGGl',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZFW0LMOPuguC731t1Dk7BV',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZFUOLMOPuguC730Alspmk2',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SZFSuLMOPuguC731m6e3ixs',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SLrNvLMOPuguC7317ZuLYsd',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SLqjeLMOPuguC730SKIwD06',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SLqheLMOPuguC730cx4hbDV',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SKkA6LMOPuguC731KLRINUA',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SKjwiLMOPuguC730W5L1TyM',
-  },
-  {
-    stripe_payment_intent_id: 'pi_3SKj2ULMOPuguC730O37vVBl',
-  },
-].map((p) => p.stripe_payment_intent_id);
+const PAYMENT_INTENT_IDS: string[] = [];
 // Add your payment intent IDs here, e.g.:
 // 'pi_3Sb5ThLMOPuguC731czsFU0l',
 // 'pi_3SdcXmLMOPuguC730BOEPLDp',
 
-interface PaymentIntentResult {
+type PaymentIntentResult = {
   id: string;
   status: 'captured' | 'uncaptured' | 'not_found' | 'error';
   message: string;
   amount?: number;
   amountCapturable?: number;
-}
+};
 
 async function checkAndCapturePayment(
   paymentIntentId: string,
