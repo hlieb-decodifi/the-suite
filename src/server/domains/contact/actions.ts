@@ -41,6 +41,27 @@ export async function submitContactInquiry(
   formData: ContactFormData,
 ): Promise<ContactSubmissionResult> {
   try {
+    // Rate limiting check
+    const { headers } = await import('next/headers');
+    const headersList = await headers();
+    const { contactFormRateLimit, getClientIP } = await import(
+      '@/lib/rate-limit'
+    );
+
+    const clientIP = getClientIP(headersList);
+    const rateLimitResult = await contactFormRateLimit.checkLimit(clientIP);
+
+    if (!rateLimitResult.success) {
+      const minutesUntilReset = Math.ceil(
+        (rateLimitResult.resetTime - Date.now()) / (1000 * 60),
+      );
+
+      return {
+        success: false,
+        error: `Too many contact form submissions. Please try again in ${minutesUntilReset} minutes.`,
+      };
+    }
+
     // Use service role client to bypass RLS issues
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
@@ -63,6 +84,28 @@ export async function submitContactInquiry(
 
     // Validate form data
     const validatedData = contactFormSchema.parse(formData);
+
+    // Additional server-side validation for security
+    if (validatedData.message.length > 5000) {
+      return {
+        success: false,
+        error: 'Message is too long. Please keep it under 5000 characters.',
+      };
+    }
+
+    if (validatedData.name.length > 200) {
+      return {
+        success: false,
+        error: 'Name is too long. Please keep it under 200 characters.',
+      };
+    }
+
+    if (validatedData.subject.length > 500) {
+      return {
+        success: false,
+        error: 'Subject is too long. Please keep it under 500 characters.',
+      };
+    }
 
     // Prepare inquiry data
     const inquiryData = {

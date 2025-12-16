@@ -327,7 +327,7 @@ export async function initiateRefundServerAction(formData: FormData) {
     }
 
     // 3. Get and validate booking payment status
-    const adminSupabase = createAdminClient();
+    const adminSupabase = await createAdminClient();
 
     // Try to find booking payment from support request relationships
     if (supportRequest.booking_id) {
@@ -474,7 +474,7 @@ export async function initiateRefundServerAction(formData: FormData) {
       updateData.professional_notes = professional_notes;
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminSupabase
       .from('support_requests')
       .update(updateData)
       .eq('id', support_request_id);
@@ -518,6 +518,7 @@ export async function resolveSupportRequestAction({
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -540,7 +541,7 @@ export async function resolveSupportRequestAction({
       };
     }
 
-    // Get support request to check if user is the professional
+    // Get support request to check if user is the professional (using regular client for authorization)
     const { data: supportRequest, error: supportRequestError } = await supabase
       .from('support_requests')
       .select('*')
@@ -556,8 +557,8 @@ export async function resolveSupportRequestAction({
       };
     }
 
-    // Update the support request
-    const { error: updateError } = await supabase
+    // Update the support request using admin client (bypasses RLS)
+    const { error: updateError } = await adminSupabase
       .from('support_requests')
       .update({
         status: 'resolved',
