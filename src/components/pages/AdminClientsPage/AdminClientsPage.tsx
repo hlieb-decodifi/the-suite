@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { applyDateRangeFilter } from '@/utils/dateFilter';
 
 export async function getAdminClientsData({
   start,
@@ -26,8 +27,9 @@ export async function getAdminClientsData({
     .from('users')
     .select('id, first_name, last_name, created_at, client_profiles(id)')
     .in('id', clientIds);
-  if (start) query = query.gte('created_at', start);
-  if (end) query = query.lte('created_at', end);
+
+  // Apply inclusive date range filter
+  query = applyDateRangeFilter(query, 'created_at', start, end);
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);

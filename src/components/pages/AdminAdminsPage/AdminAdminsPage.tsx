@@ -1,5 +1,6 @@
 import React from 'react';
 import { createAdminClient } from '@/lib/supabase/server';
+import { applyDateRangeFilter } from '@/utils/dateFilter';
 
 // Server action for fetching admins data (inlined, not in a separate file)
 export async function getAdminAdminsData({
@@ -33,13 +34,10 @@ export async function getAdminAdminsData({
     .from('users')
     .select('id, first_name, last_name, created_at')
     .in('id', adminIds);
-  if (start) query = query.gte('created_at', start);
-  let endValue = end;
-  // If end is a date string (YYYY-MM-DD), append time to include the full day
-  if (end && /^\d{4}-\d{2}-\d{2}$/.test(end)) {
-    endValue = `${end}T23:59:59.999Z`;
-  }
-  if (endValue) query = query.lte('created_at', endValue);
+
+  // Apply inclusive date range filter
+  query = applyDateRangeFilter(query, 'created_at', start, end);
+
   // Server-side name filtering (case-insensitive)
   if (filterName) {
     // Use ilike for case-insensitive partial match on first_name or last_name
