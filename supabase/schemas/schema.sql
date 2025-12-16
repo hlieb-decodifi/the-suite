@@ -376,11 +376,16 @@ drop policy if exists "Professionals can delete their own services" on services;
 drop policy if exists "Professionals can manage their own services" on services;
 drop policy if exists "Anyone can view services from published professionals" on services;
 drop policy if exists "Professionals can view their own unpublished services" on services;
+drop policy if exists "Prevent hard delete of services" on services;
+drop policy if exists "Prevent hard delete of services via RLS" on services;
+drop policy if exists "Professionals can view their own services" on services;
+drop policy if exists "Professionals can insert their own services" on services;
+drop policy if exists "Professionals can update their own services" on services;
 
 -- New policies for services
--- Professionals can manage all their services (including archived ones)
-create policy "Professionals can manage their own services"
-  on services for all
+-- Professionals can select their services
+create policy "Professionals can view their own services"
+  on services for select
   using (
     exists (
       select 1 from professional_profiles
@@ -388,6 +393,42 @@ create policy "Professionals can manage their own services"
       and professional_profiles.user_id = auth.uid()
     )
   );
+
+-- Professionals can insert their services
+create policy "Professionals can insert their own services"
+  on services for insert
+  with check (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Professionals can update their services
+create policy "Professionals can update their own services"
+  on services for update
+  using (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from professional_profiles
+      where professional_profiles.id = services.professional_profile_id
+      and professional_profiles.user_id = auth.uid()
+    )
+  );
+
+-- Explicitly prevent hard deletion of services via RLS
+-- Services should be archived (soft delete) instead to maintain booking history
+-- Hard deletes (when no bookings exist) are only allowed via admin client
+create policy "Prevent hard delete of services via RLS"
+  on services for delete
+  using (false);
 
 -- Public can only view non-archived services from published professionals
 create policy "Anyone can view services from published professionals"
@@ -470,10 +511,17 @@ grant execute on function archive_service to authenticated;
 grant execute on function unarchive_service to authenticated;
 
 -- RLS policies for addresses
-create policy "Users can create addresses"
+-- Drop existing policies first
+drop policy if exists "Users can create addresses" on addresses;
+drop policy if exists "Prevent direct address creation via RLS" on addresses;
+
+-- Explicitly prevent direct address creation via RLS
+-- Addresses should only be created via admin client or security definer functions
+-- This prevents orphaned addresses and ensures proper validation
+create policy "Prevent direct address creation via RLS"
   on addresses for insert
   to authenticated
-  with check (true);
+  with check (false);
 
 create policy "Users can view addresses linked to their profile"
   on addresses for select
@@ -2341,16 +2389,16 @@ create policy "Clients can create support requests"
     )
   );
 
-create policy "Professionals can update support request status and resolution"
+-- Drop existing update policy
+drop policy if exists "Professionals can update support request status and resolution" on support_requests;
+drop policy if exists "Prevent direct support request updates via RLS" on support_requests;
+
+-- Explicitly prevent direct updates to support requests via RLS
+-- All updates (status, refund fields, resolution) should only be done via admin client
+-- with proper authorization checks in server actions
+create policy "Prevent direct support request updates via RLS"
   on support_requests for update
-  using (
-    auth.uid() = professional_id
-    or exists (
-      select 1 from conversations c
-      where c.id = support_requests.conversation_id
-      and c.professional_id = auth.uid()
-    )
-  );
+  using (false);
 
 -- Clients are not allowed to update support requests, only create and view them
 
