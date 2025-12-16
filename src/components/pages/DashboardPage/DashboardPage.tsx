@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getRecentConversations } from '@/server/domains/messages/actions';
 import { redirect } from 'next/navigation';
 import { DashboardPageClient } from './DashboardPageClient';
+import { applyDateRangeFilter } from '@/utils/dateFilter';
 
 // Define our own type for how the appointment data is actually structured
 type AppointmentWithServices = {
@@ -211,14 +212,13 @@ export async function getDashboardSupportRequests(
       supportRequestsQuery = supportRequestsQuery.eq('client_id', userId);
     }
 
-    // Apply date filters if provided
-    if (startDate) {
-      supportRequestsQuery = supportRequestsQuery.gte('created_at', startDate);
-    }
-
-    if (endDate) {
-      supportRequestsQuery = supportRequestsQuery.lte('created_at', endDate);
-    }
+    // Apply inclusive date range filter
+    supportRequestsQuery = applyDateRangeFilter(
+      supportRequestsQuery,
+      'created_at',
+      startDate,
+      endDate,
+    );
 
     // Order by created_at descending and apply limit if specified
     supportRequestsQuery = supportRequestsQuery.order('created_at', {
