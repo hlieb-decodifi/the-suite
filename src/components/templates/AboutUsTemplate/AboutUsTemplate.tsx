@@ -19,10 +19,10 @@ export function AboutUsTemplate() {
 
             <Typography className="text-xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
               At The Suite, we believe access to haircare isn't just about
-              convenience—
+              convenience —
               <strong className="text-foreground">
                 {' '}
-                it's about dignity, identity, and reclaiming your time.
+                it's about dignity, identity, and time.
               </strong>
             </Typography>
 
@@ -34,15 +34,14 @@ export function AboutUsTemplate() {
                 <br />
                 <span className="text-primary font-semibold">
                   {' '}
-                  These haircare deserts don't just disrupt routines — they
-                  steal time, create stress, and make basic grooming feel like a
-                  luxury.
+                  These haircare deserts disrupt routines, burden schedules, and
+                  make basic grooming unnecessarily difficult.
                 </span>
               </Typography>
             </div>
 
             <Typography className="text-2xl text-foreground font-bold mb-8 text-primary">
-              We created The Suite to change that story.
+              We created The Suite to change that.
             </Typography>
 
             <Typography className="text-lg text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">

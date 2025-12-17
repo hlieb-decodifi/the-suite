@@ -1,5 +1,6 @@
 import { AdminAppointmentsPageClient } from './AdminAppointmentsPageClient';
 import { createAdminClient } from '@/lib/supabase/server';
+import { applyDateRangeFilter } from '@/utils/dateFilter';
 
 export async function getAdminAppointmentsData({
   start,
@@ -38,8 +39,15 @@ export async function getAdminAppointmentsData({
         )
       )
     `);
-  if (start) appointmentsQuery = appointmentsQuery.gte('start_time', start);
-  if (end) appointmentsQuery = appointmentsQuery.lte('end_time', end);
+
+  // Apply inclusive date range filter
+  appointmentsQuery = applyDateRangeFilter(
+    appointmentsQuery,
+    'start_time',
+    start,
+    end,
+  );
+
   const { data: rawAppointments, error: appointmentsError } =
     await appointmentsQuery;
   if (appointmentsError) throw new Error(appointmentsError.message);

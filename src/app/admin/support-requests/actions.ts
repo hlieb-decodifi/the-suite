@@ -1,6 +1,7 @@
 'use server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { SupportRequest } from '@/types/support_requests';
+import { applyDateRangeFilter } from '@/utils/dateFilter';
 
 export async function fetchAdminSupportRequests({
   start,
@@ -35,8 +36,10 @@ export async function fetchAdminSupportRequests({
     `,
     )
     .order('created_at', { ascending: false });
-  if (start) query = query.gte('created_at', start);
-  if (end) query = query.lte('created_at', end);
+
+  // Apply inclusive date range filter
+  query = applyDateRangeFilter(query, 'created_at', start, end);
+
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   // Map nulls to undefined for optional fields

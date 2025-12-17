@@ -76,33 +76,6 @@ export async function getAdminDashboardData({
   };
 }
 
-// Fetch appointments data (direct query)
-export async function getAdminAppointmentsData({
-  startDate,
-  endDate,
-  client,
-  professional,
-  sortDirection = 'asc',
-}: {
-  startDate?: string;
-  endDate?: string;
-  client?: string;
-  professional?: string;
-  sortDirection?: 'asc' | 'desc';
-}) {
-  const adminSupabase = await createAdminClient();
-  let query = adminSupabase.from('appointments').select('*');
-  if (startDate) query = query.gte('date', startDate);
-  if (endDate) query = query.lte('date', endDate);
-  if (client) query = query.eq('client', client);
-  if (professional) query = query.eq('professional', professional);
-  query = query.order('date', { ascending: sortDirection === 'asc' });
-  query = query.order('time', { ascending: sortDirection === 'asc' });
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return data;
-}
-
 export async function AdminDashboardPageLayout({
   children,
 }: {
