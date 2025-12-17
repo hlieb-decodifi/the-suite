@@ -54,21 +54,11 @@ export async function GET(request: NextRequest) {
         );
 
         // Calculate amount to capture based on payment type
-        let totalCaptureAmount: number;
-
-        if (payment.payment_type === 'deposit') {
-          // For deposit payments, capture the balance amount + tip
-          totalCaptureAmount = payment.balance_amount + payment.tip_amount;
-          console.log(
-            `[CRON] Deposit payment detected - capturing balance: $${payment.balance_amount / 100} + tip: $${payment.tip_amount / 100} = $${totalCaptureAmount / 100}`,
-          );
-        } else {
-          // For full payments, capture the full amount + tip
-          totalCaptureAmount = payment.amount + payment.tip_amount;
-          console.log(
-            `[CRON] Full payment detected - capturing total: $${payment.amount / 100} + tip: $${payment.tip_amount / 100} = $${totalCaptureAmount / 100}`,
-          );
-        }
+        // The balance_amount is the total remaining amount to be captured, including services and tips.
+        const totalCaptureAmount = payment.balance_amount;
+        console.log(
+          `[CRON] Payment detected - capturing balance: $${payment.balance_amount / 100}`,
+        );
 
         // Capture the payment intent
         const result = await capturePaymentIntent(
