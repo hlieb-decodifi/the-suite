@@ -81,10 +81,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Mark payment as captured in database
-        const updateResult = await markPaymentCaptured(
-          payment.id,
-          result.capturedAmount || totalCaptureAmount,
-        );
+        const updateResult = await markPaymentCaptured(payment.id);
 
         if (!updateResult.success) {
           throw new Error(
