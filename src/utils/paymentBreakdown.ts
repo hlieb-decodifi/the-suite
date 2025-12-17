@@ -58,25 +58,32 @@ export function calculatePaymentBreakdown({
   const depositAmount = bookingPayment.deposit_amount ?? 0;
   const balanceAmount = bookingPayment.balance_amount ?? 0;
 
-  let deposit = depositAmount;
-  let balance = balanceAmount;
+  // `balance_amount` from the database includes tips. For the breakdown, we separate them.
+  const balanceWithoutTips = balanceAmount - tips;
 
-  // When service fee is excluded (for professionals)
+  let deposit = depositAmount;
+  let balance = balanceWithoutTips;
+
+  // For the professional's view, we must deduct the service fee from their earnings.
   if (!includeServiceFee) {
-    // If there's a deposit, deduct the fee from deposit
-    if (depositAmount > 0) {
-      deposit = depositAmount - serviceFee;
-      // Ensure deposit doesn't go negative
-      deposit = Math.max(0, deposit);
-    } else {
-      // If no deposit, deduct the fee from balance
-      balance = balanceAmount - serviceFee;
-      // Ensure balance doesn't go negative
-      balance = Math.max(0, balance);
+    let feeToDeduct = serviceFee;
+
+    // Prioritize deducting fee from deposit.
+    const feeFromDeposit = Math.min(deposit, feeToDeduct);
+    deposit -= feeFromDeposit;
+    feeToDeduct -= feeFromDeposit;
+
+    // Deduct any remaining fee from the balance.
+    if (feeToDeduct > 0) {
+      balance -= feeToDeduct;
     }
+
+    // Ensure values don't go negative.
+    deposit = Math.max(0, deposit);
+    balance = Math.max(0, balance);
   }
 
-  // Calculate total based on deposit, balance, and tips
+  // The final total is the sum of the adjusted components.
   const total = deposit + balance + tips;
 
   // Format as currency if requested
