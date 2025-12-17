@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         );
 
         // Calculate amount to capture based on payment type
-        // For deposit payments, capture the balance amount + tip
+        // The balance_amount is the total remaining amount to be captured, including services and tips.
         const totalCaptureAmount = payment.balance_amount;
         console.log(
           `[CRON] Payment detected - capturing balance: $${payment.balance_amount / 100}`,
