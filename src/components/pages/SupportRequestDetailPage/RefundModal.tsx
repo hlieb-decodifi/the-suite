@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DollarSign, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { initiateRefundServerAction } from '@/server/domains/support-requests/server-actions';
+import { calculatePaymentBreakdown } from '@/utils/paymentBreakdown';
 
 type RefundModalProps = {
   isOpen: boolean;
@@ -42,24 +43,43 @@ export const RefundModal: React.FC<RefundModalProps> = ({
   onSuccess,
   paymentDetails,
 }) => {
-  // Calculate maximum refundable amount based on payment method
-  const calculateMaxRefundableAmount = () => {
-    if (!paymentDetails) return originalAmount;
+  // Calculate payment breakdown (without service fee for professional view)
+  const paymentBreakdown = useMemo(() => {
+    if (!paymentDetails) return null;
 
-    const isOnlinePayment = paymentDetails.isOnlinePayment ?? true; // Default to online if not specified
+    const tipAmount = paymentDetails.tipAmount ?? 0;
+
+    return calculatePaymentBreakdown({
+      bookingServices: [],
+      bookingPayment: {
+        tip_amount: tipAmount,
+        service_fee: paymentDetails.serviceFee ?? 0,
+        deposit_amount: paymentDetails.depositAmount ?? 0,
+        balance_amount: paymentDetails.balanceAmount ?? 0,
+      },
+      includeServiceFee: false, // Professional view - exclude service fee
+      formatAsCurrency: false,
+    });
+  }, [paymentDetails]);
+
+  // Calculate maximum refundable amount (what professional sees and can refund)
+  const calculateMaxRefundableAmount = () => {
+    if (!paymentDetails || !paymentBreakdown) return originalAmount;
+
+    const isOnlinePayment = paymentDetails.isOnlinePayment ?? true;
 
     if (isOnlinePayment) {
-      // For card payments: can refund full amount (deposit + balance + tips)
-      return originalAmount;
+      // For card payments: professional sees total without service fee
+      return paymentBreakdown.total as number;
     } else {
-      // For cash payments: can only refund amounts charged online (deposit + service fee)
-      const depositAmount = paymentDetails.depositAmount ?? 0;
-      const serviceFee = paymentDetails.serviceFee ?? 0;
-      return depositAmount + serviceFee;
+      // For cash payments: can only refund amounts charged online (deposit - excluding service fee portion)
+      const deposit = paymentBreakdown.deposit as number;
+      return deposit;
     }
   };
 
   const maxRefundableAmount = calculateMaxRefundableAmount();
+  const serviceFee = paymentDetails?.serviceFee ?? 0;
 
   const [refundAmount, setRefundAmount] = useState(
     maxRefundableAmount.toString(),
@@ -75,8 +95,7 @@ export const RefundModal: React.FC<RefundModalProps> = ({
     if (isNaN(amount) || amount <= 0 || amount > maxRefundableAmount) {
       const paymentType =
         paymentDetails?.isOnlinePayment === false ? 'cash' : 'card';
-      const additionalInfo =
-        paymentType === 'cash' ? ' (deposit + service fee only)' : '';
+      const additionalInfo = paymentType === 'cash' ? ' (deposit only)' : '';
       toast({
         title: 'Invalid Amount',
         description: `Refund amount must be between $0.01 and $${maxRefundableAmount.toFixed(2)}${additionalInfo}`,
@@ -97,10 +116,15 @@ export const RefundModal: React.FC<RefundModalProps> = ({
     try {
       setIsSubmitting(true);
 
+      // If professional is refunding the full amount, add service fee on top
+      // This ensures the client receives the full amount back
+      const isFullRefund = Math.abs(amount - maxRefundableAmount) < 0.01; // Using small epsilon for floating point comparison
+      const actualRefundAmount = isFullRefund ? amount + serviceFee : amount;
+
       // Create FormData for the server action
       const formData = new FormData();
       formData.append('support_request_id', supportRequestId);
-      formData.append('refund_amount', amount.toString());
+      formData.append('refund_amount', actualRefundAmount.toString());
       formData.append('professional_notes', refundReason.trim());
 
       console.log('Submitting refund request to server action');
@@ -192,45 +216,57 @@ export const RefundModal: React.FC<RefundModalProps> = ({
               <div className="pt-2 border-t border-border mt-2">
                 <h4 className="text-sm font-medium mb-2">Payment Breakdown</h4>
 
-                {paymentDetails?.baseAmount !== undefined && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground">
-                      Service Amount:
-                    </span>
-                    <span>${paymentDetails.baseAmount.toFixed(2)}</span>
-                  </div>
-                )}
+                {paymentBreakdown && (
+                  <>
+                    {(paymentBreakdown.servicesSubtotal as number) > 0 && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">
+                          Service Amount:
+                        </span>
+                        <span>
+                          $
+                          {(
+                            paymentBreakdown.servicesSubtotal as number
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
 
-                {paymentDetails?.depositAmount !== undefined &&
-                  paymentDetails.depositAmount > 0 && (
-                    <div className="flex justify-between items-center text-xs mt-1">
-                      <span className="text-muted-foreground">Deposit:</span>
-                      <span>${paymentDetails.depositAmount.toFixed(2)}</span>
-                    </div>
-                  )}
+                    {(paymentBreakdown.deposit as number) > 0 && (
+                      <div className="flex justify-between items-center text-xs mt-1">
+                        <span className="text-muted-foreground">Deposit:</span>
+                        <span>
+                          ${(paymentBreakdown.deposit as number).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
 
-                {paymentDetails?.tipAmount !== undefined &&
-                  paymentDetails.tipAmount > 0 && (
-                    <div className="flex justify-between items-center text-xs mt-1">
-                      <span className="text-muted-foreground">Tip:</span>
-                      <span>${paymentDetails.tipAmount.toFixed(2)}</span>
-                    </div>
-                  )}
+                    {(paymentBreakdown.tips as number) > 0 && (
+                      <div className="flex justify-between items-center text-xs mt-1">
+                        <span className="text-muted-foreground">Tips:</span>
+                        <span>
+                          ${(paymentBreakdown.tips as number).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
 
-                {paymentDetails?.serviceFee !== undefined &&
-                  paymentDetails.serviceFee > 0 && (
-                    <div className="flex justify-between items-center text-xs mt-1">
-                      <span className="text-muted-foreground">
-                        Service Fee:
+                    {(paymentBreakdown.balance as number) > 0 && (
+                      <div className="flex justify-between items-center text-xs mt-1">
+                        <span className="text-muted-foreground">Balance:</span>
+                        <span>
+                          ${(paymentBreakdown.balance as number).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center font-medium text-sm mt-2 pt-1 border-t border-border">
+                      <span>Total:</span>
+                      <span>
+                        ${(paymentBreakdown.total as number).toFixed(2)}
                       </span>
-                      <span>${paymentDetails.serviceFee.toFixed(2)}</span>
                     </div>
-                  )}
-
-                <div className="flex justify-between items-center font-medium text-sm mt-2 pt-1 border-t border-border">
-                  <span>Total Paid:</span>
-                  <span>${originalAmount.toFixed(2)}</span>
-                </div>
+                  </>
+                )}
 
                 <div className="flex justify-between items-center font-medium text-sm mt-1 text-primary">
                   <span>Max Refundable:</span>
@@ -247,9 +283,8 @@ export const RefundModal: React.FC<RefundModalProps> = ({
                   <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2 text-xs text-blue-800">
                     <p className="font-medium">Cash Payment Notice:</p>
                     <p>
-                      Only the deposit and service fee can be refunded as they
-                      were charged online. The service amount and tips were paid
-                      in cash.
+                      Only the deposit can be refunded as it was charged online.
+                      The service amount and tips were paid in cash.
                     </p>
                   </div>
                 )}
@@ -317,8 +352,9 @@ export const RefundModal: React.FC<RefundModalProps> = ({
             <Button
               onClick={handleSubmit}
               disabled={isSubmitting || !refundAmount || !refundReason.trim()}
-              className="min-w-[140px] bg-primary hover:bg-primary/90"
+              className="flex items-center justify-center gap-2 min-w-[140px] bg-primary hover:bg-primary/90"
             >
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               Initiate Refund
             </Button>
           </DialogFooter>
