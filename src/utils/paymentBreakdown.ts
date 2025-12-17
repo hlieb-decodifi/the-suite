@@ -6,19 +6,17 @@
 import { formatCurrency } from './formatCurrency';
 
 type PaymentBreakdownInput = {
-  bookingServices: Array<{ price: number }>;
   bookingPayment: {
-    tip_amount: number;
-    service_fee: number;
-    deposit_amount: number;
-    balance_amount: number;
+    tip_amount?: number | null;
+    service_fee?: number | null;
+    deposit_amount?: number | null;
+    balance_amount?: number | null;
   };
   includeServiceFee: boolean;
   formatAsCurrency?: boolean;
 };
 
 type PaymentBreakdownResult = {
-  servicesSubtotal: number | string;
   tips: number | string;
   serviceFee?: number | string;
   deposit: number | string;
@@ -29,7 +27,6 @@ type PaymentBreakdownResult = {
 /**
  * Calculates payment breakdown with proper service fee handling
  *
- * @param bookingServices - Array of booking services to calculate subtotal
  * @param bookingPayment - Booking payment data containing amounts and fees
  * @param includeServiceFee - Whether to include service fee in breakdown (true for clients, false for professionals)
  * @param formatAsCurrency - Whether to format numbers as currency strings
@@ -39,7 +36,6 @@ type PaymentBreakdownResult = {
  * ```typescript
  * // For client view (include service fee)
  * const breakdown = calculatePaymentBreakdown({
- *   bookingServices: services,
  *   bookingPayment: payment,
  *   includeServiceFee: true,
  *   formatAsCurrency: true
@@ -47,28 +43,20 @@ type PaymentBreakdownResult = {
  *
  * // For professional view (exclude service fee)
  * const breakdown = calculatePaymentBreakdown({
- *   bookingServices: services,
  *   bookingPayment: payment,
  *   includeServiceFee: false
  * });
  * ```
  */
 export function calculatePaymentBreakdown({
-  bookingServices,
   bookingPayment,
   includeServiceFee,
   formatAsCurrency = false,
 }: PaymentBreakdownInput): PaymentBreakdownResult {
-  // Calculate services subtotal
-  const servicesSubtotal = bookingServices.reduce(
-    (sum, service) => sum + service.price,
-    0,
-  );
-
-  const tips = bookingPayment.tip_amount;
-  const serviceFee = bookingPayment.service_fee;
-  const depositAmount = bookingPayment.deposit_amount;
-  const balanceAmount = bookingPayment.balance_amount;
+  const tips = bookingPayment.tip_amount ?? 0;
+  const serviceFee = bookingPayment.service_fee ?? 0;
+  const depositAmount = bookingPayment.deposit_amount ?? 0;
+  const balanceAmount = bookingPayment.balance_amount ?? 0;
 
   let deposit = depositAmount;
   let balance = balanceAmount;
@@ -88,13 +76,12 @@ export function calculatePaymentBreakdown({
     }
   }
 
-  // Calculate total
-  const total = balance + deposit + tips;
+  // Calculate total based on deposit, balance, and tips
+  const total = deposit + balance + tips;
 
   // Format as currency if requested
   if (formatAsCurrency) {
     const result: PaymentBreakdownResult = {
-      servicesSubtotal: formatCurrency(servicesSubtotal),
       tips: formatCurrency(tips),
       deposit: formatCurrency(deposit),
       balance: formatCurrency(balance),
@@ -110,7 +97,6 @@ export function calculatePaymentBreakdown({
 
   // Return as numbers
   const result: PaymentBreakdownResult = {
-    servicesSubtotal,
     tips,
     deposit,
     balance,

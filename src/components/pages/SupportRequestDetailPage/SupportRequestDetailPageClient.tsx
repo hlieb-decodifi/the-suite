@@ -272,7 +272,6 @@ export function SupportRequestDetailPageClient(
   });
 
   const paymentBreakdown = calculatePaymentBreakdown({
-    bookingServices: [],
     bookingPayment: payment || {},
     includeServiceFee: !isProfessional,
     formatAsCurrency: false,

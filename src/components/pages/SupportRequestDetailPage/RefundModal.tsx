@@ -47,12 +47,9 @@ export const RefundModal: React.FC<RefundModalProps> = ({
   const paymentBreakdown = useMemo(() => {
     if (!paymentDetails) return null;
 
-    const tipAmount = paymentDetails.tipAmount ?? 0;
-
     return calculatePaymentBreakdown({
-      bookingServices: [],
       bookingPayment: {
-        tip_amount: tipAmount,
+        tip_amount: paymentDetails.tipAmount ?? 0,
         service_fee: paymentDetails.serviceFee ?? 0,
         deposit_amount: paymentDetails.depositAmount ?? 0,
         balance_amount: paymentDetails.balanceAmount ?? 0,
@@ -218,19 +215,15 @@ export const RefundModal: React.FC<RefundModalProps> = ({
 
                 {paymentBreakdown && (
                   <>
-                    {(paymentBreakdown.servicesSubtotal as number) > 0 && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-muted-foreground">
-                          Service Amount:
-                        </span>
-                        <span>
-                          $
-                          {(
-                            paymentBreakdown.servicesSubtotal as number
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
+                    {paymentDetails?.baseAmount !== undefined &&
+                      paymentDetails.baseAmount > 0 && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">
+                            Service Amount:
+                          </span>
+                          <span>${paymentDetails.baseAmount.toFixed(2)}</span>
+                        </div>
+                      )}
 
                     {(paymentBreakdown.deposit as number) > 0 && (
                       <div className="flex justify-between items-center text-xs mt-1">

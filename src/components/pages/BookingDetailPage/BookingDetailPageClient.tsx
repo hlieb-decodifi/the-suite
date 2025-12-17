@@ -541,11 +541,16 @@ export function BookingDetailPageClient({
   const services = appointment.bookings.booking_services;
   const payment = appointment.bookings.booking_payments;
 
+  // Calculate services subtotal for display
+  const servicesTotal = services.reduce(
+    (sum, service) => sum + service.price,
+    0,
+  );
+
   // Calculate payment breakdown using utility
   // Clients see service fee included, professionals see it excluded
   const paymentBreakdown = payment
     ? calculatePaymentBreakdown({
-        bookingServices: services,
         bookingPayment: {
           tip_amount: payment.tip_amount,
           service_fee: payment.service_fee,
@@ -556,12 +561,6 @@ export function BookingDetailPageClient({
         formatAsCurrency: false,
       })
     : null;
-
-  // Legacy calculations for backward compatibility
-  const servicesTotal = services.reduce(
-    (sum, service) => sum + service.price,
-    0,
-  );
   const subtotal = servicesTotal;
   const serviceFee = payment?.service_fee ?? 0;
   const totalTips = payment?.tip_amount ?? 0;
@@ -907,11 +906,7 @@ export function BookingDetailPageClient({
                             Services Subtotal:
                           </Typography>
                           <Typography variant="small" className="font-medium">
-                            {formatCurrency(
-                              paymentBreakdown
-                                ? (paymentBreakdown.servicesSubtotal as number)
-                                : subtotal,
-                            )}
+                            {formatCurrency(servicesTotal)}
                           </Typography>
                         </div>
                         {paymentBreakdown?.serviceFee !== undefined && (
