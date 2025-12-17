@@ -679,9 +679,12 @@ export function SupportRequestDetailPageClient(
           onSuccess={() => handleModalSuccess(true)}
           paymentDetails={{
             baseAmount:
-              payment.amount -
-              (payment.deposit_amount || 0) -
-              (payment.service_fee || 0),
+              // payment.amount -
+              // (payment.deposit_amount || 0) -
+              // (payment.service_fee || 0),
+              payment.deposit_amount
+                ? payment.balance_amount
+                : payment.balance_amount - payment.service_fee,
             depositAmount: payment.deposit_amount || 0,
             tipAmount: payment.tip_amount || 0,
             serviceFee: payment.service_fee || 0,
