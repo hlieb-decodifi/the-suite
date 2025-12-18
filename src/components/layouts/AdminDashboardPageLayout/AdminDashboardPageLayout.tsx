@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/server';
+import { requireAdminUser } from '@/server/domains/admin/actions';
 import { AdminDashboardPageLayoutClient } from './AdminDashboardPageLayoutClient';
 import { DateRangeContextProvider } from './DateRangeContextProvider';
 
@@ -48,6 +49,12 @@ export async function getAdminDashboardData({
   startDate?: string | undefined;
   endDate?: string | undefined;
 }): Promise<DashboardData> {
+  // Check if current user is admin
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    throw new Error('Admin access required');
+  }
+
   const adminSupabase = createAdminClient();
   const params: { start_date?: string; end_date?: string } = {};
   if (startDate) params.start_date = startDate;

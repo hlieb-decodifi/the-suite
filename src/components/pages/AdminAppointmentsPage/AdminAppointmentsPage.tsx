@@ -1,6 +1,7 @@
 import { AdminAppointmentsPageClient } from './AdminAppointmentsPageClient';
 import { createAdminClient } from '@/lib/supabase/server';
 import { applyDateRangeFilter } from '@/utils/dateFilter';
+import { requireAdminUser } from '@/server/domains/admin/actions';
 
 export async function getAdminAppointmentsData({
   start,
@@ -9,6 +10,12 @@ export async function getAdminAppointmentsData({
   start?: string | undefined;
   end?: string | undefined;
 }) {
+  // Check if current user is admin
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    throw new Error('Admin access required');
+  }
+
   const adminSupabase = createAdminClient();
   // Build the query with nested selects
   let appointmentsQuery = adminSupabase.from('appointments').select(`
