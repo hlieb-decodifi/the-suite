@@ -6,7 +6,7 @@ import { CalendarDays } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { ProfessionalDetailsModal } from '@/components/modals/ProfessionalDetailsModal/ProfessionalDetailsModal';
 
-import type { ProfessionalDetails as ServerProfessionalDetails } from '@/lib/admin/fetchProfessionalDetails';
+import type { ProfessionalDetails as ServerProfessionalDetails } from '@/server/domains/professionals/db';
 
 // Helper to call server action from client
 async function fetchProfessionalDetailsFromServer(userId: string) {
