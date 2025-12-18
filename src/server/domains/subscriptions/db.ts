@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Database utilities for subscription management.
+ *
+ * @security IMPORTANT - Functions in this file use admin client to bypass RLS.
+ * - `updatePlanPriceInDb` - Called ONLY by Stripe webhooks (verified signature)
+ * - `getActivePlansFromDb` - Read-only public data (safe for public use)
+ * - `getPlansWithStripePriceIds` - Called ONLY by webhook sync functions
+ * - `updateStripeConnectStatus` - Called by authenticated user actions and webhooks
+ * - `getStripeConnectStatusFromDb` - Called by authenticated user actions
+ *
+ * @module subscriptions/db
+ * @internal
+ */
+
 import { createAdminClient } from '@/lib/supabase/server';
 
 export type SubscriptionPlan = {
@@ -27,7 +41,12 @@ export type ProfessionalStripeConnect = {
   updated_at: string;
 };
 
-// Update a subscription plan price in the database
+/**
+ * @internal
+ * @webhook
+ * Update a subscription plan price in the database.
+ * Called ONLY by Stripe webhooks when price changes are detected.
+ */
 export async function updatePlanPriceInDb(
   stripePriceId: string,
   newPrice: number,
@@ -72,7 +91,10 @@ export async function updatePlanPriceInDb(
   };
 }
 
-// Get all active subscription plans
+/**
+ * Get all active subscription plans.
+ * This is READ-ONLY public data, safe for use in public-facing pages.
+ */
 export async function getActivePlansFromDb(): Promise<SubscriptionPlan[]> {
   const supabase = createAdminClient();
 
@@ -98,7 +120,12 @@ export async function getActivePlansFromDb(): Promise<SubscriptionPlan[]> {
   }));
 }
 
-// Get all plans with Stripe price IDs
+/**
+ * @internal
+ * @webhook
+ * Get all plans with Stripe price IDs for webhook sync.
+ * Called ONLY by webhook sync functions.
+ */
 export async function getPlansWithStripePriceIds(): Promise<
   { id: string; stripePriceId: string }[]
 > {
@@ -125,7 +152,12 @@ export async function getPlansWithStripePriceIds(): Promise<
     }));
 }
 
-// Update Stripe Connect status in database
+/**
+ * @internal
+ * Update Stripe Connect status in database.
+ * Called by authenticated user actions (onboarding) and webhook handlers.
+ * SECURITY: Caller must verify userId matches authenticated session user.
+ */
 export async function updateStripeConnectStatus(
   userId: string,
   status: {
@@ -178,7 +210,12 @@ export async function updateStripeConnectStatus(
   }
 }
 
-// Get Stripe Connect status from database
+/**
+ * @internal
+ * Get Stripe Connect status from database.
+ * Called by authenticated user actions to check their own Connect status.
+ * SECURITY: Caller must verify userId matches authenticated session user.
+ */
 export async function getStripeConnectStatusFromDb(userId: string): Promise<{
   isConnected: boolean;
   accountId?: string;

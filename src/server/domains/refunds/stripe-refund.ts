@@ -7,6 +7,19 @@ import { Database } from '@/../supabase/types';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 /**
+ * @fileoverview Stripe refund processing utilities.
+ *
+ * @security IMPORTANT - The main export `processStripeRefund` uses admin client.
+ * It is ONLY called by `initiateRefundServerAction` in support-requests/server-actions.ts
+ * which verifies that the authenticated user is the professional for the support request.
+ *
+ * DO NOT call `processStripeRefund` directly without proper authorization checks.
+ *
+ * @module refunds/stripe-refund
+ * @internal
+ */
+
+/**
  * Type definitions for refund processing
  */
 type RefundOperation = {
@@ -666,6 +679,18 @@ async function updateDatabaseAfterRefund(
  * @param supportRequestId The ID of the support request
  * @param refundAmount The amount to refund (in dollars)
  * @returns Success status and error message if applicable
+ */
+/**
+ * @internal
+ * Process a refund through Stripe for a support request.
+ *
+ * @security CRITICAL - This function uses admin client and bypasses RLS.
+ * Called ONLY by `initiateRefundServerAction` which verifies:
+ * - User is authenticated
+ * - User is the professional for the support request
+ * - Support request is in valid state for refund
+ *
+ * DO NOT call directly from user-facing code.
  */
 export async function processStripeRefund(
   supportRequestId: string,

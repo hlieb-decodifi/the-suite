@@ -1,3 +1,19 @@
+/**
+ * @fileoverview Internal database utilities for Stripe payment processing.
+ *
+ * @security IMPORTANT - All functions in this file use admin client to bypass RLS.
+ * These are internal utilities and should ONLY be called by authorized parent functions:
+ * - Stripe webhook handlers (cryptographically verified via signature)
+ * - Authorized server actions (verify user ownership before calling these)
+ * - Cron jobs (protected via API route authentication)
+ *
+ * DO NOT export these functions to client-facing code or call them directly from
+ * user-provided parameters without proper authorization checks.
+ *
+ * @module stripe-payments/db
+ * @internal
+ */
+
 import { createAdminClient } from '@/lib/supabase/server';
 import { formatDuration } from '@/utils/formatDuration';
 import type {
@@ -7,7 +23,11 @@ import type {
 } from './types';
 
 /**
- * Get professional profile data needed for payment processing
+ * @internal
+ * Get professional profile data needed for payment processing.
+ * Uses admin client to bypass RLS for payment operations.
+ *
+ * @security Only called by authorized payment functions that have verified user ownership.
  */
 export async function getProfessionalProfileForPayment(
   professionalProfileId: string,
@@ -60,7 +80,10 @@ export async function getProfessionalProfileForPayment(
 }
 
 /**
- * Enhanced payment calculation with deposit validation
+ * @internal
+ * Enhanced payment calculation with deposit validation.
+ *
+ * @security Read-only calculations, safe for use after user authorization.
  */
 export async function calculatePaymentAmounts(
   totalAmount: number, // in cents
@@ -146,7 +169,11 @@ export async function calculatePaymentAmounts(
 }
 
 /**
- * Create or update booking payment record with Stripe information
+ * @internal
+ * Create or update booking payment record with Stripe information.
+ * Uses admin client to bypass RLS for payment insert operations.
+ *
+ * @security Only called by authorized booking creation functions after validation.
  */
 export async function createBookingPaymentRecord(
   bookingId: string,
@@ -228,7 +255,9 @@ export async function updateBookingPaymentWithSession(
 }
 
 /**
- * Update booking payment with uncaptured payment intent for balance processing
+ * @internal
+ * Update booking payment with uncaptured payment intent for balance processing.
+ * Called by payment service after creating uncaptured intent.
  */
 export async function updateBookingPaymentWithUncapturedIntent(
   bookingId: string,
@@ -273,7 +302,9 @@ export async function updateBookingPaymentWithUncapturedIntent(
 }
 
 /**
- * Update booking payment with scheduled balance payment info (to be created later in webhook)
+ * @internal
+ * Update booking payment with scheduled balance payment info.
+ * Called by payment service to schedule balance collection.
  */
 export async function updateBookingPaymentWithScheduledBalance(
   bookingId: string,
@@ -313,7 +344,9 @@ export async function updateBookingPaymentWithScheduledBalance(
 }
 
 /**
- * Get booking payment by checkout session ID
+ * @internal
+ * Get booking payment by checkout session ID.
+ * Called by webhook handlers to find payment record.
  */
 export async function getBookingPaymentBySessionId(
   sessionId: string,
@@ -345,6 +378,8 @@ export async function getBookingPaymentBySessionId(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which sets status during initial insert.
  * This function is kept for backward compatibility with webhooks.
+ * @internal
+ * Called by webhooks and payment service functions.
  */
 export async function updateBookingPaymentStatus(
   bookingId: string,
@@ -389,6 +424,8 @@ export async function updateBookingPaymentStatus(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which calculates deposit/balance during initial insert.
  * This function is kept for backward compatibility with legacy code.
+ * @internal
+ * Called by payment service after Stripe session creation.
  */
 export async function updateBookingPaymentForStripe(
   bookingId: string,
@@ -431,7 +468,9 @@ export async function updateBookingPaymentForStripe(
 }
 
 /**
- * Delete a booking and all its related records (for cancelled checkouts)
+ * @internal
+ * Delete a booking and all its related records (for cancelled checkouts).
+ * Called by cancellation handlers and webhook cleanup.
  */
 export async function deleteBookingAndRelatedRecords(
   bookingId: string,
@@ -496,7 +535,9 @@ export async function deleteBookingAndRelatedRecords(
 }
 
 /**
- * Get or create a Stripe customer for a user
+ * @internal
+ * Get or create a Stripe customer for a user.
+ * Called by payment service during checkout creation.
  */
 export async function getOrCreateStripeCustomer(
   userId: string,
@@ -575,7 +616,9 @@ export async function getOrCreateStripeCustomer(
 }
 
 /**
- * Get Stripe customer ID for a user (if exists)
+ * @internal
+ * Get Stripe customer ID for a user (if exists).
+ * Called by payment processing and tip functions.
  */
 export async function getStripeCustomerId(
   userId: string,
@@ -601,8 +644,9 @@ export async function getStripeCustomerId(
 }
 
 /**
- * Save customer record from completed Stripe session
- * This is useful when a customer was created during checkout but we didn't save it to our DB
+ * @internal
+ * Save customer record from completed Stripe session.
+ * Called by webhook handlers when customer was created during checkout.
  */
 export async function saveCustomerFromStripeSession(
   userId: string,
@@ -645,7 +689,9 @@ export async function saveCustomerFromStripeSession(
 }
 
 /**
- * Update customer email in Stripe when user email changes
+ * @internal
+ * Update customer email in Stripe when user email changes.
+ * Called by user profile update handlers.
  */
 export async function updateStripeCustomerEmail(
   userId: string,
@@ -681,6 +727,8 @@ export async function updateStripeCustomerEmail(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which calculates schedule dates during initial insert.
  * This function is kept for backward compatibility with legacy code.
+ * @internal
+ * Called by payment service to schedule pre-auth and capture.
  */
 export async function updateBookingPaymentWithScheduling(
   bookingId: string,
@@ -728,7 +776,9 @@ export async function updateBookingPaymentWithScheduling(
 }
 
 /**
- * Get payments that need pre-authorization
+ * @internal
+ * Get payments that need pre-authorization.
+ * Called ONLY by cron job (src/app/api/cron/pre-auth-payments).
  */
 export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
   {
@@ -829,7 +879,9 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
 }
 
 /**
- * Get payments that need to be captured
+ * @internal
+ * Get payments that need to be captured.
+ * Called ONLY by cron job (src/app/api/cron/capture-payments).
  */
 export async function getPaymentsPendingCapture(limit: number = 50): Promise<
   {
@@ -896,7 +948,9 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
 }
 
 /**
- * Mark payment as pre-authorized
+ * @internal
+ * Mark payment as pre-authorized after successful authorization.
+ * Called ONLY by cron job (src/app/api/cron/pre-auth-payments).
  */
 export async function markPaymentPreAuthorized(
   paymentId: string,
@@ -932,7 +986,9 @@ export async function markPaymentPreAuthorized(
 }
 
 /**
- * Mark payment as captured
+ * @internal
+ * Mark payment as captured after successful capture.
+ * Called ONLY by cron job (src/app/api/cron/capture-payments).
  */
 export async function markPaymentCaptured(
   paymentId: string,
@@ -967,7 +1023,9 @@ export async function markPaymentCaptured(
 }
 
 /**
- * Get appointments needing balance notifications (includes both card and cash payments)
+ * @internal
+ * Get appointments needing balance notifications.
+ * Called ONLY by cron job (src/app/api/cron/balance-notifications).
  */
 export async function getAppointmentsNeedingBalanceNotification(
   limit: number = 50,
@@ -1257,7 +1315,9 @@ export async function getAppointmentsNeedingBalanceNotification(
 }
 
 /**
- * Mark balance notification as sent
+ * @internal
+ * Mark balance notification as sent to avoid duplicate emails.
+ * Called ONLY by cron job (src/app/api/cron/balance-notifications).
  */
 export async function markBalanceNotificationSent(
   bookingId: string,
@@ -1289,7 +1349,9 @@ export async function markBalanceNotificationSent(
 }
 
 /**
- * Update tip amount for a booking payment
+ * @internal
+ * Update tip amount for a booking payment.
+ * Called by tip service after successful tip payment.
  */
 export async function updatePaymentTipAmount(
   bookingId: string,
@@ -1322,7 +1384,9 @@ export async function updatePaymentTipAmount(
 }
 
 /**
- * Get booking details for payment confirmation emails
+ * @internal
+ * Get booking details for payment confirmation emails.
+ * Called by webhook handlers and email notification functions.
  */
 export async function getBookingDetailsForConfirmation(
   bookingId: string,
@@ -1451,6 +1515,8 @@ export async function getBookingDetailsForConfirmation(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which calculates the correct amount during initial insert.
  * This function is kept for backward compatibility with legacy code.
+ * @internal
+ * Called by payment service to adjust amounts for cash payments.
  */
 export async function updateBookingPaymentAmount(
   bookingId: string,

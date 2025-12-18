@@ -1,14 +1,13 @@
 'use server';
 
+import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
 import { revalidatePath } from 'next/cache';
 import {
   getProfileFromDb,
+  setCookieConsentInDb,
   toggleProfilePublishStatusInDb,
   updateProfileHeaderInDb,
-  updateSubscriptionStatusInDb,
-  setCookieConsentInDb,
 } from './db';
-import { headerFormSchema, publishToggleSchema } from '@/types/profiles';
 
 export async function getProfileAction(userId: string) {
   try {
@@ -67,23 +66,6 @@ export async function toggleProfilePublishStatusAction(
         error instanceof Error
           ? error.message
           : 'Failed to toggle publish status',
-    };
-  }
-}
-
-export async function updateSubscriptionStatusAction(userId: string) {
-  try {
-    await updateSubscriptionStatusInDb(userId);
-    revalidatePath('/profile');
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating subscription:', error);
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Failed to update subscription',
     };
   }
 }
