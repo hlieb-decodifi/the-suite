@@ -133,30 +133,54 @@ export async function createBooking(
       }
     }
 
-    // Get the main service details
+    // Verify the professional profile exists and is published
+    const { data: professionalProfile, error: profileError } = await supabase
+      .from('professional_profiles')
+      .select('id, is_published, user_id')
+      .eq('id', professionalProfileId)
+      .single();
+
+    if (profileError || !professionalProfile) {
+      throw new Error('Professional profile not found');
+    }
+
+    if (!professionalProfile.is_published) {
+      throw new Error('This professional is not currently accepting bookings');
+    }
+
+    // Get the main service details and verify it belongs to the professional
     const { data: mainService, error: mainServiceError } = await supabase
       .from('services')
-      .select('id, name, price, duration')
+      .select('id, name, price, duration, professional_profile_id')
       .eq('id', formData.serviceId)
+      .eq('professional_profile_id', professionalProfileId) // Security: Verify service belongs to professional
       .single();
 
     if (mainServiceError || !mainService) {
       throw new Error(
-        `Error getting main service: ${mainServiceError?.message}`,
+        'Service not found or does not belong to this professional',
       );
     }
 
-    // Get extra service durations
+    // Get extra service durations and verify they belong to the professional
     const extraServiceDurations: number[] = [];
     if (formData.extraServiceIds.length > 0) {
       const { data: extraServices, error: extraServicesError } = await supabase
         .from('services')
-        .select('duration')
-        .in('id', formData.extraServiceIds);
+        .select('duration, professional_profile_id')
+        .in('id', formData.extraServiceIds)
+        .eq('professional_profile_id', professionalProfileId); // Security: Verify all services belong to professional
 
       if (extraServicesError || !extraServices) {
         throw new Error(
           `Error fetching extra services: ${extraServicesError?.message}`,
+        );
+      }
+
+      // Verify all requested services were found (security check)
+      if (extraServices.length !== formData.extraServiceIds.length) {
+        throw new Error(
+          'Some selected services do not belong to this professional',
         );
       }
 
@@ -263,7 +287,10 @@ export async function createBooking(
         );
       }
 
-      // Insert main service into booking_services using admin client
+      // Insert main service into booking_services
+      // Note: Admin client is used because booking_services has RLS enabled but no insert policies
+      // This is intentional - only server-side code should insert services after validation
+      // The service has already been validated to belong to the professional above
       const { error: mainServiceInsertError } = await adminSupabase
         .from('booking_services')
         .insert({
@@ -281,12 +308,30 @@ export async function createBooking(
 
       // Insert extra services into booking_services
       if (formData.extraServiceIds.length > 0) {
-        const { data: extraServices } = await supabase
-          .from('services')
-          .select('id, price, duration')
-          .in('id', formData.extraServiceIds);
+        const { data: extraServices, error: fetchExtraServicesError } =
+          await supabase
+            .from('services')
+            .select('id, price, duration, professional_profile_id')
+            .in('id', formData.extraServiceIds)
+            .eq('professional_profile_id', professionalProfileId); // Security: Re-verify services belong to professional
 
-        if (extraServices && extraServices.length > 0) {
+        if (fetchExtraServicesError) {
+          throw new Error(
+            `Error fetching extra services: ${fetchExtraServicesError.message}`,
+          );
+        }
+
+        // Security check: Verify all requested services were found and belong to the professional
+        if (
+          !extraServices ||
+          extraServices.length !== formData.extraServiceIds.length
+        ) {
+          throw new Error(
+            'Some selected services do not belong to this professional',
+          );
+        }
+
+        if (extraServices.length > 0) {
           const extraServicesData = extraServices.map((service) => ({
             booking_id: booking.id,
             service_id: service.id,
@@ -308,6 +353,7 @@ export async function createBooking(
 
       // NOTE: booking_payments record creation moved to createBookingWithStripePayment
       // This allows all payment data to be calculated upfront before insertion
+      // Security fix: Prevents payment record manipulation by controlling creation server-side
 
       // Note: Confirmation emails are sent from Stripe webhook after payment confirmation
       // This ensures emails are only sent for successfully paid bookings

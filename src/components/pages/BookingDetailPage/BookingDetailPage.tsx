@@ -146,7 +146,7 @@ export async function BookingDetailPage({
     isAdmin = false;
   }
 
-  const appointment = await getAppointmentById(id, isAdmin);
+  const appointment = await getAppointmentById(id);
 
   // If appointment not found, redirect to not found page
   if (!appointment) {
@@ -162,12 +162,11 @@ export async function BookingDetailPage({
   }
 
   // Fetch existing support request for this appointment
-  const existingSupportRequest = await getExistingSupportRequest(id, isAdmin);
+  const existingSupportRequest = await getExistingSupportRequest(id);
 
   // Fetch review status for this appointment
   const reviewStatus = await getReviewStatusForAppointment(
     appointment.booking_id,
-    isAdmin,
   );
 
   return (
@@ -187,16 +186,40 @@ export async function BookingDetailPage({
 // Get appointment details by ID with enhanced data
 export async function getAppointmentById(
   appointmentId: string,
-  isAdmin: boolean = false,
 ): Promise<DetailedAppointmentType | null> {
   try {
-    // Use admin client for admin users, else regular client
-    const supabase = isAdmin
-      ? (await import('@/lib/supabase/server')).createAdminClient()
-      : await createClient();
+    // Verify admin status from session (don't trust parameters)
+    const regularClient = await createClient();
+    const {
+      data: { user: sessionUser },
+    } = await regularClient.auth.getUser();
 
-    // Fetch the appointment with all related data
-    const { data, error } = await supabase
+    if (!sessionUser) {
+      return null;
+    }
+
+    // Check if user is admin
+    let isAdmin = false;
+    try {
+      const { data: adminResult } = await regularClient.rpc('is_admin', {
+        user_uuid: sessionUser.id,
+      });
+      isAdmin = !!adminResult;
+    } catch {
+      isAdmin = false;
+    }
+
+    // Choose appropriate client based on verified admin status
+    let supabase;
+    if (isAdmin) {
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      supabase = createAdminClient();
+    } else {
+      supabase = regularClient;
+    }
+
+    // Build the query
+    const query = supabase
       .from('appointments_with_status')
       .select(
         `
@@ -315,8 +338,10 @@ export async function getAppointmentById(
         )
       `,
       )
-      .eq('id', appointmentId)
-      .single();
+      .eq('id', appointmentId);
+
+    // Execute the query
+    const { data, error } = await query.single();
 
     if (error) {
       console.error('Error fetching appointment:', error);
@@ -472,27 +497,51 @@ export async function getAppointmentById(
 // All appointment status updates now handled by server actions or BookingDetailPage/actions.ts
 
 // Get existing support request for an appointment
-async function getExistingSupportRequest(
-  appointmentId: string,
-  isAdmin: boolean = false,
-): Promise<{
+async function getExistingSupportRequest(appointmentId: string): Promise<{
   id: string;
   status: string;
   category?: string;
 } | null> {
   try {
-    // Use admin client for admin users, else regular client
-    const supabase = isAdmin
-      ? (await import('@/lib/supabase/server')).createAdminClient()
-      : await createClient();
+    // Verify admin status from session (don't trust parameters)
+    const regularClient = await createClient();
+    const {
+      data: { user: sessionUser },
+    } = await regularClient.auth.getUser();
 
-    const { data: supportRequest, error } = await supabase
+    if (!sessionUser) {
+      return null;
+    }
+
+    // Check if user is admin
+    let isAdmin = false;
+    try {
+      const { data: adminResult } = await regularClient.rpc('is_admin', {
+        user_uuid: sessionUser.id,
+      });
+      isAdmin = !!adminResult;
+    } catch {
+      isAdmin = false;
+    }
+
+    // Choose appropriate client based on verified admin status
+    let supabase;
+    if (isAdmin) {
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      supabase = createAdminClient();
+    } else {
+      supabase = regularClient;
+    }
+
+    // Build and execute the query
+    const query = supabase
       .from('support_requests')
       .select('id, status, title, created_at, category')
       .eq('appointment_id', appointmentId)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    const { data: supportRequest, error } = await query.single();
 
     if (error || !supportRequest) {
       return null;
@@ -510,10 +559,7 @@ async function getExistingSupportRequest(
 }
 
 // Get review status for a booking
-async function getReviewStatusForAppointment(
-  bookingId: string,
-  isAdmin: boolean = false,
-): Promise<{
+async function getReviewStatusForAppointment(bookingId: string): Promise<{
   canReview: boolean;
   hasReview: boolean;
   review: {
@@ -527,9 +573,9 @@ async function getReviewStatusForAppointment(
     const { getReviewStatus } = await import(
       '@/server/domains/reviews/actions'
     );
-    const result = await getReviewStatus(bookingId, isAdmin);
+    const result = await getReviewStatus(bookingId);
 
-    console.log('Review status result:', { bookingId, isAdmin, result });
+    console.log('Review status result:', { bookingId, result });
 
     if (result.success && result.reviewStatus) {
       return result.reviewStatus;
