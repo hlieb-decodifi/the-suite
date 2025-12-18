@@ -8,6 +8,7 @@ import { Typography } from '@/components/ui/typography';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay/LoadingOverlay';
 import { formatCurrency } from '@/utils';
 import { format } from 'date-fns';
+import { calculatePaymentBreakdown } from '@/utils/paymentBreakdown';
 import {
   ArrowLeft,
   Calendar,
@@ -268,6 +269,12 @@ export function SupportRequestDetailPageClient(
     appointment,
     payment,
     isPaidByCard,
+  });
+
+  const paymentBreakdown = calculatePaymentBreakdown({
+    bookingPayment: payment || {},
+    includeServiceFee: !isProfessional,
+    formatAsCurrency: false,
   });
 
   return (
@@ -566,7 +573,7 @@ export function SupportRequestDetailPageClient(
                   </div>
                 </div>
 
-                {payment && (
+                {payment && booking && (
                   <div>
                     <Typography
                       variant="small"
@@ -575,9 +582,7 @@ export function SupportRequestDetailPageClient(
                       Payment
                     </Typography>
                     <Typography className="font-medium">
-                      {formatCurrency(
-                        payment.amount + (payment.tip_amount || 0),
-                      )}
+                      {formatCurrency(paymentBreakdown.total as number)}
                     </Typography>
                     {payment.payment_methods && (
                       <Typography
@@ -669,7 +674,7 @@ export function SupportRequestDetailPageClient(
       </div>
 
       {/* Modals */}
-      {isProfessional && appointment && payment && (
+      {isProfessional && appointment && payment && booking && (
         <RefundModal
           isOpen={isRefundModalOpen}
           onClose={() => setIsRefundModalOpen(false)}
@@ -678,10 +683,14 @@ export function SupportRequestDetailPageClient(
           serviceName={serviceName}
           onSuccess={() => handleModalSuccess(true)}
           paymentDetails={{
-            baseAmount:
-              payment.amount -
-              (payment.deposit_amount || 0) -
-              (payment.service_fee || 0),
+            baseAmount: (() => {
+              // Calculate actual services total from booking_services
+              const bookingServices = booking.booking_services || [];
+              return bookingServices.reduce(
+                (sum: number, bs: { price: number }) => sum + bs.price,
+                0,
+              );
+            })(),
             depositAmount: payment.deposit_amount || 0,
             tipAmount: payment.tip_amount || 0,
             serviceFee: payment.service_fee || 0,

@@ -909,7 +909,6 @@ export async function markPaymentPreAuthorized(
  */
 export async function markPaymentCaptured(
   paymentId: string,
-  capturedAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createSupabaseAdminClient();
 
@@ -919,7 +918,7 @@ export async function markPaymentCaptured(
       .update({
         captured_at: new Date().toISOString(),
         status: 'completed',
-        amount: capturedAmount / 100, // Convert back to dollars
+        // amount: capturedAmount / 100, // Convert back to dollars
         capture_scheduled_for: null, // Clear the scheduled capture date
         updated_at: new Date().toISOString(),
       })

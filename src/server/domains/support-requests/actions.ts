@@ -476,6 +476,7 @@ export async function getSupportRequest(id: string): Promise<{
               tip_amount,
               service_fee,
               deposit_amount,
+              balance_amount,
               status,
               stripe_payment_intent_id,
               refunded_amount,

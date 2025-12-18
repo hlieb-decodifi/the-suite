@@ -317,7 +317,8 @@ export async function getDashboardAppointments(
         const tipAmount = bookingPayment?.tip_amount || 0;
 
         // Calculate total amount
-        const totalAmount = servicesTotal + serviceFee + tipAmount;
+        const totalAmount =
+          servicesTotal + tipAmount + (isProfessional ? 0 : serviceFee);
 
         // Get the first service details
         const firstService = bookingServices[0];
