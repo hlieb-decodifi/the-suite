@@ -1,1 +1,0 @@
-export { AdminAppointmentTestActions } from './AdminAppointmentTestActions';

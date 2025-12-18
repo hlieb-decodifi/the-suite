@@ -1,9 +1,8 @@
-import { Typography } from '@/components/ui/typography';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Clock } from 'lucide-react';
-import { format } from 'date-fns';
-import { AdminAppointmentTestActions } from '@/components/common/AdminAppointmentTestActions';
+import { Typography } from '@/components/ui/typography';
 import type { Appointment } from '@/types/appointments';
+import { format } from 'date-fns';
+import { CalendarDays, Clock } from 'lucide-react';
 
 type Props = {
   appointments: Appointment[];
@@ -28,7 +27,6 @@ export function AdminAppointmentsTemplate({
   onFilterClient,
   onFilterProfessional,
   onSortDirection,
-  onRefresh,
 }: Props) {
   // Helper to compute current status based on time
   function getComputedStatus(
@@ -170,7 +168,6 @@ export function AdminAppointmentsTemplate({
                   <th className="border px-2 py-1">Professional</th>
                   <th className="border px-2 py-1">Service</th>
                   <th className="border px-2 py-1">Status</th>
-                  <th className="border px-2 py-1 w-16">Test</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,17 +261,6 @@ export function AdminAppointmentsTemplate({
                           endTime={app.endTime}
                         />
                       </td>
-                      <td className="border px-2 py-1">
-                        <div
-                          className="flex justify-center"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <AdminAppointmentTestActions
-                            appointmentId={app.id}
-                            {...(onRefresh && { onUpdate: onRefresh })}
-                          />
-                        </div>
-                      </td>
                     </tr>
                   ))
                 )}
@@ -324,15 +310,6 @@ export function AdminAppointmentsTemplate({
                       </Typography>
                     </div>
                   </div>
-                </div>
-                <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                  <Typography variant="small" className="text-muted-foreground">
-                    Test Actions
-                  </Typography>
-                  <AdminAppointmentTestActions
-                    appointmentId={app.id}
-                    {...(onRefresh && { onUpdate: onRefresh })}
-                  />
                 </div>
               </div>
             ))}
