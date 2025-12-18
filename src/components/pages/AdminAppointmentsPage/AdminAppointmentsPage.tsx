@@ -9,7 +9,7 @@ export async function getAdminAppointmentsData({
   start?: string | undefined;
   end?: string | undefined;
 }) {
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   // Build the query with nested selects
   let appointmentsQuery = adminSupabase.from('appointments').select(`
       id,

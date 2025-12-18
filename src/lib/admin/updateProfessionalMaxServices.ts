@@ -35,7 +35,7 @@ export async function updateProfessionalMaxServices(
   }
 
   // Use admin client for the update
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   // Find professional profile by userId
   const { data: profile, error: profileError } = await adminSupabase
     .from('professional_profiles')

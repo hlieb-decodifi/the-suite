@@ -1,15 +1,8 @@
 import { stripe } from '@/lib/stripe/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type { Stripe } from 'stripe';
 import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
 import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
-
-function createSupabaseAdminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
+import { createAdminClient } from '@/lib/supabase/server';
 
 /**
  * Create a Stripe checkout session for booking payment
@@ -1275,7 +1268,7 @@ export async function createUncapturedPayment(
   appointmentStartTime: string,
   appointmentEndTime: string,
 ): Promise<Stripe.PaymentIntent> {
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
 
   console.log('Creating IMMEDIATE uncaptured payment for booking:', bookingId);
   console.log('Appointment times:', {
@@ -1357,7 +1350,9 @@ export async function createUncapturedPayment(
       capture_scheduled_for: captureTime.toISOString(), // Capture at appointment end time
       pre_auth_scheduled_for: null, // NULL - no scheduling needed, it's immediate
       pre_auth_placed_at: new Date().toISOString(), // Set now since auth is placed immediately
-      authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      authorization_expires_at: new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000,
+      ).toISOString(), // 7 days from now
       stripe_payment_intent_id: paymentIntent.id,
       status: 'authorized',
     })
@@ -1520,7 +1515,7 @@ export async function createPaymentForBooking(
   appointmentStartTime: string,
   appointmentEndTime: string,
 ): Promise<Stripe.PaymentIntent> {
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
 
   console.log('Creating payment for booking:', bookingId);
   console.log('Appointment times:', {
@@ -1550,7 +1545,7 @@ export async function createPaymentForBooking(
   }
 
   // If should_pre_auth_now is true, use uncaptured payment
-  if (scheduleData[0].should_pre_auth_now) {
+  if (scheduleData[0]?.should_pre_auth_now) {
     console.log('Appointment is within 6 days, creating uncaptured payment');
     return createUncapturedPayment(
       bookingId,

@@ -14,7 +14,7 @@ export async function updateAppointmentTimesAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Check if user is admin
     const {

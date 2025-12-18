@@ -327,7 +327,7 @@ export async function initiateRefundServerAction(formData: FormData) {
     }
 
     // 3. Get and validate booking payment status
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Try to find booking payment from support request relationships
     if (supportRequest.booking_id) {
@@ -518,7 +518,7 @@ export async function resolveSupportRequestAction({
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     const {
       data: { user },
@@ -616,7 +616,7 @@ async function sendSupportRequestCreationEmail(
 ) {
   try {
     // Use admin client for auth operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get professional data using admin client
     const { data: professionalAuth, error: professionalAuthError } =
@@ -666,7 +666,7 @@ async function sendSupportRequestCreationEmail(
 async function sendSupportRequestResolvedEmails(supportRequestId: string) {
   try {
     // Use admin client for auth operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get support request data with booking and user info
     const { data: supportRequest, error: supportRequestError } =
@@ -776,7 +776,7 @@ async function sendSupportRequestRefundedEmails(
 ) {
   try {
     // Use admin client for auth operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get support request data with booking, appointment, and user info
     const { data: supportRequest, error: supportRequestError } =

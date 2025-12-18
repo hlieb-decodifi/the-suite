@@ -15,7 +15,7 @@ export async function getAdminAdminsData({
   sortDirection?: 'asc' | 'desc';
 }) {
   'use server';
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   // Get admin users by querying user_roles table
   const userRolesQuery = adminSupabase
     .from('user_roles')

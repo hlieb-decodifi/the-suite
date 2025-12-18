@@ -97,7 +97,7 @@ export async function createBooking(
   serviceFee: number;
 }> {
   const supabase = await createClient();
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
 
   try {
     // Get the current user

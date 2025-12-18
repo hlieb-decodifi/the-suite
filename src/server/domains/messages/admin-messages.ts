@@ -16,7 +16,7 @@ export async function getMessagesForAdmin(
     }
 
     // 2. Use admin client to fetch messages
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
     const { data: messagesData, error: messagesError } = await adminSupabase
       .from('messages')
       .select(`*, attachments:message_attachments(*)`)
