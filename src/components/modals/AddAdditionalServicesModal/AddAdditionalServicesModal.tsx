@@ -120,7 +120,6 @@ export function AddAdditionalServicesModal({
       const result = await addAdditionalServices({
         appointmentId,
         additionalServiceIds: selectedServiceIds,
-        professionalUserId,
       });
 
       if (result.success && result.newTotal && result.servicesAdded) {
