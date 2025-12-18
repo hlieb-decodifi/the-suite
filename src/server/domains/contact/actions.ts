@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 import {
   contactFormSchema,
@@ -41,35 +41,36 @@ export async function submitContactInquiry(
   formData: ContactFormData,
 ): Promise<ContactSubmissionResult> {
   try {
-    // Rate limiting check
-    const { headers } = await import('next/headers');
-    const headersList = await headers();
-    const { contactFormRateLimit, getClientIP } = await import(
-      '@/lib/rate-limit'
-    );
+    // Check authentication - only authenticated users can submit inquiries
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    const clientIP = getClientIP(headersList);
-    const rateLimitResult = await contactFormRateLimit.checkLimit(clientIP);
-
-    if (!rateLimitResult.success) {
-      const minutesUntilReset = Math.ceil(
-        (rateLimitResult.resetTime - Date.now()) / (1000 * 60),
-      );
-
+    if (!user) {
       return {
         success: false,
-        error: `Too many contact form submissions. Please try again in ${minutesUntilReset} minutes.`,
+        error: 'Please sign in to submit a contact inquiry.',
       };
     }
 
-    // Use service role client to bypass RLS issues
-    const serviceSupabase = createAdminClient();
+    // Check if user has exceeded daily limit (10 inquiries per day)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count, error: countError } = await supabase
+      .from('contact_inquiries')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', oneDayAgo);
 
-    // Also get current user from regular client for user_id
-    const regularSupabase = await createClient();
-    const {
-      data: { user },
-    } = await regularSupabase.auth.getUser();
+    if (countError) {
+      console.error('Error checking inquiry count:', countError);
+    } else if (count !== null && count >= 10) {
+      return {
+        success: false,
+        error:
+          'You have reached the maximum number of inquiries allowed per day (10). Please try again tomorrow.',
+      };
+    }
 
     // Validate form data
     const validatedData = contactFormSchema.parse(formData);
@@ -104,13 +105,11 @@ export async function submitContactInquiry(
       subject: validatedData.subject,
       message: validatedData.message,
       urgency: 'medium' as const, // Default urgency since it's not in the form anymore
-      user_id: user?.id || null,
-      user_agent:
-        typeof window !== 'undefined' ? window.navigator.userAgent : null,
+      user_id: user.id, // Now required - user is always authenticated
     };
 
-    // Insert inquiry into database using service role (bypasses RLS)
-    const { data: inquiry, error } = await serviceSupabase
+    // Insert inquiry into database (RLS will allow authenticated users)
+    const { data: inquiry, error } = await supabase
       .from('contact_inquiries')
       .insert(inquiryData)
       .select('id')
