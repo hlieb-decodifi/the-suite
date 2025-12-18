@@ -22,7 +22,7 @@ export async function fetchAdminSupportRequests({
   if (!isAdmin) throw new Error('You do not have admin access');
 
   // Fetch support requests with admin client (only fields needed for table)
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   let query = adminSupabase
     .from('support_requests')
     .select(

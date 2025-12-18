@@ -223,7 +223,7 @@ export async function deleteService({
   serviceId: string;
 }) {
   const supabase = await createClient();
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
 
   try {
     const profileId = await getProfessionalProfileId(userId);

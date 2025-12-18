@@ -1,5 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export type SubscriptionPlan = {
   id: string;
@@ -27,24 +26,6 @@ export type ProfessionalStripeConnect = {
   created_at: string;
   updated_at: string;
 };
-
-// Create a direct client using service role key for admin access
-function createAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createClient<Database>(supabaseUrl, supabaseServiceKey);
-}
 
 // Update a subscription plan price in the database
 export async function updatePlanPriceInDb(

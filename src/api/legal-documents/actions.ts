@@ -1,5 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export async function getLegalDocument(
@@ -28,14 +27,7 @@ export async function updateLegalDocument(
   content: string,
   effectiveDate: string,
 ) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error(
-      'Server configuration error: missing Supabase URL or Service Role Key',
-    );
-  }
-  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+  const adminSupabase = createAdminClient();
   const docType =
     type === 'terms'
       ? 'terms_and_conditions'

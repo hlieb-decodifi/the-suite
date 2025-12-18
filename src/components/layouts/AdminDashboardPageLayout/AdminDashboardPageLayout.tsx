@@ -48,7 +48,7 @@ export async function getAdminDashboardData({
   startDate?: string | undefined;
   endDate?: string | undefined;
 }): Promise<DashboardData> {
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   const params: { start_date?: string; end_date?: string } = {};
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;

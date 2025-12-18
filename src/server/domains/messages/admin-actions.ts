@@ -18,7 +18,7 @@ export async function getAllGeneralConversationsForAdmin({
   }
 
   // 2. Use admin client to fetch all conversations/messages
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   const { data: conversations, error } = await adminSupabase
     .from('conversations')
     .select('*')

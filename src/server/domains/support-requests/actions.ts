@@ -541,7 +541,7 @@ export async function closeSupportRequest({
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     const {
       data: { user },

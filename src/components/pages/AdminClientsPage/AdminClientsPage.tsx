@@ -8,7 +8,7 @@ export async function getAdminClientsData({
   start?: string | undefined;
   end?: string | undefined;
 }) {
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
   // Get client users by querying user_roles table
   const userRolesQuery = adminSupabase
     .from('user_roles')

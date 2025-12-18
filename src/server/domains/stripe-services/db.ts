@@ -1,29 +1,10 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
+import { createAdminClient } from '@/lib/supabase/server';
 import type {
-  ServiceWithStripe,
   ProfessionalProfileForStripe,
+  ServiceWithStripe,
   StripeProductStatus,
   StripeSyncStatus,
 } from './types';
-
-// Create admin client for operations that need elevated permissions
-function createSupabaseAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
-}
 
 /**
  * Get professional profile data needed for Stripe evaluation
@@ -31,7 +12,7 @@ function createSupabaseAdminClient() {
 export async function getProfessionalProfileForStripe(
   userId: string,
 ): Promise<ProfessionalProfileForStripe | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -80,7 +61,7 @@ export async function getProfessionalProfileForStripe(
 export async function professionalHasCreditCardPayment(
   professionalProfileId: string,
 ): Promise<boolean> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -117,7 +98,7 @@ export async function professionalHasCreditCardPayment(
 export async function getServicesPendingSync(
   limit: number = 50,
 ): Promise<ServiceWithStripe[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -145,7 +126,7 @@ export async function getServicesPendingSync(
 export async function getServicesForProfessional(
   professionalProfileId: string,
 ): Promise<ServiceWithStripe[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -180,7 +161,7 @@ export async function updateServiceStripeData(
     stripe_synced_at?: string | null;
   },
 ): Promise<boolean> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData = {
@@ -243,7 +224,7 @@ export async function markServiceSyncError(
 export async function markProfessionalServicesForSync(
   professionalProfileId: string,
 ): Promise<boolean> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -272,7 +253,7 @@ export async function markProfessionalServicesForSync(
 export async function getServiceWithStripeData(
   serviceId: string,
 ): Promise<ServiceWithStripe | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -299,7 +280,7 @@ export async function getServiceWithStripeData(
 export async function getServicesWithSyncErrors(
   limit: number = 100,
 ): Promise<ServiceWithStripe[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -342,7 +323,7 @@ export async function getStripeSyncStats(): Promise<{
   error: number;
   total: number;
 }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase

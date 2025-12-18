@@ -91,7 +91,7 @@ export async function createBooking(
   clientTimezone: string = 'UTC',
 ): Promise<{ bookingId: string; totalPrice: number }> {
   const supabase = await createClient();
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
 
   try {
     // Get the current user

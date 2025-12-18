@@ -4,8 +4,7 @@ import {
   updatePlanPriceInDb,
   updateStripeConnectStatus,
 } from '@/server/domains/subscriptions/db';
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
+import { createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { trackActivity } from '@/api/activity-log/actions';
 
@@ -36,24 +35,6 @@ type StripeSubscriptionWithPeriod = {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2023-10-16' as Stripe.LatestApiVersion,
 });
-
-// Create a direct client using service role key for admin access
-function createAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createClient<Database>(supabaseUrl, supabaseServiceKey);
-}
 
 // Centralized helper function to send booking confirmation emails
 async function sendConfirmationEmailsForBooking(

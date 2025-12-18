@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 import {
   contactFormSchema,
@@ -63,18 +63,7 @@ export async function submitContactInquiry(
     }
 
     // Use service role client to bypass RLS issues
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
-    }
-
-    const { createClient: createServiceClient } = await import(
-      '@supabase/supabase-js'
-    );
-    const serviceSupabase = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceRoleKey,
-    );
+    const serviceSupabase = createAdminClient();
 
     // Also get current user from regular client for user_id
     const regularSupabase = await createClient();

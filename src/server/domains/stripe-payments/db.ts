@@ -1,29 +1,10 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
-import type {
-  ProfessionalProfileForPayment,
-  PaymentCalculation,
-  BookingPaymentWithStripe,
-} from './types';
+import { createAdminClient } from '@/lib/supabase/server';
 import { formatDuration } from '@/utils/formatDuration';
-
-// Create admin client for operations that need elevated permissions
-function createSupabaseAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
-}
+import type {
+  BookingPaymentWithStripe,
+  PaymentCalculation,
+  ProfessionalProfileForPayment,
+} from './types';
 
 /**
  * Get professional profile data needed for payment processing
@@ -31,7 +12,7 @@ function createSupabaseAdminClient() {
 export async function getProfessionalProfileForPayment(
   professionalProfileId: string,
 ): Promise<ProfessionalProfileForPayment | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -173,7 +154,7 @@ export async function createBookingPaymentRecord(
   tipAmount: number = 0,
   stripeCheckoutSessionId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const paymentData = {
@@ -218,7 +199,7 @@ export async function updateBookingPaymentWithSession(
   bookingId: string,
   sessionId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -254,7 +235,7 @@ export async function updateBookingPaymentWithUncapturedIntent(
   balanceAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createSupabaseAdminClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase
       .from('booking_payments')
@@ -299,7 +280,7 @@ export async function updateBookingPaymentWithScheduledBalance(
   status: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createSupabaseAdminClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase
       .from('booking_payments')
@@ -335,7 +316,7 @@ export async function updateBookingPaymentWithScheduledBalance(
 export async function getBookingPaymentBySessionId(
   sessionId: string,
 ): Promise<BookingPaymentWithStripe | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -364,7 +345,7 @@ export async function updateBookingPaymentStatus(
   status: string,
   stripePaymentIntentId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData: Record<string, string> = {
@@ -404,7 +385,7 @@ export async function updateBookingPaymentForStripe(
   paymentCalculation: PaymentCalculation,
   stripeCheckoutSessionId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData = {
@@ -445,7 +426,7 @@ export async function updateBookingPaymentForStripe(
 export async function deleteBookingAndRelatedRecords(
   bookingId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Delete in reverse order of dependencies
@@ -511,7 +492,7 @@ export async function getOrCreateStripeCustomer(
   userId: string,
   userEmail?: string,
 ): Promise<{ success: boolean; customerId?: string; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // First, check if customer already exists in our database
@@ -589,7 +570,7 @@ export async function getOrCreateStripeCustomer(
 export async function getStripeCustomerId(
   userId: string,
 ): Promise<string | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -617,7 +598,7 @@ export async function saveCustomerFromStripeSession(
   userId: string,
   stripeCustomerId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Check if customer already exists
@@ -694,7 +675,7 @@ export async function updateBookingPaymentWithScheduling(
   shouldPreAuthNow: boolean,
   paymentIntentId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData: Record<string, string | number | null> = {
@@ -746,7 +727,7 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
     stripe_payment_method_id: string | null;
   }[]
 > {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -824,7 +805,7 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
     capture_scheduled_for: string;
   }[]
 > {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -875,7 +856,7 @@ export async function markPaymentPreAuthorized(
   paymentId: string,
   paymentIntentId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -910,7 +891,7 @@ export async function markPaymentPreAuthorized(
 export async function markPaymentCaptured(
   paymentId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -970,7 +951,7 @@ export async function getAppointmentsNeedingBalanceNotification(
     }[];
   }[]
 > {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Calculate the timestamp for 2 hours ago
@@ -1235,7 +1216,7 @@ export async function getAppointmentsNeedingBalanceNotification(
 export async function markBalanceNotificationSent(
   bookingId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -1268,7 +1249,7 @@ export async function updatePaymentTipAmount(
   bookingId: string,
   tipAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -1316,7 +1297,7 @@ export async function getBookingDetailsForConfirmation(
   };
   error?: string;
 }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Get booking with all related data
@@ -1425,7 +1406,7 @@ export async function updateBookingPaymentAmount(
   bookingId: string,
   amount: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase

@@ -2,10 +2,9 @@
 
 import { SignUpFormValues } from '@/components/forms/SignUpForm/schema';
 import { SignInFormValues } from '@/components/forms/SignInForm/schema';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const getURL = () => {
   let url =
@@ -34,17 +33,7 @@ const getURL = () => {
 async function userExistsByEmail(
   email: string,
 ): Promise<{ exists: boolean; error?: string }> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error(
-      'userExistsByEmail: Missing Supabase URL or Service Role Key.',
-    );
-    return { exists: false, error: 'Server configuration error' };
-  }
-
-  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+  const adminSupabase = createAdminClient();
 
   // Use the user_exists RPC function for efficient lookup
   const { data, error } = await adminSupabase.rpc('user_exists', {
@@ -80,24 +69,17 @@ export async function inviteAdminAction(
   }
 
   // Get Supabase admin client
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return { success: false, error: 'Server configuration error.' };
-  }
-  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+  const adminSupabase = createAdminClient();
 
   // Get admin role id
   const { data: rolesData, error: rolesError } = await adminSupabase
-    .from('roles')
+    .from('user_roles')
     .select('id')
-    .eq('name', 'admin')
+    .eq('role', 'admin')
     .single();
   if (rolesError || !rolesData?.id) {
     return { success: false, error: 'Could not find admin role id.' };
   }
-  const ADMIN_ROLE_ID = rolesData.id;
-
   // Use Supabase's inviteUserByEmail to invite the admin
   const { data: invitedUser, error: inviteError } =
     await adminSupabase.auth.admin.inviteUserByEmail(email, {
@@ -105,7 +87,6 @@ export async function inviteAdminAction(
         first_name: firstName,
         last_name: lastName,
         role: 'admin',
-        role_id: ADMIN_ROLE_ID,
       },
       redirectTo: `${getURL()}auth/set-password?type=admin_invite`,
     });
@@ -114,8 +95,22 @@ export async function inviteAdminAction(
     return { success: false, error: inviteError.message };
   }
 
+  // Create user_roles entry for the admin
+  if (invitedUser?.user?.id) {
+    const { error: roleError } = await adminSupabase.from('user_roles').insert({
+      user_id: invitedUser.user.id,
+      role: 'admin',
+    });
+
+    if (roleError) {
+      console.error('Error creating user_roles entry:', roleError);
+      // Don't fail the entire operation if role creation fails
+      // The user is already created, we just log the error
+    }
+  }
+
   // Revalidate the admin list page after successful invite
-  await revalidatePath('/admin/admins');
+  revalidatePath('/admin/admins');
 
   return { success: true, user: invitedUser };
 }
@@ -599,17 +594,7 @@ export async function convertOAuthToEmailAction(
     }
 
     // Use admin client to update user with email and password
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return {
-        success: false,
-        error: 'Server configuration error',
-      };
-    }
-
-    const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+    const adminSupabase = createAdminClient();
 
     // Update user with new email and password
     const { error: updateError } =

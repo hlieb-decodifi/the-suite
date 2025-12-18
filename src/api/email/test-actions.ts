@@ -107,7 +107,7 @@ export async function getEmailTemplates(): Promise<
     }
 
     // Use admin client for database operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     const { data: dbTemplates, error } = await adminSupabase
       .from('email_templates')
@@ -413,7 +413,7 @@ export async function syncBrevoTemplateParams(): Promise<{
     }
 
     // Use admin client for database operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get all email templates from database using admin client
     const { data: dbTemplates, error: dbError } = await adminSupabase
@@ -693,7 +693,7 @@ export async function sendTestEmail(
     }
 
     // Get template from database for the name using admin client
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
     const { data: dbTemplate, error } = await adminSupabase
       .from('email_templates')
       .select('name')

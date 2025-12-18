@@ -19,7 +19,7 @@ export type ProfessionalDetails = {
 export async function fetchProfessionalDetails(
   userId: string,
 ): Promise<ProfessionalDetails | null> {
-  const supabase = await createAdminClient();
+  const supabase = createAdminClient();
 
   // 1. Get user email from auth.users
   const { data: authUser, error: authError } =
