@@ -1,15 +1,14 @@
 import { toast } from '@/components/ui/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
+import type { HeaderFormValues, ProfileData } from '@/types/profiles';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getProfile,
+  setCookieConsent,
   toggleProfilePublishStatus,
   updateProfileHeader,
-  updateSubscriptionStatus,
-  setCookieConsent,
 } from './api';
-import type { HeaderFormValues, ProfileData } from '@/types/profiles';
 
 // Define query keys as constants for consistency
 export const QUERY_KEYS = {
@@ -123,56 +122,6 @@ export function useToggleProfilePublishStatus() {
       });
     },
     onSettled: (_, __, { userId }) => {
-      // Refetch after error or success
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile(userId) });
-    },
-  });
-}
-
-export function useUpdateSubscription() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (userId: string) => updateSubscriptionStatus(userId),
-    onMutate: async (userId) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.profile(userId) });
-
-      // Snapshot the previous value
-      const previousProfile = queryClient.getQueryData<ProfileData>(
-        QUERY_KEYS.profile(userId),
-      );
-
-      // Optimistically update to the new value
-      if (previousProfile) {
-        queryClient.setQueryData<ProfileData>(QUERY_KEYS.profile(userId), {
-          ...previousProfile,
-          isSubscribed: false,
-        });
-      }
-
-      return { previousProfile };
-    },
-    onError: (err, userId, context) => {
-      // If the mutation fails, roll back
-      if (context?.previousProfile) {
-        queryClient.setQueryData(
-          QUERY_KEYS.profile(userId),
-          context.previousProfile,
-        );
-      }
-
-      toast({
-        variant: 'destructive',
-        title: 'Error updating subscription',
-        description:
-          err instanceof Error ? err.message : 'An unexpected error occurred',
-      });
-    },
-    onSuccess: () => {
-      toast({ description: 'Subscription updated successfully.' });
-    },
-    onSettled: (_, __, userId) => {
       // Refetch after error or success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profile(userId) });
     },

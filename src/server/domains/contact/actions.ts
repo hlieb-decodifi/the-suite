@@ -165,15 +165,18 @@ export async function getContactInquiries(
   offset: number = 0,
 ) {
   try {
-    const supabase = await createClient();
-
-    // Check if user is admin
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error('Unauthorized');
+    // Check if current user is admin
+    const { requireAdminUser } = await import('@/server/domains/admin/actions');
+    const adminCheck = await requireAdminUser();
+    if (!adminCheck.success) {
+      return {
+        success: false,
+        error: 'Admin access required',
+        inquiries: [],
+      };
     }
+
+    const supabase = await createClient();
 
     // Build query
     let query = supabase
@@ -234,14 +237,27 @@ export async function updateContactInquiryStatus(
   adminNotes?: string,
 ) {
   try {
+    // Check if current user is admin
+    const { requireAdminUser } = await import('@/server/domains/admin/actions');
+    const adminCheck = await requireAdminUser();
+    if (!adminCheck.success) {
+      return {
+        success: false,
+        error: 'Admin access required',
+      };
+    }
+
     const supabase = await createClient();
 
-    // Check if user is admin
+    // Get current user for assigned_to field
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      throw new Error('Unauthorized');
+      return {
+        success: false,
+        error: 'Failed to get user information',
+      };
     }
 
     const updateData: Record<string, unknown> = {
