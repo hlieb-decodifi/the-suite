@@ -2581,9 +2581,8 @@ create table contact_inquiries (
   message text not null,
   urgency text not null default 'medium' check (urgency in ('low', 'medium', 'high')),
   status text not null default 'new' check (status in ('new', 'in_progress', 'resolved', 'closed')),
-  user_id uuid references auth.users(id),
+  user_id uuid references auth.users(id) not null, -- Required: only authenticated users can submit
   page_url text,
-  user_agent text,
   attachments jsonb default '[]'::jsonb,
   admin_notes text,
   assigned_to uuid references auth.users(id),
@@ -2604,9 +2603,10 @@ create index if not exists idx_contact_inquiries_assigned_to on contact_inquirie
 create policy "Users can view their own inquiries" on contact_inquiries
   for select using (user_id = auth.uid());
 
--- Anyone (including unauthenticated users) can create inquiries
-create policy "Anyone can create inquiries" on contact_inquiries
-  for insert with check (true);
+-- Only authenticated users can create inquiries
+-- Application enforces a limit of 10 inquiries per user per 24 hours
+create policy "Authenticated users can create inquiries" on contact_inquiries
+  for insert with check (auth.uid() = user_id);
 
 -- Admins can view all inquiries (assuming admins have a specific role)
 create policy "Admins can view all inquiries" on contact_inquiries
