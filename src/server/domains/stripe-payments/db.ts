@@ -71,7 +71,9 @@ export async function calculatePaymentAmounts(
   const { requires_deposit, deposit_type, deposit_value } = professionalProfile;
 
   // Get service fee from config
-  const { getServiceFeeFromConfig } = await import('@/server/lib/service-fee');
+  const { getServiceFeeFromConfig } = await import(
+    '@/server/domains/stripe-payments/config'
+  );
   const serviceFee = await getServiceFeeFromConfig();
 
   // Calculate service amount if not provided (backward compatibility)

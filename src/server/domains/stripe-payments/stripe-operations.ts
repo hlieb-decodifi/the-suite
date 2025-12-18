@@ -1,6 +1,6 @@
 import { stripe } from '@/lib/stripe/server';
 import type { Stripe } from 'stripe';
-import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
+import { getServiceFeeFromConfig } from '@/server/domains/stripe-payments/config';
 import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
 import { createAdminClient } from '@/lib/supabase/server';
 
@@ -91,7 +91,7 @@ export async function createStripeCheckoutSession(
 
       // NEW FEE STRUCTURE: Calculate professional fee (3%) and client service fee
       const { getProfessionalFeePercentage } = await import(
-        '@/server/lib/service-fee'
+        '@/server/domains/stripe-payments/config'
       );
       const professionalFeePercentage = await getProfessionalFeePercentage();
       const clientServiceFee = await getServiceFeeFromConfig();
@@ -208,7 +208,7 @@ export async function createBalancePaymentIntent(
     // NEW FEE STRUCTURE: Calculate professional fee (3%) on balance amount
     // Balance payment no longer includes client service fee (that's in deposit)
     const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const professionalFeePercentage = await getProfessionalFeePercentage();
     const professionalFee = Math.round(
@@ -303,6 +303,16 @@ export async function createUncapturedPaymentIntent(
   paymentMethodId?: string,
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
+    // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
+    // Client service fee was already charged with deposit
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/domains/stripe-payments/config'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
       currency: 'usd',
@@ -321,13 +331,6 @@ export async function createUncapturedPaymentIntent(
       // Connected account payment: Apply professional fee structure
       // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
       // Client service fee was already charged with deposit
-      const { getProfessionalFeePercentage } = await import(
-        '@/server/lib/service-fee'
-      );
-      const professionalFeePercentage = await getProfessionalFeePercentage();
-      const professionalFee = Math.round(
-        amount * (professionalFeePercentage / 100),
-      );
 
       if (amount > 0) {
         paymentIntentData.application_fee_amount = professionalFee;
@@ -834,7 +837,7 @@ export async function createEnhancedCheckoutSession(
       // Add transfer data only if this is not a service fee only payment
       if (!isServiceFeeOnly && chargeAmount > 0) {
         const { getProfessionalFeePercentage } = await import(
-          '@/server/lib/service-fee'
+          '@/server/domains/stripe-payments/config'
         );
         const professionalFeePercentage = await getProfessionalFeePercentage();
 
@@ -918,7 +921,7 @@ export async function createPaymentIntent(options: {
     // NEW FEE STRUCTURE: Apply professional fee (3%) only
     // This function is generic, so we check context to determine if client service fee applies
     const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const professionalFeePercentage = await getProfessionalFeePercentage();
     const professionalFee = Math.round(
@@ -1281,7 +1284,7 @@ export async function createUncapturedPayment(
 
   // NEW FEE STRUCTURE: Apply professional fee (3%) to uncaptured balance payments
   const { getProfessionalFeePercentage } = await import(
-    '@/server/lib/service-fee'
+    '@/server/domains/stripe-payments/config'
   );
   const professionalFeePercentage = await getProfessionalFeePercentage();
   const amountInCents = Math.round(amount * 100);
@@ -1447,7 +1450,7 @@ export async function createNoShowCharge(
 
     // NEW FEE STRUCTURE: Apply professional fee (3%) to no-show charges
     const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const professionalFeePercentage = await getProfessionalFeePercentage();
     const professionalFee = Math.round(
@@ -1582,7 +1585,7 @@ export async function createPaymentForBooking(
 
   // NEW FEE STRUCTURE: Apply professional fee (3%) to normal payment intents
   const { getProfessionalFeePercentage } = await import(
-    '@/server/lib/service-fee'
+    '@/server/domains/stripe-payments/config'
   );
   const professionalFeePercentage = await getProfessionalFeePercentage();
   const amountInCents = Math.round(amount * 100);

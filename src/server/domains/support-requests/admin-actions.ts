@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { requireAdminUser } from '@/server/lib/auth';
+import { requireAdminUser } from '@/server/domains/admin/actions';
 
 /**
  * Fetch all messages for a support request (admin only).
