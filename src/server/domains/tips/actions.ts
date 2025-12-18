@@ -80,8 +80,6 @@ export async function updateTipAction(
 export async function createPostAppointmentTipAction(
   bookingId: string,
   tipAmount: number,
-  professionalId: string,
-  clientId: string,
 ): Promise<{
   success: boolean;
   checkoutUrl?: string | null;
@@ -110,7 +108,7 @@ export async function createPostAppointmentTipAction(
       };
     }
 
-    // Verify the user owns this booking and it's completed
+    // Verify the user owns this booking and get professional details
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
       .select(
@@ -118,6 +116,9 @@ export async function createPostAppointmentTipAction(
         id,
         client_id,
         professional_profile_id,
+        professional_profiles!inner(
+          user_id
+        ),
         appointments(
           id,
           start_time,
@@ -136,7 +137,19 @@ export async function createPostAppointmentTipAction(
       };
     }
 
-    if (booking.client_id !== user.id || booking.client_id !== clientId) {
+    // Derive client_id and professional_id from database (not parameters)
+    const clientId = booking.client_id;
+    const professionalId = booking.professional_profiles?.user_id;
+
+    if (!professionalId) {
+      return {
+        success: false,
+        error: 'Professional not found for this booking',
+      };
+    }
+
+    // Verify the user owns this booking
+    if (booking.client_id !== user.id) {
       return {
         success: false,
         error: 'Unauthorized',

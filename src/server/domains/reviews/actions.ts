@@ -185,23 +185,17 @@ export async function submitReview(
 /**
  * Get review status for a booking
  */
-export async function getReviewStatus(
-  bookingId: string,
-  isAdmin: boolean = false,
-): Promise<{
+export async function getReviewStatus(bookingId: string): Promise<{
   success: boolean;
   reviewStatus?: ReviewStatus;
   error?: string;
 }> {
   try {
-    // Use admin client for admin queries to bypass RLS
-    const supabase = isAdmin ? createAdminClient() : await createClient();
-
-    // Get the current user (always from regular client for user context)
-    const userClient = await createClient();
+    // Get the current user from session
+    const regularClient = await createClient();
     const {
       data: { user },
-    } = await userClient.auth.getUser();
+    } = await regularClient.auth.getUser();
     if (!user) {
       return {
         success: false,
@@ -209,8 +203,27 @@ export async function getReviewStatus(
       };
     }
 
-    // First, get the appointment details to check review status
-    const { data: appointment, error: appointmentError } = await supabase
+    // Check if user is admin
+    let isAdmin = false;
+    try {
+      const { data: adminResult } = await regularClient.rpc('is_admin', {
+        user_uuid: user.id,
+      });
+      isAdmin = !!adminResult;
+    } catch {
+      isAdmin = false;
+    }
+
+    // Choose appropriate client based on verified admin status
+    let supabase;
+    if (isAdmin) {
+      supabase = createAdminClient();
+    } else {
+      supabase = regularClient;
+    }
+
+    // Build the query
+    const query = supabase
       .from('appointments')
       .select(
         `
@@ -235,8 +248,10 @@ export async function getReviewStatus(
         )
       `,
       )
-      .eq('booking_id', bookingId)
-      .single();
+      .eq('booking_id', bookingId);
+
+    // Execute the query
+    const { data: appointment, error: appointmentError } = await query.single();
 
     if (appointmentError || !appointment) {
       return {

@@ -474,7 +474,7 @@ export async function initiateRefundServerAction(formData: FormData) {
       updateData.professional_notes = professional_notes;
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminSupabase
       .from('support_requests')
       .update(updateData)
       .eq('id', support_request_id);
@@ -518,6 +518,7 @@ export async function resolveSupportRequestAction({
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
     const {
       data: { user },
@@ -540,7 +541,7 @@ export async function resolveSupportRequestAction({
       };
     }
 
-    // Get support request to check if user is the professional
+    // Get support request to check if user is the professional (using regular client for authorization)
     const { data: supportRequest, error: supportRequestError } = await supabase
       .from('support_requests')
       .select('*')
@@ -556,8 +557,8 @@ export async function resolveSupportRequestAction({
       };
     }
 
-    // Update the support request
-    const { error: updateError } = await supabase
+    // Update the support request using admin client (bypasses RLS)
+    const { error: updateError } = await adminSupabase
       .from('support_requests')
       .update({
         status: 'resolved',
@@ -615,7 +616,7 @@ async function sendSupportRequestCreationEmail(
 ) {
   try {
     // Use admin client for auth operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get professional data using admin client
     const { data: professionalAuth, error: professionalAuthError } =
@@ -665,7 +666,7 @@ async function sendSupportRequestCreationEmail(
 async function sendSupportRequestResolvedEmails(supportRequestId: string) {
   try {
     // Use admin client for auth operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get support request data with booking and user info
     const { data: supportRequest, error: supportRequestError } =
@@ -775,7 +776,7 @@ async function sendSupportRequestRefundedEmails(
 ) {
   try {
     // Use admin client for auth operations
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Get support request data with booking, appointment, and user info
     const { data: supportRequest, error: supportRequestError } =

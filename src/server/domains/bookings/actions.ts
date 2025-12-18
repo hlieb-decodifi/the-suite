@@ -5,7 +5,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
 import { handleDualPaymentCancellation } from './cancellation-helpers';
-import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
+import { getServiceFeeFromConfig } from '@/server/domains/stripe-payments/config';
 import { format, toZonedTime } from 'date-fns-tz';
 import {
   sendBookingCancellationNoShowClient,
@@ -22,8 +22,6 @@ import {
   AppointmentCompletion2hafterProfessionalParams,
 } from '@/providers/brevo/types';
 import { formatDuration } from '@/utils/formatDuration';
-
-// Using createAdminClient from @/lib/supabase/server
 
 /**
  * Format a UTC date/time for a specific timezone
@@ -1919,6 +1917,14 @@ export async function getCancellationPolicyAction(bookingId: string): Promise<{
   const supabase = await createClient();
 
   try {
+    // Get current user
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return { hasPolicy: false, error: 'Unauthorized' };
+    }
+
     const { data: booking, error } = await supabase
       .from('bookings')
       .select(
@@ -1928,8 +1934,10 @@ export async function getCancellationPolicyAction(bookingId: string): Promise<{
         professional_profiles!inner(
           cancellation_policy_enabled,
           cancellation_24h_charge_percentage,
-          cancellation_48h_charge_percentage
+          cancellation_48h_charge_percentage,
+          users!inner(id)
         ),
+        clients:users!client_id(id),
         booking_services(price)
       `,
       )
@@ -1946,6 +1954,16 @@ export async function getCancellationPolicyAction(bookingId: string): Promise<{
     }
 
     const professionalProfile = booking.professional_profiles;
+    const professionalUser = professionalProfile.users;
+    const clientUser = booking.clients;
+
+    // Check authorization - only the client or professional can view policy
+    const isProfessional = user.id === professionalUser.id;
+    const isClient = user.id === clientUser.id;
+
+    if (!isProfessional && !isClient) {
+      return { hasPolicy: false, error: 'Unauthorized' };
+    }
 
     if (!professionalProfile.cancellation_policy_enabled) {
       return { hasPolicy: false };

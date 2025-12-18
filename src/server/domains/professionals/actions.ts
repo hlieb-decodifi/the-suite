@@ -1,6 +1,5 @@
 'use server';
-import { updateProfessionalMaxServices } from '@/lib/admin/updateProfessionalMaxServices';
-import { fetchProfessionalDetails } from '@/lib/admin/fetchProfessionalDetails';
+import { updateProfessionalMaxServices, fetchProfessionalDetails } from './db';
 
 export async function updateProfessionalMaxServicesAction(
   userId: string,

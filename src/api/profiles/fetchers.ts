@@ -110,29 +110,30 @@ export async function updateUserDetails(
   return true;
 }
 
-// Create a new address
+// Create a new address using RPC function (bypasses RLS)
 export async function createAddress(
   addressData: AddressFormData,
 ): Promise<string | null> {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from('addresses')
-    .insert({
-      country: addressData.country,
-      state: addressData.state,
-      city: addressData.city,
-      street_address: addressData.streetAddress,
-    })
-    .select('id')
-    .single();
+  // Use the security definer RPC function to bypass RLS
+  const { data, error } = await supabase.rpc('insert_address_and_return_id', {
+    p_country: addressData.country,
+    p_state: addressData.state,
+    p_city: addressData.city,
+    p_street_address: addressData.streetAddress,
+    p_apartment: addressData.apartment ?? undefined,
+    p_latitude: addressData.latitude ?? undefined,
+    p_longitude: addressData.longitude ?? undefined,
+    p_google_place_id: addressData.googlePlaceId ?? undefined,
+  });
 
   if (error) {
     console.error('Error creating address:', error);
     return null;
   }
 
-  return data.id;
+  return data as string;
 }
 
 // Update existing address

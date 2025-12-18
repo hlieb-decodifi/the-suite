@@ -1,6 +1,8 @@
 import { AdminMessagesPageClient } from './AdminMessagesPageClient';
-import { getAllGeneralConversationsForAdmin } from '@/server/domains/messages/admin-actions';
-import { getMessagesForAdmin } from '@/server/domains/messages/admin-messages';
+import {
+  getAllGeneralConversationsForAdmin,
+  getMessagesForAdmin,
+} from '@/server/domains/messages/admin-actions';
 import { AdminConversation, ChatMessage } from '@/types/messages';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';

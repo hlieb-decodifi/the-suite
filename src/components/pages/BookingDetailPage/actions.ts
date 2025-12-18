@@ -20,15 +20,22 @@ type AppointmentWithBooking = {
 export async function updateAppointmentStatus(
   appointmentId: string,
   status: string,
-  userId: string,
-  isProfessional: boolean,
 ) {
   try {
     const supabase = await createClient();
-    const { createAdminClient } = await import('@/lib/supabase/server');
     const adminSupabase = createAdminClient();
 
-    // First verify that the user has permission to update this appointment
+    // Get authenticated user from session
+    const {
+      data: { user: sessionUser },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !sessionUser) {
+      throw new Error('Not authenticated');
+    }
+
+    // Fetch appointment with booking details to verify permissions
     const { data, error: fetchError } = await supabase
       .from('appointments')
       .select(
@@ -58,16 +65,15 @@ export async function updateAppointmentStatus(
     let canUpdate = false;
 
     if (appointmentData?.bookings) {
+      // Check if user is the professional for this appointment
       if (
-        isProfessional &&
         appointmentData.bookings.professionals &&
-        appointmentData.bookings.professionals.user_id === userId
+        appointmentData.bookings.professionals.user_id === sessionUser.id
       ) {
         canUpdate = true;
-      } else if (
-        !isProfessional &&
-        appointmentData.bookings.client_id === userId
-      ) {
+      }
+      // Check if user is the client for this appointment
+      else if (appointmentData.bookings.client_id === sessionUser.id) {
         canUpdate = true;
       }
     }
@@ -76,7 +82,7 @@ export async function updateAppointmentStatus(
       throw new Error('You do not have permission to update this appointment');
     }
 
-    // Update the appointment status using admin client since RLS policy was removed
+    // Update the appointment status using admin client after permission verification
     const { error: updateError } = await adminSupabase
       .from('appointments')
       .update({
@@ -105,7 +111,6 @@ export async function updateAppointmentStatus(
 export type AddAdditionalServicesParams = {
   appointmentId: string;
   additionalServiceIds: string[];
-  professionalUserId: string;
 };
 
 export type AddAdditionalServicesResult = {
@@ -123,7 +128,7 @@ export type AddAdditionalServicesResult = {
 /**
  * Add additional services to an existing appointment
  * This function:
- * 1. Validates the appointment belongs to the professional
+ * 1. Validates the appointment belongs to the authenticated professional
  * 2. Adds the new services to booking_services
  * 3. Updates payment amounts
  * 4. For card payments: Updates the uncaptured Stripe payment intent
@@ -132,18 +137,35 @@ export type AddAdditionalServicesResult = {
 export async function addAdditionalServices({
   appointmentId,
   additionalServiceIds,
-  professionalUserId,
 }: AddAdditionalServicesParams): Promise<AddAdditionalServicesResult> {
   try {
     console.log('[addAdditionalServices] Starting with params:', {
       appointmentId,
       additionalServiceIds,
-      professionalUserId,
     });
 
     const supabase = await createClient();
 
-    // First, verify the appointment belongs to this professional
+    // Get authenticated user from session
+    const {
+      data: { user: sessionUser },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !sessionUser) {
+      console.error(
+        '[addAdditionalServices] Authentication failed:',
+        authError,
+      );
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    console.log('[addAdditionalServices] Authenticated user:', sessionUser.id);
+
+    // Verify the appointment belongs to this professional
     const { data: appointment, error: appointmentError } = await supabase
       .from('appointments')
       .select(
@@ -209,17 +231,22 @@ export async function addAdditionalServices({
       };
     }
 
-    // Verify professional ownership
-    if (booking.professionals.user_id !== professionalUserId) {
+    // Verify professional ownership using authenticated session user
+    if (booking.professionals.user_id !== sessionUser.id) {
       console.error('[addAdditionalServices] Authorization failed:', {
         expectedUserId: booking.professionals.user_id,
-        actualUserId: professionalUserId,
+        actualUserId: sessionUser.id,
       });
       return {
         success: false,
         error: 'Not authorized to modify this appointment',
       };
     }
+
+    console.log(
+      '[addAdditionalServices] Authorization verified for professional:',
+      sessionUser.id,
+    );
 
     // Get the additional services details
     const { data: services, error: servicesError } = await supabase

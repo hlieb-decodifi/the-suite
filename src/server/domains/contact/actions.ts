@@ -41,28 +41,61 @@ export async function submitContactInquiry(
   formData: ContactFormData,
 ): Promise<ContactSubmissionResult> {
   try {
-    // Use service role client to bypass RLS issues
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-      throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
-    }
-
-    const { createClient: createServiceClient } = await import(
-      '@supabase/supabase-js'
-    );
-    const serviceSupabase = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceRoleKey,
-    );
-
-    // Also get current user from regular client for user_id
-    const regularSupabase = await createClient();
+    // Check authentication - only authenticated users can submit inquiries
+    const supabase = await createClient();
     const {
       data: { user },
-    } = await regularSupabase.auth.getUser();
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Please sign in to submit a contact inquiry.',
+      };
+    }
+
+    // Check if user has exceeded daily limit (10 inquiries per day)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count, error: countError } = await supabase
+      .from('contact_inquiries')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', oneDayAgo);
+
+    if (countError) {
+      console.error('Error checking inquiry count:', countError);
+    } else if (count !== null && count >= 10) {
+      return {
+        success: false,
+        error:
+          'You have reached the maximum number of inquiries allowed per day (10). Please try again tomorrow.',
+      };
+    }
 
     // Validate form data
     const validatedData = contactFormSchema.parse(formData);
+
+    // Additional server-side validation for security
+    if (validatedData.message.length > 5000) {
+      return {
+        success: false,
+        error: 'Message is too long. Please keep it under 5000 characters.',
+      };
+    }
+
+    if (validatedData.name.length > 200) {
+      return {
+        success: false,
+        error: 'Name is too long. Please keep it under 200 characters.',
+      };
+    }
+
+    if (validatedData.subject.length > 500) {
+      return {
+        success: false,
+        error: 'Subject is too long. Please keep it under 500 characters.',
+      };
+    }
 
     // Prepare inquiry data
     const inquiryData = {
@@ -72,13 +105,11 @@ export async function submitContactInquiry(
       subject: validatedData.subject,
       message: validatedData.message,
       urgency: 'medium' as const, // Default urgency since it's not in the form anymore
-      user_id: user?.id || null,
-      user_agent:
-        typeof window !== 'undefined' ? window.navigator.userAgent : null,
+      user_id: user.id, // Now required - user is always authenticated
     };
 
-    // Insert inquiry into database using service role (bypasses RLS)
-    const { data: inquiry, error } = await serviceSupabase
+    // Insert inquiry into database (RLS will allow authenticated users)
+    const { data: inquiry, error } = await supabase
       .from('contact_inquiries')
       .insert(inquiryData)
       .select('id')
@@ -133,15 +164,18 @@ export async function getContactInquiries(
   offset: number = 0,
 ) {
   try {
-    const supabase = await createClient();
-
-    // Check if user is admin
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error('Unauthorized');
+    // Check if current user is admin
+    const { requireAdminUser } = await import('@/server/domains/admin/actions');
+    const adminCheck = await requireAdminUser();
+    if (!adminCheck.success) {
+      return {
+        success: false,
+        error: 'Admin access required',
+        inquiries: [],
+      };
     }
+
+    const supabase = await createClient();
 
     // Build query
     let query = supabase
@@ -202,14 +236,27 @@ export async function updateContactInquiryStatus(
   adminNotes?: string,
 ) {
   try {
+    // Check if current user is admin
+    const { requireAdminUser } = await import('@/server/domains/admin/actions');
+    const adminCheck = await requireAdminUser();
+    if (!adminCheck.success) {
+      return {
+        success: false,
+        error: 'Admin access required',
+      };
+    }
+
     const supabase = await createClient();
 
-    // Check if user is admin
+    // Get current user for assigned_to field
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      throw new Error('Unauthorized');
+      return {
+        success: false,
+        error: 'Failed to get user information',
+      };
     }
 
     const updateData: Record<string, unknown> = {

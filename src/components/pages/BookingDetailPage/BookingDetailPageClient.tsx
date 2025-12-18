@@ -217,12 +217,7 @@ export function BookingDetailPageClient({
     try {
       // Import the function from the actions file
       const { updateAppointmentStatus } = await import('./actions');
-      const result = await updateAppointmentStatus(
-        appointment.id,
-        newStatus,
-        userId,
-        isProfessional,
-      );
+      const result = await updateAppointmentStatus(appointment.id, newStatus);
       if (result.success) {
         setAppointmentData((prev) => ({
           ...prev,

@@ -134,14 +134,6 @@ export async function toggleProfilePublishStatusInDb(
     throw new Error(`Profile publish status update error: ${error.message}`);
 }
 
-export async function updateSubscriptionStatusInDb(
-  userId: string,
-): Promise<void> {
-  // This would be implemented with actual subscription logic
-  // For now, we'll just simulate a successful operation
-  console.log(`Subscription updated for user ${userId}`);
-}
-
 export async function setCookieConsentInDb(
   userId: string,
   consent: boolean,

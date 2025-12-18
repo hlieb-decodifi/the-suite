@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { LeafletMap } from '@/components/common/LeafletMap';
 import { useActivityTracker } from '@/api/activity-log';
-import { getServiceFeeAction } from '@/server/lib/service-fee';
+import { getServiceFeeAction } from '@/server/domains/stripe-payments/config';
 
 export type BookingPageClientProps = {
   service: ServiceListItem;

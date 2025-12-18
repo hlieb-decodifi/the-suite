@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { BookingFormValues } from './schema';
 import { ServiceListItem } from '@/components/templates/ServicesTemplate/types';
-import { getServiceFeeAction } from '@/server/lib/service-fee';
+import { getServiceFeeAction } from '@/server/domains/stripe-payments/config';
 
 type UseCalculateTotalPriceProps = {
   service: ServiceListItem;

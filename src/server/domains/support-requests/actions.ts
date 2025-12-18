@@ -118,7 +118,6 @@ export async function getAdminSupportRequest(id: string): Promise<{
     };
   }
 }
-import { processStripeRefund } from '../refunds/stripe-refund';
 
 /**
  * Create a new support request
@@ -287,116 +286,6 @@ export async function createSupportRequest({
     };
   } catch (error) {
     console.error('Error in createSupportRequest:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-    };
-  }
-}
-
-/**
- * Initiate a refund for a support request
- */
-export async function initiateRefund({
-  support_request_id,
-  refund_amount,
-  professional_notes,
-}: {
-  support_request_id: string;
-  refund_amount: number;
-  professional_notes?: string;
-}): Promise<{ success: boolean; error?: string }> {
-  try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    console.log('user', user);
-
-    if (!user) {
-      return {
-        success: false,
-        error: 'Not authenticated',
-      };
-    }
-
-    // Validate UUID format
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(support_request_id)) {
-      return {
-        success: false,
-        error: 'Invalid support request ID format',
-      };
-    }
-
-    // Get support request
-    const { data: supportRequest, error: supportRequestError } = await supabase
-      .from('support_requests')
-      .select('*')
-      .eq('id', support_request_id)
-      .eq('professional_id', user.id)
-      .single();
-
-    if (supportRequestError || !supportRequest) {
-      console.error('Error fetching support request:', supportRequestError);
-      return {
-        success: false,
-        error: 'Support request not found or you do not have permission',
-      };
-    }
-
-    // Process the refund through Stripe
-    const { success, error: refundError } = await processStripeRefund(
-      support_request_id,
-      refund_amount,
-    );
-
-    if (!success) {
-      return {
-        success: false,
-        error: refundError || 'Failed to process refund',
-      };
-    }
-
-    // Only update professional notes if provided, since processStripeRefund already handled the main update
-    if (professional_notes) {
-      const { error: updateError } = await supabase
-        .from('support_requests')
-        .update({
-          professional_notes: professional_notes,
-        })
-        .eq('id', support_request_id);
-
-      if (updateError) {
-        console.error('Error updating support request notes:', updateError);
-        // Don't fail the entire operation for notes update failure
-      }
-    }
-
-    // Add a message to the conversation
-    if (supportRequest.conversation_id) {
-      const { error: messageError } = await supabase.from('messages').insert({
-        conversation_id: supportRequest.conversation_id,
-        sender_id: user.id,
-        content: `Refund of $${refund_amount.toFixed(2)} has been initiated. ${
-          professional_notes ? `Note: ${professional_notes}` : ''
-        }`,
-      });
-
-      if (messageError) {
-        console.error('Error creating refund message:', messageError);
-        // Don't return error as the refund was processed successfully
-      }
-    }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    console.error('Error in initiateRefund:', error);
     return {
       success: false,
       error: 'An unexpected error occurred',
@@ -643,103 +532,6 @@ export async function getSupportRequest(id: string): Promise<{
 }
 
 /**
- * Resolve a support request
- */
-export async function resolveSupportRequest({
-  support_request_id,
-  resolution_notes,
-}: {
-  support_request_id: string;
-  resolution_notes?: string;
-}): Promise<{ success: boolean; error?: string }> {
-  try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return {
-        success: false,
-        error: 'Not authenticated',
-      };
-    }
-
-    // Validate UUID format
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(support_request_id)) {
-      return {
-        success: false,
-        error: 'Invalid support request ID format',
-      };
-    }
-
-    // Get support request to check if user is the professional
-    const { data: supportRequest, error: supportRequestError } = await supabase
-      .from('support_requests')
-      .select('*')
-      .eq('id', support_request_id)
-      .eq('professional_id', user.id)
-      .single();
-
-    if (supportRequestError || !supportRequest) {
-      console.error('Error fetching support request:', supportRequestError);
-      return {
-        success: false,
-        error: 'Support request not found or you do not have permission',
-      };
-    }
-
-    // Update the support request
-    const { error: updateError } = await supabase
-      .from('support_requests')
-      .update({
-        status: 'resolved',
-        resolved_at: new Date().toISOString(),
-        resolved_by: user.id,
-        resolution_notes: resolution_notes || null,
-      })
-      .eq('id', support_request_id);
-
-    if (updateError) {
-      console.error('Error resolving support request:', updateError);
-      return {
-        success: false,
-        error: 'Failed to resolve support request',
-      };
-    }
-
-    // Add a message to the conversation
-    if (supportRequest.conversation_id) {
-      const { error: messageError } = await supabase.from('messages').insert({
-        conversation_id: supportRequest.conversation_id,
-        sender_id: user.id,
-        content: `Support request has been resolved. ${
-          resolution_notes ? `Resolution notes: ${resolution_notes}` : ''
-        }`,
-      });
-
-      if (messageError) {
-        console.error('Error creating resolution message:', messageError);
-        // Don't return error as the support request was resolved successfully
-      }
-    }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    console.error('Error in resolveSupportRequest:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-    };
-  }
-}
-
-/**
  * Close a support request (without resolving)
  */
 export async function closeSupportRequest({
@@ -749,6 +541,7 @@ export async function closeSupportRequest({
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
     const {
       data: { user },
@@ -771,7 +564,7 @@ export async function closeSupportRequest({
       };
     }
 
-    // Get support request to check if user is the professional
+    // Get support request to check if user is the professional (using regular client for authorization)
     const { data: supportRequest, error: supportRequestError } = await supabase
       .from('support_requests')
       .select('*')
@@ -787,8 +580,8 @@ export async function closeSupportRequest({
       };
     }
 
-    // Update the support request
-    const { error: updateError } = await supabase
+    // Update the support request using admin client (bypasses RLS)
+    const { error: updateError } = await adminSupabase
       .from('support_requests')
       .update({
         status: 'closed',

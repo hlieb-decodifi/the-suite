@@ -1,28 +1,9 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
+import { createAdminClient } from '@/lib/supabase/server';
 import {
   sendBookingConfirmationClient,
   sendBookingConfirmationProfessional,
 } from '@/providers/brevo/templates';
 import { format, toZonedTime } from 'date-fns-tz';
-
-// Create admin client for operations that need elevated permissions
-function createSupabaseAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
-}
 
 // No longer using in-memory tracking - using database instead
 
@@ -85,7 +66,7 @@ async function generateMessageURL(
   targetUserId: string,
 ): Promise<string> {
   try {
-    const adminSupabase = createSupabaseAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Determine who is client and who i`s professional
     const { data: isCurrentUserClient } = await adminSupabase.rpc('is_client', {
@@ -198,7 +179,7 @@ export async function sendBookingConfirmationEmails(
     });
 
     console.log('📊 Creating admin Supabase client...');
-    const adminSupabase = createSupabaseAdminClient();
+    const adminSupabase = createAdminClient();
 
     // Use atomic update to prevent race conditions - try to claim the right to send emails
     const { data: updateResult, error: updateError } = await adminSupabase

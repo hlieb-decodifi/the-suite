@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -435,8 +435,7 @@ export type Database = {
           subject: string
           updated_at: string
           urgency: string
-          user_agent: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           admin_notes?: string | null
@@ -454,8 +453,7 @@ export type Database = {
           subject: string
           updated_at?: string
           urgency?: string
-          user_agent?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           admin_notes?: string | null
@@ -473,8 +471,7 @@ export type Database = {
           subject?: string
           updated_at?: string
           urgency?: string
-          user_agent?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }

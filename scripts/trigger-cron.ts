@@ -24,13 +24,10 @@ async function triggerCronJob(
 ) {
   const baseUrls = {
     local: 'http://localhost:3000',
-    staging:
-      process.env.STAGING_URL ||
-      'https://the-suite-git-develop-decodifi.vercel.app',
-    production: process.env.PRODUCTION_URL || 'https://your-production-url.com',
+    staging: process.env.STAGING_URL,
+    production: process.env.PRODUCTION_URL,
   };
 
-  const baseUrl = baseUrls[environment];
   // Use environment variable for local development
   const cronSecret = process.env.CRON_SECRET;
 
@@ -38,6 +35,8 @@ async function triggerCronJob(
     console.error('❌ CRON_SECRET environment variable is required');
     process.exit(1);
   }
+
+  const baseUrl = baseUrls[environment];
 
   if (!baseUrl) {
     console.error(

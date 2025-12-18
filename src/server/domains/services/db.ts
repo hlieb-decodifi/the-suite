@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { ServiceDB } from '@/types/services';
 
 export type Service = ServiceDB;
@@ -223,11 +223,12 @@ export async function deleteService({
   serviceId: string;
 }) {
   const supabase = await createClient();
+  const adminSupabase = createAdminClient();
 
   try {
     const profileId = await getProfessionalProfileId(userId);
 
-    // First check if service exists and belongs to user
+    // First check if service exists and belongs to user (using regular client for auth)
     const { data: serviceData, error: checkError } = await supabase
       .from('services')
       .select('id')
@@ -258,7 +259,8 @@ export async function deleteService({
       );
     }
 
-    const { error } = await supabase
+    // Use admin client for hard delete (bypasses RLS policy that prevents deletion)
+    const { error } = await adminSupabase
       .from('services')
       .delete()
       .eq('id', serviceId)

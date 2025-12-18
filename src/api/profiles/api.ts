@@ -1,11 +1,10 @@
-import { HeaderFormValues, ProfileData } from '@/types/profiles';
 import {
   getProfileAction,
-  updateProfileHeaderAction,
-  toggleProfilePublishStatusAction,
-  updateSubscriptionStatusAction,
   setCookieConsentAction,
+  toggleProfilePublishStatusAction,
+  updateProfileHeaderAction,
 } from '@/server/domains/profiles/actions';
+import { HeaderFormValues, ProfileData } from '@/types/profiles';
 
 export async function getProfile(userId: string) {
   const result = await getProfileAction(userId);
@@ -35,14 +34,6 @@ export async function toggleProfilePublishStatus(
   });
   if (!result.success) {
     throw new Error(result.error || 'Failed to toggle publish status');
-  }
-  return result;
-}
-
-export async function updateSubscriptionStatus(userId: string) {
-  const result = await updateSubscriptionStatusAction(userId);
-  if (!result.success) {
-    throw new Error(result.error || 'Failed to update subscription');
   }
   return result;
 }
