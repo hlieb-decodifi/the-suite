@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { applyDateRangeFilter } from '@/utils/dateFilter';
+import { requireAdminUser } from '@/server/domains/admin/actions';
 
 export async function getAdminClientsData({
   start,
@@ -8,6 +9,12 @@ export async function getAdminClientsData({
   start?: string | undefined;
   end?: string | undefined;
 }) {
+  // Check if current user is admin
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    throw new Error('Admin access required');
+  }
+
   const adminSupabase = createAdminClient();
   // Get client users by querying user_roles table
   const userRolesQuery = adminSupabase

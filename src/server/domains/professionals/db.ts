@@ -1,4 +1,4 @@
-import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { ServiceUI } from '@/types/services';
 import { Appointment } from '@/types/appointments';
 
@@ -19,6 +19,13 @@ export type ProfessionalDetails = {
 export async function fetchProfessionalDetails(
   userId: string,
 ): Promise<ProfessionalDetails | null> {
+  // Check if current user is admin
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return null;
+  }
+
   const supabase = createAdminClient();
 
   // 1. Get user email from auth.users
@@ -126,30 +133,10 @@ export async function updateProfessionalMaxServices(
   maxServices: number,
 ): Promise<{ success: boolean; error?: string }> {
   // Role check: ensure current user is admin
-  const supabase = await createClient();
-  const { data: sessionData, error: sessionError } =
-    await supabase.auth.getUser();
-  const sessionUser = sessionData?.user;
-  if (sessionError || !sessionUser) {
-    return { success: false, error: 'Not authenticated' };
-  }
-  // Check if user is admin
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select('role_id')
-    .eq('id', sessionUser.id)
-    .single();
-  if (userError || !userData) {
-    return { success: false, error: 'User not found' };
-  }
-  // Check if user is admin
-  const { data: userRoleData, error: userRoleError } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', userId)
-    .single();
-  if (userRoleError || !userRoleData || userRoleData.role !== 'admin') {
-    return { success: false, error: 'Permission denied: admin only' };
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return { success: false, error: 'Admin access required' };
   }
 
   // Use admin client for the update

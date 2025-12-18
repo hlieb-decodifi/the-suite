@@ -12,17 +12,6 @@ const getURL = () => {
     process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
     'http://localhost:3000/';
   // Make sure to include `https://` when not localhost.
-  console.log('url', url);
-  console.log(
-    'process.env.NEXT_PUBLIC_BASE_URL',
-    process.env.NEXT_PUBLIC_BASE_URL,
-  );
-  console.log('process.env.VERCEL_URL', process.env.NEXT_PUBLIC_VERCEL_URL);
-  console.log('process.env.VERCEL_BRANCH_URL', process.env.VERCEL_BRANCH_URL);
-  console.log(
-    'process.env.NEXT_PUBLIC_SITE_URL',
-    process.env.NEXT_PUBLIC_SITE_URL,
-  );
   url = url.startsWith('http') ? url : `https://${url}`;
   // Make sure to include a trailing `/`.
   url = url.endsWith('/') ? url : `${url}/`;
@@ -30,6 +19,11 @@ const getURL = () => {
 };
 
 // Helper function to check if a user exists by email (case-insensitive)
+// SECURITY NOTE: This function is intentionally NOT EXPORTED to prevent email enumeration attacks.
+// It is only used internally by:
+// - inviteAdminAction (protected by requireAdminUser)
+// - signUpAction (legitimate duplicate check during registration)
+// - convertOAuthToEmailAction (legitimate check when user converts account)
 async function userExistsByEmail(
   email: string,
 ): Promise<{ exists: boolean; error?: string }> {
@@ -59,6 +53,13 @@ export async function inviteAdminAction(
   firstName?: string,
   lastName?: string,
 ) {
+  // Check if current user is admin
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return { success: false, error: 'Admin access required' };
+  }
+
   // Check if user already exists
   const { exists, error: userCheckError } = await userExistsByEmail(email);
   if (userCheckError) {
@@ -71,16 +72,9 @@ export async function inviteAdminAction(
   // Get Supabase admin client
   const adminSupabase = createAdminClient();
 
-  // Get admin role id
-  const { data: rolesData, error: rolesError } = await adminSupabase
-    .from('user_roles')
-    .select('id')
-    .eq('role', 'admin')
-    .single();
-  if (rolesError || !rolesData?.id) {
-    return { success: false, error: 'Could not find admin role id.' };
-  }
   // Use Supabase's inviteUserByEmail to invite the admin
+  // Note: The handle_new_user() database trigger automatically creates the user_roles entry
+  // based on the 'role' metadata we pass here
   const { data: invitedUser, error: inviteError } =
     await adminSupabase.auth.admin.inviteUserByEmail(email, {
       data: {
@@ -93,20 +87,6 @@ export async function inviteAdminAction(
 
   if (inviteError) {
     return { success: false, error: inviteError.message };
-  }
-
-  // Create user_roles entry for the admin
-  if (invitedUser?.user?.id) {
-    const { error: roleError } = await adminSupabase.from('user_roles').insert({
-      user_id: invitedUser.user.id,
-      role: 'admin',
-    });
-
-    if (roleError) {
-      console.error('Error creating user_roles entry:', roleError);
-      // Don't fail the entire operation if role creation fails
-      // The user is already created, we just log the error
-    }
   }
 
   // Revalidate the admin list page after successful invite
