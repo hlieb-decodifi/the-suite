@@ -1946,10 +1946,10 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
         try {
           // NEW FEE STRUCTURE: Calculate professional fee (3% of deposit only) + client service fee
           const { getProfessionalFeePercentage } = await import(
-            '@/server/lib/service-fee'
+            '@/server/domains/stripe-payments/config'
           );
           const { getServiceFeeFromConfig } = await import(
-            '@/server/lib/service-fee'
+            '@/server/domains/stripe-payments/config'
           );
           const professionalFeePercentage =
             await getProfessionalFeePercentage();

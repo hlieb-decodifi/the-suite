@@ -5,7 +5,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { stripe } from '@/lib/stripe/server';
 import { handleDualPaymentCancellation } from './cancellation-helpers';
-import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
+import { getServiceFeeFromConfig } from '@/server/domains/stripe-payments/config';
 import { format, toZonedTime } from 'date-fns-tz';
 import {
   sendBookingCancellationNoShowClient,
