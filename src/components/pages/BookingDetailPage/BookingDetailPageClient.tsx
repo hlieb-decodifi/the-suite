@@ -865,16 +865,14 @@ export function BookingDetailPageClient({
                           </div>
                         )}
                         <Separator />
-                        {!!total && total > 0 && (
-                          <div className="flex justify-between items-center">
-                            <Typography className="font-semibold">
-                              Total:
-                            </Typography>
-                            <Typography className="font-bold text-primary text-lg">
-                              {formatCurrency(total)}
-                            </Typography>
-                          </div>
-                        )}
+                        <div className="flex justify-between items-center">
+                          <Typography className="font-semibold">
+                            Total:
+                          </Typography>
+                          <Typography className="font-bold text-primary text-lg">
+                            {formatCurrency(total)}
+                          </Typography>
+                        </div>
                       </div>
                     </div>
                   </>
