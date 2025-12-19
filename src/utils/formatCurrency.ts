@@ -6,7 +6,7 @@ export function formatCurrency(
   options: Intl.NumberFormatOptions = {},
   locale = 'en-US',
 ): string {
-  if (!amount) {
+  if (amount === undefined || amount === null) {
     return 'N/A';
   }
 
