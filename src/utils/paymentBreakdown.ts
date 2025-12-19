@@ -1,10 +1,3 @@
-/**
- * Payment breakdown utilities for booking payments
- * Handles service fee inclusion/exclusion logic for different user roles
- */
-
-import { formatCurrency } from './formatCurrency';
-
 type PaymentBreakdownInput = {
   bookingPayment: {
     tip_amount?: number | null;
@@ -13,50 +6,30 @@ type PaymentBreakdownInput = {
     balance_amount?: number | null;
   };
   includeServiceFee: boolean;
-  formatAsCurrency?: boolean;
+  balancePaymentType: 'cash' | 'card';
 };
 
 type PaymentBreakdownResult = {
-  tips: number | string;
-  serviceFee?: number | string;
-  deposit: number | string;
-  balance: number | string;
-  total: number | string;
+  tips: number;
+  deposit: number;
+  cardBalance: number;
+  cashBalance: number;
+  total: number;
+  serviceFee: number | undefined;
 };
 
-/**
- * Calculates payment breakdown with proper service fee handling
- *
- * @param bookingPayment - Booking payment data containing amounts and fees
- * @param includeServiceFee - Whether to include service fee in breakdown (true for clients, false for professionals)
- * @param formatAsCurrency - Whether to format numbers as currency strings
- * @returns Object containing breakdown values
- *
- * @example
- * ```typescript
- * // For client view (include service fee)
- * const breakdown = calculatePaymentBreakdown({
- *   bookingPayment: payment,
- *   includeServiceFee: true,
- *   formatAsCurrency: true
- * });
- *
- * // For professional view (exclude service fee)
- * const breakdown = calculatePaymentBreakdown({
- *   bookingPayment: payment,
- *   includeServiceFee: false
- * });
- * ```
- */
 export function calculatePaymentBreakdown({
   bookingPayment,
   includeServiceFee,
-  formatAsCurrency = false,
+  balancePaymentType,
 }: PaymentBreakdownInput): PaymentBreakdownResult {
   const tips = bookingPayment.tip_amount ?? 0;
   const serviceFee = bookingPayment.service_fee ?? 0;
   const depositAmount = bookingPayment.deposit_amount ?? 0;
   const balanceAmount = bookingPayment.balance_amount ?? 0;
+
+  const isCardBalancePayment = balancePaymentType === 'card';
+  const isCashBalancePayment = balancePaymentType === 'cash';
 
   // `balance_amount` from the database includes tips. For the breakdown, we separate them.
   const balanceWithoutTips = balanceAmount - tips;
@@ -86,32 +59,27 @@ export function calculatePaymentBreakdown({
   // The final total is the sum of the adjusted components.
   const total = deposit + balance + tips;
 
-  // Format as currency if requested
-  if (formatAsCurrency) {
-    const result: PaymentBreakdownResult = {
-      tips: formatCurrency(tips),
-      deposit: formatCurrency(deposit),
-      balance: formatCurrency(balance),
-      total: formatCurrency(total),
-    };
-
-    if (includeServiceFee) {
-      result.serviceFee = formatCurrency(serviceFee);
-    }
-
-    return result;
-  }
-
   // Return as numbers
   const result: PaymentBreakdownResult = {
     tips,
     deposit,
-    balance,
+    cardBalance: isCardBalancePayment ? balance : 0,
+    cashBalance: isCashBalancePayment ? balance : 0,
     total,
+    serviceFee: includeServiceFee ? serviceFee : undefined,
   };
 
-  if (includeServiceFee) {
+  // Include service fee as separate line item only when:
+  // - includeServiceFee is true (client view)
+  // - AND balance is paid by cash
+  // - AND there's no deposit (when there's a deposit, service fee is already included in it)
+  const shouldShowServiceFeeSeparately =
+    includeServiceFee && isCashBalancePayment && depositAmount === 0;
+
+  if (shouldShowServiceFeeSeparately) {
     result.serviceFee = serviceFee;
+    result.cashBalance = balanceAmount - serviceFee;
+    result.cardBalance = serviceFee;
   }
 
   return result;

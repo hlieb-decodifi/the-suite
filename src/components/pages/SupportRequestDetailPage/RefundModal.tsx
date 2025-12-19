@@ -55,7 +55,7 @@ export const RefundModal: React.FC<RefundModalProps> = ({
         balance_amount: paymentDetails.balanceAmount ?? 0,
       },
       includeServiceFee: false, // Professional view - exclude service fee
-      formatAsCurrency: false,
+      balancePaymentType: paymentDetails.isOnlinePayment ? 'card' : 'cash',
     });
   }, [paymentDetails]);
 
@@ -243,12 +243,10 @@ export const RefundModal: React.FC<RefundModalProps> = ({
                       </div>
                     )}
 
-                    {(paymentBreakdown.balance as number) > 0 && (
+                    {paymentBreakdown.cardBalance > 0 && (
                       <div className="flex justify-between items-center text-xs mt-1">
                         <span className="text-muted-foreground">Balance:</span>
-                        <span>
-                          ${(paymentBreakdown.balance as number).toFixed(2)}
-                        </span>
+                        <span>${paymentBreakdown.cardBalance.toFixed(2)}</span>
                       </div>
                     )}
 
