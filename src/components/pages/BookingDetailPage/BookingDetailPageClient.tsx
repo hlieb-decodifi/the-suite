@@ -353,8 +353,6 @@ export function BookingDetailPageClient({
     // Only for completed appointments
     if (computedStatus !== 'completed') return false;
 
-    console.log('computedStatus', computedStatus);
-
     // Only existing payments
     const payment = appointmentData.bookings.booking_payments;
     if (!payment) return false;
@@ -557,8 +555,6 @@ export function BookingDetailPageClient({
 
   const { cardBalance, cashBalance, serviceFee, tips, deposit, total } =
     paymentBreakdown || {};
-
-  console.log('paymentBreakdown', paymentBreakdown);
 
   return (
     <div className="w-full">
