@@ -274,7 +274,7 @@ export function SupportRequestDetailPageClient(
   const paymentBreakdown = calculatePaymentBreakdown({
     bookingPayment: payment || {},
     includeServiceFee: !isProfessional,
-    formatAsCurrency: false,
+    balancePaymentType: payment?.payment_methods?.is_online ? 'card' : 'cash',
   });
 
   return (

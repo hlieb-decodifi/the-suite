@@ -1,9 +1,35 @@
 /**
- * Payment breakdown utilities for booking payments
- * Handles service fee inclusion/exclusion logic for different user roles
+ * Payment Breakdown Utility
+ *
+ * Handles three payment scenarios based on deposit and payment method:
+ *
+ * SCENARIO 1: DEPOSIT EXISTS (deposit_amount > 0)
+ *   - Service fee is INCLUDED in deposit_amount
+ *   - deposit_amount = actual_deposit + service_fee
+ *   - balance_amount = remaining_service + tips
+ *   - Display: deposit (card) + balance INCLUDING TIPS (card or cash)
+ *   - Tips are part of the balance, not a separate line item
+ *
+ * SCENARIO 2: NO DEPOSIT + CARD PAYMENT (deposit_amount = 0, balancePaymentType = 'card')
+ *   - Service fee is PART OF balance_amount
+ *   - balance_amount = service_fee + service_amount + tips
+ *   - Display: full balance INCLUDING TIPS (card)
+ *   - Tips are part of the card balance, not a separate line item
+ *
+ * SCENARIO 3: NO DEPOSIT + CASH PAYMENT (deposit_amount = 0, balancePaymentType = 'cash')
+ *   - Service fee is charged SEPARATELY on card
+ *   - balance_amount = service_fee + service_amount + tips
+ *   - Display: service_fee (card) + (service_amount + tips) as cash balance
+ *   - Tips are part of the cash balance, not a separate line item
+ *   - This is the ONLY scenario where serviceFee is shown as a separate line item
+ *
+ * For professional view (includeServiceFee = false):
+ *   - Service fee is deducted from their earnings (from deposit or balance)
+ *   - Tips remain included in the balance amounts
+ *
+ * NOTE: The 'tips' field in the result is for informational purposes only
+ * (to show "including $X in tips"). Tips are already included in card/cash balance amounts.
  */
-
-import { formatCurrency } from './formatCurrency';
 
 type PaymentBreakdownInput = {
   bookingPayment: {
@@ -13,106 +39,100 @@ type PaymentBreakdownInput = {
     balance_amount?: number | null;
   };
   includeServiceFee: boolean;
-  formatAsCurrency?: boolean;
+  balancePaymentType: 'cash' | 'card';
 };
 
 type PaymentBreakdownResult = {
-  tips: number | string;
-  serviceFee?: number | string;
-  deposit: number | string;
-  balance: number | string;
-  total: number | string;
+  tips: number;
+  deposit: number;
+  cardBalance: number;
+  cashBalance: number;
+  total: number;
+  serviceFee: number | undefined;
 };
 
-/**
- * Calculates payment breakdown with proper service fee handling
- *
- * @param bookingPayment - Booking payment data containing amounts and fees
- * @param includeServiceFee - Whether to include service fee in breakdown (true for clients, false for professionals)
- * @param formatAsCurrency - Whether to format numbers as currency strings
- * @returns Object containing breakdown values
- *
- * @example
- * ```typescript
- * // For client view (include service fee)
- * const breakdown = calculatePaymentBreakdown({
- *   bookingPayment: payment,
- *   includeServiceFee: true,
- *   formatAsCurrency: true
- * });
- *
- * // For professional view (exclude service fee)
- * const breakdown = calculatePaymentBreakdown({
- *   bookingPayment: payment,
- *   includeServiceFee: false
- * });
- * ```
- */
 export function calculatePaymentBreakdown({
   bookingPayment,
   includeServiceFee,
-  formatAsCurrency = false,
+  balancePaymentType,
 }: PaymentBreakdownInput): PaymentBreakdownResult {
   const tips = bookingPayment.tip_amount ?? 0;
   const serviceFee = bookingPayment.service_fee ?? 0;
   const depositAmount = bookingPayment.deposit_amount ?? 0;
   const balanceAmount = bookingPayment.balance_amount ?? 0;
 
-  // `balance_amount` from the database includes tips. For the breakdown, we separate them.
-  const balanceWithoutTips = balanceAmount - tips;
+  const isCardBalancePayment = balancePaymentType === 'card';
+  const isCashBalancePayment = balancePaymentType === 'cash';
 
-  let deposit = depositAmount;
-  let balance = balanceWithoutTips;
+  // Determine where the service fee is located:
+  // - If deposit exists: service fee is ALWAYS included in deposit
+  // - If no deposit + cash payment: service fee is charged separately on card
+  // - If no deposit + card payment: service fee is part of balance
+  const hasDeposit = depositAmount > 0;
 
-  // For the professional's view, we must deduct the service fee from their earnings.
-  if (!includeServiceFee) {
-    let feeToDeduct = serviceFee;
+  let deposit = 0;
+  let cardBalance = 0;
+  let cashBalance = 0;
+  let showServiceFeeSeparately: number | undefined = undefined;
 
-    // Prioritize deducting fee from deposit.
-    const feeFromDeposit = Math.min(deposit, feeToDeduct);
-    deposit -= feeFromDeposit;
-    feeToDeduct -= feeFromDeposit;
-
-    // Deduct any remaining fee from the balance.
-    if (feeToDeduct > 0) {
-      balance -= feeToDeduct;
-    }
-
-    // Ensure values don't go negative.
-    deposit = Math.max(0, deposit);
-    balance = Math.max(0, balance);
-  }
-
-  // The final total is the sum of the adjusted components.
-  const total = deposit + balance + tips;
-
-  // Format as currency if requested
-  if (formatAsCurrency) {
-    const result: PaymentBreakdownResult = {
-      tips: formatCurrency(tips),
-      deposit: formatCurrency(deposit),
-      balance: formatCurrency(balance),
-      total: formatCurrency(total),
-    };
-
+  // SCENARIO 1: Deposit exists (service fee included in deposit)
+  if (hasDeposit) {
     if (includeServiceFee) {
-      result.serviceFee = formatCurrency(serviceFee);
+      // Client view: show full deposit amount (includes service fee)
+      deposit = depositAmount;
+    } else {
+      // Professional view: deduct service fee from deposit
+      deposit = Math.max(0, depositAmount - serviceFee);
     }
 
-    return result;
+    // Balance amount contains remaining service + tips
+    // Tips are included in the balance display (card or cash)
+    if (isCardBalancePayment) {
+      cardBalance = balanceAmount;
+    } else {
+      cashBalance = balanceAmount;
+    }
+  }
+  // SCENARIO 2 & 3: No deposit
+  else {
+    // SCENARIO 2: Card payment
+    if (isCardBalancePayment) {
+      // Card payment: full balance amount charged to card (includes service fee + service + tips)
+      if (includeServiceFee) {
+        // Client view: show full card balance (includes tips)
+        cardBalance = balanceAmount;
+      } else {
+        // Professional view: deduct service fee from card balance (tips still included)
+        cardBalance = Math.max(0, balanceAmount - serviceFee);
+      }
+    }
+    // SCENARIO 3: Cash payment
+    else if (isCashBalancePayment) {
+      // Cash payment: service fee charged to card, service+tips paid in cash
+      // balance_amount = serviceFee (card) + serviceAmount (cash) + tips (cash)
+
+      if (includeServiceFee) {
+        // Client view: show service fee on card, rest (including tips) on cash
+        showServiceFeeSeparately = serviceFee;
+        cardBalance = serviceFee; // Service fee charged to card
+        cashBalance = balanceAmount - serviceFee; // Service amount + tips paid in cash
+      } else {
+        // Professional view: only cash portion (including tips, excluding service fee)
+        cardBalance = 0;
+        cashBalance = Math.max(0, balanceAmount - serviceFee);
+      }
+    }
   }
 
-  // Return as numbers
-  const result: PaymentBreakdownResult = {
+  // Calculate total (tips are already included in card/cash balance)
+  const total = deposit + cardBalance + cashBalance;
+
+  return {
     tips,
     deposit,
-    balance,
+    cardBalance,
+    cashBalance,
     total,
+    serviceFee: showServiceFeeSeparately, // Only shown for cash payments without deposit
   };
-
-  if (includeServiceFee) {
-    result.serviceFee = serviceFee;
-  }
-
-  return result;
 }
