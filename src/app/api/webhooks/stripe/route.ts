@@ -2136,9 +2136,8 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
               .from('booking_payments')
               .update({
                 deposit_payment_intent_id: depositPaymentIntent.id,
-                status: 'paid', // Deposit paid, no balance needed
+                status: 'deposit_paid', // Deposit paid, no balance needed
                 stripe_payment_method_id: paymentMethodId,
-                balance_amount: 0,
                 updated_at: new Date().toISOString(),
               })
               .eq('booking_id', bookingId);
@@ -2243,8 +2242,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
               .update({
                 deposit_payment_intent_id: depositPaymentIntent.id,
                 stripe_payment_method_id: paymentMethodId,
-                status: 'paid', // Deposit paid, no balance needed
-                balance_amount: 0,
+                status: 'deposit_paid', // Deposit paid, no balance needed
                 updated_at: new Date().toISOString(),
               })
               .eq('booking_id', bookingId);
