@@ -194,6 +194,7 @@ export function SupportRequestDetailPageClient(
 
   // Check if payment was made by card (for refund eligibility)
   const isPaidByCard = payment?.stripe_payment_intent_id;
+  const hasDeposit = payment?.deposit_amount > 0;
 
   // Better service name fallback logic with direct access to service data
   let serviceName = 'General Inquiry';
@@ -309,7 +310,7 @@ export function SupportRequestDetailPageClient(
             supportRequest.status !== 'closed' && (
               <div className="flex gap-3">
                 {/* Refund Button - Only show if appointment has payment made by card and not already a refund request */}
-                {appointment && payment && isPaidByCard && (
+                {appointment && payment && (isPaidByCard || hasDeposit) && (
                   <Button
                     variant="outline"
                     size="sm"
