@@ -1,6 +1,7 @@
 import { ProfileServicesPage } from '@/components/pages/ProfileServicesPage/ProfileServicesPage';
 import { createClient } from '@/lib/supabase/server';
 import type { Metadata } from 'next';
+import { generateSEOMetadata, generateProfessionalKeywords } from '@/utils/seo';
 
 // Cache the page for a reasonable time since professional profiles don't change frequently
 // This provides good performance while ensuring data freshness
@@ -64,39 +65,24 @@ export async function generateMetadata({
   const serviceNames =
     services?.map((s) => s.name).join(', ') || 'various services';
 
-  const title = `${professionalName} Services - ${profession}${location ? ` in ${location}` : ''} | The Suite`;
+  const title = `${professionalName} Services - ${profession}${location ? ` in ${location}` : ''}`;
   const metaDescription = `Book ${serviceNames.toLowerCase()} with ${professionalName}${location ? ` in ${location}` : ''}. ${services?.length || 0} professional services available for booking.`;
 
-  return {
+  // Generate professional-specific keywords including services
+  const keywords = generateProfessionalKeywords({
+    name: professionalName,
+    profession,
+    location,
+    services: services?.map((s) => s.name) || [],
+  });
+
+  return generateSEOMetadata({
     title,
-    description: metaDescription.substring(0, 160),
-    keywords: [
-      professionalName,
-      profession,
-      location,
-      ...(services?.map((s) => s.name) || []),
-      'services',
-      'booking',
-      'appointment',
-      'The Suite',
-    ].filter(Boolean),
-    openGraph: {
-      title,
-      description: metaDescription.substring(0, 160),
-      type: 'website',
-      url: `${process.env.NEXT_PUBLIC_SITE_URL}/professionals/${id}/services`,
-      siteName: 'The Suite',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description: metaDescription.substring(0, 160),
-    },
-    robots: {
-      index: true,
-      follow: true,
-    },
-  };
+    description: metaDescription,
+    keywords: [...keywords, 'services', 'booking', 'appointment'],
+    path: `/professionals/${id}/services`,
+    type: 'website',
+  });
 }
 
 export default async function ProfessionalPublicServicesPage({
