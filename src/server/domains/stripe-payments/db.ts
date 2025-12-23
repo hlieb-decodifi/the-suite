@@ -358,6 +358,10 @@ export async function getBookingPaymentBySessionId(
 
 /**
  * Update booking payment status
+ *
+ * @deprecated This function is deprecated in favor of calculating all payment data upfront.
+ * New bookings use calculateCompletePaymentData which sets status during initial insert.
+ * This function is kept for backward compatibility with webhooks.
  */
 export async function updateBookingPaymentStatus(
   bookingId: string,
@@ -398,6 +402,10 @@ export async function updateBookingPaymentStatus(
 
 /**
  * Update existing booking payment record with Stripe information
+ *
+ * @deprecated This function is deprecated in favor of calculating all payment data upfront.
+ * New bookings use calculateCompletePaymentData which calculates deposit/balance during initial insert.
+ * This function is kept for backward compatibility with legacy code.
  */
 export async function updateBookingPaymentForStripe(
   bookingId: string,
@@ -686,6 +694,10 @@ export async function updateStripeCustomerEmail(
 
 /**
  * Update booking payment with payment scheduling information
+ *
+ * @deprecated This function is deprecated in favor of calculating all payment data upfront.
+ * New bookings use calculateCompletePaymentData which calculates schedule dates during initial insert.
+ * This function is kept for backward compatibility with legacy code.
  */
 export async function updateBookingPaymentWithScheduling(
   bookingId: string,
@@ -744,6 +756,8 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
     professional_stripe_account_id: string;
     pre_auth_scheduled_for: string;
     stripe_payment_method_id: string | null;
+    is_online_payment: boolean;
+    deposit_amount: number;
   }[]
 > {
   const supabase = createSupabaseAdminClient();
@@ -756,8 +770,12 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
         id,
         booking_id,
         amount,
+        deposit_amount,
         pre_auth_scheduled_for,
         stripe_payment_method_id,
+        payment_methods!inner(
+          is_online
+        ),
         bookings!inner(
           client_id,
           professional_profile_id,
@@ -777,14 +795,30 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
       .lte('pre_auth_scheduled_for', new Date().toISOString())
       .is('pre_auth_placed_at', null)
       .not('pre_auth_scheduled_for', 'is', null)
+      .not('stripe_payment_method_id', 'is', null) // Only process if payment method exists (excludes broken records)
       .limit(limit);
+
+    console.log('data', data);
 
     if (error) {
       console.error('Error fetching payments pending pre-auth:', error);
       return [];
     }
 
-    return (data || []).map((payment) => ({
+    // Filter out cash payments that have a deposit (balance is cash, no pre-auth needed)
+    // But INCLUDE cash payments with no deposit (service fee needs to be charged via Stripe)
+    const filteredData = (data || []).filter((payment) => {
+      const isOnlinePayment = payment.payment_methods?.is_online === true;
+      const hasDeposit = payment.deposit_amount > 0;
+
+      // Include if:
+      // 1. Online payment (always needs pre-auth)
+      // 2. Cash payment with no deposit (service fee needs Stripe charge)
+      // Exclude: Cash payment with deposit (balance is cash, already paid deposit)
+      return isOnlinePayment || !hasDeposit;
+    });
+
+    return filteredData.map((payment) => ({
       id: payment.id,
       booking_id: payment.booking_id,
       amount: Math.round(payment.amount * 100), // Convert to cents
@@ -802,6 +836,8 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
       ).professional_profiles.professional_stripe_connect.stripe_account_id,
       pre_auth_scheduled_for: payment.pre_auth_scheduled_for!,
       stripe_payment_method_id: payment.stripe_payment_method_id,
+      is_online_payment: payment.payment_methods?.is_online === true,
+      deposit_amount: Math.round((payment.deposit_amount || 0) * 100), // Convert to cents
     }));
   } catch (error) {
     console.error('Error in getPaymentsPendingPreAuth:', error);
@@ -822,6 +858,8 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
     balance_amount: number;
     payment_type: string;
     capture_scheduled_for: string;
+    is_online_payment: boolean;
+    deposit_amount: number;
   }[]
 > {
   const supabase = createSupabaseAdminClient();
@@ -837,8 +875,12 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
         amount,
         tip_amount,
         balance_amount,
+        deposit_amount,
         payment_type,
-        capture_scheduled_for
+        capture_scheduled_for,
+        payment_methods!inner(
+          is_online
+        )
       `,
       )
       .lte('capture_scheduled_for', new Date().toISOString())
@@ -861,6 +903,8 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
       balance_amount: Math.round((payment.balance_amount || 0) * 100), // Convert to cents
       payment_type: payment.payment_type!,
       capture_scheduled_for: payment.capture_scheduled_for!,
+      is_online_payment: payment.payment_methods?.is_online === true,
+      deposit_amount: Math.round((payment.deposit_amount || 0) * 100), // Convert to cents
     }));
   } catch (error) {
     console.error('Error in getPaymentsPendingCapture:', error);
@@ -1420,6 +1464,10 @@ export async function getBookingDetailsForConfirmation(
 
 /**
  * Update the payment amount for a booking (used for cash payments to store correct Stripe amount)
+ *
+ * @deprecated This function is deprecated in favor of calculating all payment data upfront.
+ * New bookings use calculateCompletePaymentData which calculates the correct amount during initial insert.
+ * This function is kept for backward compatibility with legacy code.
  */
 export async function updateBookingPaymentAmount(
   bookingId: string,

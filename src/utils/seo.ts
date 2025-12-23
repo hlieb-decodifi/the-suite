@@ -8,10 +8,23 @@ export type SEOData = {
   imageUrl?: string;
   type?: 'website' | 'profile' | 'article';
   noIndex?: boolean;
+  /** Relative path for automatic canonical URL generation (e.g., "/about-us") */
+  path?: string;
 };
 
 /**
  * Generate consistent metadata for pages
+ *
+ * IMPORTANT: Canonical URLs always point to the production domain (NEXT_PUBLIC_BASE_URL)
+ * even when deployed on Vercel preview URLs. This is crucial for SEO to:
+ * - Prevent duplicate content penalties
+ * - Consolidate link equity to the canonical domain
+ * - Signal to search engines which version is authoritative
+ *
+ * Set NEXT_PUBLIC_BASE_URL in your environment:
+ * - Production: https://the-suite.com
+ * - Staging/Preview: https://the-suite.com (still use production domain)
+ * - Development: Can use localhost, or still use production domain
  */
 export function generateSEOMetadata({
   title,
@@ -21,8 +34,13 @@ export function generateSEOMetadata({
   imageUrl,
   type = 'website',
   noIndex = false,
+  path,
 }: SEOData): Metadata {
-  const siteName = 'The Suite';
+  const siteName = 'The Suite Service';
+
+  // ALWAYS use production domain for canonical URLs, never Vercel preview URLs
+  // This tells search engines the "source of truth" is the custom domain
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://the-suite.com';
 
   // Ensure description is within optimal length
   const metaDescription =
@@ -40,16 +58,21 @@ export function generateSEOMetadata({
     'The Suite',
   ];
 
+  // Generate canonical URL from path if not explicitly provided
+  // This will use the production domain even on Vercel preview deployments
+  const finalCanonicalUrl =
+    canonicalUrl || (path ? `${baseUrl}${path}` : undefined);
+
   return {
     title: title.includes(siteName) ? title : `${title} | ${siteName}`,
     description: metaDescription,
     keywords: allKeywords.filter(Boolean),
-    ...(canonicalUrl && { alternates: { canonical: canonicalUrl } }),
+    ...(finalCanonicalUrl && { alternates: { canonical: finalCanonicalUrl } }),
     openGraph: {
       title,
       description: metaDescription,
       type,
-      ...(canonicalUrl && { url: canonicalUrl }),
+      ...(finalCanonicalUrl && { url: finalCanonicalUrl }),
       siteName,
       ...(imageUrl && {
         images: [

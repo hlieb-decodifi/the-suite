@@ -1,12 +1,21 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { createBooking } from '@/components/templates/BookingModalTemplate/actions';
 import type { BookingFormValues } from '@/components/forms/BookingForm/schema';
 import type { PaymentProcessingResult } from './types';
+import {
+  calculateCompletePaymentData,
+  type CompletePaymentData,
+} from './payment-calculator';
+import { getProfessionalProfileForPayment } from './db';
+import type { ProfessionalProfileForPayment } from './types';
 
 /**
  * Create a booking with unified payment processing for both cash and card
+ *
+ * NEW APPROACH: Calculate all payment data upfront and insert booking_payments once
  */
 export async function createBookingWithStripePayment(
   formData: BookingFormValues,
@@ -17,6 +26,7 @@ export async function createBookingWithStripePayment(
 
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
     // Get the current user
     const {
@@ -48,7 +58,30 @@ export async function createBookingWithStripePayment(
       };
     }
 
-    // First, create the booking using the existing flow
+    // Get professional profile for payment calculation
+    const professionalProfile = await getProfessionalProfileForPayment(
+      professionalProfileId,
+    );
+
+    if (!professionalProfile) {
+      return {
+        success: false,
+        error: 'Professional profile not found',
+        requiresPayment: false,
+        paymentType: 'full',
+      };
+    }
+
+    if (!professionalProfile.stripe_account_id) {
+      return {
+        success: false,
+        error: 'Professional has not connected their Stripe account',
+        requiresPayment: false,
+        paymentType: 'full',
+      };
+    }
+
+    // Create the booking (without payment record)
     const [hours, minutes] = formData.timeSlot.split(':');
     const dateWithTime = new Date(formData.date);
     dateWithTime.setHours(
@@ -76,15 +109,55 @@ export async function createBookingWithStripePayment(
     // Store booking ID for cleanup on error
     bookingId = bookingResult.bookingId;
 
-    // Unified payment flow for both cash and card
-    const paymentResult = await handleUnifiedPaymentFlow(
-      bookingResult.bookingId,
+    // Calculate ALL payment data upfront (single calculation)
+    const paymentData = await calculateCompletePaymentData({
+      totalPrice: bookingResult.totalPrice,
+      tipAmount: formData.tipAmount || 0,
+      serviceFee: bookingResult.serviceFee * 100, // Convert to cents
+      professionalProfile,
+      appointmentStartTime: bookingResult.appointmentStartTime,
+      appointmentEndTime: bookingResult.appointmentEndTime,
+      isOnlinePayment: paymentMethod.is_online,
+    });
+
+    // Insert booking_payments record ONCE with complete data
+    const { error: paymentError } = await adminSupabase
+      .from('booking_payments')
+      .insert({
+        booking_id: bookingId,
+        payment_method_id: formData.paymentMethodId,
+        amount: paymentData.amount,
+        deposit_amount: paymentData.deposit_amount,
+        balance_amount: paymentData.balance_amount,
+        tip_amount: paymentData.tip_amount,
+        service_fee: paymentData.service_fee,
+        status: paymentData.status,
+        payment_type: paymentData.payment_type,
+        requires_balance_payment: paymentData.requires_balance_payment,
+        capture_scheduled_for: paymentData.capture_scheduled_for,
+        pre_auth_scheduled_for: paymentData.pre_auth_scheduled_for,
+      });
+
+    if (paymentError) {
+      console.error('Failed to create payment record:', paymentError);
+      await cleanupFailedBooking(bookingId);
+      return {
+        success: false,
+        error: 'Failed to create payment record',
+        requiresPayment: false,
+        paymentType: 'full',
+      };
+    }
+
+    // Create Stripe checkout session (simplified, no more updates)
+    const paymentResult = await createStripeCheckoutSessionForBooking(
+      bookingId,
       professionalProfileId,
       user.id,
       user.email || '',
-      formData,
-      bookingResult.totalPrice,
       paymentMethod.is_online,
+      professionalProfile,
+      paymentData,
     );
 
     // If payment processing failed, clean up the booking
@@ -138,11 +211,123 @@ async function cleanupFailedBooking(bookingId: string): Promise<void> {
 }
 
 /**
+ * Create Stripe checkout session based on pre-calculated payment data
+ *
+ * SIMPLIFIED: Only creates Stripe session and updates session ID
+ * All payment calculations done before calling this function
+ */
+async function createStripeCheckoutSessionForBooking(
+  bookingId: string,
+  professionalProfileId: string,
+  userId: string,
+  userEmail: string,
+  isOnlinePayment: boolean,
+  professionalProfile: ProfessionalProfileForPayment,
+  paymentData: CompletePaymentData,
+): Promise<PaymentProcessingResult> {
+  try {
+    const { updateBookingPaymentWithSession } = await import('./db');
+    const { createEnhancedCheckoutSession } = await import(
+      './stripe-operations'
+    );
+
+    // Prepare metadata
+    const metadata: Record<string, string> = {
+      booking_id: bookingId,
+      professional_profile_id: professionalProfileId,
+      payment_flow: paymentData.paymentFlow,
+      payment_method_type: isOnlinePayment ? 'card' : 'cash',
+    };
+
+    // Add scenario-specific metadata
+    if (paymentData.stripeCheckoutType === 'setup_only') {
+      if (paymentData.deposit_amount > 0) {
+        // Deposit scenario
+        metadata.deposit_amount = (paymentData.deposit_amount * 100).toString();
+        metadata.balance_amount = (paymentData.balance_amount * 100).toString();
+        metadata.professional_stripe_account_id =
+          professionalProfile.stripe_account_id || '';
+        metadata.capture_scheduled_for =
+          paymentData.capture_scheduled_for || '';
+        metadata.appointment_timing = paymentData.appointmentTiming;
+      } else {
+        // Scheduled payment scenario
+        metadata.scheduled_amount = paymentData.stripeAmount.toString();
+        metadata.pre_auth_scheduled_for =
+          paymentData.pre_auth_scheduled_for || '';
+        metadata.capture_scheduled_for =
+          paymentData.capture_scheduled_for || '';
+      }
+    }
+
+    // Determine payment type for Stripe session
+    let stripePaymentType: 'full' | 'deposit' | 'setup_only';
+    if (paymentData.stripeCheckoutType === 'setup_only') {
+      stripePaymentType = 'setup_only';
+    } else if (paymentData.deposit_amount > 0) {
+      stripePaymentType = 'deposit';
+    } else {
+      stripePaymentType = 'full';
+    }
+
+    // Create Stripe checkout session
+    const checkoutResult = await createEnhancedCheckoutSession({
+      bookingId,
+      clientId: userId,
+      professionalStripeAccountId: professionalProfile.stripe_account_id || '',
+      amount: paymentData.stripeAmount,
+      depositAmount: Math.round(paymentData.deposit_amount * 100),
+      balanceAmount: Math.round(paymentData.balance_amount * 100),
+      paymentType: stripePaymentType,
+      requiresBalancePayment: paymentData.requires_balance_payment,
+      metadata,
+      customerEmail: userEmail,
+      useUncapturedPayment: paymentData.useUncapturedPayment,
+    });
+
+    if (!checkoutResult.success || !checkoutResult.checkoutUrl) {
+      return {
+        success: false,
+        error: checkoutResult.error || 'Failed to create checkout session',
+        requiresPayment: false,
+        paymentType: stripePaymentType,
+      };
+    }
+
+    // Update ONLY session ID (single update)
+    await updateBookingPaymentWithSession(bookingId, checkoutResult.sessionId!);
+
+    return {
+      success: true,
+      bookingId,
+      checkoutUrl: checkoutResult.checkoutUrl,
+      requiresPayment: true,
+      paymentType: stripePaymentType,
+    };
+  } catch (error) {
+    console.error('Error creating Stripe checkout session:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to create checkout session',
+      requiresPayment: false,
+      paymentType: 'full',
+    };
+  }
+}
+
+/**
+ * @deprecated This function is deprecated and will be removed in a future version.
+ * Use the new createBookingWithStripePayment flow which calculates all payment data upfront.
+ *
  * Unified payment flow that handles both cash and card payments
  * NEW LOGIC:
  * - Deposits: ALWAYS charged immediately (regardless of payment method or timing)
  * - Suite fee, tips, balance: Follow scheduled workflow (setup intent if >6 days, immediate if ≤6 days)
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handleUnifiedPaymentFlow(
   bookingId: string,
   professionalProfileId: string,

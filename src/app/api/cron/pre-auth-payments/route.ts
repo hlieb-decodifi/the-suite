@@ -53,17 +53,42 @@ export async function GET(request: NextRequest) {
           `[CRON] Processing pre-auth for booking: ${payment.booking_id}`,
         );
 
-        // Create uncaptured payment intent
+        // Defensive check: payment method should always exist due to query filter
+        // This should never happen, but if it does, skip and log error
+        if (!payment.stripe_payment_method_id) {
+          console.error(
+            `[CRON] ❌ Skipping booking ${payment.booking_id} - missing payment method ID. This indicates a data integrity issue or cash payment that wasn't filtered.`,
+          );
+          continue; // Skip to next payment
+        }
+
+        // Determine payment routing:
+        // - Cash payment without deposit: Direct to platform (service fee only)
+        // - Online payment or cash with deposit: Route through connected account
+        const isCashPayment = !payment.is_online_payment;
+        const hasDeposit = payment.deposit_amount > 0;
+        const isDirectPlatformPayment = isCashPayment && !hasDeposit;
+
+        const stripeAccountId = isDirectPlatformPayment
+          ? null // Direct platform payment
+          : payment.professional_stripe_account_id; // Connected account payment
+
+        console.log(
+          `[CRON] Payment routing for ${payment.booking_id}: ${isDirectPlatformPayment ? 'Direct platform (service fee)' : 'Connected account'}`,
+        );
+
+        // Create uncaptured payment intent with confirmed payment method
         const result = await createUncapturedPaymentIntent(
           payment.amount,
           payment.customer_id,
-          payment.professional_stripe_account_id,
+          stripeAccountId,
           {
             booking_id: payment.booking_id,
             cron_job: 'pre_auth_payments',
             scheduled_for: payment.pre_auth_scheduled_for,
+            payment_routing: isDirectPlatformPayment ? 'platform' : 'connected',
           },
-          payment.stripe_payment_method_id || undefined, // Pass payment method ID from setup intent
+          payment.stripe_payment_method_id, // Required: payment method from setup intent
         );
 
         if (!result.success) {
