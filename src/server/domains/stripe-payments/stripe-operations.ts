@@ -305,21 +305,11 @@ export async function getCheckoutSession(sessionId: string): Promise<{
 export async function createUncapturedPaymentIntent(
   amount: number,
   customerId: string,
-  professionalStripeAccountId: string,
+  professionalStripeAccountId: string | null,
   metadata: Record<string, string> = {},
   paymentMethodId?: string,
 ): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
   try {
-    // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
-    // Client service fee was already charged with deposit
-    const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
-    );
-    const professionalFeePercentage = await getProfessionalFeePercentage();
-    const professionalFee = Math.round(
-      amount * (professionalFeePercentage / 100),
-    );
-
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
       currency: 'usd',
@@ -333,14 +323,28 @@ export async function createUncapturedPaymentIntent(
       },
     };
 
-    // Apply professional fee (3%) to balance amount
-    if (amount > 0) {
-      paymentIntentData.application_fee_amount = professionalFee;
-      paymentIntentData.transfer_data = {
-        destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
-      };
-      paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
+    // Route payment based on whether it's going through connected account
+    if (professionalStripeAccountId) {
+      // Connected account payment: Apply professional fee structure
+      // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
+      // Client service fee was already charged with deposit
+      const { getProfessionalFeePercentage } = await import(
+        '@/server/lib/service-fee'
+      );
+      const professionalFeePercentage = await getProfessionalFeePercentage();
+      const professionalFee = Math.round(
+        amount * (professionalFeePercentage / 100),
+      );
+
+      if (amount > 0) {
+        paymentIntentData.application_fee_amount = professionalFee;
+        paymentIntentData.transfer_data = {
+          destination: professionalStripeAccountId, // Professional gets (amount - application_fee)
+        };
+        paymentIntentData.on_behalf_of = professionalStripeAccountId; // Professional pays the processing fees
+      }
     }
+    // If no professionalStripeAccountId: Direct platform payment (e.g., service fee for cash payments)
 
     // If payment method is provided, set it and confirm
     if (paymentMethodId) {
@@ -351,9 +355,20 @@ export async function createUncapturedPaymentIntent(
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
 
-    console.log(
-      `[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} - Total: $${amount / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${(amount - professionalFee) / 100}`,
-    );
+    // Log based on payment routing
+    if (
+      professionalStripeAccountId &&
+      paymentIntentData.application_fee_amount
+    ) {
+      const professionalFee = paymentIntentData.application_fee_amount;
+      console.log(
+        `[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} (Connected Account) - Total: $${amount / 100}, Professional fee (3%): $${professionalFee / 100}, To professional: $${(amount - professionalFee) / 100}`,
+      );
+    } else {
+      console.log(
+        `[createUncapturedPaymentIntent] Created payment intent ${paymentIntent.id} (Direct Platform) - Amount: $${amount / 100}`,
+      );
+    }
 
     return {
       success: true,

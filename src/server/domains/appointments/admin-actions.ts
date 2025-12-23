@@ -255,35 +255,244 @@ export async function makePaymentPreAuthScheduledAction(
 }
 
 /**
- * Admin action to simulate payment pre-auth being placed immediately (appointment ≤ 6 days away)
+ * Admin action to make payment pre-auth ready for cron job pickup
+ * Sets pre_auth_scheduled_for to NOW so cron job can immediately process it
  */
 export async function makePaymentPreAuthPlacedAction(
   appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const now = new Date();
-  const startTime = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
-  const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour duration
+  try {
+    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
-  return updateAppointmentTimesAction(
-    appointmentId,
-    startTime.toISOString(),
-    endTime.toISOString(),
-  );
+    // Check if user is admin
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { success: false, error: 'Unauthorized: User not found' };
+    }
+
+    // Verify admin role
+    const { data: isAdminData, error: adminError } = await supabase.rpc(
+      'is_admin',
+      {
+        user_uuid: user.id,
+      },
+    );
+
+    if (adminError || !isAdminData) {
+      return { success: false, error: 'Unauthorized: Admin access required' };
+    }
+
+    // Set appointment to 5 days from now (within 6-day threshold)
+    const now = new Date();
+    const startTime = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+
+    // Update appointment times
+    const { error: appointmentError } = await adminSupabase
+      .from('appointments')
+      .update({
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', appointmentId);
+
+    if (appointmentError) {
+      console.error('Error updating appointment:', appointmentError);
+      return {
+        success: false,
+        error: `Failed to update appointment: ${appointmentError.message}`,
+      };
+    }
+
+    // Get booking ID and existing payment method ID
+    const { data: appointment, error: getAppointmentError } =
+      await adminSupabase
+        .from('appointments')
+        .select('booking_id')
+        .eq('id', appointmentId)
+        .single();
+
+    if (getAppointmentError || !appointment) {
+      return {
+        success: false,
+        error: 'Failed to get booking ID',
+      };
+    }
+
+    // Get existing payment record to preserve stripe_payment_method_id
+    const { data: existingPayment, error: getPaymentError } =
+      await adminSupabase
+        .from('booking_payments')
+        .select('stripe_payment_method_id')
+        .eq('booking_id', appointment.booking_id)
+        .single();
+
+    if (getPaymentError) {
+      console.error('Error getting existing payment:', getPaymentError);
+      return {
+        success: false,
+        error: 'Failed to get existing payment record',
+      };
+    }
+
+    // Set pre_auth_scheduled_for to NOW so cron job picks it up immediately
+    // Also calculate proper capture_scheduled_for (12 hours after appointment end)
+    const captureTime = new Date(endTime.getTime() + 12 * 60 * 60 * 1000);
+
+    const { error: paymentError } = await adminSupabase
+      .from('booking_payments')
+      .update({
+        pre_auth_scheduled_for: new Date().toISOString(), // NOW - triggers cron
+        pre_auth_placed_at: null, // Must be null for cron to pick it up
+        capture_scheduled_for: captureTime.toISOString(),
+        status: 'pre_auth_scheduled', // Status that cron expects
+        stripe_payment_method_id: existingPayment.stripe_payment_method_id, // CRITICAL: Preserve this!
+        updated_at: new Date().toISOString(),
+      })
+      .eq('booking_id', appointment.booking_id);
+
+    if (paymentError) {
+      console.error('Error updating payment:', paymentError);
+      return {
+        success: false,
+        error: `Failed to update payment: ${paymentError.message}`,
+      };
+    }
+
+    console.log(
+      `✅ Pre-auth made ready for cron pickup - booking: ${appointment.booking_id}`,
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error in makePaymentPreAuthPlacedAction:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
 }
 
 /**
- * Admin action to simulate payment capture being ready (appointment ended, ready for capture)
+ * Admin action to make payment capture ready for cron job pickup
+ * Sets capture_scheduled_for to NOW so cron job can immediately capture it
  */
 export async function makePaymentCaptureReadyAction(
   appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const now = new Date();
-  const endTime = new Date(now.getTime() - 2 * 60 * 60 * 1000); // ended 2 hours ago
-  const startTime = new Date(endTime.getTime() - 60 * 60 * 1000); // 1 hour duration
+  try {
+    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
-  return updateAppointmentTimesAction(
-    appointmentId,
-    startTime.toISOString(),
-    endTime.toISOString(),
-  );
+    // Check if user is admin
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { success: false, error: 'Unauthorized: User not found' };
+    }
+
+    // Verify admin role
+    const { data: isAdminData, error: adminError } = await supabase.rpc(
+      'is_admin',
+      {
+        user_uuid: user.id,
+      },
+    );
+
+    if (adminError || !isAdminData) {
+      return { success: false, error: 'Unauthorized: Admin access required' };
+    }
+
+    // Set appointment to have ended 2 hours ago
+    const now = new Date();
+    const endTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const startTime = new Date(endTime.getTime() - 60 * 60 * 1000);
+
+    // Update appointment times
+    const { error: appointmentError } = await adminSupabase
+      .from('appointments')
+      .update({
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', appointmentId);
+
+    if (appointmentError) {
+      console.error('Error updating appointment:', appointmentError);
+      return {
+        success: false,
+        error: `Failed to update appointment: ${appointmentError.message}`,
+      };
+    }
+
+    // Get booking ID
+    const { data: appointment, error: getAppointmentError } =
+      await adminSupabase
+        .from('appointments')
+        .select('booking_id')
+        .eq('id', appointmentId)
+        .single();
+
+    if (getAppointmentError || !appointment) {
+      return {
+        success: false,
+        error: 'Failed to get booking ID',
+      };
+    }
+
+    // Get existing payment record to preserve critical fields
+    const { data: existingPayment, error: getPaymentError } =
+      await adminSupabase
+        .from('booking_payments')
+        .select('stripe_payment_method_id, stripe_payment_intent_id')
+        .eq('booking_id', appointment.booking_id)
+        .single();
+
+    if (getPaymentError) {
+      console.error('Error getting existing payment:', getPaymentError);
+      return {
+        success: false,
+        error: 'Failed to get existing payment record',
+      };
+    }
+
+    // Set capture_scheduled_for to NOW so cron job picks it up immediately
+    // Must have stripe_payment_intent_id and status 'authorized' for cron to process
+    const { error: paymentError } = await adminSupabase
+      .from('booking_payments')
+      .update({
+        capture_scheduled_for: new Date().toISOString(), // NOW - triggers cron
+        status: 'authorized', // Status that cron expects for capture
+        stripe_payment_method_id: existingPayment.stripe_payment_method_id, // CRITICAL: Preserve this!
+        stripe_payment_intent_id: existingPayment.stripe_payment_intent_id, // CRITICAL: Preserve this!
+        updated_at: new Date().toISOString(),
+      })
+      .eq('booking_id', appointment.booking_id);
+
+    if (paymentError) {
+      console.error('Error updating payment:', paymentError);
+      return {
+        success: false,
+        error: `Failed to update payment: ${paymentError.message}`,
+      };
+    }
+
+    console.log(
+      `✅ Capture made ready for cron pickup - booking: ${appointment.booking_id}`,
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error in makePaymentCaptureReadyAction:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
 }

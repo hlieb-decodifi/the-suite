@@ -353,8 +353,6 @@ export function BookingDetailPageClient({
     // Only for completed appointments
     if (computedStatus !== 'completed') return false;
 
-    console.log('computedStatus', computedStatus);
-
     // Only existing payments
     const payment = appointmentData.bookings.booking_payments;
     if (!payment) return false;
@@ -529,15 +527,6 @@ export function BookingDetailPageClient({
     setIsCancellationModalOpen(false);
   };
 
-  const handleNoShowSuccess = () => {
-    // ... existing code ...
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const getOtherPartyDescription = () => {
-    return `Location for appointment with ${getOtherPartyName()}`;
-  };
-
   const services = appointment.bookings.booking_services;
   const payment = appointment.bookings.booking_payments;
 
@@ -558,12 +547,14 @@ export function BookingDetailPageClient({
           balance_amount: payment.balance_amount,
         },
         includeServiceFee: !isProfessional,
-        formatAsCurrency: false,
+        balancePaymentType: payment.payment_methods?.is_online
+          ? 'card'
+          : 'cash',
       })
     : null;
-  const subtotal = servicesTotal;
-  const serviceFee = payment?.service_fee ?? 0;
-  const totalTips = payment?.tip_amount ?? 0;
+
+  const { cardBalance, cashBalance, serviceFee, tips, deposit, total } =
+    paymentBreakdown || {};
 
   return (
     <div className="w-full">
@@ -645,119 +636,7 @@ export function BookingDetailPageClient({
                         <Typography className="font-medium text-red-700 mb-2">
                           Refund Processed
                         </Typography>
-                        {/* <div className="grid grid-cols-1 gap-2">
-                          <div className="flex justify-between">
-                            <Typography
-                              variant="small"
-                              className="text-muted-foreground"
-                            >
-                              Refunded Amount:
-                            </Typography>
-                          </div>
 
-                          {isClient &&
-                            appointment.bookings.booking_payments.service_fee >
-                              0 &&
-                            (() => {
-                              const payment =
-                                appointment.bookings.booking_payments;
-                              const isOnlinePayment =
-                                payment.payment_methods?.is_online;
-                              const hasDeposit = payment.deposit_amount > 0;
-
-                              if (isOnlinePayment) {
-                                // Online payment: show breakdown of service amount + suite fee + deposit (if any)
-                                return (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <Typography
-                                        variant="small"
-                                        className="text-muted-foreground pl-4"
-                                      >
-                                        • Service Amount:{' '}
-                                        {formatCurrency(
-                                          payment.refunded_amount -
-                                            (payment.deposit_amount || 0),
-                                        )}
-                                      </Typography>
-                                    </div>
-                                    {hasDeposit && (
-                                      <div className="flex justify-between">
-                                        <Typography
-                                          variant="small"
-                                          className="text-muted-foreground pl-4"
-                                        >
-                                          • Deposit:{' '}
-                                          {formatCurrency(
-                                            payment.deposit_amount,
-                                          )}
-                                        </Typography>
-                                      </div>
-                                    )}
-                                    <div className="flex justify-between">
-                                      <Typography
-                                        variant="small"
-                                        className="text-muted-foreground pl-4"
-                                      >
-                                        • Suite Fee:{' '}
-                                        {formatCurrency(payment.service_fee)}
-                                      </Typography>
-                                    </div>
-                                  </>
-                                );
-                              } else {
-                                // Cash payment: show suite fee + deposit (if any) refunded via card
-                                return (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <Typography
-                                        variant="small"
-                                        className="text-muted-foreground pl-4"
-                                      >
-                                        • Suite Fee refunded to card:{' '}
-                                        {formatCurrency(payment.service_fee)}
-                                      </Typography>
-                                    </div>
-                                    {hasDeposit && (
-                                      <div className="flex justify-between">
-                                        <Typography
-                                          variant="small"
-                                          className="text-muted-foreground pl-4"
-                                        >
-                                          • Deposit refunded to card:{' '}
-                                          {formatCurrency(
-                                            payment.deposit_amount,
-                                          )}
-                                        </Typography>
-                                      </div>
-                                    )}
-                                  </>
-                                );
-                              }
-                            })()}
-                          {appointment.bookings.booking_payments
-                            .refunded_at && (
-                            <div className="flex justify-between">
-                              <Typography
-                                variant="small"
-                                className="text-muted-foreground"
-                              >
-                                Processed:
-                              </Typography>
-                              <Typography
-                                variant="small"
-                                className="font-medium"
-                              >
-                                {format(
-                                  new Date(
-                                    appointment.bookings.booking_payments.refunded_at!,
-                                  ),
-                                  'MMM d, yyyy',
-                                )}
-                              </Typography>
-                            </div>
-                          )}
-                        </div> */}
                         {appointment.bookings.booking_payments
                           .refund_reason && (
                           <div className="mt-2">
@@ -909,7 +788,7 @@ export function BookingDetailPageClient({
                             {formatCurrency(servicesTotal)}
                           </Typography>
                         </div>
-                        {paymentBreakdown?.serviceFee !== undefined && (
+                        {!!serviceFee && serviceFee > 0 && (
                           <div className="flex justify-between items-center">
                             <Typography
                               variant="small"
@@ -918,150 +797,80 @@ export function BookingDetailPageClient({
                               Service Fee:
                             </Typography>
                             <Typography variant="small" className="font-medium">
-                              {formatCurrency(
-                                paymentBreakdown.serviceFee as number,
-                              )}
+                              {formatCurrency(serviceFee)}
                             </Typography>
                           </div>
                         )}
-                        {paymentBreakdown &&
-                          (paymentBreakdown.tips as number) > 0 && (
+                        {!!tips && tips > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Tips:
+                            </Typography>
+                            <Typography variant="small" className="font-medium">
+                              {formatCurrency(tips)}
+                            </Typography>
+                          </div>
+                        )}
+                        {!!deposit && deposit > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Deposit Paid:
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-green-600"
+                            >
+                              {formatCurrency(deposit)}
+                            </Typography>
+                          </div>
+                        )}
+                        {!!cashBalance && cashBalance > 0 && (
+                          <div className="flex justify-between items-center">
+                            <Typography
+                              variant="small"
+                              className="text-muted-foreground"
+                            >
+                              Cash Balance Due (At Appointment):
+                            </Typography>
+                            <Typography
+                              variant="small"
+                              className="font-medium text-amber-600"
+                            >
+                              {formatCurrency(cashBalance)}
+                            </Typography>
+                          </div>
+                        )}
+                        {!!cardBalance && cardBalance > 0 && (
+                          <div className="flex flex-col gap-2">
                             <div className="flex justify-between items-center">
                               <Typography
                                 variant="small"
                                 className="text-muted-foreground"
                               >
-                                Tips:
+                                Card Balance Due:
                               </Typography>
                               <Typography
                                 variant="small"
-                                className="font-medium"
+                                className="font-medium text-amber-600"
                               >
-                                {formatCurrency(
-                                  paymentBreakdown.tips as number,
-                                )}
+                                {formatCurrency(cardBalance)}
                               </Typography>
                             </div>
-                          )}
-                        {paymentBreakdown &&
-                          (paymentBreakdown.deposit as number) > 0 && (
-                            <div className="flex justify-between items-center">
-                              <Typography
-                                variant="small"
-                                className="text-muted-foreground"
-                              >
-                                Deposit Paid:
-                              </Typography>
-                              <Typography
-                                variant="small"
-                                className="font-medium text-green-600"
-                              >
-                                {formatCurrency(
-                                  paymentBreakdown.deposit as number,
-                                )}
-                              </Typography>
-                            </div>
-                          )}
-                        {paymentBreakdown &&
-                          (paymentBreakdown.balance as number) > 0 && (
-                            <>
-                              {/* Check if this is a cash payment with deposit */}
-                              {(() => {
-                                const depositAmount =
-                                  appointment.bookings.booking_payments
-                                    ?.deposit_amount ?? 0;
-                                const isDeposit = depositAmount > 0;
-                                const isCashPayment =
-                                  !appointment.bookings.booking_payments
-                                    ?.payment_methods?.is_online;
-                                const suiteFee =
-                                  appointment.bookings.booking_payments
-                                    ?.service_fee ?? 0;
-                                const calculatedBalance =
-                                  paymentBreakdown.balance as number;
-
-                                if (isDeposit && isCashPayment) {
-                                  // For cash payments with deposit: show both Stripe balance (suite fee) and cash balance (services + tips)
-                                  const cashBalance =
-                                    subtotal + totalTips - depositAmount; // Services and tips paid in cash
-
-                                  return (
-                                    <>
-                                      {/* Hide card balance for professionals when it's only suite fee */}
-                                      {!isProfessional && (
-                                        <div className="flex justify-between items-center">
-                                          <Typography
-                                            variant="small"
-                                            className="text-muted-foreground"
-                                          >
-                                            Card Balance Due (Suite Fee):
-                                          </Typography>
-                                          <Typography
-                                            variant="small"
-                                            className="font-medium text-amber-600"
-                                          >
-                                            {formatCurrency(suiteFee)}
-                                          </Typography>
-                                        </div>
-                                      )}
-                                      {cashBalance > 0 && (
-                                        <div className="flex justify-between items-center">
-                                          <Typography
-                                            variant="small"
-                                            className="text-muted-foreground"
-                                          >
-                                            Cash Balance Due (At Appointment):
-                                          </Typography>
-                                          <Typography
-                                            variant="small"
-                                            className="font-medium text-amber-600"
-                                          >
-                                            {formatCurrency(cashBalance)}
-                                          </Typography>
-                                        </div>
-                                      )}
-                                    </>
-                                  );
-                                } else {
-                                  // Regular balance due display using calculated balance
-                                  // The utility already handles fee deduction for professionals
-                                  if (calculatedBalance <= 0) {
-                                    return null;
-                                  }
-
-                                  return (
-                                    <div className="flex justify-between items-center">
-                                      <Typography
-                                        variant="small"
-                                        className="text-muted-foreground"
-                                      >
-                                        Balance Due:
-                                      </Typography>
-                                      <Typography
-                                        variant="small"
-                                        className="font-medium text-amber-600"
-                                      >
-                                        {formatCurrency(calculatedBalance)}
-                                      </Typography>
-                                    </div>
-                                  );
-                                }
-                              })()}
-                            </>
-                          )}
+                          </div>
+                        )}
                         <Separator />
                         <div className="flex justify-between items-center">
                           <Typography className="font-semibold">
                             Total:
                           </Typography>
                           <Typography className="font-bold text-primary text-lg">
-                            {formatCurrency(
-                              paymentBreakdown
-                                ? (paymentBreakdown.total as number)
-                                : isProfessional
-                                  ? subtotal + totalTips
-                                  : subtotal + serviceFee + totalTips,
-                            )}
+                            {formatCurrency(total)}
                           </Typography>
                         </div>
                       </div>
@@ -1550,13 +1359,7 @@ export function BookingDetailPageClient({
                   <div className="flex justify-between items-center">
                     <Typography className="font-semibold">Total:</Typography>
                     <Typography className="font-bold text-primary text-lg">
-                      {formatCurrency(
-                        paymentBreakdown
-                          ? (paymentBreakdown.total as number)
-                          : isProfessional
-                            ? servicesTotal + totalTips
-                            : servicesTotal + serviceFee + totalTips,
-                      )}
+                      {formatCurrency(total)}
                     </Typography>
                   </div>
                 </div>
@@ -1740,7 +1543,7 @@ export function BookingDetailPageClient({
           (total, service) => total + service.price,
           0,
         )}
-        onSuccess={handleNoShowSuccess}
+        onSuccess={() => {}}
       />
 
       {/* Review Prompt Modal */}

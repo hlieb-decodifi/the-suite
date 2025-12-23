@@ -2,6 +2,7 @@ import { ProfilePage } from '@/components/pages/ProfilePage/ProfilePage';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { Metadata } from 'next';
+import { generateSEOMetadata, generateProfessionalKeywords } from '@/utils/seo';
 
 // Cache the page for a reasonable time since professional profiles don't change frequently
 // This provides good performance while ensuring data freshness
@@ -55,41 +56,25 @@ export async function generateMetadata({
   const description = profile.description || '';
 
   // Create SEO-optimized title and description
-  const title = `${professionalName} - ${profession}${location ? ` in ${location}` : ''} | The Suite`;
+  const title = `${professionalName} - ${profession}${location ? ` in ${location}` : ''}`;
   const metaDescription = description
-    ? description.substring(0, 160)
+    ? description
     : `Book ${profession.toLowerCase()} services with ${professionalName}${location ? ` in ${location}` : ''}. Professional beauty and wellness services on The Suite platform.`;
 
-  return {
+  // Generate professional-specific keywords
+  const keywords = generateProfessionalKeywords({
+    name: professionalName,
+    profession,
+    location,
+  });
+
+  return generateSEOMetadata({
     title,
     description: metaDescription,
-    keywords: [
-      professionalName,
-      profession,
-      location,
-      'beauty services',
-      'wellness',
-      'professional services',
-      'book appointment',
-      'The Suite',
-    ].filter(Boolean),
-    openGraph: {
-      title,
-      description: metaDescription,
-      type: 'profile',
-      url: `${process.env.NEXT_PUBLIC_SITE_URL}/professionals/${id}`,
-      siteName: 'The Suite',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description: metaDescription,
-    },
-    robots: {
-      index: true,
-      follow: true,
-    },
-  };
+    keywords,
+    path: `/professionals/${id}`,
+    type: 'profile',
+  });
 }
 
 export default async function ProfessionalPublicPage({

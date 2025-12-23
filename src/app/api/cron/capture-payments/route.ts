@@ -53,12 +53,32 @@ export async function GET(request: NextRequest) {
           `[CRON] Capturing payment for booking: ${payment.booking_id}`,
         );
 
-        // Calculate amount to capture based on payment type
-        // The balance_amount is the total remaining amount to be captured, including services and tips.
-        const totalCaptureAmount = payment.balance_amount;
-        console.log(
-          `[CRON] Payment detected - capturing balance: $${payment.balance_amount / 100}`,
-        );
+        // Calculate amount to capture based on payment method
+        // - Online payment: Capture balance_amount (full balance via Stripe)
+        // - Cash payment without deposit: Capture amount (service fee only, balance is cash)
+        const isCashPayment = !payment.is_online_payment;
+        const hasDeposit = payment.deposit_amount > 0;
+
+        let totalCaptureAmount: number;
+        if (isCashPayment && !hasDeposit) {
+          // Cash payment without deposit: Only capture service fee (amount field)
+          totalCaptureAmount = payment.amount;
+          console.log(
+            `[CRON] Cash payment (no deposit) - capturing service fee: $${payment.amount / 100}`,
+          );
+        } else if (isCashPayment && hasDeposit) {
+          // This shouldn't happen (cash with deposit shouldn't be in capture queue)
+          console.log(
+            `[CRON] ⚠️ Warning: Cash payment with deposit in capture queue for booking ${payment.booking_id}. Skipping.`,
+          );
+          continue;
+        } else {
+          // Online payment: Capture full balance amount
+          totalCaptureAmount = payment.balance_amount;
+          console.log(
+            `[CRON] Online payment - capturing balance: $${payment.balance_amount / 100}`,
+          );
+        }
 
         // Capture the payment intent
         const result = await capturePaymentIntent(

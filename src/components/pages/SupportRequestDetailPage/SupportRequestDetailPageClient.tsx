@@ -194,6 +194,28 @@ export function SupportRequestDetailPageClient(
 
   // Check if payment was made by card (for refund eligibility)
   const isPaidByCard = payment?.stripe_payment_intent_id;
+  const hasDeposit = payment?.deposit_amount > 0;
+
+  // Calculate max refundable amount (what professional can refund)
+  const calculateMaxRefundableForProfessional = () => {
+    if (!payment) return 0;
+
+    const isOnlinePayment = payment.payment_methods?.is_online ?? true;
+    const depositAmount = payment.deposit_amount || 0;
+    const serviceFee = payment.service_fee || 0;
+
+    if (isOnlinePayment) {
+      // For card payments: professional can refund everything except service fee
+      const totalAmount = payment.amount + (payment.tip_amount || 0);
+      return totalAmount - serviceFee;
+    } else {
+      // For cash payments: can only refund deposit charged online (minus service fee)
+      // If no deposit, max refundable is 0 (service fee goes to platform)
+      return depositAmount > 0 ? depositAmount - serviceFee : 0;
+    }
+  };
+
+  const maxRefundableForProfessional = calculateMaxRefundableForProfessional();
 
   // Better service name fallback logic with direct access to service data
   let serviceName = 'General Inquiry';
@@ -274,7 +296,7 @@ export function SupportRequestDetailPageClient(
   const paymentBreakdown = calculatePaymentBreakdown({
     bookingPayment: payment || {},
     includeServiceFee: !isProfessional,
-    formatAsCurrency: false,
+    balancePaymentType: payment?.payment_methods?.is_online ? 'card' : 'cash',
   });
 
   return (
@@ -308,18 +330,21 @@ export function SupportRequestDetailPageClient(
             supportRequest.status !== 'resolved' &&
             supportRequest.status !== 'closed' && (
               <div className="flex gap-3">
-                {/* Refund Button - Only show if appointment has payment made by card and not already a refund request */}
-                {appointment && payment && isPaidByCard && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsRefundModalOpen(true)}
-                    className="text-sm text-orange-600 border-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                  >
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Process Refund
-                  </Button>
-                )}
+                {/* Refund Button - Only show if professional has amount they can refund */}
+                {appointment &&
+                  payment &&
+                  (isPaidByCard || hasDeposit) &&
+                  maxRefundableForProfessional > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsRefundModalOpen(true)}
+                      className="text-sm text-orange-600 border-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Process Refund
+                    </Button>
+                  )}
 
                 {/* Resolve Button */}
                 <Button
