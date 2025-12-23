@@ -83,13 +83,19 @@ async function calculateTotalPrice(
  * @param formData The booking form data
  * @param professionalProfileId The ID of the professional's profile
  * @param clientTimezone The client's timezone for proper date conversion
- * @returns Object containing the booking ID and total price
+ * @returns Object containing the booking ID, total price, appointment timing, and service fee
  */
 export async function createBooking(
   formData: BookingFormValues & { dateWithTime: Date },
   professionalProfileId: string,
   clientTimezone: string = 'UTC',
-): Promise<{ bookingId: string; totalPrice: number }> {
+): Promise<{
+  bookingId: string;
+  totalPrice: number;
+  appointmentStartTime: Date;
+  appointmentEndTime: Date;
+  serviceFee: number;
+}> {
   const supabase = await createClient();
   const adminSupabase = await createAdminClient();
 
@@ -204,7 +210,6 @@ export async function createBooking(
       .single();
 
     // Determine initial payment status
-    const paymentStatus = paymentMethod?.is_online ? 'pending' : 'completed';
     const bookingStatus = paymentMethod?.is_online ? 'pending' : 'confirmed';
 
     try {
@@ -299,75 +304,20 @@ export async function createBooking(
         }
       }
 
-      // Calculate payment schedule for online payments
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const paymentRecord: any = {
-        booking_id: booking.id,
-        payment_method_id: formData.paymentMethodId,
-        amount: totalPrice,
-        tip_amount: formData.tipAmount || 0,
-        service_fee: serviceFee,
-        status: paymentStatus,
-        capture_scheduled_for: null as string | null,
-        pre_auth_scheduled_for: null as string | null,
-      };
-
-      // For online payments, calculate and set payment schedule
-      if (paymentMethod?.is_online) {
-        try {
-          const { data: scheduleData, error: scheduleError } =
-            await supabase.rpc('calculate_payment_schedule', {
-              appointment_start_time: utcDate.toISOString(),
-              appointment_end_time: utcEndDate.toISOString(),
-            });
-
-          if (!scheduleError && scheduleData && scheduleData.length > 0) {
-            const schedule = scheduleData[0];
-
-            if (schedule?.should_pre_auth_now) {
-              // Appointment is <6 days: Pre-auth happens immediately, no scheduling needed
-              paymentRecord.capture_scheduled_for = schedule?.capture_date;
-              paymentRecord.status = 'pending'; // Will be updated to 'authorized' when payment intent is created
-              console.log(
-                'Immediate pre-auth schedule (appointment <6 days):',
-                {
-                  captureDate: schedule?.capture_date,
-                  immediatePreAuth: true,
-                },
-              );
-            } else if (schedule) {
-              // Appointment is >6 days: Schedule both pre-auth and capture
-              paymentRecord.pre_auth_scheduled_for = schedule?.pre_auth_date;
-              paymentRecord.capture_scheduled_for = schedule?.capture_date;
-              console.log('Scheduled payment (appointment >6 days):', {
-                preAuthDate: schedule?.pre_auth_date,
-                captureDate: schedule?.capture_date,
-                scheduledPreAuth: true,
-              });
-            }
-          }
-        } catch (scheduleError) {
-          console.error('Failed to calculate payment schedule:', scheduleError);
-          // Continue without schedule - will be handled later in the payment flow
-        }
-      }
-
-      // Create payment record using admin client (secure payment data handling)
-      const { error: paymentError } = await adminSupabase
-        .from('booking_payments')
-        .insert(paymentRecord);
-
-      if (paymentError) {
-        throw new Error(
-          `Error creating payment record: ${paymentError.message}`,
-        );
-      }
+      // NOTE: booking_payments record creation moved to createBookingWithStripePayment
+      // This allows all payment data to be calculated upfront before insertion
 
       // Note: Confirmation emails are sent from Stripe webhook after payment confirmation
       // This ensures emails are only sent for successfully paid bookings
 
-      // Return the booking details
-      return { bookingId: booking.id, totalPrice };
+      // Return the booking details with appointment timing for payment calculation
+      return {
+        bookingId: booking.id,
+        totalPrice,
+        appointmentStartTime: utcDate,
+        appointmentEndTime: utcEndDate,
+        serviceFee,
+      };
     } catch (error) {
       console.error('Error in createBooking:', error);
       throw error;

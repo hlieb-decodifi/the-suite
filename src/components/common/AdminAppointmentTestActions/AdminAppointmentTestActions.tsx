@@ -218,7 +218,7 @@ export function AdminAppointmentTestActions({
                 <Timer className="mr-2 h-4 w-4" />
                 Pre-Auth Scheduled
                 <span className="ml-auto text-xs text-muted-foreground">
-                  (7 days away)
+                  (future date)
                 </span>
               </Button>
 
@@ -230,9 +230,9 @@ export function AdminAppointmentTestActions({
                 size="sm"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
-                Pre-Auth Placed
+                Pre-Auth Ready (Cron)
                 <span className="ml-auto text-xs text-muted-foreground">
-                  (5 days away)
+                  (triggerable now)
                 </span>
               </Button>
 
@@ -244,9 +244,9 @@ export function AdminAppointmentTestActions({
                 size="sm"
               >
                 <Wallet className="mr-2 h-4 w-4" />
-                Capture Ready
+                Capture Ready (Cron)
                 <span className="ml-auto text-xs text-muted-foreground">
-                  (ended 2h ago)
+                  (triggerable now)
                 </span>
               </Button>
             </div>
@@ -258,9 +258,9 @@ export function AdminAppointmentTestActions({
               end_time in appointments table.
             </div>
             <div>
-              <strong>Payment Actions:</strong> Also update
-              pre_auth_scheduled_for, capture_scheduled_for, and payment status
-              in booking_payments table.
+              <strong>Payment Actions:</strong> Set pre_auth_scheduled_for and
+              capture_scheduled_for to NOW, making them immediately triggerable
+              by cron jobs.
             </div>
           </div>
         </div>

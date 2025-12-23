@@ -2158,11 +2158,6 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
               `⏰ Appointment >6 days - scheduling balance payment for cron job`,
             );
 
-            // Update booking payment with deposit info and schedule balance payment
-            const { updateBookingPaymentWithScheduledBalance } = await import(
-              '@/server/domains/stripe-payments/db'
-            );
-
             // Get appointment data for scheduling
             const { data: appointmentData } = await supabase
               .from('appointments')
@@ -2181,14 +2176,7 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
               );
 
               if (scheduleResult.success) {
-                await updateBookingPaymentWithScheduledBalance(
-                  bookingId,
-                  scheduleResult.captureDate!,
-                  uncapturedBalanceAmount / 100, // Convert to dollars
-                  'pending_balance_payment',
-                );
-
-                // Also update with deposit payment intent ID
+                // Single atomic update with all payment scheduling data
                 console.log(
                   `📝 Updating booking payment with deposit payment intent ID and scheduling:`,
                   {
@@ -2196,35 +2184,39 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
                     depositPaymentIntentId: depositPaymentIntent.id,
                     preAuthScheduledFor:
                       scheduleResult.preAuthDate!.toISOString(),
+                    paymentMethodId, // Critical: Save for cron job
                   },
                 );
 
-                const { error: depositUpdateError } = await supabase
+                const { error: paymentUpdateError } = await supabase
                   .from('booking_payments')
                   .update({
                     deposit_payment_intent_id: depositPaymentIntent.id,
-                    stripe_payment_method_id: paymentMethodId, // Save for cron job
+                    stripe_payment_method_id: paymentMethodId, // Critical: Save for cron job
                     pre_auth_scheduled_for:
                       scheduleResult.preAuthDate!.toISOString(),
+                    capture_scheduled_for:
+                      scheduleResult.captureDate!.toISOString(),
+                    balance_amount: uncapturedBalanceAmount / 100,
                     amount: uncapturedBalanceAmount / 100, // Set amount that cron will process
+                    status: 'pre_auth_scheduled',
                     updated_at: new Date().toISOString(),
                   })
                   .eq('booking_id', bookingId);
 
-                if (depositUpdateError) {
+                if (paymentUpdateError) {
                   console.error(
-                    `❌ Failed to update booking payment with deposit payment intent ID:`,
-                    depositUpdateError,
+                    `❌ Failed to update booking payment with scheduled balance:`,
+                    paymentUpdateError,
                   );
                 } else {
                   console.log(
-                    `✅ Successfully updated booking payment with deposit payment intent ID for booking ${bookingId}`,
+                    `✅ Successfully updated booking payment with scheduled balance for booking ${bookingId}`,
+                  );
+                  console.log(
+                    `✅ Balance payment scheduled for ${scheduleResult.preAuthDate?.toISOString()}`,
                   );
                 }
-
-                console.log(
-                  `✅ Balance payment scheduled for ${scheduleResult.preAuthDate?.toISOString()}`,
-                );
               } else {
                 console.error(
                   `❌ Failed to schedule balance payment: ${scheduleResult.error}`,
@@ -2265,38 +2257,80 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
           );
         }
       } else {
-        // Regular setup intent (no deposit) - just save payment method for later processing
+        // Regular setup intent (no deposit) - save payment method and schedule if needed
         console.log(
-          `🔍 Regular setup intent - saving payment method for future payment`,
+          `🔍 Regular setup intent (no deposit) - saving payment method for future payment`,
         );
 
-        // Update payment status to pending and save the payment method ID for cron job
+        // Read scheduling information from setup intent metadata
+        const preAuthScheduledFor =
+          setupIntent.metadata?.pre_auth_scheduled_for;
+        const captureScheduledFor = setupIntent.metadata?.capture_scheduled_for;
+        const paymentMethodType = setupIntent.metadata?.payment_method_type;
+
         console.log(
-          `📝 Updating booking payment with payment method ID for regular setup:`,
-          {
-            bookingId,
-            paymentMethodId,
-          },
+          `🔍 Payment method type: ${paymentMethodType}, Pre-auth scheduled: ${!!preAuthScheduledFor}`,
         );
 
-        const { error: regularUpdateError } = await supabase
-          .from('booking_payments')
-          .update({
-            status: 'pending',
-            stripe_payment_method_id: paymentMethodId, // Save payment method ID for cron job
-            updated_at: new Date().toISOString(),
-          })
-          .eq('booking_id', bookingId);
-
-        if (regularUpdateError) {
-          console.error(
-            `❌ Failed to update booking payment with payment method ID:`,
-            regularUpdateError,
-          );
-        } else {
+        if (preAuthScheduledFor && captureScheduledFor) {
+          // Payment with scheduling - save payment method and schedule dates
+          // This applies to BOTH online and cash payments without deposit
+          // (cash still needs service fee charged via Stripe)
           console.log(
-            `✅ Successfully updated booking payment with payment method ID for booking ${bookingId}`,
+            `📅 Payment with scheduling - setting pre-auth and capture dates`,
+            {
+              paymentMethodType,
+              preAuthScheduledFor,
+              captureScheduledFor,
+            },
           );
+
+          const { error: regularUpdateError } = await supabase
+            .from('booking_payments')
+            .update({
+              status: 'pre_auth_scheduled', // Set status to indicate pre-auth is scheduled
+              stripe_payment_method_id: paymentMethodId,
+              pre_auth_scheduled_for: preAuthScheduledFor,
+              capture_scheduled_for: captureScheduledFor,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('booking_id', bookingId);
+
+          if (regularUpdateError) {
+            console.error(
+              `❌ Failed to update booking payment with scheduling:`,
+              regularUpdateError,
+            );
+          } else {
+            console.log(
+              `✅ Successfully updated booking payment with scheduling for booking ${bookingId}`,
+            );
+          }
+        } else {
+          // Payment without scheduling (immediate or already processed)
+          console.log(
+            `📝 Payment without scheduling - saving payment method only`,
+          );
+
+          const { error: regularUpdateError } = await supabase
+            .from('booking_payments')
+            .update({
+              status: 'pending',
+              stripe_payment_method_id: paymentMethodId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('booking_id', bookingId);
+
+          if (regularUpdateError) {
+            console.error(
+              `❌ Failed to update booking payment with payment method ID:`,
+              regularUpdateError,
+            );
+          } else {
+            console.log(
+              `✅ Successfully updated booking payment with payment method ID for booking ${bookingId}`,
+            );
+          }
         }
       }
 

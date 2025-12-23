@@ -24,7 +24,7 @@ import { z } from 'zod';
 const depositSettingsSchema = z
   .object({
     requires_deposit: z.boolean(),
-    deposit_type: z.enum(['percentage', 'fixed']).optional(),
+    deposit_type: z.enum(['percentage', 'fixed']).nullable().optional(),
     deposit_value: z.number().min(0).optional(),
   })
   .refine(
@@ -35,7 +35,7 @@ const depositSettingsSchema = z
       return true;
     },
     {
-      message: 'Deposit type and value are required when deposit is enabled',
+      message: 'Please select a deposit type (percentage or fixed amount)',
       path: ['deposit_type'],
     },
   )
@@ -144,7 +144,7 @@ export function DepositSettingsForm({
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        value={field.value}
+                        value={field.value ?? undefined}
                         className="flex flex-col space-y-2"
                         disabled={isLoading}
                       >
