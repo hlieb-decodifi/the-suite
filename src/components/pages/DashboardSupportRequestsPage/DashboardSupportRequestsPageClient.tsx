@@ -11,11 +11,19 @@ import {
 } from '@/components/ui/table';
 import { Typography } from '@/components/ui/typography';
 import { MessageBadge } from '@/components/ui/message-badge';
-import { format } from 'date-fns';
+import { formatDate, formatTime } from '@/utils/formatDate';
 import { ChevronRight, Clock, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+// Helper function to format time from Date object
+function formatTimeFromDate(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const timeString = `${hours}:${minutes.toString().padStart(2, '0')}`;
+  return formatTime(timeString);
+}
 
 // Define support request type
 type SupportRequestType = {
@@ -249,10 +257,10 @@ function SupportRequestTableCard({
             </div>
             <div className="text-muted-foreground text-sm flex items-center mt-1">
               <MessageSquare className="mr-1 h-3 w-3" />
-              {format(supportRequest.date, 'MMM d, yyyy')}
+              {formatDate(supportRequest.date)}
               <span className="mx-1">•</span>
               <Clock className="mr-1 h-3 w-3" />
-              {format(supportRequest.date, 'h:mm a')}
+              {formatTimeFromDate(supportRequest.date)}
             </div>
           </div>
           <SupportRequestStatusBadge status={supportRequest.status} />
@@ -322,8 +330,8 @@ function DashboardTemplateSupportRequestsTable({
                   <div className="flex flex-col">
                     <div className="flex items-center">
                       <MessageSquare className="mr-1 h-3 w-3 text-muted-foreground" />
-                      <span>{format(supportRequest.date, 'MMM d, yyyy')}</span>
-                      {supportRequest.unreadCount &&
+                      <span>{formatDate(supportRequest.date)}</span>
+                      {!!supportRequest.unreadCount &&
                         supportRequest.unreadCount > 0 && (
                           <MessageBadge
                             count={supportRequest.unreadCount}
@@ -334,7 +342,7 @@ function DashboardTemplateSupportRequestsTable({
                     </div>
                     <div className="flex items-center text-muted-foreground">
                       <Clock className="mr-1 h-3 w-3" />
-                      <span>{format(supportRequest.date, 'h:mm a')}</span>
+                      <span>{formatTimeFromDate(supportRequest.date)}</span>
                     </div>
                   </div>
                 </TableCell>
