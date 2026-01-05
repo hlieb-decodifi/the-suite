@@ -850,6 +850,10 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         console.log(`📝 Saving payment method ID: ${paymentMethodId}`);
       }
 
+      // Check if this is an uncaptured payment
+      const isUncapturedPayment =
+        session.metadata?.use_uncaptured === 'true' || false;
+
       // For deposit payments, store in deposit_payment_intent_id
       if (paymentType === 'deposit' || paymentType === 'deposit_only') {
         updateData.deposit_payment_intent_id = paymentIntentId;
@@ -858,8 +862,21 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
       } else {
         // For full payments, store in stripe_payment_intent_id
         updateData.stripe_payment_intent_id = paymentIntentId;
-        updateData.status = 'completed';
-        console.log(`📝 Storing as main payment intent: ${paymentIntentId}`);
+        // For uncaptured payments, set status to 'authorized' instead of 'completed'
+        // The status will be updated to 'completed' when the payment is captured
+        if (isUncapturedPayment) {
+          updateData.status = 'authorized';
+          updateData.pre_auth_placed_at = new Date().toISOString();
+          updateData.authorization_expires_at = new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000,
+          ).toISOString(); // 7 days from now
+          console.log(
+            `📝 Storing as uncaptured payment intent: ${paymentIntentId}`,
+          );
+        } else {
+          updateData.status = 'completed';
+          console.log(`📝 Storing as main payment intent: ${paymentIntentId}`);
+        }
       }
 
       const { error: updateError } = await supabase
@@ -2069,6 +2086,13 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
                 `✅ Uncaptured balance payment created: ${uncapturedResult.paymentIntentId}`,
               );
 
+              // Log authorization expiration if available
+              if (uncapturedResult.authorizationExpiresAt) {
+                console.log(
+                  `📅 Authorization expires at: ${uncapturedResult.authorizationExpiresAt.toISOString()}`,
+                );
+              }
+
               // Update booking payment with both payment intent IDs
               console.log(
                 `📝 Updating booking payment with payment intent IDs:`,
@@ -2076,20 +2100,39 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
                   bookingId,
                   depositPaymentIntentId: depositPaymentIntent.id,
                   balancePaymentIntentId: uncapturedResult.paymentIntentId,
+                  authorizationExpiresAt:
+                    uncapturedResult.authorizationExpiresAt?.toISOString(),
                 },
               );
 
+              const updateData: {
+                deposit_payment_intent_id: string;
+                stripe_payment_intent_id: string;
+                capture_method: string;
+                status: string;
+                stripe_payment_method_id: string;
+                balance_amount: number;
+                updated_at: string;
+                authorization_expires_at?: string;
+              } = {
+                deposit_payment_intent_id: depositPaymentIntent.id,
+                stripe_payment_intent_id: uncapturedResult.paymentIntentId,
+                capture_method: 'manual',
+                status: 'authorized', // Deposit paid, balance authorized
+                stripe_payment_method_id: paymentMethodId,
+                balance_amount: uncapturedBalanceAmount / 100,
+                updated_at: new Date().toISOString(),
+              };
+
+              // Store the REAL authorization expiration from Stripe
+              if (uncapturedResult.authorizationExpiresAt) {
+                updateData.authorization_expires_at =
+                  uncapturedResult.authorizationExpiresAt.toISOString();
+              }
+
               const { error: updateError } = await supabase
                 .from('booking_payments')
-                .update({
-                  deposit_payment_intent_id: depositPaymentIntent.id,
-                  stripe_payment_intent_id: uncapturedResult.paymentIntentId,
-                  capture_method: 'manual',
-                  status: 'authorized', // Deposit paid, balance authorized
-                  stripe_payment_method_id: paymentMethodId,
-                  balance_amount: uncapturedBalanceAmount / 100,
-                  updated_at: new Date().toISOString(),
-                })
+                .update(updateData)
                 .eq('booking_id', bookingId);
 
               if (updateError) {

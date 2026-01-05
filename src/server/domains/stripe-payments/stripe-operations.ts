@@ -301,7 +301,12 @@ export async function createUncapturedPaymentIntent(
   professionalStripeAccountId: string | null,
   metadata: Record<string, string> = {},
   paymentMethodId?: string,
-): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  paymentIntentId?: string;
+  authorizationExpiresAt?: Date;
+  error?: string;
+}> {
   try {
     // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
     // Client service fee was already charged with deposit
@@ -346,7 +351,7 @@ export async function createUncapturedPaymentIntent(
     if (paymentMethodId) {
       paymentIntentData.payment_method = paymentMethodId;
       paymentIntentData.confirm = true;
-      paymentIntentData.off_session = true;
+      paymentIntentData.off_session = true; // This triggers MIT (Merchant-Initiated Transaction)
     }
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
@@ -366,9 +371,59 @@ export async function createUncapturedPaymentIntent(
       );
     }
 
+    // CRITICAL: Retrieve the actual authorization expiration from Stripe
+    // Visa MIT transactions get 4.75 days, not 7 days!
+    let authorizationExpiresAt: Date | undefined;
+
+    if (paymentMethodId && paymentIntent.latest_charge) {
+      try {
+        const chargeId =
+          typeof paymentIntent.latest_charge === 'string'
+            ? paymentIntent.latest_charge
+            : paymentIntent.latest_charge.id;
+
+        const charge = await stripe.charges.retrieve(chargeId);
+        const captureBeforeTimestamp =
+          charge.payment_method_details?.card?.capture_before;
+
+        if (captureBeforeTimestamp) {
+          authorizationExpiresAt = new Date(captureBeforeTimestamp * 1000);
+          const holdDurationDays =
+            (captureBeforeTimestamp - charge.created) / 86400;
+
+          console.log(
+            `[createUncapturedPaymentIntent] ✅ Retrieved authorization expiration from Stripe:`,
+            {
+              paymentIntentId: paymentIntent.id,
+              expiresAt: authorizationExpiresAt.toISOString(),
+              holdDurationDays: holdDurationDays.toFixed(2),
+              cardBrand: charge.payment_method_details?.card?.brand,
+              transactionType: paymentMethodId ? 'MIT (off_session)' : 'CIT',
+            },
+          );
+        } else {
+          console.log(
+            `[createUncapturedPaymentIntent] ⚠️ No capture_before found for charge ${chargeId}, using fallback`,
+          );
+          // Fallback: Conservative 4-day estimate for MIT transactions
+          authorizationExpiresAt = new Date(
+            Date.now() + 4 * 24 * 60 * 60 * 1000,
+          );
+        }
+      } catch (retrieveError) {
+        console.error(
+          `[createUncapturedPaymentIntent] Error retrieving charge details:`,
+          retrieveError,
+        );
+        // Fallback: Conservative 4-day estimate
+        authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+      }
+    }
+
     return {
       success: true,
       paymentIntentId: paymentIntent.id,
+      ...(authorizationExpiresAt && { authorizationExpiresAt }),
     };
   } catch (error) {
     console.error('Error creating uncaptured payment intent:', error);
