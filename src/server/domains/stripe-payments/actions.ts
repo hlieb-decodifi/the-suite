@@ -378,7 +378,7 @@ async function handleUnifiedPaymentFlow(
     const totalAmountCents = Math.round(totalPrice * 100);
     const tipAmountCents = Math.round((formData.tipAmount || 0) * 100);
     const { getServiceFeeFromConfig } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const serviceFeeResult = await getServiceFeeFromConfig();
     const serviceAmountCents =

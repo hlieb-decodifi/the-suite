@@ -31,8 +31,12 @@ export default function AdminAdminsPageClient({
       params.delete('sortDirection');
     }
     // Only push if changed
-    if (window.location.search !== `?${params.toString()}`) {
-      router.replace(`?${params.toString()}`);
+    const newSearch = params.toString();
+    if (window.location.search !== `?${newSearch}`) {
+      const newUrl = newSearch
+        ? `${window.location.pathname}?${newSearch}`
+        : window.location.pathname;
+      router.replace(newUrl);
     }
   }, [filterName, sortDirection, router]);
 

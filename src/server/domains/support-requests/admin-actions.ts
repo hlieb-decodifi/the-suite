@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { requireAdminUser } from '@/server/lib/auth';
+import { requireAdminUser } from '@/server/domains/admin/actions';
 
 /**
  * Fetch all messages for a support request (admin only).
@@ -12,7 +12,7 @@ export async function getAdminSupportRequestMessages(supportRequestId: string) {
   }
 
   // 2. Use admin client to fetch all messages for the support request
-  const adminSupabase = await createAdminClient();
+  const adminSupabase = createAdminClient();
 
   // Fetch the conversation id for this support request
   const { data: supportRequest, error: supportRequestError } =

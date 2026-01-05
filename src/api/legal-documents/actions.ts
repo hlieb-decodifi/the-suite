@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
 export async function getLegalDocument(
@@ -28,14 +27,15 @@ export async function updateLegalDocument(
   content: string,
   effectiveDate: string,
 ) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error(
-      'Server configuration error: missing Supabase URL or Service Role Key',
-    );
+  // Check if current user is admin
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    console.error('Unauthorized attempt to update legal document');
+    return false;
   }
-  const adminSupabase = createAdminClient(supabaseUrl, supabaseServiceKey);
+
+  const supabase = await createClient();
   const docType =
     type === 'terms'
       ? 'terms_and_conditions'
@@ -47,7 +47,7 @@ export async function updateLegalDocument(
   const effectiveDateValue = effectiveDate.trim() === '' ? null : effectiveDate;
 
   // First, try to update existing document
-  const { data: updateData, error: updateError } = await adminSupabase
+  const { data: updateData, error: updateError } = await supabase
     .from('legal_documents')
     .update({
       content,
@@ -68,7 +68,7 @@ export async function updateLegalDocument(
 
   // If no rows were updated (document doesn't exist), create a new one
   if (!updateError && (!updateData || updateData.length === 0)) {
-    const { error: insertError } = await adminSupabase
+    const { error: insertError } = await supabase
       .from('legal_documents')
       .insert({
         type: docType,

@@ -19,18 +19,25 @@ export type ProfessionalDetails = {
 export async function fetchProfessionalDetails(
   userId: string,
 ): Promise<ProfessionalDetails | null> {
-  const supabase = await createAdminClient();
+  // Check if current user is admin
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return null;
+  }
+
+  const adminSupabase = createAdminClient();
 
   // 1. Get user email from auth.users
   const { data: authUser, error: authError } =
-    await supabase.auth.admin.getUserById(userId);
+    await adminSupabase.auth.admin.getUserById(userId);
   if (authError || !authUser?.user) return null;
 
   // 2. Get professional profile
   let professionalProfileId: string | null = null;
   let maxServices: number | null = null;
   let createdAt: string | undefined = undefined;
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await adminSupabase
     .from('professional_profiles')
     .select('id, is_published, created_at')
     .eq('user_id', userId)
@@ -39,7 +46,7 @@ export async function fetchProfessionalDetails(
     professionalProfileId = profile.id;
     createdAt = profile.created_at ?? undefined;
     // Get max_services from service_limits table
-    const { data: limitData } = await supabase
+    const { data: limitData } = await adminSupabase
       .from('service_limits')
       .select('max_services')
       .eq('professional_profile_id', profile.id)
@@ -52,7 +59,7 @@ export async function fetchProfessionalDetails(
   // 3. Get services for this professional
   let services: ServiceUI[] = [];
   if (professionalProfileId) {
-    const { data: servicesData } = await supabase
+    const { data: servicesData } = await adminSupabase
       .from('services')
       .select('id, name, price, duration, description')
       .eq('professional_profile_id', professionalProfileId);
@@ -81,7 +88,7 @@ export async function fetchProfessionalDetails(
   // 4. Get appointments for this professional
   let appointments: Appointment[] = [];
   if (professionalProfileId) {
-    const { data: appointmentsData } = await supabase
+    const { data: appointmentsData } = await adminSupabase
       .from('appointments')
       .select('id, start_time, end_time, status')
       .eq('professional_profile_id', professionalProfileId);
@@ -116,4 +123,47 @@ export async function fetchProfessionalDetails(
     maxServices,
     createdAt,
   };
+}
+
+/**
+ * Update the max_services value for a professional profile by userId (admin only)
+ */
+export async function updateProfessionalMaxServices(
+  userId: string,
+  maxServices: number,
+): Promise<{ success: boolean; error?: string }> {
+  // Role check: ensure current user is admin
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return { success: false, error: 'Admin access required' };
+  }
+
+  // Use admin client for the update
+  const adminSupabase = createAdminClient();
+  // Find professional profile by userId
+  const { data: profile, error: profileError } = await adminSupabase
+    .from('professional_profiles')
+    .select('id')
+    .eq('user_id', userId)
+    .single();
+  if (profileError || !profile) {
+    return { success: false, error: 'Professional profile not found' };
+  }
+  // Upsert into service_limits table
+  const { error: upsertError } = await adminSupabase
+    .from('service_limits')
+    .upsert(
+      [
+        {
+          professional_profile_id: profile.id,
+          max_services: maxServices,
+        },
+      ],
+      { onConflict: 'professional_profile_id' },
+    );
+  if (upsertError) {
+    return { success: false, error: upsertError.message };
+  }
+  return { success: true };
 }

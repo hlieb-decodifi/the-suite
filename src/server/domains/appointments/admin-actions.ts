@@ -4,8 +4,17 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * Admin-only action to update appointment start and end times for testing purposes
- * Also updates payment scheduling times based on the new appointment times
+ * @security CRITICAL - Admin-only action
+ * Updates appointment times for testing purposes. 
+ * 
+ * SECURITY CHECKS:
+ * 1. User authentication verification
+ * 2. Admin role verification via is_admin RPC
+ * 3. Only uses admin client AFTER authorization passes
+ * 
+ * @param appointmentId - The appointment ID to update
+ * @param startTime - New start time (ISO string)
+ * @param endTime - New end time (ISO string)
  */
 export async function updateAppointmentTimesAction(
   appointmentId: string,
@@ -14,9 +23,9 @@ export async function updateAppointmentTimesAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
-    // Check if user is admin
+    // SECURITY CHECK 1: Verify user is authenticated
     const {
       data: { user },
       error: userError,
@@ -25,7 +34,7 @@ export async function updateAppointmentTimesAction(
       return { success: false, error: 'Unauthorized: User not found' };
     }
 
-    // Verify admin role
+    // SECURITY CHECK 2: Verify user has admin role
     const { data: isAdminData, error: adminError } = await supabase.rpc(
       'is_admin',
       {
@@ -37,7 +46,7 @@ export async function updateAppointmentTimesAction(
       return { success: false, error: 'Unauthorized: Admin access required' };
     }
 
-    // Update the appointment using admin client
+    // SECURITY CHECK PASSED - Now use admin client to update
     const { error: updateError } = await adminSupabase
       .from('appointments')
       .update({
@@ -75,6 +84,7 @@ export async function updateAppointmentTimesAction(
 
 /**
  * Helper function to update payment scheduling times based on appointment times
+ * Note: Only called after admin verification passes in parent function
  */
 async function updatePaymentSchedulingTimes(
   adminSupabase: ReturnType<typeof createAdminClient>,
@@ -255,17 +265,20 @@ export async function makePaymentPreAuthScheduledAction(
 }
 
 /**
- * Admin action to make payment pre-auth ready for cron job pickup
- * Sets pre_auth_scheduled_for to NOW so cron job can immediately process it
+ * @security CRITICAL - Admin-only action
+ * Makes payment pre-auth ready for cron job pickup.
+ * Sets pre_auth_scheduled_for to NOW so cron job can immediately process it.
+ * 
+ * SECURITY: Inherits authentication and admin role checks via inline verification.
  */
 export async function makePaymentPreAuthPlacedAction(
   appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
-    // Check if user is admin
+    // SECURITY CHECK 1: Verify user is authenticated
     const {
       data: { user },
       error: userError,
@@ -274,7 +287,7 @@ export async function makePaymentPreAuthPlacedAction(
       return { success: false, error: 'Unauthorized: User not found' };
     }
 
-    // Verify admin role
+    // SECURITY CHECK 2: Verify user has admin role
     const { data: isAdminData, error: adminError } = await supabase.rpc(
       'is_admin',
       {
@@ -286,6 +299,7 @@ export async function makePaymentPreAuthPlacedAction(
       return { success: false, error: 'Unauthorized: Admin access required' };
     }
 
+    // SECURITY CHECK PASSED - Now use admin client
     // Set appointment to 5 days from now (within 6-day threshold)
     const now = new Date();
     const startTime = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
@@ -378,17 +392,20 @@ export async function makePaymentPreAuthPlacedAction(
 }
 
 /**
- * Admin action to make payment capture ready for cron job pickup
- * Sets capture_scheduled_for to NOW so cron job can immediately capture it
+ * @security CRITICAL - Admin-only action
+ * Makes payment capture ready for cron job pickup.
+ * Sets capture_scheduled_for to NOW so cron job can immediately capture it.
+ * 
+ * SECURITY: Inherits authentication and admin role checks via inline verification.
  */
 export async function makePaymentCaptureReadyAction(
   appointmentId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
+    const adminSupabase = createAdminClient();
 
-    // Check if user is admin
+    // SECURITY CHECK 1: Verify user is authenticated
     const {
       data: { user },
       error: userError,
@@ -397,7 +414,7 @@ export async function makePaymentCaptureReadyAction(
       return { success: false, error: 'Unauthorized: User not found' };
     }
 
-    // Verify admin role
+    // SECURITY CHECK 2: Verify user has admin role
     const { data: isAdminData, error: adminError } = await supabase.rpc(
       'is_admin',
       {
@@ -409,6 +426,7 @@ export async function makePaymentCaptureReadyAction(
       return { success: false, error: 'Unauthorized: Admin access required' };
     }
 
+    // SECURITY CHECK PASSED - Now use admin client
     // Set appointment to have ended 2 hours ago
     const now = new Date();
     const endTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
@@ -496,3 +514,4 @@ export async function makePaymentCaptureReadyAction(
     };
   }
 }
+

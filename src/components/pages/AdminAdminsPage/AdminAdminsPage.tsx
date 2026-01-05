@@ -1,6 +1,7 @@
 import React from 'react';
 import { createAdminClient } from '@/lib/supabase/server';
 import { applyDateRangeFilter } from '@/utils/dateFilter';
+import { requireAdminUser } from '@/server/domains/admin/actions';
 
 // Server action for fetching admins data (inlined, not in a separate file)
 export async function getAdminAdminsData({
@@ -15,7 +16,13 @@ export async function getAdminAdminsData({
   sortDirection?: 'asc' | 'desc';
 }) {
   'use server';
-  const adminSupabase = await createAdminClient();
+  // Check if current user is admin
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    throw new Error('Admin access required');
+  }
+
+  const adminSupabase = createAdminClient();
   // Get admin users by querying user_roles table
   const userRolesQuery = adminSupabase
     .from('user_roles')

@@ -46,5 +46,5 @@ export default async function ContactPage() {
     }
   }
 
-  return <ContactTemplate userData={userData} />;
+  return <ContactTemplate userData={userData} isAuthenticated={!!user} />;
 }
