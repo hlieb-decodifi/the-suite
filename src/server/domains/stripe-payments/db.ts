@@ -264,9 +264,14 @@ export async function updateBookingPaymentWithUncapturedIntent(
   paymentIntentId: string,
   captureDate: Date,
   balanceAmount: number,
+  authorizationExpiresAt?: Date,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
+
+    // Use provided expiration or conservative fallback
+    const expiresAt =
+      authorizationExpiresAt || new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
 
     const { error } = await supabase
       .from('booking_payments')
@@ -274,9 +279,7 @@ export async function updateBookingPaymentWithUncapturedIntent(
         stripe_payment_intent_id: paymentIntentId,
         capture_method: 'manual',
         capture_scheduled_for: captureDate.toISOString(),
-        authorization_expires_at: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000,
-        ).toISOString(), // 7 days from now
+        authorization_expires_at: expiresAt.toISOString(),
         status: 'authorized',
         balance_amount: balanceAmount,
         updated_at: new Date().toISOString(),

@@ -1400,6 +1400,39 @@ export async function createUncapturedPayment(
     'with application fee structure',
   );
 
+  // Retrieve the actual authorization expiration from Stripe
+  let authorizationExpiresAt: Date;
+  try {
+    if (paymentIntent.latest_charge) {
+      const chargeId =
+        typeof paymentIntent.latest_charge === 'string'
+          ? paymentIntent.latest_charge
+          : paymentIntent.latest_charge.id;
+
+      const charge = await stripe.charges.retrieve(chargeId);
+      const captureBeforeTimestamp =
+        charge.payment_method_details?.card?.capture_before;
+
+      if (captureBeforeTimestamp) {
+        authorizationExpiresAt = new Date(captureBeforeTimestamp * 1000);
+        console.log(
+          `✅ Retrieved authorization expiration: ${authorizationExpiresAt.toISOString()}`,
+        );
+      } else {
+        // Fallback: Conservative 4-day estimate
+        authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+        console.log('⚠️ No capture_before found, using 4-day fallback');
+      }
+    } else {
+      // Fallback if no charge yet
+      authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+      console.log('⚠️ No charge found, using 4-day fallback');
+    }
+  } catch (error) {
+    console.error('Error retrieving charge details:', error);
+    authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+  }
+
   // Update booking_payments for immediate uncaptured payment (NO pre-auth scheduling)
   const { error: updateError } = await adminSupabase
     .from('booking_payments')
@@ -1408,9 +1441,7 @@ export async function createUncapturedPayment(
       capture_scheduled_for: captureTime.toISOString(), // Capture at appointment end time
       pre_auth_scheduled_for: null, // NULL - no scheduling needed, it's immediate
       pre_auth_placed_at: new Date().toISOString(), // Set now since auth is placed immediately
-      authorization_expires_at: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000,
-      ).toISOString(), // 7 days from now
+      authorization_expires_at: authorizationExpiresAt.toISOString(), // Real expiration from Stripe
       stripe_payment_intent_id: paymentIntent.id,
       status: 'authorized',
     })

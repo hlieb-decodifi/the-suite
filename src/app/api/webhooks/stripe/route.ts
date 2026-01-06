@@ -758,14 +758,16 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
       console.log('📅 Payment schedule calculated:', scheduleData);
 
       // Update booking payment with schedule
+      // Note: Using conservative 4-day estimate as placeholder
+      // Real expiration will be set when balance payment is actually authorized by cron job
       const { error: updateError } = await supabase
         .from('booking_payments')
         .update({
           capture_scheduled_for: captureDate,
           pre_auth_placed_at: new Date().toISOString(),
           authorization_expires_at: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000,
-          ).toISOString(), // 7 days from now
+            Date.now() + 4 * 24 * 60 * 60 * 1000,
+          ).toISOString(), // Conservative 4-day estimate (will be updated when payment is authorized)
           status: 'authorized',
         })
         .eq('booking_id', bookingId);
@@ -866,10 +868,52 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         // The status will be updated to 'completed' when the payment is captured
         if (isUncapturedPayment) {
           updateData.status = 'authorized';
+          updateData.capture_method = 'manual'; // CRITICAL: Set to manual for uncaptured payments
           updateData.pre_auth_placed_at = new Date().toISOString();
-          updateData.authorization_expires_at = new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000,
-          ).toISOString(); // 7 days from now
+
+          // Retrieve the REAL authorization expiration from Stripe
+          try {
+            const piExpanded = await stripe.paymentIntents.retrieve(
+              paymentIntentId,
+              {
+                expand: ['latest_charge'],
+              },
+            );
+
+            const charge = piExpanded.latest_charge;
+            if (charge && typeof charge === 'object') {
+              const captureBeforeTimestamp =
+                charge.payment_method_details?.card?.capture_before;
+
+              if (captureBeforeTimestamp) {
+                updateData.authorization_expires_at = new Date(
+                  captureBeforeTimestamp * 1000,
+                ).toISOString();
+                console.log(
+                  `✅ Retrieved authorization expiration: ${updateData.authorization_expires_at}`,
+                );
+              } else {
+                // Fallback: Conservative 4-day estimate
+                updateData.authorization_expires_at = new Date(
+                  Date.now() + 4 * 24 * 60 * 60 * 1000,
+                ).toISOString();
+                console.log('⚠️ No capture_before found, using 4-day fallback');
+              }
+            } else {
+              // Fallback
+              updateData.authorization_expires_at = new Date(
+                Date.now() + 4 * 24 * 60 * 60 * 1000,
+              ).toISOString();
+              console.log('⚠️ No charge found, using 4-day fallback');
+            }
+          } catch (error) {
+            console.error('Error retrieving authorization expiration:', error);
+            // Fallback: Conservative 4-day estimate
+            updateData.authorization_expires_at = new Date(
+              Date.now() + 4 * 24 * 60 * 60 * 1000,
+            ).toISOString();
+          }
+
           console.log(
             `📝 Storing as uncaptured payment intent: ${paymentIntentId}`,
           );
@@ -878,6 +922,12 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
           console.log(`📝 Storing as main payment intent: ${paymentIntentId}`);
         }
       }
+
+      console.log('💾 About to update booking_payments with:', {
+        bookingId,
+        updateData,
+        isUncapturedPayment,
+      });
 
       const { error: updateError } = await supabase
         .from('booking_payments')
