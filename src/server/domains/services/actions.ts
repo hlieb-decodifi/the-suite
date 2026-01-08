@@ -131,14 +131,26 @@ export async function upsertService({
  * Server Action: Delete a service (only if no bookings exist)
  */
 export async function deleteService({
-  userId,
   serviceId,
 }: {
-  userId: string;
+  userId?: string; // Deprecated: for backwards compatibility only, not used
   serviceId: string;
 }) {
   try {
-    await dbDeleteService({ userId, serviceId });
+    // Get userId from session, not from parameter (security)
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    await dbDeleteService({ userId: user.id, serviceId });
 
     // Revalidate the path to show updated data
     revalidatePath('/profile');
@@ -158,14 +170,26 @@ export async function deleteService({
  * Server Action: Archive a service (soft delete)
  */
 export async function archiveService({
-  userId,
   serviceId,
 }: {
-  userId: string;
+  userId?: string; // Deprecated: for backwards compatibility only, not used
   serviceId: string;
 }) {
   try {
-    await dbArchiveService({ userId, serviceId });
+    // Get userId from session, not from parameter (security)
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    await dbArchiveService({ userId: user.id, serviceId });
 
     // Revalidate the path to show updated data
     revalidatePath('/profile');
@@ -185,14 +209,26 @@ export async function archiveService({
  * Server Action: Unarchive a service
  */
 export async function unarchiveService({
-  userId,
   serviceId,
 }: {
-  userId: string;
+  userId?: string; // Deprecated: for backwards compatibility only, not used
   serviceId: string;
 }) {
   try {
-    await dbUnarchiveService({ userId, serviceId });
+    // Get userId from session, not from parameter (security)
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Not authenticated',
+      };
+    }
+
+    await dbUnarchiveService({ userId: user.id, serviceId });
 
     // Revalidate the path to show updated data
     revalidatePath('/profile');

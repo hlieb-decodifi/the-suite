@@ -1,9 +1,9 @@
-import { Typography } from '@/components/ui/typography';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Clock } from 'lucide-react';
-import { format } from 'date-fns';
-import { AdminAppointmentTestActions } from '@/components/common/AdminAppointmentTestActions';
+import { Typography } from '@/components/ui/typography';
 import type { Appointment } from '@/types/appointments';
+import { format } from 'date-fns';
+import { CalendarDays, Clock } from 'lucide-react';
+import { AdminAppointmentTestActions } from '@/components/common/AdminAppointmentTestActions';
 
 type Props = {
   appointments: Appointment[];
@@ -324,15 +324,15 @@ export function AdminAppointmentsTemplate({
                       </Typography>
                     </div>
                   </div>
-                </div>
-                <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                  <Typography variant="small" className="text-muted-foreground">
-                    Test Actions
-                  </Typography>
-                  <AdminAppointmentTestActions
-                    appointmentId={app.id}
-                    {...(onRefresh && { onUpdate: onRefresh })}
-                  />
+                  <div className="mt-3 pt-3 border-t flex justify-between items-center">
+                    <Typography variant="small" className="text-muted-foreground">
+                      Test Actions
+                    </Typography>
+                    <AdminAppointmentTestActions
+                      appointmentId={app.id}
+                      {...(onRefresh && { onUpdate: onRefresh })}
+                    />
+                  </div>
                 </div>
               </div>
             ))}

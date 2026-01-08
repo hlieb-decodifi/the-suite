@@ -378,7 +378,7 @@ async function handleUnifiedPaymentFlow(
     const totalAmountCents = Math.round(totalPrice * 100);
     const tipAmountCents = Math.round((formData.tipAmount || 0) * 100);
     const { getServiceFeeFromConfig } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const serviceFeeResult = await getServiceFeeFromConfig();
     const serviceAmountCents =
@@ -1001,8 +1001,10 @@ export async function verifyBookingPayment(
       await saveCustomerFromStripeSession(user.id, session.customer);
     }
 
-    // Update booking payment status if needed (but not for setup intents)
-    if (!isSetupIntent) {
+    // Update booking payment status if needed (but not for setup intents or uncaptured payments)
+    // For uncaptured payments, the webhook already set the correct status ('authorized')
+    // and we should not overwrite it with 'completed'
+    if (!isSetupIntent && !isUncaptured) {
       const { updateBookingPaymentStatus } = await import('./db');
       const updateResult = await updateBookingPaymentStatus(
         bookingId,

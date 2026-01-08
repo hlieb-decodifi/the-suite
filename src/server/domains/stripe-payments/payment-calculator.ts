@@ -107,6 +107,10 @@ export async function calculateCompletePaymentData(params: {
       );
     }
 
+    // When appointment is < 7 days away (immediate), balance payment is created immediately
+    // in webhook handler, so pre_auth_scheduled_for should be null to prevent cron job processing
+    const isImmediate = scheduleResult.shouldPreAuthNow;
+
     return {
       // Amounts (convert to dollars)
       amount: totalAmountCents / 100,
@@ -121,12 +125,15 @@ export async function calculateCompletePaymentData(params: {
       requires_balance_payment: true,
 
       // Schedule (only for online payments that need pre-auth)
+      // For immediate payments: capture_scheduled_for is set, pre_auth_scheduled_for is null
+      // For scheduled payments: both are set
       capture_scheduled_for: isOnlinePayment
         ? scheduleResult.captureDate!.toISOString()
         : null,
-      pre_auth_scheduled_for: isOnlinePayment
-        ? scheduleResult.preAuthDate!.toISOString()
-        : null,
+      pre_auth_scheduled_for:
+        isOnlinePayment && !isImmediate
+          ? scheduleResult.preAuthDate!.toISOString()
+          : null,
 
       // Stripe configuration
       stripeCheckoutType: 'setup_only',
@@ -135,9 +142,7 @@ export async function calculateCompletePaymentData(params: {
 
       // Metadata
       paymentFlow: 'setup_for_deposit_and_balance',
-      appointmentTiming: scheduleResult.shouldPreAuthNow
-        ? 'immediate'
-        : 'scheduled',
+      appointmentTiming: isImmediate ? 'immediate' : 'scheduled',
     };
   }
 
@@ -203,10 +208,14 @@ export async function calculateCompletePaymentData(params: {
     // Status
     status: 'pending',
     payment_type: paymentCalculation.isFullPayment ? 'full' : 'deposit',
-    requires_balance_payment: false,
+    // Card payments require balance payment tracking (full payment created as uncaptured)
+    // Cash payments don't require balance payment (only service fee charged upfront)
+    requires_balance_payment: isOnlinePayment,
 
-    // Schedule (none for immediate)
-    capture_scheduled_for: null,
+    // Schedule
+    // Capture should happen at appointment end time (set by webhook/checkout handler)
+    // Pre-auth is immediate (no scheduling needed), so pre_auth_scheduled_for is null
+    capture_scheduled_for: appointmentEndTime.toISOString(),
     pre_auth_scheduled_for: null,
 
     // Stripe configuration
@@ -241,7 +250,9 @@ async function calculatePaymentAmounts(
   const { requires_deposit, deposit_type, deposit_value } = professionalProfile;
 
   // Get service fee from config
-  const { getServiceFeeFromConfig } = await import('@/server/lib/service-fee');
+  const { getServiceFeeFromConfig } = await import(
+    '@/server/domains/stripe-payments/config'
+  );
   const serviceFee = await getServiceFeeFromConfig();
 
   if (!requires_deposit || !deposit_value) {

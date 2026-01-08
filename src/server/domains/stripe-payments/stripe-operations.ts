@@ -1,14 +1,92 @@
 import { stripe } from '@/lib/stripe/server';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type { Stripe } from 'stripe';
-import { getServiceFeeFromConfig } from '@/server/lib/service-fee';
+import { getServiceFeeFromConfig } from '@/server/domains/stripe-payments/config';
 import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
+import { createAdminClient } from '@/lib/supabase/server';
 
-function createSupabaseAdminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+/**
+ * Retrieve the actual authorization expiration from Stripe charge
+ *
+ * This function extracts the `capture_before` timestamp from a Stripe charge,
+ * which indicates when the authorization hold will expire. This is more accurate
+ * than assuming a fixed 7-day period, as Stripe's actual hold periods vary based on:
+ * - Card brand (Visa, Mastercard, etc.)
+ * - Transaction type (MIT vs CIT)
+ * - Customer's payment history and risk profile
+ *
+ * @param paymentIntentId - The Stripe payment intent ID
+ * @returns Date object for authorization expiration, or undefined if not available
+ */
+export async function getAuthorizationExpirationFromStripe(
+  paymentIntentId: string,
+): Promise<Date | undefined> {
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      paymentIntentId,
+      { expand: ['latest_charge'] },
+    );
+
+    if (!paymentIntent.latest_charge) {
+      console.log(
+        `[getAuthorizationExpiration] ⚠️ No charge found for payment intent ${paymentIntentId}`,
+      );
+      return undefined;
+    }
+
+    const charge =
+      typeof paymentIntent.latest_charge === 'string'
+        ? await stripe.charges.retrieve(paymentIntent.latest_charge)
+        : paymentIntent.latest_charge;
+
+    const captureBeforeTimestamp =
+      charge.payment_method_details?.card?.capture_before;
+
+    if (captureBeforeTimestamp) {
+      const expirationDate = new Date(captureBeforeTimestamp * 1000);
+      console.log(
+        `[getAuthorizationExpiration] ✅ Retrieved expiration for ${paymentIntentId}: ${expirationDate.toISOString()}`,
+      );
+      return expirationDate;
+    }
+
+    console.log(
+      `[getAuthorizationExpiration] ⚠️ No capture_before found for payment intent ${paymentIntentId}`,
+    );
+    return undefined;
+  } catch (error) {
+    console.error(
+      `[getAuthorizationExpiration] Error retrieving expiration for ${paymentIntentId}:`,
+      error,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Get authorization expiration with a conservative fallback
+ *
+ * Returns the actual expiration from Stripe if available, otherwise falls back
+ * to a conservative 4-day estimate (based on Visa MIT authorization window).
+ *
+ * @param paymentIntentId - The Stripe payment intent ID
+ * @returns Date object for authorization expiration (always returns a value)
+ */
+export async function getAuthorizationExpirationWithFallback(
+  paymentIntentId: string,
+): Promise<Date> {
+  const expiration =
+    await getAuthorizationExpirationFromStripe(paymentIntentId);
+
+  if (expiration) {
+    return expiration;
+  }
+
+  // Fallback: Conservative 4-day estimate for MIT transactions
+  const fallbackDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+  console.log(
+    `[getAuthorizationExpiration] ⚠️ Using 4-day fallback: ${fallbackDate.toISOString()}`,
   );
+  return fallbackDate;
 }
 
 /**
@@ -98,7 +176,7 @@ export async function createStripeCheckoutSession(
 
       // NEW FEE STRUCTURE: Calculate professional fee (3%) and client service fee
       const { getProfessionalFeePercentage } = await import(
-        '@/server/lib/service-fee'
+        '@/server/domains/stripe-payments/config'
       );
       const professionalFeePercentage = await getProfessionalFeePercentage();
       const clientServiceFee = await getServiceFeeFromConfig();
@@ -215,7 +293,7 @@ export async function createBalancePaymentIntent(
     // NEW FEE STRUCTURE: Calculate professional fee (3%) on balance amount
     // Balance payment no longer includes client service fee (that's in deposit)
     const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const professionalFeePercentage = await getProfessionalFeePercentage();
     const professionalFee = Math.round(
@@ -308,8 +386,23 @@ export async function createUncapturedPaymentIntent(
   professionalStripeAccountId: string | null,
   metadata: Record<string, string> = {},
   paymentMethodId?: string,
-): Promise<{ success: boolean; paymentIntentId?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  paymentIntentId?: string;
+  authorizationExpiresAt?: Date;
+  error?: string;
+}> {
   try {
+    // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
+    // Client service fee was already charged with deposit
+    const { getProfessionalFeePercentage } = await import(
+      '@/server/domains/stripe-payments/config'
+    );
+    const professionalFeePercentage = await getProfessionalFeePercentage();
+    const professionalFee = Math.round(
+      amount * (professionalFeePercentage / 100),
+    );
+
     const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount,
       currency: 'usd',
@@ -328,13 +421,6 @@ export async function createUncapturedPaymentIntent(
       // Connected account payment: Apply professional fee structure
       // NEW FEE STRUCTURE: Balance payments only have professional fee (3%)
       // Client service fee was already charged with deposit
-      const { getProfessionalFeePercentage } = await import(
-        '@/server/lib/service-fee'
-      );
-      const professionalFeePercentage = await getProfessionalFeePercentage();
-      const professionalFee = Math.round(
-        amount * (professionalFeePercentage / 100),
-      );
 
       if (amount > 0) {
         paymentIntentData.application_fee_amount = professionalFee;
@@ -350,7 +436,7 @@ export async function createUncapturedPaymentIntent(
     if (paymentMethodId) {
       paymentIntentData.payment_method = paymentMethodId;
       paymentIntentData.confirm = true;
-      paymentIntentData.off_session = true;
+      paymentIntentData.off_session = true; // This triggers MIT (Merchant-Initiated Transaction)
     }
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
@@ -370,9 +456,20 @@ export async function createUncapturedPaymentIntent(
       );
     }
 
+    // CRITICAL: Retrieve the actual authorization expiration from Stripe
+    // Visa MIT transactions get 4.75 days, not 7 days!
+    let authorizationExpiresAt: Date | undefined;
+
+    if (paymentMethodId && paymentIntent.latest_charge) {
+      authorizationExpiresAt = await getAuthorizationExpirationWithFallback(
+        paymentIntent.id,
+      );
+    }
+
     return {
       success: true,
       paymentIntentId: paymentIntent.id,
+      ...(authorizationExpiresAt && { authorizationExpiresAt }),
     };
   } catch (error) {
     console.error('Error creating uncaptured payment intent:', error);
@@ -841,7 +938,7 @@ export async function createEnhancedCheckoutSession(
       // Add transfer data only if this is not a service fee only payment
       if (!isServiceFeeOnly && chargeAmount > 0) {
         const { getProfessionalFeePercentage } = await import(
-          '@/server/lib/service-fee'
+          '@/server/domains/stripe-payments/config'
         );
         const professionalFeePercentage = await getProfessionalFeePercentage();
 
@@ -925,7 +1022,7 @@ export async function createPaymentIntent(options: {
     // NEW FEE STRUCTURE: Apply professional fee (3%) only
     // This function is generic, so we check context to determine if client service fee applies
     const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const professionalFeePercentage = await getProfessionalFeePercentage();
     const professionalFee = Math.round(
@@ -1275,7 +1372,7 @@ export async function createUncapturedPayment(
   appointmentStartTime: string,
   appointmentEndTime: string,
 ): Promise<Stripe.PaymentIntent> {
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
 
   console.log('Creating IMMEDIATE uncaptured payment for booking:', bookingId);
   console.log('Appointment times:', {
@@ -1288,7 +1385,7 @@ export async function createUncapturedPayment(
 
   // NEW FEE STRUCTURE: Apply professional fee (3%) to uncaptured balance payments
   const { getProfessionalFeePercentage } = await import(
-    '@/server/lib/service-fee'
+    '@/server/domains/stripe-payments/config'
   );
   const professionalFeePercentage = await getProfessionalFeePercentage();
   const amountInCents = Math.round(amount * 100);
@@ -1349,6 +1446,11 @@ export async function createUncapturedPayment(
     'with application fee structure',
   );
 
+  // Retrieve the actual authorization expiration from Stripe
+  const authorizationExpiresAt = await getAuthorizationExpirationWithFallback(
+    paymentIntent.id,
+  );
+
   // Update booking_payments for immediate uncaptured payment (NO pre-auth scheduling)
   const { error: updateError } = await adminSupabase
     .from('booking_payments')
@@ -1357,7 +1459,7 @@ export async function createUncapturedPayment(
       capture_scheduled_for: captureTime.toISOString(), // Capture at appointment end time
       pre_auth_scheduled_for: null, // NULL - no scheduling needed, it's immediate
       pre_auth_placed_at: new Date().toISOString(), // Set now since auth is placed immediately
-      authorization_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      authorization_expires_at: authorizationExpiresAt.toISOString(), // Real expiration from Stripe
       stripe_payment_intent_id: paymentIntent.id,
       status: 'authorized',
     })
@@ -1452,7 +1554,7 @@ export async function createNoShowCharge(
 
     // NEW FEE STRUCTURE: Apply professional fee (3%) to no-show charges
     const { getProfessionalFeePercentage } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const professionalFeePercentage = await getProfessionalFeePercentage();
     const professionalFee = Math.round(
@@ -1520,7 +1622,7 @@ export async function createPaymentForBooking(
   appointmentStartTime: string,
   appointmentEndTime: string,
 ): Promise<Stripe.PaymentIntent> {
-  const adminSupabase = createSupabaseAdminClient();
+  const adminSupabase = createAdminClient();
 
   console.log('Creating payment for booking:', bookingId);
   console.log('Appointment times:', {
@@ -1550,7 +1652,7 @@ export async function createPaymentForBooking(
   }
 
   // If should_pre_auth_now is true, use uncaptured payment
-  if (scheduleData[0].should_pre_auth_now) {
+  if (scheduleData[0]?.should_pre_auth_now) {
     console.log('Appointment is within 6 days, creating uncaptured payment');
     return createUncapturedPayment(
       bookingId,
@@ -1587,7 +1689,7 @@ export async function createPaymentForBooking(
 
   // NEW FEE STRUCTURE: Apply professional fee (3%) to normal payment intents
   const { getProfessionalFeePercentage } = await import(
-    '@/server/lib/service-fee'
+    '@/server/domains/stripe-payments/config'
   );
   const professionalFeePercentage = await getProfessionalFeePercentage();
   const amountInCents = Math.round(amount * 100);

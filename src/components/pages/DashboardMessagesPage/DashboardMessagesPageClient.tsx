@@ -4,7 +4,7 @@ import heic2any from 'heic2any';
 import NextImage from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -188,6 +188,14 @@ export function DashboardMessagesPageClient({
     }
   };
 
+  const loadMessages = useCallback(async (conversationId: string) => {
+    const result = await getMessages(conversationId);
+    if (result.success && result.messages) {
+      setMessages(result.messages);
+      setTimeout(() => scrollToFirstUnreadOrBottom(result.messages!), 100);
+    }
+  }, []);
+
   // Load messages for selected conversation and mark as read
   useEffect(() => {
     if (selectedConversation) {
@@ -202,7 +210,7 @@ export function DashboardMessagesPageClient({
         ),
       );
     }
-  }, [selectedConversation]);
+  }, [selectedConversation, loadMessages]);
 
   // Enhanced polling for conversations with tab visibility and longer intervals
   useEffect(() => {
@@ -315,13 +323,6 @@ export function DashboardMessagesPageClient({
     };
   }, [selectedConversation]);
 
-  const loadMessages = async (conversationId: string) => {
-    const result = await getMessages(conversationId);
-    if (result.success && result.messages) {
-      setMessages(result.messages);
-      setTimeout(() => scrollToFirstUnreadOrBottom(result.messages!), 100);
-    }
-  };
 
   const handleImageSelect = async (
     event: React.ChangeEvent<HTMLInputElement>,

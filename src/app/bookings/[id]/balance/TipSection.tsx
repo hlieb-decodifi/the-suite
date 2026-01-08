@@ -110,8 +110,6 @@ export function TipSection({
       const result = await createPostAppointmentTipAction(
         bookingId,
         newTipAmount,
-        professionalId,
-        clientId,
       );
 
       if (!result.success) {

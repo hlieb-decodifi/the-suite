@@ -1,37 +1,35 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
+/**
+ * @fileoverview Internal database utilities for Stripe service synchronization.
+ *
+ * @security IMPORTANT - All functions in this file use admin client to bypass RLS.
+ * These are internal utilities for background jobs and should ONLY be called by:
+ * - Stripe service sync actions (verify professional ownership before calling)
+ * - Background sync jobs (cron jobs with API route protection)
+ * - Service management actions (verify user owns service before syncing)
+ *
+ * DO NOT call these directly from user-facing code without authorization.
+ *
+ * @module stripe-services/db
+ * @internal
+ */
+
+import { createAdminClient } from '@/lib/supabase/server';
 import type {
-  ServiceWithStripe,
   ProfessionalProfileForStripe,
+  ServiceWithStripe,
   StripeProductStatus,
   StripeSyncStatus,
 } from './types';
 
-// Create admin client for operations that need elevated permissions
-function createSupabaseAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
-}
-
 /**
- * Get professional profile data needed for Stripe evaluation
+ * @internal
+ * Get professional profile data needed for Stripe evaluation.
+ * Called by sync service after verifying professional ownership.
  */
 export async function getProfessionalProfileForStripe(
   userId: string,
 ): Promise<ProfessionalProfileForStripe | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -75,12 +73,14 @@ export async function getProfessionalProfileForStripe(
 }
 
 /**
- * Check if professional has Credit Card payment method enabled
+ * @internal
+ * Check if professional has Credit Card payment method enabled.
+ * Called by sync service to determine if services should sync.
  */
 export async function professionalHasCreditCardPayment(
   professionalProfileId: string,
 ): Promise<boolean> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -112,12 +112,14 @@ export async function professionalHasCreditCardPayment(
 }
 
 /**
- * Get services that need Stripe synchronization
+ * @internal
+ * Get services that need Stripe synchronization.
+ * Called by background sync jobs and manual sync triggers.
  */
 export async function getServicesPendingSync(
   limit: number = 50,
 ): Promise<ServiceWithStripe[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -140,12 +142,14 @@ export async function getServicesPendingSync(
 }
 
 /**
- * Get all services for a professional profile
+ * @internal
+ * Get all services for a professional profile.
+ * Called by sync service after verifying professional ownership.
  */
 export async function getServicesForProfessional(
   professionalProfileId: string,
 ): Promise<ServiceWithStripe[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -167,7 +171,9 @@ export async function getServicesForProfessional(
 }
 
 /**
- * Update service Stripe synchronization data
+ * @internal
+ * Update service Stripe synchronization data.
+ * Called by sync service after successful/failed Stripe API calls.
  */
 export async function updateServiceStripeData(
   serviceId: string,
@@ -180,7 +186,7 @@ export async function updateServiceStripeData(
     stripe_synced_at?: string | null;
   },
 ): Promise<boolean> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData = {
@@ -206,7 +212,9 @@ export async function updateServiceStripeData(
 }
 
 /**
- * Mark service sync as successful
+ * @internal
+ * Mark service sync as successful.
+ * Called by sync service after successful Stripe product creation.
  */
 export async function markServiceSyncSuccess(
   serviceId: string,
@@ -225,7 +233,9 @@ export async function markServiceSyncSuccess(
 }
 
 /**
- * Mark service sync as failed
+ * @internal
+ * Mark service sync as failed.
+ * Called by sync service after failed Stripe API calls.
  */
 export async function markServiceSyncError(
   serviceId: string,
@@ -238,12 +248,14 @@ export async function markServiceSyncError(
 }
 
 /**
- * Mark all services for a professional as pending sync
+ * @internal
+ * Mark all services for a professional as pending sync.
+ * Called by sync service when subscription changes or Connect status updates.
  */
 export async function markProfessionalServicesForSync(
   professionalProfileId: string,
 ): Promise<boolean> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -267,12 +279,14 @@ export async function markProfessionalServicesForSync(
 }
 
 /**
- * Get service by ID with Stripe data
+ * @internal
+ * Get service by ID with Stripe data.
+ * Called by sync service to fetch current sync status.
  */
 export async function getServiceWithStripeData(
   serviceId: string,
 ): Promise<ServiceWithStripe | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -294,12 +308,14 @@ export async function getServiceWithStripeData(
 }
 
 /**
- * Get services with sync errors for monitoring
+ * @internal
+ * Get services with sync errors for monitoring/troubleshooting.
+ * Called by admin monitoring tools and error reports.
  */
 export async function getServicesWithSyncErrors(
   limit: number = 100,
 ): Promise<ServiceWithStripe[]> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -322,7 +338,9 @@ export async function getServicesWithSyncErrors(
 }
 
 /**
- * Reset service sync status to pending (for retry)
+ * @internal
+ * Reset service sync status to pending (for retry).
+ * Called by admin tools to retry failed syncs.
  */
 export async function resetServiceSyncStatus(
   serviceId: string,
@@ -334,7 +352,9 @@ export async function resetServiceSyncStatus(
 }
 
 /**
- * Get sync statistics for monitoring
+ * @internal
+ * Get sync statistics for monitoring dashboards.
+ * Called by admin monitoring/analytics tools.
  */
 export async function getStripeSyncStats(): Promise<{
   pending: number;
@@ -342,7 +362,7 @@ export async function getStripeSyncStats(): Promise<{
   error: number;
   total: number;
 }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase

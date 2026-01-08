@@ -1,37 +1,38 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { Database } from '@/../supabase/types';
-import type {
-  ProfessionalProfileForPayment,
-  PaymentCalculation,
-  BookingPaymentWithStripe,
-} from './types';
+/**
+ * @fileoverview Internal database utilities for Stripe payment processing.
+ *
+ * @security IMPORTANT - All functions in this file use admin client to bypass RLS.
+ * These are internal utilities and should ONLY be called by authorized parent functions:
+ * - Stripe webhook handlers (cryptographically verified via signature)
+ * - Authorized server actions (verify user ownership before calling these)
+ * - Cron jobs (protected via API route authentication)
+ *
+ * DO NOT export these functions to client-facing code or call them directly from
+ * user-provided parameters without proper authorization checks.
+ *
+ * @module stripe-payments/db
+ * @internal
+ */
+
+import { createAdminClient } from '@/lib/supabase/server';
 import { formatDuration } from '@/utils/formatDuration';
-
-// Create admin client for operations that need elevated permissions
-function createSupabaseAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseServiceKey) {
-    throw new Error('Missing Supabase service role key');
-  }
-
-  return createAdminClient<Database>(supabaseUrl, supabaseServiceKey);
-}
+import type {
+  BookingPaymentWithStripe,
+  PaymentCalculation,
+  ProfessionalProfileForPayment,
+} from './types';
 
 /**
- * Get professional profile data needed for payment processing
+ * @internal
+ * Get professional profile data needed for payment processing.
+ * Uses admin client to bypass RLS for payment operations.
+ *
+ * @security Only called by authorized payment functions that have verified user ownership.
  */
 export async function getProfessionalProfileForPayment(
   professionalProfileId: string,
 ): Promise<ProfessionalProfileForPayment | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -79,7 +80,10 @@ export async function getProfessionalProfileForPayment(
 }
 
 /**
- * Enhanced payment calculation with deposit validation
+ * @internal
+ * Enhanced payment calculation with deposit validation.
+ *
+ * @security Read-only calculations, safe for use after user authorization.
  */
 export async function calculatePaymentAmounts(
   totalAmount: number, // in cents
@@ -90,7 +94,9 @@ export async function calculatePaymentAmounts(
   const { requires_deposit, deposit_type, deposit_value } = professionalProfile;
 
   // Get service fee from config
-  const { getServiceFeeFromConfig } = await import('@/server/lib/service-fee');
+  const { getServiceFeeFromConfig } = await import(
+    '@/server/domains/stripe-payments/config'
+  );
   const serviceFee = await getServiceFeeFromConfig();
 
   // Calculate service amount if not provided (backward compatibility)
@@ -163,7 +169,11 @@ export async function calculatePaymentAmounts(
 }
 
 /**
- * Create or update booking payment record with Stripe information
+ * @internal
+ * Create or update booking payment record with Stripe information.
+ * Uses admin client to bypass RLS for payment insert operations.
+ *
+ * @security Only called by authorized booking creation functions after validation.
  */
 export async function createBookingPaymentRecord(
   bookingId: string,
@@ -173,7 +183,7 @@ export async function createBookingPaymentRecord(
   tipAmount: number = 0,
   stripeCheckoutSessionId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const paymentData = {
@@ -218,7 +228,7 @@ export async function updateBookingPaymentWithSession(
   bookingId: string,
   sessionId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -245,16 +255,23 @@ export async function updateBookingPaymentWithSession(
 }
 
 /**
- * Update booking payment with uncaptured payment intent for balance processing
+ * @internal
+ * Update booking payment with uncaptured payment intent for balance processing.
+ * Called by payment service after creating uncaptured intent.
  */
 export async function updateBookingPaymentWithUncapturedIntent(
   bookingId: string,
   paymentIntentId: string,
   captureDate: Date,
   balanceAmount: number,
+  authorizationExpiresAt?: Date,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createSupabaseAdminClient();
+    const supabase = createAdminClient();
+
+    // Use provided expiration or conservative fallback
+    const expiresAt =
+      authorizationExpiresAt || new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
 
     const { error } = await supabase
       .from('booking_payments')
@@ -262,9 +279,7 @@ export async function updateBookingPaymentWithUncapturedIntent(
         stripe_payment_intent_id: paymentIntentId,
         capture_method: 'manual',
         capture_scheduled_for: captureDate.toISOString(),
-        authorization_expires_at: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000,
-        ).toISOString(), // 7 days from now
+        authorization_expires_at: expiresAt.toISOString(),
         status: 'authorized',
         balance_amount: balanceAmount,
         updated_at: new Date().toISOString(),
@@ -290,7 +305,9 @@ export async function updateBookingPaymentWithUncapturedIntent(
 }
 
 /**
- * Update booking payment with scheduled balance payment info (to be created later in webhook)
+ * @internal
+ * Update booking payment with scheduled balance payment info.
+ * Called by payment service to schedule balance collection.
  */
 export async function updateBookingPaymentWithScheduledBalance(
   bookingId: string,
@@ -299,7 +316,7 @@ export async function updateBookingPaymentWithScheduledBalance(
   status: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createSupabaseAdminClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase
       .from('booking_payments')
@@ -330,12 +347,14 @@ export async function updateBookingPaymentWithScheduledBalance(
 }
 
 /**
- * Get booking payment by checkout session ID
+ * @internal
+ * Get booking payment by checkout session ID.
+ * Called by webhook handlers to find payment record.
  */
 export async function getBookingPaymentBySessionId(
   sessionId: string,
 ): Promise<BookingPaymentWithStripe | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -362,13 +381,15 @@ export async function getBookingPaymentBySessionId(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which sets status during initial insert.
  * This function is kept for backward compatibility with webhooks.
+ * @internal
+ * Called by webhooks and payment service functions.
  */
 export async function updateBookingPaymentStatus(
   bookingId: string,
   status: string,
   stripePaymentIntentId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData: Record<string, string> = {
@@ -406,13 +427,15 @@ export async function updateBookingPaymentStatus(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which calculates deposit/balance during initial insert.
  * This function is kept for backward compatibility with legacy code.
+ * @internal
+ * Called by payment service after Stripe session creation.
  */
 export async function updateBookingPaymentForStripe(
   bookingId: string,
   paymentCalculation: PaymentCalculation,
   stripeCheckoutSessionId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData = {
@@ -448,12 +471,14 @@ export async function updateBookingPaymentForStripe(
 }
 
 /**
- * Delete a booking and all its related records (for cancelled checkouts)
+ * @internal
+ * Delete a booking and all its related records (for cancelled checkouts).
+ * Called by cancellation handlers and webhook cleanup.
  */
 export async function deleteBookingAndRelatedRecords(
   bookingId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Delete in reverse order of dependencies
@@ -513,13 +538,15 @@ export async function deleteBookingAndRelatedRecords(
 }
 
 /**
- * Get or create a Stripe customer for a user
+ * @internal
+ * Get or create a Stripe customer for a user.
+ * Called by payment service during checkout creation.
  */
 export async function getOrCreateStripeCustomer(
   userId: string,
   userEmail?: string,
 ): Promise<{ success: boolean; customerId?: string; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // First, check if customer already exists in our database
@@ -592,12 +619,14 @@ export async function getOrCreateStripeCustomer(
 }
 
 /**
- * Get Stripe customer ID for a user (if exists)
+ * @internal
+ * Get Stripe customer ID for a user (if exists).
+ * Called by payment processing and tip functions.
  */
 export async function getStripeCustomerId(
   userId: string,
 ): Promise<string | null> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -618,14 +647,15 @@ export async function getStripeCustomerId(
 }
 
 /**
- * Save customer record from completed Stripe session
- * This is useful when a customer was created during checkout but we didn't save it to our DB
+ * @internal
+ * Save customer record from completed Stripe session.
+ * Called by webhook handlers when customer was created during checkout.
  */
 export async function saveCustomerFromStripeSession(
   userId: string,
   stripeCustomerId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Check if customer already exists
@@ -662,7 +692,9 @@ export async function saveCustomerFromStripeSession(
 }
 
 /**
- * Update customer email in Stripe when user email changes
+ * @internal
+ * Update customer email in Stripe when user email changes.
+ * Called by user profile update handlers.
  */
 export async function updateStripeCustomerEmail(
   userId: string,
@@ -698,6 +730,8 @@ export async function updateStripeCustomerEmail(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which calculates schedule dates during initial insert.
  * This function is kept for backward compatibility with legacy code.
+ * @internal
+ * Called by payment service to schedule pre-auth and capture.
  */
 export async function updateBookingPaymentWithScheduling(
   bookingId: string,
@@ -706,7 +740,7 @@ export async function updateBookingPaymentWithScheduling(
   shouldPreAuthNow: boolean,
   paymentIntentId?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const updateData: Record<string, string | number | null> = {
@@ -745,7 +779,9 @@ export async function updateBookingPaymentWithScheduling(
 }
 
 /**
- * Get payments that need pre-authorization
+ * @internal
+ * Get payments that need pre-authorization.
+ * Called ONLY by cron job (src/app/api/cron/pre-auth-payments).
  */
 export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
   {
@@ -760,7 +796,7 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
     deposit_amount: number;
   }[]
 > {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -846,7 +882,9 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
 }
 
 /**
- * Get payments that need to be captured
+ * @internal
+ * Get payments that need to be captured.
+ * Called ONLY by cron job (src/app/api/cron/capture-payments).
  */
 export async function getPaymentsPendingCapture(limit: number = 50): Promise<
   {
@@ -862,7 +900,7 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
     deposit_amount: number;
   }[]
 > {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { data, error } = await supabase
@@ -913,24 +951,80 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
 }
 
 /**
- * Mark payment as pre-authorized
+ * @internal
+ * Mark payment as pre-authorized after successful authorization.
+ * Called ONLY by cron job (src/app/api/cron/pre-auth-payments).
  */
 export async function markPaymentPreAuthorized(
   paymentId: string,
   paymentIntentId: string,
+  authorizationExpiresAt?: Date,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
+    const updateData: {
+      stripe_payment_intent_id: string;
+      pre_auth_placed_at: string;
+      pre_auth_scheduled_for: null;
+      status: string;
+      updated_at: string;
+      authorization_expires_at?: string;
+      capture_scheduled_for?: string;
+    } = {
+      stripe_payment_intent_id: paymentIntentId,
+      pre_auth_placed_at: new Date().toISOString(),
+      pre_auth_scheduled_for: null, // Clear the scheduled date since auth is now placed
+      status: 'authorized',
+      updated_at: new Date().toISOString(),
+    };
+
+    // Store the REAL authorization expiration from Stripe
+    if (authorizationExpiresAt) {
+      updateData.authorization_expires_at =
+        authorizationExpiresAt.toISOString();
+      console.log(
+        `[markPaymentPreAuthorized] Storing authorization expiration: ${authorizationExpiresAt.toISOString()}`,
+      );
+
+      // CRITICAL: Check if scheduled capture is after authorization expiration
+      // Get current payment record to check capture_scheduled_for
+      const { data: payment, error: fetchError } = await supabase
+        .from('booking_payments')
+        .select('capture_scheduled_for, booking_id')
+        .eq('id', paymentId)
+        .single();
+
+      if (fetchError) {
+        console.error(
+          '[markPaymentPreAuthorized] Error fetching payment:',
+          fetchError,
+        );
+      } else if (payment?.capture_scheduled_for) {
+        const scheduledCapture = new Date(payment.capture_scheduled_for);
+        const safetyBufferHours = 12; // 12-hour safety buffer before expiration
+        const safeCaptureDeadline = new Date(
+          authorizationExpiresAt.getTime() - safetyBufferHours * 60 * 60 * 1000,
+        );
+
+        if (scheduledCapture > safeCaptureDeadline) {
+          console.log(
+            `⚠️ [markPaymentPreAuthorized] Adjusting capture time for booking ${payment.booking_id}:`,
+            {
+              originalCapture: scheduledCapture.toISOString(),
+              adjustedCapture: safeCaptureDeadline.toISOString(),
+              authExpires: authorizationExpiresAt.toISOString(),
+              reason: 'Capture scheduled after authorization expiration',
+            },
+          );
+          updateData.capture_scheduled_for = safeCaptureDeadline.toISOString();
+        }
+      }
+    }
+
     const { error } = await supabase
       .from('booking_payments')
-      .update({
-        stripe_payment_intent_id: paymentIntentId,
-        pre_auth_placed_at: new Date().toISOString(),
-        pre_auth_scheduled_for: null, // Clear the scheduled date since auth is now placed
-        status: 'authorized',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', paymentId);
 
     if (error) {
@@ -949,12 +1043,14 @@ export async function markPaymentPreAuthorized(
 }
 
 /**
- * Mark payment as captured
+ * @internal
+ * Mark payment as captured after successful capture.
+ * Called ONLY by cron job (src/app/api/cron/capture-payments).
  */
 export async function markPaymentCaptured(
   paymentId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -984,7 +1080,9 @@ export async function markPaymentCaptured(
 }
 
 /**
- * Get appointments needing balance notifications (includes both card and cash payments)
+ * @internal
+ * Get appointments needing balance notifications.
+ * Called ONLY by cron job (src/app/api/cron/balance-notifications).
  */
 export async function getAppointmentsNeedingBalanceNotification(
   limit: number = 50,
@@ -1014,7 +1112,7 @@ export async function getAppointmentsNeedingBalanceNotification(
     }[];
   }[]
 > {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Calculate the timestamp for 2 hours ago
@@ -1274,12 +1372,14 @@ export async function getAppointmentsNeedingBalanceNotification(
 }
 
 /**
- * Mark balance notification as sent
+ * @internal
+ * Mark balance notification as sent to avoid duplicate emails.
+ * Called ONLY by cron job (src/app/api/cron/balance-notifications).
  */
 export async function markBalanceNotificationSent(
   bookingId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -1306,13 +1406,15 @@ export async function markBalanceNotificationSent(
 }
 
 /**
- * Update tip amount for a booking payment
+ * @internal
+ * Update tip amount for a booking payment.
+ * Called by tip service after successful tip payment.
  */
 export async function updatePaymentTipAmount(
   bookingId: string,
   tipAmount: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase
@@ -1339,7 +1441,9 @@ export async function updatePaymentTipAmount(
 }
 
 /**
- * Get booking details for payment confirmation emails
+ * @internal
+ * Get booking details for payment confirmation emails.
+ * Called by webhook handlers and email notification functions.
  */
 export async function getBookingDetailsForConfirmation(
   bookingId: string,
@@ -1360,7 +1464,7 @@ export async function getBookingDetailsForConfirmation(
   };
   error?: string;
 }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     // Get booking with all related data
@@ -1468,12 +1572,14 @@ export async function getBookingDetailsForConfirmation(
  * @deprecated This function is deprecated in favor of calculating all payment data upfront.
  * New bookings use calculateCompletePaymentData which calculates the correct amount during initial insert.
  * This function is kept for backward compatibility with legacy code.
+ * @internal
+ * Called by payment service to adjust amounts for cash payments.
  */
 export async function updateBookingPaymentAmount(
   bookingId: string,
   amount: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = createAdminClient();
 
   try {
     const { error } = await supabase

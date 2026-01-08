@@ -95,10 +95,25 @@ export async function GET(request: NextRequest) {
           throw new Error(result.error || 'Failed to create payment intent');
         }
 
-        // Mark payment as pre-authorized in database
+        // Log authorization expiration for monitoring
+        if (result.authorizationExpiresAt) {
+          const holdDurationHours =
+            (result.authorizationExpiresAt.getTime() - Date.now()) /
+            (60 * 60 * 1000);
+          console.log(
+            `[CRON] Authorization for booking ${payment.booking_id} expires at ${result.authorizationExpiresAt.toISOString()} (${holdDurationHours.toFixed(1)} hours from now)`,
+          );
+        } else {
+          console.log(
+            `[CRON] ⚠️ No authorization expiration returned for booking ${payment.booking_id} - using fallback`,
+          );
+        }
+
+        // Mark payment as pre-authorized in database with REAL expiration from Stripe
         const updateResult = await markPaymentPreAuthorized(
           payment.id,
           result.paymentIntentId!,
+          result.authorizationExpiresAt, // Pass the real expiration from Stripe
         );
 
         if (!updateResult.success) {

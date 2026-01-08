@@ -549,7 +549,7 @@ async function createSeparateCancellationCharge(
 
     // Calculate transfer amount for professional (cancellation fee minus platform service fee)
     const { getServiceFeeFromConfig } = await import(
-      '@/server/lib/service-fee'
+      '@/server/domains/stripe-payments/config'
     );
     const serviceFee = await getServiceFeeFromConfig(); // Get from config in cents
     const cancellationFee = chargeAmountInCents - serviceFee;

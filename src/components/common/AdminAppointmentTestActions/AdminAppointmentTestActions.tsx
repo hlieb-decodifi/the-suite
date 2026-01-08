@@ -36,6 +36,17 @@ type AdminAppointmentTestActionsProps = {
   onUpdate?: () => void;
 };
 
+/**
+ * @security Admin-only component
+ * 
+ * This component provides testing actions for appointments.
+ * All server actions called by this component include:
+ * 1. User authentication verification
+ * 2. Admin role verification via is_admin RPC
+ * 3. Admin client usage only AFTER authorization passes
+ * 
+ * See: src/server/domains/appointments/admin-actions.ts
+ */
 export function AdminAppointmentTestActions({
   appointmentId,
   onUpdate,
@@ -112,7 +123,7 @@ export function AdminAppointmentTestActions({
           variant="outline"
           size="sm"
           className="h-8 w-8 p-0 hover:bg-muted"
-          title="Test Actions"
+          title="Test Actions (Admin Only)"
         >
           <Settings className="h-3 w-3" />
         </Button>
@@ -125,7 +136,7 @@ export function AdminAppointmentTestActions({
           </DialogTitle>
           <DialogDescription>
             Change the appointment start/end times to simulate different states
-            for testing purposes.
+            for testing purposes. Admin access required.
           </DialogDescription>
         </DialogHeader>
 
@@ -262,9 +273,14 @@ export function AdminAppointmentTestActions({
               capture_scheduled_for to NOW, making them immediately triggerable
               by cron jobs.
             </div>
+            <div className="pt-2 border-t mt-2">
+              <strong>🔒 Security:</strong> All actions verify admin role before
+              execution.
+            </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
