@@ -948,6 +948,27 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
         paymentType,
       });
 
+      // VERIFY: Read back what was actually stored
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('booking_payments')
+        .select('status, capture_method, authorization_expires_at')
+        .eq('booking_id', bookingId)
+        .single();
+
+      if (verifyError) {
+        console.error(
+          '❌ Error verifying booking payment update:',
+          verifyError,
+        );
+      } else {
+        console.log('🔍 VERIFICATION - Booking payment after update:', {
+          bookingId,
+          status: verifyData.status,
+          capture_method: verifyData.capture_method,
+          authorization_expires_at: verifyData.authorization_expires_at,
+        });
+      }
+
       // Send confirmation emails for all new bookings that have been successfully processed
       // This ensures consistent email behavior regardless of payment method
       const isNewBooking = session.metadata?.is_new_booking !== 'false';
