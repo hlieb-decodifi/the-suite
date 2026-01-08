@@ -264,9 +264,14 @@ export async function updateBookingPaymentWithUncapturedIntent(
   paymentIntentId: string,
   captureDate: Date,
   balanceAmount: number,
+  authorizationExpiresAt?: Date,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
+
+    // Use provided expiration or conservative fallback
+    const expiresAt =
+      authorizationExpiresAt || new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
 
     const { error } = await supabase
       .from('booking_payments')
@@ -274,9 +279,7 @@ export async function updateBookingPaymentWithUncapturedIntent(
         stripe_payment_intent_id: paymentIntentId,
         capture_method: 'manual',
         capture_scheduled_for: captureDate.toISOString(),
-        authorization_expires_at: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000,
-        ).toISOString(), // 7 days from now
+        authorization_expires_at: expiresAt.toISOString(),
         status: 'authorized',
         balance_amount: balanceAmount,
         updated_at: new Date().toISOString(),
@@ -955,19 +958,73 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
 export async function markPaymentPreAuthorized(
   paymentId: string,
   paymentIntentId: string,
+  authorizationExpiresAt?: Date,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createAdminClient();
 
   try {
+    const updateData: {
+      stripe_payment_intent_id: string;
+      pre_auth_placed_at: string;
+      pre_auth_scheduled_for: null;
+      status: string;
+      updated_at: string;
+      authorization_expires_at?: string;
+      capture_scheduled_for?: string;
+    } = {
+      stripe_payment_intent_id: paymentIntentId,
+      pre_auth_placed_at: new Date().toISOString(),
+      pre_auth_scheduled_for: null, // Clear the scheduled date since auth is now placed
+      status: 'authorized',
+      updated_at: new Date().toISOString(),
+    };
+
+    // Store the REAL authorization expiration from Stripe
+    if (authorizationExpiresAt) {
+      updateData.authorization_expires_at =
+        authorizationExpiresAt.toISOString();
+      console.log(
+        `[markPaymentPreAuthorized] Storing authorization expiration: ${authorizationExpiresAt.toISOString()}`,
+      );
+
+      // CRITICAL: Check if scheduled capture is after authorization expiration
+      // Get current payment record to check capture_scheduled_for
+      const { data: payment, error: fetchError } = await supabase
+        .from('booking_payments')
+        .select('capture_scheduled_for, booking_id')
+        .eq('id', paymentId)
+        .single();
+
+      if (fetchError) {
+        console.error(
+          '[markPaymentPreAuthorized] Error fetching payment:',
+          fetchError,
+        );
+      } else if (payment?.capture_scheduled_for) {
+        const scheduledCapture = new Date(payment.capture_scheduled_for);
+        const safetyBufferHours = 12; // 12-hour safety buffer before expiration
+        const safeCaptureDeadline = new Date(
+          authorizationExpiresAt.getTime() - safetyBufferHours * 60 * 60 * 1000,
+        );
+
+        if (scheduledCapture > safeCaptureDeadline) {
+          console.log(
+            `⚠️ [markPaymentPreAuthorized] Adjusting capture time for booking ${payment.booking_id}:`,
+            {
+              originalCapture: scheduledCapture.toISOString(),
+              adjustedCapture: safeCaptureDeadline.toISOString(),
+              authExpires: authorizationExpiresAt.toISOString(),
+              reason: 'Capture scheduled after authorization expiration',
+            },
+          );
+          updateData.capture_scheduled_for = safeCaptureDeadline.toISOString();
+        }
+      }
+    }
+
     const { error } = await supabase
       .from('booking_payments')
-      .update({
-        stripe_payment_intent_id: paymentIntentId,
-        pre_auth_placed_at: new Date().toISOString(),
-        pre_auth_scheduled_for: null, // Clear the scheduled date since auth is now placed
-        status: 'authorized',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', paymentId);
 
     if (error) {

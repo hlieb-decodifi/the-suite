@@ -22,6 +22,7 @@ export async function replaceBalancePaymentWithAdditionalServices(
   success: boolean;
   newPaymentIntentId?: string;
   updatedAmount?: number;
+  authorizationExpiresAt?: Date;
   error?: string;
   immediatePayment?: boolean;
 }> {
@@ -154,6 +155,8 @@ export async function replaceBalancePaymentWithAdditionalServices(
         oldId: paymentIntentId,
         newId: newPaymentResult.paymentIntentId,
         amount: newTotalAmount,
+        authorizationExpiresAt:
+          newPaymentResult.authorizationExpiresAt?.toISOString(),
       },
     );
 
@@ -161,6 +164,9 @@ export async function replaceBalancePaymentWithAdditionalServices(
       success: true,
       newPaymentIntentId: newPaymentResult.paymentIntentId,
       updatedAmount: newTotalAmount,
+      ...(newPaymentResult.authorizationExpiresAt && {
+        authorizationExpiresAt: newPaymentResult.authorizationExpiresAt,
+      }),
     };
   } catch (error) {
     console.error(
