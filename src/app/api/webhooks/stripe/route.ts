@@ -872,47 +872,12 @@ async function handleBookingPaymentCheckout(session: Stripe.Checkout.Session) {
           updateData.pre_auth_placed_at = new Date().toISOString();
 
           // Retrieve the REAL authorization expiration from Stripe
-          try {
-            const piExpanded = await stripe.paymentIntents.retrieve(
-              paymentIntentId,
-              {
-                expand: ['latest_charge'],
-              },
-            );
-
-            const charge = piExpanded.latest_charge;
-            if (charge && typeof charge === 'object') {
-              const captureBeforeTimestamp =
-                charge.payment_method_details?.card?.capture_before;
-
-              if (captureBeforeTimestamp) {
-                updateData.authorization_expires_at = new Date(
-                  captureBeforeTimestamp * 1000,
-                ).toISOString();
-                console.log(
-                  `✅ Retrieved authorization expiration: ${updateData.authorization_expires_at}`,
-                );
-              } else {
-                // Fallback: Conservative 4-day estimate
-                updateData.authorization_expires_at = new Date(
-                  Date.now() + 4 * 24 * 60 * 60 * 1000,
-                ).toISOString();
-                console.log('⚠️ No capture_before found, using 4-day fallback');
-              }
-            } else {
-              // Fallback
-              updateData.authorization_expires_at = new Date(
-                Date.now() + 4 * 24 * 60 * 60 * 1000,
-              ).toISOString();
-              console.log('⚠️ No charge found, using 4-day fallback');
-            }
-          } catch (error) {
-            console.error('Error retrieving authorization expiration:', error);
-            // Fallback: Conservative 4-day estimate
-            updateData.authorization_expires_at = new Date(
-              Date.now() + 4 * 24 * 60 * 60 * 1000,
-            ).toISOString();
-          }
+          const { getAuthorizationExpirationWithFallback } = await import(
+            '@/server/domains/stripe-payments/stripe-operations'
+          );
+          const authExpiresAt =
+            await getAuthorizationExpirationWithFallback(paymentIntentId);
+          updateData.authorization_expires_at = authExpiresAt.toISOString();
 
           console.log(
             `📝 Storing as uncaptured payment intent: ${paymentIntentId}`,

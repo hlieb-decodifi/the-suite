@@ -5,6 +5,91 @@ import type { StripeCheckoutParams, StripeCheckoutResult } from './types';
 import { createAdminClient } from '@/lib/supabase/server';
 
 /**
+ * Retrieve the actual authorization expiration from Stripe charge
+ *
+ * This function extracts the `capture_before` timestamp from a Stripe charge,
+ * which indicates when the authorization hold will expire. This is more accurate
+ * than assuming a fixed 7-day period, as Stripe's actual hold periods vary based on:
+ * - Card brand (Visa, Mastercard, etc.)
+ * - Transaction type (MIT vs CIT)
+ * - Customer's payment history and risk profile
+ *
+ * @param paymentIntentId - The Stripe payment intent ID
+ * @returns Date object for authorization expiration, or undefined if not available
+ */
+export async function getAuthorizationExpirationFromStripe(
+  paymentIntentId: string,
+): Promise<Date | undefined> {
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      paymentIntentId,
+      { expand: ['latest_charge'] },
+    );
+
+    if (!paymentIntent.latest_charge) {
+      console.log(
+        `[getAuthorizationExpiration] ⚠️ No charge found for payment intent ${paymentIntentId}`,
+      );
+      return undefined;
+    }
+
+    const charge =
+      typeof paymentIntent.latest_charge === 'string'
+        ? await stripe.charges.retrieve(paymentIntent.latest_charge)
+        : paymentIntent.latest_charge;
+
+    const captureBeforeTimestamp =
+      charge.payment_method_details?.card?.capture_before;
+
+    if (captureBeforeTimestamp) {
+      const expirationDate = new Date(captureBeforeTimestamp * 1000);
+      console.log(
+        `[getAuthorizationExpiration] ✅ Retrieved expiration for ${paymentIntentId}: ${expirationDate.toISOString()}`,
+      );
+      return expirationDate;
+    }
+
+    console.log(
+      `[getAuthorizationExpiration] ⚠️ No capture_before found for payment intent ${paymentIntentId}`,
+    );
+    return undefined;
+  } catch (error) {
+    console.error(
+      `[getAuthorizationExpiration] Error retrieving expiration for ${paymentIntentId}:`,
+      error,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Get authorization expiration with a conservative fallback
+ *
+ * Returns the actual expiration from Stripe if available, otherwise falls back
+ * to a conservative 4-day estimate (based on Visa MIT authorization window).
+ *
+ * @param paymentIntentId - The Stripe payment intent ID
+ * @returns Date object for authorization expiration (always returns a value)
+ */
+export async function getAuthorizationExpirationWithFallback(
+  paymentIntentId: string,
+): Promise<Date> {
+  const expiration =
+    await getAuthorizationExpirationFromStripe(paymentIntentId);
+
+  if (expiration) {
+    return expiration;
+  }
+
+  // Fallback: Conservative 4-day estimate for MIT transactions
+  const fallbackDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+  console.log(
+    `[getAuthorizationExpiration] ⚠️ Using 4-day fallback: ${fallbackDate.toISOString()}`,
+  );
+  return fallbackDate;
+}
+
+/**
  * Create a Stripe checkout session for booking payment
  */
 export async function createStripeCheckoutSession(
@@ -376,48 +461,9 @@ export async function createUncapturedPaymentIntent(
     let authorizationExpiresAt: Date | undefined;
 
     if (paymentMethodId && paymentIntent.latest_charge) {
-      try {
-        const chargeId =
-          typeof paymentIntent.latest_charge === 'string'
-            ? paymentIntent.latest_charge
-            : paymentIntent.latest_charge.id;
-
-        const charge = await stripe.charges.retrieve(chargeId);
-        const captureBeforeTimestamp =
-          charge.payment_method_details?.card?.capture_before;
-
-        if (captureBeforeTimestamp) {
-          authorizationExpiresAt = new Date(captureBeforeTimestamp * 1000);
-          const holdDurationDays =
-            (captureBeforeTimestamp - charge.created) / 86400;
-
-          console.log(
-            `[createUncapturedPaymentIntent] ✅ Retrieved authorization expiration from Stripe:`,
-            {
-              paymentIntentId: paymentIntent.id,
-              expiresAt: authorizationExpiresAt.toISOString(),
-              holdDurationDays: holdDurationDays.toFixed(2),
-              cardBrand: charge.payment_method_details?.card?.brand,
-              transactionType: paymentMethodId ? 'MIT (off_session)' : 'CIT',
-            },
-          );
-        } else {
-          console.log(
-            `[createUncapturedPaymentIntent] ⚠️ No capture_before found for charge ${chargeId}, using fallback`,
-          );
-          // Fallback: Conservative 4-day estimate for MIT transactions
-          authorizationExpiresAt = new Date(
-            Date.now() + 4 * 24 * 60 * 60 * 1000,
-          );
-        }
-      } catch (retrieveError) {
-        console.error(
-          `[createUncapturedPaymentIntent] Error retrieving charge details:`,
-          retrieveError,
-        );
-        // Fallback: Conservative 4-day estimate
-        authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
-      }
+      authorizationExpiresAt = await getAuthorizationExpirationWithFallback(
+        paymentIntent.id,
+      );
     }
 
     return {
@@ -1401,37 +1447,9 @@ export async function createUncapturedPayment(
   );
 
   // Retrieve the actual authorization expiration from Stripe
-  let authorizationExpiresAt: Date;
-  try {
-    if (paymentIntent.latest_charge) {
-      const chargeId =
-        typeof paymentIntent.latest_charge === 'string'
-          ? paymentIntent.latest_charge
-          : paymentIntent.latest_charge.id;
-
-      const charge = await stripe.charges.retrieve(chargeId);
-      const captureBeforeTimestamp =
-        charge.payment_method_details?.card?.capture_before;
-
-      if (captureBeforeTimestamp) {
-        authorizationExpiresAt = new Date(captureBeforeTimestamp * 1000);
-        console.log(
-          `✅ Retrieved authorization expiration: ${authorizationExpiresAt.toISOString()}`,
-        );
-      } else {
-        // Fallback: Conservative 4-day estimate
-        authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
-        console.log('⚠️ No capture_before found, using 4-day fallback');
-      }
-    } else {
-      // Fallback if no charge yet
-      authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
-      console.log('⚠️ No charge found, using 4-day fallback');
-    }
-  } catch (error) {
-    console.error('Error retrieving charge details:', error);
-    authorizationExpiresAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
-  }
+  const authorizationExpiresAt = await getAuthorizationExpirationWithFallback(
+    paymentIntent.id,
+  );
 
   // Update booking_payments for immediate uncaptured payment (NO pre-auth scheduling)
   const { error: updateError } = await adminSupabase
