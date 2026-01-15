@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Typography } from '@/components/ui/typography';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { SignInModal } from '@/components/modals/SignInModal';
 import { SignUpModal } from '@/components/modals/SignUpModal';
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Pagination } from '@/components/common/Pagination';
 import {
   upsertServiceAction,
   deleteServiceAction,
@@ -367,6 +368,8 @@ function InlineServiceForm({
 export function ProfileServicesPageClient({
   user,
   initialServices,
+  initialPagination,
+  initialSearch,
   isEditable = true,
   serviceLimitInfo,
   isBookable = false,
@@ -393,6 +396,13 @@ export function ProfileServicesPageClient({
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
+  // Sync services when initialServices changes (e.g., pagination)
+  useEffect(() => {
+    setServices(initialServices);
+  }, [initialServices]);
 
   // Check authentication status
   useEffect(() => {
@@ -420,6 +430,18 @@ export function ProfileServicesPageClient({
 
     checkAuth();
   }, []);
+
+  // Handle page changes
+  const handlePageChange = (newPage: number) => {
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', newPage.toString());
+      if (initialSearch) {
+        params.set('search', initialSearch);
+      }
+      router.push(`?${params.toString()}`);
+    });
+  };
 
   // Calculate remaining slots
   const maxServices = serviceLimitInfo?.maxServices || 50;
@@ -796,110 +818,158 @@ export function ProfileServicesPageClient({
 
       {/* Mobile View - Just the services list */}
       {isMobile ? (
-        services.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4">
-            {services.map((service) => (
-              <ServiceCard
-                key={service.id}
-                service={service}
-                onEdit={handleEditService}
-                onDelete={() => handleDeleteServiceClick(service)}
-                onDuplicate={handleDuplicateService}
-                isUpdating={
-                  isSubmittingService && editingService?.id === service.id
-                }
-                isBeingEdited={editingService?.id === service.id}
-                isEditable={isEditable}
-                isDeletable={isEditable}
-                isAtLimit={isAtLimit}
-                authStatus={authStatus}
-                onBookNowClick={handleBookNowClick}
-                isBookable={isBookable}
-              />
-            ))}
-          </div>
-        ) : (
-          <Card className="border border-border bg-background/50">
-            <CardContent className="p-6 text-center">
-              <Typography variant="h4" className="text-muted-foreground mb-2">
-                No Services Yet
-              </Typography>
-              <Typography className="text-muted-foreground mb-4">
-                {isEditable
-                  ? 'Click "Add Service" to offer your first service to clients.'
-                  : "This professional hasn't added any services yet."}
-              </Typography>
-            </CardContent>
-          </Card>
-        )
-      ) : (
-        // Desktop View - Split Layout or just list in view mode
-        <div
-          className={isEditable ? 'grid lg:grid-cols-[1fr_500px] gap-6' : ''}
-        >
-          {/* Services List */}
-          <div
-            className={
-              isEditable
-                ? 'space-y-4 lg:space-y-4 max-h-[650px] lg:max-h-none overflow-y-auto lg:overflow-visible pb-4'
-                : 'gap-4 grid grid-cols-1'
-            }
-          >
-            {services.length > 0 ? (
-              <>
-                {services.map((service) => (
-                  <ServiceCard
-                    key={service.id}
-                    service={service}
-                    onEdit={handleEditService}
-                    onDelete={() => handleDeleteServiceClick(service)}
-                    onArchive={() => handleArchiveService(service)}
-                    onUnarchive={() => handleUnarchiveService(service)}
-                    onDuplicate={handleDuplicateService}
-                    isUpdating={
-                      isSubmittingService && editingService?.id === service.id
-                    }
-                    isBeingEdited={editingService?.id === service.id}
-                    isEditable={isEditable}
-                    isDeletable={isEditable}
-                    isAtLimit={isAtLimit}
-                    authStatus={authStatus}
-                    onBookNowClick={handleBookNowClick}
-                    isBookable={isBookable}
-                  />
-                ))}
-              </>
-            ) : (
-              <Card className="border border-muted bg-background/50">
-                <CardContent className="p-6 text-center">
-                  <Typography
-                    variant="h4"
-                    className="text-muted-foreground mb-2"
-                  >
-                    No Services Yet
-                  </Typography>
-                  <Typography className="text-muted-foreground mb-4">
-                    {isEditable
-                      ? 'Use the form to add your first service.'
-                      : "This professional hasn't added any services yet."}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+        <>
+          {services.length > 0 ? (
+            <div
+              className={cn(
+                'grid grid-cols-1 gap-4 relative',
+                isPending && 'opacity-60 pointer-events-none',
+              )}
+            >
+              {isPending && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              {services.map((service) => (
+                <ServiceCard
+                  key={service.id}
+                  service={service}
+                  onEdit={handleEditService}
+                  onDelete={() => handleDeleteServiceClick(service)}
+                  onDuplicate={handleDuplicateService}
+                  isUpdating={
+                    isSubmittingService && editingService?.id === service.id
+                  }
+                  isBeingEdited={editingService?.id === service.id}
+                  isEditable={isEditable}
+                  isDeletable={isEditable}
+                  isAtLimit={isAtLimit}
+                  authStatus={authStatus}
+                  onBookNowClick={handleBookNowClick}
+                  isBookable={isBookable}
+                />
+              ))}
+            </div>
+          ) : (
+            <Card className="border border-border bg-background/50">
+              <CardContent className="p-6 text-center">
+                <Typography variant="h4" className="text-muted-foreground mb-2">
+                  No Services Yet
+                </Typography>
+                <Typography className="text-muted-foreground mb-4">
+                  {isEditable
+                    ? 'Click "Add Service" to offer your first service to clients.'
+                    : "This professional hasn't added any services yet."}
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Service Form (Right Side) - Only in edit mode */}
-          {isEditable && (
-            <div className="lg:sticky lg:top-24 lg:self-start lg:border-l lg:pl-6">
-              <InlineServiceForm
-                onSubmitSuccess={handleServiceFormSubmitSuccess}
-                editingService={editingService}
-                onCancel={handleCancelEdit}
-                serviceLimitInfo={serviceLimitInfo || null}
+          {/* Pagination - Mobile */}
+          {initialPagination.totalPages > 1 && (
+            <div className="mt-6">
+              <Pagination
+                currentPage={initialPagination.page}
+                totalPages={initialPagination.totalPages}
+                onPageChange={handlePageChange}
+                showPageNumbers={false}
+                disabled={isPending}
               />
             </div>
           )}
-        </div>
+        </>
+      ) : (
+        // Desktop View - Split Layout or just list in view mode
+        <>
+          <div
+            className={isEditable ? 'grid lg:grid-cols-[1fr_500px] gap-6' : ''}
+          >
+            {/* Services List */}
+            <div className="space-y-4">
+              <div
+                className={cn(
+                  isEditable
+                    ? 'space-y-4 max-h-[650px] lg:max-h-none overflow-y-auto lg:overflow-visible pb-4 relative'
+                    : 'gap-4 grid grid-cols-1 relative',
+                  isPending && 'opacity-60 pointer-events-none',
+                )}
+              >
+                {isPending && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/50">
+                    <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {services.length > 0 ? (
+                  <>
+                    {services.map((service) => (
+                      <ServiceCard
+                        key={service.id}
+                        service={service}
+                        onEdit={handleEditService}
+                        onDelete={() => handleDeleteServiceClick(service)}
+                        onArchive={() => handleArchiveService(service)}
+                        onUnarchive={() => handleUnarchiveService(service)}
+                        onDuplicate={handleDuplicateService}
+                        isUpdating={
+                          isSubmittingService &&
+                          editingService?.id === service.id
+                        }
+                        isBeingEdited={editingService?.id === service.id}
+                        isEditable={isEditable}
+                        isDeletable={isEditable}
+                        isAtLimit={isAtLimit}
+                        authStatus={authStatus}
+                        onBookNowClick={handleBookNowClick}
+                        isBookable={isBookable}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <Card className="border border-muted bg-background/50">
+                    <CardContent className="p-6 text-center">
+                      <Typography
+                        variant="h4"
+                        className="text-muted-foreground mb-2"
+                      >
+                        No Services Yet
+                      </Typography>
+                      <Typography className="text-muted-foreground mb-4">
+                        {isEditable
+                          ? 'Use the form to add your first service.'
+                          : "This professional hasn't added any services yet."}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Pagination - Desktop */}
+              {initialPagination.totalPages > 1 && (
+                <div className="mt-6">
+                  <Pagination
+                    currentPage={initialPagination.page}
+                    totalPages={initialPagination.totalPages}
+                    onPageChange={handlePageChange}
+                    disabled={isPending}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Service Form (Right Side) - Only in edit mode */}
+            {isEditable && (
+              <div className="lg:sticky lg:top-24 lg:self-start lg:border-l lg:pl-6">
+                <InlineServiceForm
+                  onSubmitSuccess={handleServiceFormSubmitSuccess}
+                  editingService={editingService}
+                  onCancel={handleCancelEdit}
+                  serviceLimitInfo={serviceLimitInfo || null}
+                />
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Service Modal for Mobile/Tablet - Only in edit mode */}

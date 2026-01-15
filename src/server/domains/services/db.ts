@@ -94,11 +94,11 @@ export async function getServicesForUser({
     }
 
     // Apply remaining filters and pagination
-    // Sort by is_archived first (active services first), then by created_at (newest first)
+    // Sort by is_archived first (active services first), then by updated_at (most recently updated first)
     const { data, error, count } = await query
       .eq('professional_profile_id', profileId)
       .order('is_archived', { ascending: true })
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .range(from, to);
 
     if (error) {
