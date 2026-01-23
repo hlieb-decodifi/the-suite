@@ -53,6 +53,23 @@ export async function GET(request: NextRequest) {
           `[CRON] Capturing payment for booking: ${payment.booking_id}`,
         );
 
+        // Defensive check: Verify payment hasn't been refunded (in case query missed it)
+        // This prevents capturing payments for cancelled bookings
+        const { createAdminClient } = await import('@/lib/supabase/server');
+        const supabase = createAdminClient();
+        const { data: paymentCheck } = await supabase
+          .from('booking_payments')
+          .select('refunded_at, status')
+          .eq('id', payment.id)
+          .single();
+
+        if (paymentCheck?.refunded_at) {
+          console.log(
+            `[CRON] ⏭️ Skipping booking ${payment.booking_id} - payment has been refunded (booking cancelled)`,
+          );
+          continue; // Skip to next payment
+        }
+
         // Calculate amount to capture based on payment method
         // - Online payment: Capture balance_amount (full balance via Stripe)
         // - Cash payment without deposit: Capture amount (service fee only, balance is cash)
