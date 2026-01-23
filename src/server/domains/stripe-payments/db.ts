@@ -830,11 +830,10 @@ export async function getPaymentsPendingPreAuth(limit: number = 50): Promise<
       )
       .lte('pre_auth_scheduled_for', new Date().toISOString())
       .is('pre_auth_placed_at', null)
+      .is('refunded_at', null) // Exclude refunded payments (cancelled bookings)
       .not('pre_auth_scheduled_for', 'is', null)
       .not('stripe_payment_method_id', 'is', null) // Only process if payment method exists (excludes broken records)
       .limit(limit);
-
-    console.log('data', data);
 
     if (error) {
       console.error('Error fetching payments pending pre-auth:', error);
@@ -923,6 +922,7 @@ export async function getPaymentsPendingCapture(limit: number = 50): Promise<
       )
       .lte('capture_scheduled_for', new Date().toISOString())
       .in('status', ['authorized', 'pre_auth_scheduled'])
+      .is('refunded_at', null) // Exclude refunded payments (cancelled bookings)
       .not('stripe_payment_intent_id', 'is', null)
       .not('capture_scheduled_for', 'is', null)
       .limit(limit);
