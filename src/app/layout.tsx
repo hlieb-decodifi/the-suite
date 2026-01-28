@@ -6,6 +6,7 @@ import { Providers } from '@/providers';
 import { Toaster } from '@/components/ui/toaster';
 import { RootLayoutTemplate } from '@/components/templates';
 import { cn } from '@/utils/cn';
+import { getURL } from '@/lib/utils/url';
 
 const titillium = Titillium_Web({
   subsets: ['latin'],
@@ -18,37 +19,27 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-const getURL = () => {
-  const url =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.VERCEL_URL ||
-    'http://localhost:3000';
-  return url.startsWith('http') ? url : `https://${url}`;
-};
-
 const siteName = 'The Suite';
 const description = 'Premium services at your fingertips';
+const siteUrl = getURL();
 
 export const metadata: Metadata = {
-  metadataBase: new URL(getURL()),
+  metadataBase: new URL(siteUrl),
   title: siteName,
   description: description,
 
   // Open Graph (Facebook, LinkedIn, Discord, etc.)
+  // title, description, and url are inherited from top-level metadata
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: getURL(),
     siteName: siteName,
-    title: siteName,
-    description: description,
   },
 
   // Twitter Card
+  // title and description are inherited from top-level metadata
   twitter: {
     card: 'summary_large_image',
-    title: siteName,
-    description: description,
   },
 
   // Icons

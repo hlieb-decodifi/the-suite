@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
+import { getURL } from '@/lib/utils/url';
 import type { MetadataRoute } from 'next';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = getURL();
   const supabase = await createClient();
 
   // Static pages
@@ -58,26 +59,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // Dynamic professional pages
-  const { data: professionals } = await supabase
+  const { data: professionals, error } = await supabase
     .from('professional_profiles')
     .select('user_id, updated_at')
     .eq('is_published', true);
 
+  if (error) {
+    console.error('Error fetching professionals for sitemap:', error);
+    return staticPages;
+  }
+
   const professionalPages: MetadataRoute.Sitemap = (professionals || []).flatMap(
-    (professional) => [
-      {
-        url: `${baseUrl}/professionals/${professional.user_id}`,
-        lastModified: new Date(professional.updated_at),
-        changeFrequency: 'weekly' as const,
-        priority: 0.8,
-      },
-      {
-        url: `${baseUrl}/professionals/${professional.user_id}/services`,
-        lastModified: new Date(professional.updated_at),
-        changeFrequency: 'weekly' as const,
-        priority: 0.7,
-      },
-    ],
+    (professional) => {
+      const lastModified = new Date(professional.updated_at);
+      return [
+        {
+          url: `${baseUrl}/professionals/${professional.user_id}`,
+          lastModified,
+          changeFrequency: 'weekly' as const,
+          priority: 0.8,
+        },
+        {
+          url: `${baseUrl}/professionals/${professional.user_id}/services`,
+          lastModified,
+          changeFrequency: 'weekly' as const,
+          priority: 0.7,
+        },
+      ];
+    },
   );
 
   return [...staticPages, ...professionalPages];
