@@ -18,9 +18,44 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
+const getURL = () => {
+  const url =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.VERCEL_URL ||
+    'http://localhost:3000';
+  return url.startsWith('http') ? url : `https://${url}`;
+};
+
+const siteName = 'The Suite';
+const description = 'Premium services at your fingertips';
+
 export const metadata: Metadata = {
-  title: 'The Suite',
-  description: 'Premium services at your fingertips',
+  metadataBase: new URL(getURL()),
+  title: siteName,
+  description: description,
+
+  // Open Graph (Facebook, LinkedIn, Discord, etc.)
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: getURL(),
+    siteName: siteName,
+    title: siteName,
+    description: description,
+  },
+
+  // Twitter Card
+  twitter: {
+    card: 'summary_large_image',
+    title: siteName,
+    description: description,
+  },
+
+  // Icons
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 const RootLayout = ({ children }: { children: React.ReactNode }) => {
