@@ -368,6 +368,7 @@ function DatePickerSection({
     if (selectedDate !== localSelectedDate) {
       setLocalSelectedDate(selectedDate);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
   // Handle local date selection

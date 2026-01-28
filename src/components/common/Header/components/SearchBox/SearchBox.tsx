@@ -35,6 +35,7 @@ export function SearchBox({
     if (!searchParams) return;
     const urlSearchTerm = searchParams.get('search') || '';
     setSearchTerm(urlSearchTerm);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array means this only runs once on mount
 
   // Focus the input when autoFocus is true

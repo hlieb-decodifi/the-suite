@@ -18,12 +18,13 @@ import {
 import { BookingFormValues } from './schema';
 import { useBookingForm } from './useBookingForm';
 import { useActivityTracker } from '@/api/activity-log';
+import { PaymentMethod } from '@/components/templates/BookingModalTemplate';
 
 export type BookingFormProps = {
   service: ServiceListItem;
   extraServices?: ServiceListItem[];
   isLoadingExtraServices?: boolean;
-  availablePaymentMethods?: { id: string; name: string }[];
+  availablePaymentMethods?: PaymentMethod[];
   isLoadingPaymentMethods?: boolean;
   availableTimeSlots?: string[];
   isLoadingTimeSlots?: boolean;
@@ -81,6 +82,7 @@ export function BookingForm({
         form.setValue('date', selectedDate);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
   // Track booking started when user selects a date (serious intent indicator)
@@ -184,6 +186,24 @@ export function BookingForm({
     const selectedIds = form.watch('extraServiceIds') || [];
     return extraServices.filter((service) => selectedIds.includes(service.id));
   }, [extraServices, form.watch('extraServiceIds')]);
+
+  // Check if selected payment method is card
+  const selectedPaymentMethodId = form.watch('paymentMethodId');
+  const isCardPayment = useMemo(() => {
+    const selectedMethod = availablePaymentMethods.find(
+      (method) => method.id === selectedPaymentMethodId,
+    );
+    return selectedMethod?.is_online;
+  }, [selectedPaymentMethodId, availablePaymentMethods]);
+
+
+  console.log(isCardPayment, selectedPaymentMethodId, availablePaymentMethods);
+  // Reset tip amount when switching from card to cash
+  useEffect(() => {
+    if (!isCardPayment && form.getValues('tipAmount') !== 0) {
+      form.setValue('tipAmount', 0);
+    }
+  }, [isCardPayment, form]);
 
   // Notify parent about form data changes
   useEffect(() => {
@@ -322,39 +342,43 @@ export function BookingForm({
 
           <FormError error={form.formState.errors.notes?.message?.toString()} />
         </div>
-        {/* Tip - using FormFieldWrapper and FormInput */}
-        <div className="space-y-3">
-          <Typography variant="h3" className="text-lg font-semibold">
-            Add a Tip (Optional)
-          </Typography>
+        {/* Tip - Only show for card payments */}
+        {isCardPayment && (
+          <div className="space-y-3">
+            <Typography variant="h3" className="text-lg font-semibold">
+              Add a Tip (Optional)
+            </Typography>
 
-          <FormFieldWrapper
-            control={form.control}
-            name="tipAmount"
-            label="Tip Amount ($)"
-          >
-            {(field) => (
-              <FormInput
-                type="text"
-                inputMode="decimal"
-                placeholder="0.00"
-                numericOnly
-                allowDecimal
-                {...field}
-                onChange={(e) => {
-                  const value =
-                    e.target.value === '' ? 0 : Number(e.target.value);
-                  field.onChange(value);
-                }}
-                value={field.value === 0 ? '' : (field.value?.toString() ?? '')}
-              />
-            )}
-          </FormFieldWrapper>
+            <FormFieldWrapper
+              control={form.control}
+              name="tipAmount"
+              label="Tip Amount ($)"
+            >
+              {(field) => (
+                <FormInput
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  numericOnly
+                  allowDecimal
+                  {...field}
+                  onChange={(e) => {
+                    const value =
+                      e.target.value === '' ? 0 : Number(e.target.value);
+                    field.onChange(value);
+                  }}
+                  value={
+                    field.value === 0 ? '' : (field.value?.toString() ?? '')
+                  }
+                />
+              )}
+            </FormFieldWrapper>
 
-          <Typography variant="muted" className="text-sm">
-            Show your appreciation for exceptional service
-          </Typography>
-        </div>
+            <Typography variant="muted" className="text-sm">
+              Show your appreciation for exceptional service
+            </Typography>
+          </div>
+        )}
       </form>
     </Form>
   );
