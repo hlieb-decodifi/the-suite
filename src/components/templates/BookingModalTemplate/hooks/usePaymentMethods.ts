@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 export type PaymentMethod = {
   id: string;
   name: string;
+  is_online: boolean;
 };
 
 /**
@@ -39,7 +40,7 @@ async function fetchPaymentMethods(
     // Now fetch the actual payment methods
     const { data: methods, error: paymentMethodsError } = await supabase
       .from('payment_methods')
-      .select('id, name')
+      .select('id, name, is_online')
       .in('id', methodIds);
 
     if (paymentMethodsError) {

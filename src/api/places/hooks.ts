@@ -236,6 +236,7 @@ export function useAddressSelector(
         throw error;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [placeDetails, autocomplete, options.onSelect],
   );
 

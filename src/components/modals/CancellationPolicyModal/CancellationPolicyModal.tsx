@@ -50,6 +50,7 @@ export function CancellationPolicyModal({
     if (isOpen) {
       loadPolicyInfo();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, bookingId]);
 
   const loadPolicyInfo = async () => {

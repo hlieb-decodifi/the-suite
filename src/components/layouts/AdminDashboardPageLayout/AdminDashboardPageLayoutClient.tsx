@@ -148,6 +148,7 @@ export function AdminDashboardPageLayoutClient({
         isActive: activeTab === 'analytics',
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeTab, searchParams],
   );
 

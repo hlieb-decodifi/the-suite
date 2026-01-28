@@ -113,6 +113,7 @@ export function NonConvertingUsersModal({
       setOffset(0);
       fetchUsers(true);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, start, end]);
 
   const defaultTrigger = (

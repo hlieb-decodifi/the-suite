@@ -101,6 +101,7 @@ export function BookingSuccessContent() {
     };
 
     verifyPayment();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const handleContinue = () => {
