@@ -6,6 +6,7 @@ import { Providers } from '@/providers';
 import { Toaster } from '@/components/ui/toaster';
 import { RootLayoutTemplate } from '@/components/templates';
 import { cn } from '@/utils/cn';
+import { getURL } from '@/lib/utils/url';
 
 const titillium = Titillium_Web({
   subsets: ['latin'],
@@ -18,9 +19,34 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
+const siteName = 'The Suite';
+const description = 'Premium services at your fingertips';
+const siteUrl = getURL();
+
 export const metadata: Metadata = {
-  title: 'The Suite',
-  description: 'Premium services at your fingertips',
+  metadataBase: new URL(siteUrl),
+  title: siteName,
+  description: description,
+
+  // Open Graph (Facebook, LinkedIn, Discord, etc.)
+  // title, description, and url are inherited from top-level metadata
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    siteName: siteName,
+  },
+
+  // Twitter Card
+  // title and description are inherited from top-level metadata
+  twitter: {
+    card: 'summary_large_image',
+  },
+
+  // Icons
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 const RootLayout = ({ children }: { children: React.ReactNode }) => {
