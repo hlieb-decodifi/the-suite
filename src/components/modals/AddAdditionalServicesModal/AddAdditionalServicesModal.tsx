@@ -68,6 +68,7 @@ export function AddAdditionalServicesModal({
     if (isOpen) {
       loadAvailableServices();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, professionalUserId]);
 
   const loadAvailableServices = async () => {

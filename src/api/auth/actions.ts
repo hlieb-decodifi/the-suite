@@ -5,18 +5,10 @@ import { SignInFormValues } from '@/components/forms/SignInForm/schema';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getURL } from '@/lib/utils/url';
 
-const getURL = () => {
-  let url =
-    process?.env?.NEXT_PUBLIC_BASE_URL ?? // Set this to your site URL in production env.
-    process?.env?.VERCEL_BRANCH_URL ?? // Automatically set by Vercel.
-    'http://localhost:3000/';
-  // Make sure to include `https://` when not localhost.
-  url = url.startsWith('http') ? url : `https://${url}`;
-  // Make sure to include a trailing `/`.
-  url = url.endsWith('/') ? url : `${url}/`;
-  return url;
-};
+// Helper to get URL with trailing slash for auth redirects
+const getAuthURL = () => getURL({ trailingSlash: true });
 
 // Helper function to check if a user exists by email (case-insensitive)
 // SECURITY NOTE: This function is intentionally NOT EXPORTED to prevent email enumeration attacks.
@@ -82,7 +74,7 @@ export async function inviteAdminAction(
         last_name: lastName,
         role: 'admin',
       },
-      redirectTo: `${getURL()}auth/set-password?type=admin_invite`,
+      redirectTo: `${getAuthURL()}auth/set-password?type=admin_invite`,
     });
 
   if (inviteError) {
@@ -143,7 +135,7 @@ export async function signUpAction(
           last_name: data.lastName,
           role: data.userType,
         },
-        emailRedirectTo: `${getURL()}/auth/callback?redirect_to=${encodeURIComponent(finalRedirectTo)}&type=email_verification`,
+        emailRedirectTo: `${getAuthURL()}auth/callback?redirect_to=${encodeURIComponent(finalRedirectTo)}&type=email_verification`,
       },
     });
 
@@ -257,7 +249,7 @@ export async function resetPasswordAction(email: string) {
 
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getURL()}/auth/reset-password?type=password_reset`,
+      redirectTo: `${getAuthURL()}auth/reset-password?type=password_reset`,
     });
 
     if (error) {
@@ -438,7 +430,7 @@ export async function updateEmailAction(newEmail: string, password: string) {
         email: newEmail,
       },
       {
-        emailRedirectTo: `${getURL()}auth/email-confirmed?type=email_change`,
+        emailRedirectTo: `${getAuthURL()}auth/email-confirmed?type=email_change`,
       },
     );
 
@@ -473,7 +465,7 @@ export async function signInWithGoogleAction(redirectTo: string = '/profile') {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${getURL()}auth/callback?redirect_to=${redirectTo}`,
+        redirectTo: `${getAuthURL()}auth/callback?redirect_to=${redirectTo}`,
       },
     });
 
@@ -628,7 +620,7 @@ export async function getGoogleOAuthUrlAction(
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${getURL()}auth/callback?${callbackParams.toString()}`,
+        redirectTo: `${getAuthURL()}auth/callback?${callbackParams.toString()}`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

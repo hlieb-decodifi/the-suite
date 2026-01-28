@@ -194,6 +194,7 @@ export function DashboardMessagesPageClient({
       setMessages(result.messages);
       setTimeout(() => scrollToFirstUnreadOrBottom(result.messages!), 100);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load messages for selected conversation and mark as read

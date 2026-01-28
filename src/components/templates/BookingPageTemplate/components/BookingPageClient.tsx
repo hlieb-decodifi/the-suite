@@ -362,7 +362,7 @@ export function BookingPageClient({
                   </div>
 
                   {/* Tip */}
-                  {formData.tipAmount && formData.tipAmount > 0 && (
+                  {!!formData.tipAmount && formData.tipAmount > 0 && (
                     <div className="flex justify-between items-center">
                       <Typography
                         variant="small"

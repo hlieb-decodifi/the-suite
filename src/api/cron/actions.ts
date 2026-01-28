@@ -27,10 +27,8 @@ export async function triggerCronJob(jobEndpoint: string): Promise<{
     }
 
     // Get the base URL for the current environment
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      'http://localhost:3000';
+    const { getURL } = await import('@/lib/utils/url');
+    const baseUrl = getURL();
     const url = `${baseUrl}${jobEndpoint}`;
 
     console.log(`[SERVER] Triggering cron job: ${url}`);
