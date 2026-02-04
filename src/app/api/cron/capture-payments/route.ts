@@ -4,6 +4,7 @@ import {
   markPaymentCaptured,
 } from '@/server/domains/stripe-payments/db';
 import { capturePaymentIntent } from '@/server/domains/stripe-payments/stripe-operations';
+import { chainToStaging } from '@/lib/utils/cron-chain';
 
 export const runtime = 'nodejs';
 
@@ -37,6 +38,12 @@ export async function GET(request: NextRequest) {
     );
 
     if (pendingCaptures.length === 0) {
+      // Chain to staging even when no work was done
+      await chainToStaging({
+        endpoint: '/api/cron/capture-payments',
+        awaitCompletion: false,
+      });
+
       return NextResponse.json({
         success: true,
         message: 'No payments need capturing',
@@ -141,6 +148,12 @@ export async function GET(request: NextRequest) {
     console.log(
       `[CRON] Payment capture processing completed. Processed: ${processedCount}, Errors: ${errorCount}, Duration: ${duration}ms`,
     );
+
+    // Chain to staging environment (fire and forget)
+    await chainToStaging({
+      endpoint: '/api/cron/capture-payments',
+      awaitCompletion: false,
+    });
 
     return NextResponse.json({
       success: true,
