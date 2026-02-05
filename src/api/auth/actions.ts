@@ -668,7 +668,7 @@ export async function deleteAdminAction(userId: string) {
   // Check if current user is admin
   const { requireAdminUser } = await import('@/server/domains/admin/actions');
   const adminCheck = await requireAdminUser();
-  if (!adminCheck.success) {
+  if (!adminCheck.success || !adminCheck.user) {
     return { success: false, error: 'Admin access required' };
   }
 
