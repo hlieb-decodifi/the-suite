@@ -659,3 +659,96 @@ export async function getGoogleOAuthUrlAction(
     };
   }
 }
+
+/**
+ * Server action to delete an admin user
+ * Deletes the user from both auth and public tables
+ */
+export async function deleteAdminAction(userId: string) {
+  // Check if current user is admin
+  const { requireAdminUser } = await import('@/server/domains/admin/actions');
+  const adminCheck = await requireAdminUser();
+  if (!adminCheck.success) {
+    return { success: false, error: 'Admin access required' };
+  }
+
+  const currentUserId = adminCheck.user.id;
+
+  // Prevent users from deleting themselves
+  if (currentUserId === userId) {
+    return {
+      success: false,
+      error: 'You cannot delete your own admin account',
+    };
+  }
+
+  try {
+    const adminSupabase = createAdminClient();
+
+    // Verify the user to be deleted is actually an admin
+    const { data: userRole, error: roleError } = await adminSupabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
+
+    if (roleError || !userRole || userRole.role !== 'admin') {
+      return {
+        success: false,
+        error: 'User is not an admin or does not exist',
+      };
+    }
+
+    // Manually delete related records before deleting from auth
+    // Step 1: Delete from user_roles
+    const { error: roleDeleteError } = await adminSupabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId);
+
+    if (roleDeleteError) {
+      console.error('Error deleting user role:', roleDeleteError);
+      return {
+        success: false,
+        error: 'Failed to delete user role',
+      };
+    }
+
+    // Step 2: Delete from public.users
+    const { error: userDeleteError } = await adminSupabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (userDeleteError) {
+      console.error('Error deleting user from public.users:', userDeleteError);
+      return {
+        success: false,
+        error: 'Failed to delete user record',
+      };
+    }
+
+    // Step 3: Delete from auth.users
+    const { error: deleteAuthError } =
+      await adminSupabase.auth.admin.deleteUser(userId);
+
+    if (deleteAuthError) {
+      console.error('Error deleting user from auth:', deleteAuthError);
+      return {
+        success: false,
+        error: deleteAuthError.message || 'Failed to delete user from authentication',
+      };
+    }
+
+    // Revalidate the admin list page
+    revalidatePath('/admin/admins');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting admin user:', error);
+    return {
+      success: false,
+      error: 'Failed to delete admin user. Please try again.',
+    };
+  }
+}
