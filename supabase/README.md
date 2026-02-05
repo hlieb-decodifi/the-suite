@@ -467,23 +467,6 @@ SUPABASE_SERVICE_ROLE_KEY=eyJh... (from supabase status)
 
 ## Testing
 
-### Test Credentials
-
-After running seeds, use these test accounts:
-
-**Admin:**
-- Email: `admin@decodifi.uk`
-- Password: `mHMGB1uzkdfQ16xU`
-
-**Professional:**
-- Email: `professional@mail.com`
-- Password: `secret`
-- Has Stripe Connect, subscription, and services
-
-**Client:**
-- Email: `client@mail.com`
-- Password: `secret`
-
 ## Troubleshooting
 
 ### "relation does not exist" Error
