@@ -58,7 +58,7 @@ See `.cursor/rules/never-edit-migration-files.mdc` for the full workflow and why
 Seeds are organized by purpose:
 - `seed.sql` - Core config, payment methods, subscription plans, admin user
 - `seed-infrastructure.sql` - Email templates, legal docs, storage buckets
-- `seed-test-users.sql` - Test professional and client accounts
+- `seed-test-users.sql` - Professional and client accounts for development
 - `seed-additional-services.sql` - Extra services for UI testing
 
 Reset your database with seeds: `yarn db:reset`
