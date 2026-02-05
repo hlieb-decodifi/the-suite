@@ -422,9 +422,10 @@ export function DashboardMessagesPageClient({
         const formData = new FormData();
         formData.append('file', image.file);
 
+        // Upload with user folder structure to match RLS policy: user_id/timestamp-filename
         const { data, error } = await supabase.storage
           .from('message-attachments')
-          .upload(`${Date.now()}-${image.file.name}`, image.file, {
+          .upload(`${currentUserId}/${Date.now()}-${image.file.name}`, image.file, {
             cacheControl: '3600',
             upsert: false,
           });

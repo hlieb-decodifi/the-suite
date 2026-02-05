@@ -9,6 +9,7 @@ import {
 } from '@/providers/brevo/templates';
 import { EmailRecipient } from '@/providers/brevo/types';
 import { format, toZonedTime } from 'date-fns-tz';
+import { chainToStaging } from '@/lib/utils/cron-chain';
 
 export const runtime = 'nodejs';
 
@@ -77,6 +78,12 @@ export async function GET(request: NextRequest) {
     );
 
     if (appointmentsNeedingNotification.length === 0) {
+      // Chain to staging even when no work was done
+      await chainToStaging({
+        endpoint: '/api/cron/balance-notifications',
+        awaitCompletion: false,
+      });
+
       return NextResponse.json({
         success: true,
         message: 'No appointments need balance notifications',
@@ -185,6 +192,12 @@ export async function GET(request: NextRequest) {
     console.log(
       `[CRON] Balance notifications processing completed. Processed: ${processedCount}, Errors: ${errorCount}, Duration: ${duration}ms`,
     );
+
+    // Chain to staging environment (fire and forget)
+    await chainToStaging({
+      endpoint: '/api/cron/balance-notifications',
+      awaitCompletion: false,
+    });
 
     return NextResponse.json({
       success: true,
