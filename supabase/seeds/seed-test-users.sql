@@ -74,7 +74,8 @@ BEGIN
         current_timestamp
     );
     
-    -- Note: Professional role will be set via user_roles table after user creation
+    -- Note: Professional role is set via metadata in raw_user_meta_data above
+    -- The trigger will automatically create the role and profile
     
     -- Get the monthly subscription plan ID
     SELECT id INTO monthly_plan_id FROM subscription_plans WHERE name = 'Monthly' AND interval = 'month';
@@ -351,7 +352,8 @@ BEGIN
         current_timestamp
     );
     
-    -- Note: Client role will be set via user_roles table after user creation
+    -- Note: Client role is set via metadata in raw_user_meta_data above
+    -- The trigger will automatically create the role and profile
     
     -- Create address for the client
     INSERT INTO addresses (
