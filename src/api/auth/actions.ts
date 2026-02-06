@@ -65,20 +65,53 @@ export async function inviteAdminAction(
   const adminSupabase = createAdminClient();
 
   // Use Supabase's inviteUserByEmail to invite the admin
-  // Note: The handle_new_user() database trigger automatically creates the user_roles entry
-  // based on the 'role' metadata we pass here
+  // NOTE: DO NOT pass 'admin' role in metadata - it will be blocked by trigger for security
+  // We'll manually insert the admin role after user is created
   const { data: invitedUser, error: inviteError } =
     await adminSupabase.auth.admin.inviteUserByEmail(email, {
       data: {
         first_name: firstName,
         last_name: lastName,
-        role: 'admin',
+        // role is NOT passed - trigger will create default 'client' role, which we'll override
       },
       redirectTo: `${getAuthURL()}auth/set-password?type=admin_invite`,
     });
 
   if (inviteError) {
     return { success: false, error: inviteError.message };
+  }
+
+  // Manually update the role to 'admin' in the database
+  // This bypasses the metadata security check and is only accessible to admins
+  if (invitedUser.user?.id) {
+    // Wait a moment for trigger to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Update role directly in database
+    const { error: roleError } = await adminSupabase
+      .from('user_roles')
+      .update({ role: 'admin', updated_at: new Date().toISOString() })
+      .eq('user_id', invitedUser.user.id);
+
+    if (roleError) {
+      console.error('Failed to assign admin role to invited user:', roleError);
+      // Clean up the created user since role assignment failed
+      await adminSupabase.auth.admin.deleteUser(invitedUser.user.id);
+      return {
+        success: false,
+        error: 'Failed to assign admin role. Please try again.',
+      };
+    }
+
+    // Clean up any profiles that were created for the default role
+    await adminSupabase
+      .from('client_profiles')
+      .delete()
+      .eq('user_id', invitedUser.user.id);
+    await adminSupabase
+      .from('professional_profiles')
+      .delete()
+      .eq('user_id', invitedUser.user.id);
   }
 
   // Revalidate the admin list page after successful invite
@@ -113,7 +146,7 @@ export async function signUpAction(
   }
 
   try {
-    // Ensure userType is set
+    // Ensure userType is set (for redirect purposes only)
     if (!data.userType) {
       data.userType = 'client';
     }
@@ -126,6 +159,8 @@ export async function signUpAction(
     }
 
     // Create user with authentication
+    // NOTE: Role is passed in metadata but trigger prevents 'admin' privilege escalation
+    // Trigger will default to 'client' if invalid/admin role is provided
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -133,7 +168,7 @@ export async function signUpAction(
         data: {
           first_name: data.firstName,
           last_name: data.lastName,
-          role: data.userType,
+          role: data.userType, // 'client' or 'professional' - admin role is blocked by trigger
         },
         emailRedirectTo: `${getAuthURL()}auth/callback?redirect_to=${encodeURIComponent(finalRedirectTo)}&type=email_verification`,
       },

@@ -234,24 +234,18 @@ export async function GET(request: Request) {
             );
             console.log('[AUTH_CALLBACK] Role from URL parameters:', role);
 
-            // Handle role assignment and profile setup
-            if (role && (role === 'professional' || role === 'client')) {
+            // Update role if specified in URL (from signup flow)
+            // Note: Trigger has already run and created default 'client' role
+            // We need to update it if user selected 'professional' during OAuth signup
+            if (role && role === 'professional') {
               try {
                 const admin = createAdminClient();
-
-                // Update user role using new role system
                 console.log(`[AUTH_CALLBACK] Updating user role to: ${role}`);
+                
                 const { error: updateError } = await admin
                   .from('user_roles')
-                  .upsert(
-                    {
-                      user_id: sessionData.user.id,
-                      role: role as 'professional' | 'client',
-                    },
-                    {
-                      onConflict: 'user_id',
-                    },
-                  );
+                  .update({ role: 'professional', updated_at: new Date().toISOString() })
+                  .eq('user_id', sessionData.user.id);
 
                 if (updateError) {
                   console.error(
@@ -261,29 +255,33 @@ export async function GET(request: Request) {
                 } else {
                   console.log('[AUTH_CALLBACK] Successfully updated user role');
 
-                  // If changing to professional, ensure professional profile exists
-                  if (role === 'professional') {
-                    const { error: profProfileError } = await admin
-                      .from('professional_profiles')
-                      .upsert(
-                        { user_id: sessionData.user.id },
-                        {
-                          onConflict: 'user_id',
-                          ignoreDuplicates: true,
-                        },
-                      );
+                  // Create professional profile and remove client profile
+                  const { error: profProfileError } = await admin
+                    .from('professional_profiles')
+                    .upsert(
+                      { user_id: sessionData.user.id },
+                      {
+                        onConflict: 'user_id',
+                        ignoreDuplicates: true,
+                      },
+                    );
 
-                    if (profProfileError) {
-                      console.error(
-                        '[AUTH_CALLBACK] Error creating professional profile:',
-                        profProfileError,
-                      );
-                    } else {
-                      console.log(
-                        '[AUTH_CALLBACK] Professional profile ensured',
-                      );
-                    }
+                  if (profProfileError) {
+                    console.error(
+                      '[AUTH_CALLBACK] Error creating professional profile:',
+                      profProfileError,
+                    );
+                  } else {
+                    console.log(
+                      '[AUTH_CALLBACK] Professional profile ensured',
+                    );
                   }
+
+                  // Remove client profile if it exists
+                  await admin
+                    .from('client_profiles')
+                    .delete()
+                    .eq('user_id', sessionData.user.id);
                 }
               } catch (roleAssignmentError) {
                 console.error(

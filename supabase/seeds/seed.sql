@@ -103,7 +103,11 @@ BEGIN
         current_timestamp
     );
     
-    -- Note: Admin role will be set via user_roles table after user creation
+    -- Manually assign admin role (bypassing trigger security)
+    -- Admin role cannot be set via metadata for security reasons
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (admin_user_id, 'admin')
+    ON CONFLICT (user_id) DO UPDATE SET role = 'admin', updated_at = NOW();
     
     RAISE NOTICE 'Admin user created successfully!';
     RAISE NOTICE 'Admin User ID: %', admin_user_id;
