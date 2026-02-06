@@ -525,7 +525,11 @@ async function handleSubscriptionCheckout(session: Stripe.Checkout.Session) {
     if (profileError || !profileData) {
       console.log('Professional profile not found, creating one...');
 
-      // First, ensure the user has the professional role
+      // SPECIAL CASE: Automatically assign professional role during subscription payment
+      // This is an exception to the "admin must assign roles" rule because:
+      // 1. User has explicitly paid for a professional subscription
+      // 2. The payment itself indicates intent to become a professional
+      // Note: Regular signup does NOT auto-assign roles
       await supabase.from('user_roles').upsert(
         {
           user_id: userId,
